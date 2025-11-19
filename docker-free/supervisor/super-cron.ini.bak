@@ -1,0 +1,11 @@
+[program:bloated-crontab]
+command=crond -f -l 0 -L /data/httpd/storage/logs/supervisor-bloated-crontab.log
+#command=crond -n
+#stdout_logfile=/data/httpd/storage/logs/supervisor-bloated-crontab.log
+redirect_stderr=true
+process_name=%(program_name)s_%(process_num)02d
+autostart=true
+autorestart=true
+numprocs=1
+user=root
+startsecs=3

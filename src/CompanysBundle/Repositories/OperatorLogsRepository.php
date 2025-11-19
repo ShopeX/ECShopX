@@ -1,0 +1,280 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace CompanysBundle\Repositories;
+
+use Doctrine\ORM\EntityRepository;
+use Doctrine\Common\Collections\Criteria;
+use CompanysBundle\Entities\OperatorLogs;
+
+use Dingo\Api\Exception\ResourceException;
+
+class OperatorLogsRepository extends EntityRepository
+{
+    /**
+     * 新增
+     *
+     * @param array $data
+     */
+    public function create($data)
+    {
+        $entity = new OperatorLogs();
+        $entity = $this->setColumnNamesData($entity, $data);
+
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 更新数据表字段数据
+     *
+     * @param $filter 更新的条件
+     * @param $data 更新的内容
+     */
+    public function updateOneBy(array $filter, array $data)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            throw new ResourceException("未查询到更新数据");
+        }
+
+        $entity = $this->setColumnNamesData($entity, $data);
+
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 更新多条数数据
+     *
+     * @param $filter 更新的条件
+     * @param $data 更新的内容
+     */
+    public function updateBy(array $filter, array $data)
+    {
+        $entityList = $this->findBy($filter);
+        if (!$entityList) {
+            throw new ResourceException("未查询到更新数据");
+        }
+
+        $em = $this->getEntityManager();
+        $result = [];
+        foreach ($entityList as $entityProp) {
+            $entityProp = $this->setColumnNamesData($entityProp, $data);
+            $em->persist($entityProp);
+            $em->flush();
+            $result[] = $this->getColumnNamesData($entityProp);
+        }
+        return $result;
+    }
+
+    /**
+     * 根据主键删除指定数据
+     *
+     * @param $id
+     */
+    public function deleteById($id)
+    {
+        $entity = $this->find($id);
+        if (!$entity) {
+            return true;
+        }
+        $em = $this->getEntityManager();
+        $em->remove($entity);
+        $em->flush();
+        return true;
+    }
+
+    /**
+     * 根据条件删除指定数据
+     *
+     * @param $filter 删除的条件
+     */
+    public function deleteBy($filter)
+    {
+        $entityList = $this->findBy($filter);
+        if (!$entityList) {
+            return true;
+        }
+        $em = $this->getEntityManager();
+        foreach ($entityList as $entityProp) {
+            $em->remove($entityProp);
+            $em->flush();
+        }
+        return true;
+    }
+
+    /**
+     * 根据主键获取数据
+     *
+     * @param $id
+     */
+    public function getInfoById($id)
+    {
+        $entity = $this->find($id);
+        if (!$entity) {
+            return [];
+        }
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 根据条件获取单条数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function getInfo(array $filter)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            return [];
+        }
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 统计数量
+     */
+    public function count($filter)
+    {
+        $criteria = Criteria::create();
+        foreach ($filter as $field => $value) {
+            $list = explode("|", $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                $criteria = $criteria->andWhere(Criteria::expr()->$k($v, $value));
+                continue;
+            } elseif (is_array($value)) {
+                $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+            } else {
+                $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+            }
+        }
+
+        $total = $this->getEntityManager()
+            ->getUnitOfWork()
+            ->getEntityPersister($this->getEntityName())
+            ->count($criteria);
+
+        return intval($total);
+    }
+
+    /**
+     * 根据条件获取单条数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function lists($filter, $page = 1, $pageSize = 100, $orderBy = array())
+    {
+        $criteria = Criteria::create();
+        foreach ($filter as $field => $value) {
+            $list = explode("|", $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                $criteria = $criteria->andWhere(Criteria::expr()->$k($v, $value));
+                continue;
+            } elseif (is_array($value)) {
+                $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+            } else {
+                $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+            }
+        }
+
+        $total = $this->getEntityManager()
+            ->getUnitOfWork()
+            ->getEntityPersister($this->getEntityName())
+            ->count($criteria);
+        $res["total_count"] = intval($total);
+
+        $lists = [];
+        if ($res["total_count"]) {
+            if ($orderBy) {
+                $criteria = $criteria->orderBy($orderBy);
+            }
+            $criteria->setFirstResult($pageSize * ($page - 1))
+                ->setMaxResults($pageSize);
+            $entityList = $this->matching($criteria);
+            foreach ($entityList as $entity) {
+                $lists[] = $this->getColumnNamesData($entity);
+            }
+        }
+        $res["list"] = $lists;
+        return $res;
+    }
+
+    /**
+     * 设置entity数据，用于插入和更新操作
+     *
+     * @param $entity
+     * @param $data
+     */
+    private function setColumnNamesData($entity, $data)
+    {
+        if (isset($data["log_id"]) && $data["log_id"]) {
+            $entity->setLogId($data["log_id"]);
+        }
+        if (isset($data["company_id"]) && $data["company_id"]) {
+            $entity->setCompanyId($data["company_id"]);
+        }
+        if (isset($data["operator_id"]) && $data["operator_id"]) {
+            $entity->setOperatorId($data["operator_id"]);
+        }
+        //当前字段非必填
+        if (isset($data["request_uri"]) && $data["request_uri"]) {
+            $entity->setRequestUri($data["request_uri"]);
+        }
+        //当前字段非必填
+        if (isset($data["ip"]) && $data["ip"]) {
+            $entity->setIp($data["ip"]);
+        }
+        //当前字段非必填
+        if (isset($data["params"]) && $data["params"]) {
+            $entity->setParams($data["params"]);
+        }
+        //当前字段非必填
+        if (isset($data["operator_name"]) && $data["operator_name"]) {
+            $entity->setOperatorName($data["operator_name"]);
+        }
+        if (isset($data["created"]) && $data["created"]) {
+            $entity->setCreated($data["created"]);
+        }
+        if (isset($data["log_type"]) && $data["log_type"]) {
+            $entity->setLogType($data["log_type"]);
+        }
+        if (isset($data["merchant_id"])) {
+            $entity->setMerchantId($data["merchant_id"]);
+        }
+        return $entity;
+    }
+
+    /**
+     * 获取数据表字段数据
+     *
+     * @param entity
+     */
+    private function getColumnNamesData($entity)
+    {
+        return [
+            'log_id' => $entity->getLogId(),
+            'company_id' => $entity->getCompanyId(),
+            'operator_id' => $entity->getOperatorId(),
+            'request_uri' => $entity->getRequestUri(),
+            'ip' => $entity->getIp(),
+            'params' => $entity->getParams(),
+            'operator_name' => $entity->getOperatorName(),
+            'created' => $entity->getCreated(),
+            'log_type' => $entity->getLogType(),
+            'merchant_id' => $entity->getMerchantId(),
+        ];
+    }
+}

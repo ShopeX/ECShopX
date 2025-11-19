@@ -1,0 +1,87 @@
+stages:
+  - build
+  - build:star
+  - deploy
+  - scanner:code
+
+variables:
+  DOCKER_IMAGE: registry.cn-hangzhou.aliyuncs.com/espier/bloated
+
+  DOCKER_USER: bryant@114927
+  DOCKER_PASS: "depency ci/cd docker password"
+
+  DOCKER_SHOPEX_IMAGE: hub.ishopex.cn/espier/bloated
+  #DOCKER_SHOPEX_USER: ecshopx-member
+  #DOCKER_SHOPEX_PASS: "A3kkads@s^dk.ciw"
+  DOCKER_SHOPEX_USER: whd-gitlab-ci-token
+  DOCKER_SHOPEX_PASS: "A32kads@sadk.ciw"
+
+  SWOOLE_COMPILER_KEY: "depency ci/cd docker password"
+  SWOOLE_COMPILER_KEY_NAME: "swoole-compiler"
+  SWOOLE_COMPILER_HOST: "swoole-compiler"
+  SWOOLE_COMPILER_HOST_NAME: "39.96.77.98"
+
+
+  DOCKERFILE_DIR: docker/php-fpm
+  DOCKER_HISTORY_LIMIT: 2
+  #CI_DEBUG_TRACE: "TRUE"
+
+.build_base:
+  stage: build
+  only:
+      - branches@master
+      - tags
+  artifacts:
+    name: version
+    paths:
+      - version.txt
+  cache:
+    key: $CI_COMMIT_REF_NAME
+    paths:
+      - vendor
+  tags:
+    - shell-docker
+  script:
+    - bash gitlab-ci/docker-development-image.sh
+  after_script:
+    - bash gitlab-ci/docker-env-clean.sh
+
+build:
+  extends: .build_base
+  tags:
+    - ali-shell-docker-1 
+
+build_apple:
+  only:
+    refs:
+      - apple-master
+
+  extends: .build_base
+  tags:
+    - shell-docker
+
+build_star:
+  extends: .build_base
+  stage: build:star
+  tags:
+    - ali-shell-docker-1 
+  variables:
+    IS_STAR: "true"
+    #CI_DEBUG_TRACE: "TRUE"
+  artifacts:
+    name: star
+    paths:
+      - star-*.tar
+    expire_in: 2 week
+  #when: manual
+
+scanner_code:
+  stage: scanner:code
+  only:
+    - branches@develop
+    - tags
+  tags:
+    - shell-sonar
+  script:    
+    - cd src && sonar-scanner -Dsonar.projectKey=${SONAR_PROJECTKEY} -Dsonar.sources=. -Dsonar.host.url=${SONAR_HOST_URL} -Dsonar.login=${SONAR_LOGIN}
+  when: manual

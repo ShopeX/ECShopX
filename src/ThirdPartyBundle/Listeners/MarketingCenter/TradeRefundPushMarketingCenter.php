@@ -1,0 +1,267 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace ThirdPartyBundle\Listeners\MarketingCenter;
+
+use OrdersBundle\Entities\NormalOrders;
+use OrdersBundle\Entities\NormalOrdersItems;
+use SystemLinkBundle\Events\TradeRefundEvent;
+use ThirdPartyBundle\Services\MarketingCenter\Request;
+use OrdersBundle\Traits\GetOrderServiceTrait;
+use SalespersonBundle\Entities\ShopSalesperson;
+use DistributionBundle\Entities\Distributor;
+use AftersalesBundle\Entities\Aftersales;
+use AftersalesBundle\Entities\AftersalesDetail;
+
+class TradeRefundPushMarketingCenter
+{
+    use GetOrderServiceTrait;
+    /**
+     * Handle the event.
+     *
+     * @param TradeRefundEvent $event
+     * @return void
+     */
+    public function handle(TradeRefundEvent $event)
+    {
+        // NOTE: important business logic
+        if (!isset($event->entities['aftersales_bn'])) {
+            $company_id = $event->entities['company_id'];
+            $order_id = $event->entities['order_id'];
+            $normalOrderRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+            $orderInfo = $normalOrderRepository->getInfo(['company_id' => $company_id, 'order_id' => $order_id]);
+            if (!$orderInfo || empty($orderInfo['salesman_id'])) {
+                return true;
+            }
+            $input['order_id'] = $orderInfo['order_id'];
+            $input['order_title'] = $orderInfo['title'];
+            $input['mobile'] = $orderInfo['mobile'];
+            $input['external_member_id'] = $orderInfo['user_id'];
+            $input['total_fee'] = $orderInfo['total_fee'];
+            $input['freight_fee'] = $orderInfo['freight_fee'];
+            $input['item_fee'] = $orderInfo['item_fee'];
+//        $input['cash_discount'] = $orderInfo['coupon_discount'];
+            $input['cost_fee'] = $orderInfo['cost_fee'];
+            $input['receipt_type'] = $orderInfo['receipt_type'];
+            $input['ziti_status'] = $orderInfo['ziti_status'];
+            $input['delivery_status'] = $orderInfo['delivery_status'];
+            $input['cancel_status'] = $orderInfo['cancel_status'];
+            $input['total_rebate'] = $orderInfo['total_rebate'];
+            $input['discount_info'] = $orderInfo['discount_info'];
+            $shopsales = app('registry')->getManager('default')->getRepository(ShopSalesperson::class);
+            $salesmanInfo = $shopsales->getInfoById($orderInfo['salesman_id']);
+            $bindSalesmanInfo = $shopsales->getInfoById($orderInfo['bind_salesman_id']);
+//            if ($salesmanInfo) {
+            $input['sale_salesperson_id'] = $salesmanInfo['work_userid'] ?? '0';
+//            }
+//            if ($bindSalesmanInfo) {
+            $input['bind_salesperson_id'] = $bindSalesmanInfo['work_userid'] ?? '0';
+//            }
+
+            $distributor = app('registry')->getManager('default')->getRepository(Distributor::class);
+            $saleInfo = $distributor->getInfoById($orderInfo['sale_salesman_distributor_id']);
+            if ($saleInfo) {
+                $input['sale_store_bn'] = $saleInfo['shop_code'] ?? '';
+            }
+            $bindInfo = $distributor->getInfoById($orderInfo['bind_salesman_distributor_id']);
+            if ($bindInfo) {
+                $input['bind_store_bn'] = $bindInfo['shop_code'] ?? '';
+            }
+            $input['chat_id'] = $orderInfo['chat_id'];
+            $input['order_create_time'] = date('Y-m-d H:i:s', $orderInfo['create_time']);
+            $input['receiver_zip'] = $orderInfo['receiver_zip'];
+            $input['receiver_province'] = $orderInfo['receiver_state'];
+            $input['receiver_city'] = $orderInfo['receiver_city'];
+            $input['receiver_county'] = $orderInfo['receiver_district'];
+            $input['receiver_address'] = $orderInfo['receiver_address'];
+            $input['receiver_name'] = $orderInfo['receiver_name'];
+            $input['receiver_mobile'] = $orderInfo['receiver_mobile'];
+            $input['pay_type'] = $orderInfo['pay_type'];
+            $input['order_source'] = '1';
+            $input['pay_status'] = $orderInfo['pay_status'];
+            $input['order_status_des'] = $orderInfo['order_status'];
+            switch ($input['order_status_des']) {
+                case 'DONE':
+                    $statusMsg = '订单完成';
+                    break;
+                case 'NOTPAY':
+                    $statusMsg = '未支付';
+                    break;
+                case 'PART_PAYMENT':
+                    $statusMsg = '部分付款';
+                    break;
+                case 'WAIT_GROUPS_SUCCESS':
+                    $statusMsg = '等待拼团成功';
+                    break;
+                case 'PAYED':
+                    $statusMsg = '已支付';
+                    break;
+                case 'CANCEL':
+                    $statusMsg = '已取消';
+                    break;
+                case 'WAIT_BUYER_CONFIRM':
+                    $statusMsg = '待用户收货';
+                    break;
+                case 'REFUND_SUCCESS':
+                    $statusMsg = '退款成功';
+                    break;
+            }
+            $input['order_status_msg'] = $statusMsg ?? '';
+            $input['remark'] = $orderInfo['remark'];
+
+            $normalOrdersItemsRepository = app('registry')->getManager('default')->getRepository(NormalOrdersItems::class);
+            $orderItem = $normalOrdersItemsRepository->get($company_id, $order_id);
+            foreach ($orderItem as $key => $value) {
+                $input['items'][$key]['sub_order_id'] = $value['id'];
+                $input['items'][$key]['price'] = $value['price'];
+                $input['items'][$key]['cost_fee'] = $value['cost_fee'];
+                $input['items'][$key]['item_fee'] = $value['item_fee'];
+                $input['items'][$key]['item_bn'] = $value['item_bn'];
+                $input['items'][$key]['item_spec_desc'] = $value['item_spec_desc'];
+                $input['items'][$key]['total_fee'] = $value['total_fee'];
+                $input['items'][$key]['member_discount'] = $value['member_discount'];
+                $input['items'][$key]['coupon_discount'] = $value['coupon_discount'];
+                $input['items'][$key]['discount_fee'] = $value['discount_fee'];
+                $input['items'][$key]['num'] = $value['num'];
+                if ($value['order_item_type'] == 'gift') {
+                    $input['items'][$key]['item_type'] = '1';
+                } else {
+                    $input['items'][$key]['item_type'] = '0';
+                }
+                $input['items'][$key]['item_name'] = $value['item_name'];
+                $input['items'][$key]['item_pic'] = $value['pic'];
+                $input['items'][$key]['profit_amount'] = '0';
+                $input['items'][$key]['order_status'] = '1';
+            }
+            foreach ($input as &$value) {
+                if (is_int($value)) {
+                    $value = strval($value);
+                }
+                if (is_null($value)) {
+                    $value = '';
+                }
+                if (is_array($value) && empty($value)) {
+                    $value = '';
+                }
+            }
+            unset($value);
+            foreach ($input['items'] as &$items) {
+                foreach ($items as &$item) {
+                    if (is_int($item)) {
+                        $item = strval($item);
+                    }
+                    if (is_null($item)) {
+                        $item = '';
+                    }
+                }
+                unset($item);
+            }
+            unset($items);
+            $params[0] = $input;
+            $request = new Request();
+            $request->call($company_id, 'basics.order.proccess', $params);
+            return true;
+        }
+        $company_id = $event->entities['company_id'];
+        $order_id = $event->entities['order_id'];
+        $aftersalesBn = $event->entities['aftersales_bn'];
+
+        $aftersalesRepository = app('registry')->getManager('default')->getRepository(Aftersales::class);
+        $aftersalesInfo = $aftersalesRepository->get(['company_id' => $company_id, 'order_id' => $order_id,'aftersales_bn' => $aftersalesBn]);
+
+        $normalOrderRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+        $orderInfo = $normalOrderRepository->getInfo(['company_id' => $company_id, 'order_id' => $order_id]);
+        if (!$aftersalesInfo || !$orderInfo) {
+            return true;
+        }
+        if (empty($orderInfo['salesman_id']) && empty($orderInfo['bind_salesman_id']) && empty($orderInfo['chat_id'])) {
+            return true;
+        }
+        $shopsales = app('registry')->getManager('default')->getRepository(ShopSalesperson::class);
+        $salesmanInfo = $shopsales->getInfoById($orderInfo['salesman_id']);
+        $bindSalesmanInfo = $shopsales->getInfoById($orderInfo['bind_salesman_id']);
+//        if ($salesmanInfo) {
+        $input['sale_salesperson_id'] = $salesmanInfo['work_userid'] ?? '0';
+//        }
+//        if ($bindSalesmanInfo) {
+        $input['bind_salesperson_id'] = $bindSalesmanInfo['work_userid'] ?? '0';
+//        }
+
+        $distributor = app('registry')->getManager('default')->getRepository(Distributor::class);
+        $saleInfo = $distributor->getInfoById($orderInfo['sale_salesman_distributor_id']);
+        if ($saleInfo) {
+            $input['sale_store_bn'] = $saleInfo['shop_code'] ?? '';
+        }
+        $bindInfo = $distributor->getInfoById($orderInfo['bind_salesman_distributor_id']);
+        if ($bindInfo) {
+            $input['bind_store_bn'] = $bindInfo['shop_code'] ?? '';
+        }
+
+        $input['chat_id'] = $orderInfo['chat_id'];
+        $input['external_member_id'] = '0';
+        $input['aftersales_bn'] = $aftersalesInfo['aftersales_bn'];
+        $input['order_id'] = $aftersalesInfo['order_id'];
+        $input['aftersales_type'] = $aftersalesInfo['aftersales_type'];
+        if ($aftersalesInfo['aftersales_status'] > 0) {
+            $input['aftersales_status'] = $aftersalesInfo['aftersales_status'] - 1;
+        } else {
+            $input['aftersales_status'] = $aftersalesInfo['aftersales_status'];
+        }
+//        $input['progress'] = $aftersalesInfo['progress'];
+        $input['refund_fee'] = $aftersalesInfo['refund_fee'];
+        $input['reason'] = $aftersalesInfo['reason'];
+        $input['description'] = $aftersalesInfo['description'];
+        $input['evidence_pic'] = $aftersalesInfo['evidence_pic'];
+        $input['refuse_reason'] = $aftersalesInfo['refuse_reason'];
+        $input['apply_time'] = date('Y-m-d H:i:s', $aftersalesInfo['create_time']);
+
+
+        $normalOrdersItemsRepository = app('registry')->getManager('default')->getRepository(NormalOrdersItems::class);
+
+        $aftersalesDetailRepository = app('registry')->getManager('default')->getRepository(AftersalesDetail::class);
+        $aftersalesDetail = $aftersalesDetailRepository->getList(['company_id' => $company_id, 'aftersales_bn' => $aftersalesBn]);
+        foreach ($aftersalesDetail['list'] as $key => $value) {
+            $input['items'][$key]['sub_order_id'] = $value['sub_order_id'];
+            $input['items'][$key]['item_id'] = $value['item_id'];
+            $input['items'][$key]['item_bn'] = $value['item_bn'];
+            $input['items'][$key]['item_name'] = $value['item_name'];
+            $input['items'][$key]['item_pic'] = $value['item_pic'];
+            $input['items'][$key]['num'] = $value['num'];
+            $input['items'][$key]['refund_fee'] = $value['refund_fee'];
+            $normalOrdersItemsInfo = $normalOrdersItemsRepository->getList(['company_id' => $company_id, 'order_id' => $order_id,'item_id' => $value['item_id']]);
+            if ($normalOrdersItemsInfo) {
+                $input['items'][$key]['item_spec_desc'] = $normalOrdersItemsInfo['list'][0]['item_spec_desc'];
+            }
+        }
+
+        foreach ($input as &$value) {
+            if (is_int($value)) {
+                $value = strval($value);
+            }
+            if (is_null($value)) {
+                $value = '';
+            }
+            if (is_array($value) && empty($value)) {
+                $value = '';
+            }
+        }
+        foreach ($input['items'] as &$items) {
+            foreach ($items as &$item) {
+                if (is_int($item)) {
+                    $item = strval($item);
+                }
+                if (is_null($item)) {
+                    $item = '';
+                }
+            }
+        }
+
+        $params[0] = $input;
+
+        $request = new Request();
+        $request->call($company_id, 'basics.aftersales.proccess', $params);
+    }
+}

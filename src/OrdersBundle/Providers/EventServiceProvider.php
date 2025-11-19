@@ -1,0 +1,65 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace OrdersBundle\Providers;
+
+use Laravel\Lumen\Providers\EventServiceProvider as ServiceProvider;
+
+class EventServiceProvider extends ServiceProvider
+{
+    // Ver: 8d1abe8e
+    /**
+     * The event listener mappings for the application.
+     *
+     * @var array
+     */
+    protected $listen = [
+        'OrdersBundle\Events\TradeFinishEvent' => [
+            'OrdersBundle\Listeners\UpdateOrderStatusListener',
+            // 'ThirdPartyBundle\Listeners\TradeFinishSendSaasErp', // 订单发送到 SaasErp
+            'ThirdPartyBundle\Listeners\MarketingCenter\TradePushMarketingCenter',
+            'OrdersBundle\Listeners\HelpToPayForPurchasePlusOne',
+            'OrdersBundle\Listeners\TradeFinishConsumeCard',
+            'OrdersBundle\Listeners\TradeFinishNotifyPush',
+            'OrdersBundle\Listeners\TradeFinishSmsNotify',
+            'OrdersBundle\Listeners\TradeFinishWxaTemplateMsg',
+            // 'OrdersBundle\Listeners\UpdateMemberGradeListener',
+            'OrdersBundle\Listeners\UpdateItemSalesListener',
+            'OrdersBundle\Listeners\UpdateGroupsActivityOrder',
+            'OrdersBundle\Listeners\TradeFinishCountBrokerage',
+            'OrdersBundle\Listeners\TradeFinishLinkMember',
+            'OrdersBundle\Listeners\TradePayFinishStatistics',   //订单一些统计
+            'OrdersBundle\Listeners\TradeFinishProfit',      // 订单分润
+            'SystemLinkBundle\Listeners\TradeFinishSendOme', // 订单发送到ome
+            'OrdersBundle\Listeners\PrinterOrder',           //订单支付完成推送到shop端
+            'OrdersBundle\Listeners\TradeFinishFapiao',      //存入发票数据
+            //'OrdersBundle\Listeners\PushResultToShop',     //订单支付完成推送到shop端
+            'OrdersBundle\Listeners\TradeFinishCustomDeclareOrder', //跨境订单清关
+            'OrdersBundle\Listeners\TradeFinishWorkWechatNotify',//企业微信消息通知
+        ],
+        'OrdersBundle\Events\MerchantTradeFinishEvent' => [
+        ],
+        'OrdersBundle\Events\OrderProcessLogEvent' => [
+            'OrdersBundle\Listeners\OrderProcess\OrderProcessLogListener', // 订单流程记录
+        ],
+        'OrdersBundle\Events\NormalOrderCancelEvent' => [
+            'OrdersBundle\Listeners\NormalOrderCancelListener',
+        ],
+
+        'OrdersBundle\Events\NormalOrderAddEvent' => [
+            'SupplierBundle\Listeners\SupplierOrderSplitListener',//供应商订单拆分
+        ],
+
+        'OrdersBundle\Events\NormalOrderConfirmReceiptEvent' => [
+            'OrdersBundle\Listeners\OrderFinishInvoiceListener', // 订单完成时更新发票结束时间
+        ],
+
+        // 'OrdersBundle\Events\TestEvent' => [
+        //     'SystemLinkBundle\Listeners\TradeFinishSendOme', // 订单发送到ome
+        //     'SystemLinkBundle\Listeners\TradeRefundSendOme', // 退款申请发送到ome
+        // ],
+    ];
+}

@@ -1,0 +1,39 @@
+{
+"point_enable":1,
+"point_max_day":100,
+"point_post_like_get_once":5,
+"point_post_like_get_max_times_day":5,
+"point_post_comment_get_once":5,
+"point_post_comment_get_max_times_day":5,
+"point_post_share_get_once":5,
+"point_post_share_get_max_times_day":5,
+"point_post_favorite_get_once":5,
+"point_post_favorite_get_max_times_day":5,
+"point_post_create_get_once":5,
+"point_post_create_get_max_times_day":5
+}
+//积分设置：
+{
+    "point_enable":1,//全局开启1开启，0关闭
+    "point_max_day":100,//每位会员每日最多
+    "point_post_like_get_once":5,//点赞每次赠送积分"
+    "point_post_like_get_max_times_day":5,//点赞每日最多次数"
+    "point_post_comment_get_once":5,//评论每次赠送积分"
+    "point_post_comment_get_max_times_day":5,//评论每日最多次数
+    "point_post_share_get_once":5,//分享每次赠送积分"
+    "point_post_share_get_max_times_day":5,//分享每日最多次数
+    "point_post_favorite_get_once":5,//收藏笔记每次赠送积分
+    "point_post_favorite_get_max_times_day":5,//收藏笔记每日最多次数
+    "point_post_create_get_once":5,//发布笔记每次赠送积分
+    "point_post_create_get_max_times_day":5//发布笔记每日最多次数
+}
+//视频是否允许上传也用saveSetting，type传video，setting传
+｛"video_enable"：1｝
+
+//第三方审核配置 也用saveSetting，type传contentCheck,setting传
+｛
+“contentCheck_enable“:1,//是否启用，后台加一个开关吧。
+“contentCheck_url“:““,
+“contentCheck_appid“:““,
+“contentCheck_appsecret“:““,
+｝

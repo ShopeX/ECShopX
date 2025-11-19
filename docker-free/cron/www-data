@@ -1,0 +1,1 @@
+* * * * * sudo -E -u www-data /usr/local/bin/php /data/httpd/artisan schedule:run >> /data/httpd/storage/logs/espier-cron.log 2>&1

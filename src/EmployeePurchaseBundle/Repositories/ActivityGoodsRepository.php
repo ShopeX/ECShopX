@@ -1,0 +1,377 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace EmployeePurchaseBundle\Repositories;
+
+use Doctrine\ORM\EntityRepository;
+use EmployeePurchaseBundle\Entities\ActivityGoods;
+use Dingo\Api\Exception\ResourceException;
+
+class ActivityGoodsRepository extends EntityRepository
+{
+    public $table = 'employee_purchase_activity_goods';
+    public $cols = ['activity_id', 'goods_id', 'company_id'];
+
+    /**
+     * 新增
+     *
+     * @param array $data
+     */
+    public function create($data)
+    {
+        $entity = new ActivityGoods();
+        $entity = $this->setColumnNamesData($entity, $data);
+
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 更新数据表字段数据
+     *
+     * @param $filter 更新的条件
+     * @param $data 更新的内容
+     */
+    public function updateOneBy(array $filter, array $data)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            throw new ResourceException("未查询到更新数据");
+        }
+
+        $entity = $this->setColumnNamesData($entity, $data);
+
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 更新多条数数据
+     *
+     * @param $filter 更新的条件
+     * @param $data 更新的内容
+     */
+    public function updateBy(array $filter, array $data)
+    {
+        $conn = app("registry")->getConnection("default");
+        $qb = $conn->createQueryBuilder()->update($this->table);
+        foreach ($data as $key => $val) {
+            $qb = $qb->set($key, $qb->expr()->literal($val));
+        }
+
+        $qb = $this->_filter($filter, $qb);
+
+        return $qb->execute();
+    }
+
+    /**
+     * 根据主键删除指定数据
+     *
+     * @param $id
+     */
+    public function deleteById($id)
+    {
+        $entity = $this->find($id);
+        if (!$entity) {
+            return true;
+        }
+        $em = $this->getEntityManager();
+        $em->remove($entity);
+        $em->flush();
+        return true;
+    }
+
+    /**
+     * 根据条件删除指定数据
+     *
+     * @param $filter 删除的条件
+     */
+    public function deleteBy($filter)
+    {
+        $entityList = $this->findBy($filter);
+        if (!$entityList) {
+            return true;
+        }
+        $em = $this->getEntityManager();
+        foreach ($entityList as $entityProp) {
+            $em->remove($entityProp);
+            $em->flush();
+        }
+        return true;
+    }
+
+    private function setColumnNamesData($entity, $params)
+    {
+        foreach ($this->cols as $col) {
+            if (isset($params[$col])) {
+                $fun = "set". str_replace(" ", "", ucwords(str_replace("_", " ", $col)));
+                $entity->$fun($params[$col]);
+            }
+        }
+        return $entity;
+    }
+
+    private function getColumnNamesData($entity, $cols = [], $ignore = [])
+    {
+        if (!$cols) {
+            $cols = $this->cols;
+        }
+
+        $values = [];
+        foreach ($cols as $col) {
+            if ($ignore && in_array($col, $ignore)) {
+                continue;
+            }
+            $fun = "get". str_replace(" ", "", ucwords(str_replace("_", " ", $col)));
+            $values[$col] = $entity->$fun();
+        }
+        return $values;
+    }
+
+    /**
+     * 筛选条件格式化
+     *
+     * @param $filter
+     * @param $qb
+     */
+    private function _filter($filter, $qb)
+    {
+        foreach ($filter as $field => $value) {
+            $list = explode('|', $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                if ($k == 'contains') {
+                    $k = 'like';
+                }
+                if ($k == 'like') {
+                    $value = '%'.$value.'%';
+                }
+                $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
+                continue;
+            } elseif (is_array($value)) {
+                array_walk($value, function (&$colVal) use ($qb) {
+                    $colVal = $qb->expr()->literal($colVal);
+                });
+                $qb = $qb->andWhere($qb->expr()->in($field, $value));
+            } else {
+                $qb = $qb->andWhere($qb->expr()->eq($field, $qb->expr()->literal($value)));
+            }
+        }
+        return $qb;
+    }
+
+    /**
+     * 根据条件获取列表数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function lists($filter, $cols = '*', $page = 1, $pageSize = -1, $orderBy = array())
+    {
+        $result['total_count'] = $this->count($filter);
+        if ($result['total_count'] > 0) {
+            $conn = app('registry')->getConnection('default');
+            $qb = $conn->createQueryBuilder()->select($cols)->from($this->table);
+            $qb = $this->_filter($filter, $qb);
+            if ($orderBy) {
+                foreach ($orderBy as $filed => $val) {
+                    $qb->addOrderBy($filed, $val);
+                }
+            }
+            if ($pageSize > 0) {
+                $qb->setFirstResult(($page - 1) * $pageSize)
+                  ->setMaxResults($pageSize);
+            }
+            $lists = $qb->execute()->fetchAll();
+        }
+        $result['list'] = $lists ?? [];
+        return $result;
+    }
+
+    /**
+     * 根据条件获取列表数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function getLists($filter, $cols = '*', $page = 1, $pageSize = -1, $orderBy = array())
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder()->select($cols)->from($this->table);
+        $qb = $this->_filter($filter, $qb);
+        if ($orderBy) {
+            foreach ($orderBy as $filed => $val) {
+                $qb->addOrderBy($filed, $val);
+            }
+        }
+        if ($pageSize > 0) {
+            $qb->setFirstResult(($page - 1) * $pageSize)
+                ->setMaxResults($pageSize);
+        }
+        return $qb->execute()->fetchAll();
+    }
+
+    /**
+     * 根据主键获取数据
+     *
+     * @param $id
+     */
+    public function getInfoById($id)
+    {
+        $entity = $this->find($id);
+        if (!$entity) {
+            return [];
+        }
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 根据条件获取单条数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function getInfo(array $filter)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            return [];
+        }
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 统计数量
+     */
+    public function count($filter)
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('count(*)')
+             ->from($this->table);
+        if ($filter) {
+            $this->_filter($filter, $qb);
+        }
+        $count = $qb->execute()->fetchColumn();
+        return intval($count);
+    }
+
+    /**
+     * 批量插入
+     * @param array $data
+     * @return false
+     */
+    public function batchInsert(array $data)
+    {
+        if (empty($data)) {
+            return false;
+        }
+
+        $conn = app("registry")->getConnection("default");
+        $qb = $conn->createQueryBuilder();
+
+        $columns = array();
+        foreach ($data[0] as $columnName => $value) {
+            $columns[] = $columnName;
+        }
+
+        $sql = 'INSERT IGNORE INTO '.$this->table. ' (' . implode(', ', $columns) . ') VALUES ';
+
+        $insertValue = [];
+        foreach($data as $value) {
+            foreach($value as &$v) {
+                $v = $qb->expr()->literal($v);
+            }
+            $insertValue[] = '(' . implode(', ', $value) . ')';
+        }
+
+        $sql .= implode(',',$insertValue);
+        return $conn->executeUpdate($sql);
+    }
+
+    public function getActivityGoodsList($filter, $page = 1, $pageSize = -1)
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb = $qb->select('count(distinct g.goods_id)')
+            ->from('employee_purchase_activity_goods', 'g')
+            ->leftJoin('g', 'items', 'i', 'g.goods_id = i.goods_id')
+            ->leftJoin('i', 'goods_items_rel_cats', 'c', 'i.item_id = c.item_id');
+        if (isset($filter['is_can_sale']) && $filter['is_can_sale']) {
+            $qb = $qb->leftJoin('i', 'distribution_distributor_items', 'di', 'i.item_id = di.item_id');
+            $qb = $qb->andWhere($qb->expr()->eq('di.is_can_sale', $qb->expr()->literal($filter['is_can_sale'])));
+        }
+        if (isset($filter['approve_status']) && $filter['approve_status']) {
+            if (is_array($filter['approve_status'])) {
+                array_walk($filter['approve_status'], function (&$colVal) use ($qb) {
+                    $colVal = $qb->expr()->literal($colVal);
+                });
+
+                $qb = $qb->andWhere($qb->expr()->in('i.approve_status', $filter['approve_status']));
+            } else {
+                $qb = $qb->andWhere($qb->expr()->eq('i.approve_status', $qb->expr()->literal($filter['approve_status'])));
+            }
+        }
+
+        if (isset($filter['company_id']) && $filter['company_id']) {
+            $qb = $qb->andWhere($qb->expr()->eq('g.company_id', $filter['company_id']));
+        }
+
+        if (isset($filter['activity_id']) && $filter['activity_id']) {
+            $qb = $qb->andWhere($qb->expr()->eq('g.activity_id', $filter['activity_id']));
+        }
+
+        if (isset($filter['keywords']) && $filter['keywords']) {
+            $qb = $qb->andWhere($qb->expr()->orX(
+                $qb->expr()->like('i.item_name', $qb->expr()->literal('%'.$filter['keywords'].'%')),
+                $qb->expr()->like('i.item_bn', $qb->expr()->literal('%'.$filter['keywords'].'%'))
+            ));
+        }
+
+        if (isset($filter['item_name']) && $filter['item_name']) {
+            $qb = $qb->andWhere($qb->expr()->like('i.item_name', $qb->expr()->literal('%'.$filter['item_name'].'%')));
+        }
+
+        if (isset($filter['item_bn']) && $filter['item_bn']) {
+            $qb = $qb->andWhere($qb->expr()->eq('i.item_bn', $qb->expr()->literal($filter['item_bn'])));
+        }
+
+        if (isset($filter['main_cat_id']) && $filter['main_cat_id']) {
+            if (is_array($filter['main_cat_id'])) {
+                $qb = $qb->andWhere($qb->expr()->in('i.item_category', $filter['main_cat_id']));
+            } else {
+                $qb = $qb->andWhere($qb->expr()->eq('i.item_category', $filter['main_cat_id']));
+            }
+        }
+
+        if (isset($filter['cat_id']) && $filter['cat_id']) {
+            if (is_array($filter['cat_id'])) {
+                $qb = $qb->andWhere($qb->expr()->in('c.category_id', $filter['cat_id']));
+            } else {
+                $qb = $qb->andWhere($qb->expr()->eq('c.category_id', $filter['cat_id']));
+            }
+        }
+
+        $qb = $qb->andWhere($qb->expr()->isNotNull('i.goods_id'));
+        $qb = $qb->addOrderBy('g.goods_id', 'DESC');
+
+        $result['total_count'] = (int)$qb->execute()->fetchColumn();
+        if ($result['total_count'] > 0) {
+            if ($pageSize > 0) {
+                $qb->setFirstResult(($page - 1) * $pageSize)
+                  ->setMaxResults($pageSize);
+            }
+            $lists = $qb->select('distinct g.goods_id as goods_id')->execute()->fetchAll();
+        }
+        $result['list'] = $lists ?? [];
+        return $result;
+    }
+}

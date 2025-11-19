@@ -1,0 +1,351 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace PromotionsBundle\Repositories;
+
+use Doctrine\ORM\EntityRepository;
+use Doctrine\Common\Collections\Criteria;
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
+use GoodsBundle\Services\MultiLang\MultiLangOutsideItemService;
+use PromotionsBundle\Entities\PromotionActivity;
+
+use Dingo\Api\Exception\ResourceException;
+
+
+class PromotionActivityRepository extends EntityRepository
+{
+    use MagicLangTrait;
+    public $table = 'promotions_point_upvaluation';
+    public $prk = 'activity_id';
+    private $multiLangField = [
+        'title'
+    ];
+
+    public function getLangService()
+    {
+        return new MultiLangOutsideItemService($this->table,$this->table,$this->multiLangField);
+    }
+    /**
+     * 新增
+     *
+     * @param array $data
+     */
+    public function create($data)
+    {
+        $entity = new PromotionActivity();
+        $entity = $this->setColumnNamesData($entity, $data);
+
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+
+        $dataRet = $this->getColumnNamesData($entity);
+
+        $this->getLangService()->addMultiLangByParams($dataRet[$this->prk],$data,$this->table);
+
+        return $dataRet;
+    }
+
+    /**
+     * 更新数据表字段数据
+     *
+     * @param $filter 更新的条件
+     * @param $data 更新的内容
+     */
+    public function updateOneBy(array $filter, array $data)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            throw new ResourceException(trans("PromotionsBundle.no_update_data_found"));
+        }
+
+        $entity = $this->setColumnNamesData($entity, $data);
+
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+        if(isset($filter[$this->prk])){
+            $this->getLangService()->updateLangData($data,$this->table,$filter[$this->prk]);
+        }
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 更新多条数数据
+     *
+     * @param $filter 更新的条件
+     * @param $data 更新的内容
+     */
+    public function updateBy(array $filter, array $data)
+    {
+        $criteria = Criteria::create();
+        foreach ($filter as $field => $value) {
+            $list = explode('|', $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                $criteria = $criteria->andWhere(Criteria::expr()->$k($v, $value));
+                continue;
+            } elseif (is_array($value)) {
+                $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+            } else {
+                $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+            }
+        }
+
+        $entityList = $this->matching($criteria);
+        if (!$entityList) {
+            throw new ResourceException(trans("PromotionsBundle.no_update_data_found"));
+        }
+
+        $em = $this->getEntityManager();
+        $result = [];
+        foreach ($entityList as $entityProp) {
+            $entityProp = $this->setColumnNamesData($entityProp, $data);
+            $em->persist($entityProp);
+            $em->flush();
+            $tmp = $this->getColumnNamesData($entityProp);
+            if(isset($filter[$this->prk])){
+                $this->getLangService()->updateLangData($data,$this->table,$filter[$this->prk]);
+            }
+
+            $result[] = $tmp;
+        }
+        return $result;
+    }
+
+    /**
+     * 根据主键删除指定数据
+     *
+     * @param $id
+     */
+    public function deleteById($id)
+    {
+        $entity = $this->find($id);
+        if (!$entity) {
+            throw new \Exception(trans("PromotionsBundle.delete_data_not_exist"));
+        }
+        $em = $this->getEntityManager();
+        $em->remove($entity);
+        $em->flush();
+        return true;
+    }
+
+    /**
+     * 根据条件删除指定数据
+     *
+     * @param $filter 删除的条件
+     */
+    public function deleteBy($filter)
+    {
+        $entityList = $this->findBy($filter);
+        if (!$entityList) {
+            throw new \Exception(trans("PromotionsBundle.delete_data_not_exist"));
+        }
+        $em = $this->getEntityManager();
+        foreach ($entityList as $entityProp) {
+            $em->remove($entityProp);
+            $em->flush();
+        }
+        return true;
+    }
+
+    /**
+     * 根据主键获取数据
+     *
+     * @param $id
+     */
+    public function getInfoById($id)
+    {
+        $entity = $this->find($id);
+        if (!$entity) {
+            return [];
+        }
+
+        $result = $this->getColumnNamesData($entity);
+        if ($result){
+            $this->getLangService()->getOneLangData($result,$this->multiLangField,$this->table,$this->getLang(),$result[$this->prk],$this->table);
+        }
+
+        return $result;
+    }
+
+    /**
+     * 根据条件获取单条数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function getInfo(array $filter)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            return [];
+        }
+
+        $result = $this->getColumnNamesData($entity);
+        if ($result){
+            $this->getLangService()->getOneLangData($result,$this->multiLangField,$this->table,$this->getLang(),$result[$this->prk],$this->table);
+        }
+
+        return $result;
+    }
+
+    public function count($filter)
+    {
+        $criteria = Criteria::create();
+        foreach ($filter as $field => $value) {
+            $list = explode('|', $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                $criteria = $criteria->andWhere(Criteria::expr()->$k($v, $value));
+                continue;
+            } elseif (is_array($value)) {
+                $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+            } else {
+                $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+            }
+        }
+
+        $total = $this->getEntityManager()
+            ->getUnitOfWork()
+            ->getEntityPersister($this->getEntityName())
+            ->count($criteria);
+
+        return intval($total);
+    }
+
+    /**
+     * 根据条件获取单条数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function lists($filter, $orderBy = ["created" => "DESC"], $pageSize = 100, $page = 1)
+    {
+        $criteria = Criteria::create();
+        foreach ($filter as $field => $value) {
+            $list = explode('|', $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                $criteria = $criteria->andWhere(Criteria::expr()->$k($v, $value));
+                continue;
+            } elseif (is_array($value)) {
+                $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+            } else {
+                $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+            }
+        }
+
+        $total = $this->getEntityManager()
+            ->getUnitOfWork()
+            ->getEntityPersister($this->getEntityName())
+            ->count($criteria);
+        $res["total_count"] = intval($total);
+
+        $lists = [];
+        if ($res['total_count']) {
+            $criteria = $criteria->orderBy($orderBy)
+                ->setFirstResult($pageSize * ($page - 1))
+                ->setMaxResults($pageSize);
+            $entityList = $this->matching($criteria);
+            foreach ($entityList as $entity) {
+                $lists[] = $this->getColumnNamesData($entity);
+            }
+        }
+
+        $res["list"] = $lists;
+
+        $res['list'] = $this->getLangService()->getListAddLang($res['list'],$this->multiLangField,$this->table,$this->getLang(),$this->prk);
+        return $res;
+    }
+
+    /**
+     * 设置entity数据，用于插入和更新操作
+     *
+     * @param $entity
+     * @param $data
+     */
+    private function setColumnNamesData($entity, $data)
+    {
+        if (isset($data["company_id"]) && $data["company_id"]) {
+            $entity->setCompanyId($data["company_id"]);
+        }
+        if (isset($data["activity_type"]) && $data["activity_type"]) {
+            $entity->setActivityType($data["activity_type"]);
+        }
+        if (isset($data["title"]) && $data["title"]) {
+            $entity->setTitle($data["title"]);
+        }
+        if (isset($data["trigger_condition"]) && $data["trigger_condition"]) {
+            $entity->setTriggerCondition(json_encode($data["trigger_condition"]));
+        }
+        if (isset($data["discount_config"]) && $data["discount_config"]) {
+            $entity->setDiscountConfig(json_encode($data["discount_config"]));
+        }
+        if (isset($data["sms_params"]) && $data["sms_params"]) {
+            $entity->setSmsParams(json_encode($data["sms_params"]), 1);
+        }
+        if (isset($data["sms_isopen"]) && $data["sms_isopen"]) {
+            $entity->setSmsIsopen($data["sms_isopen"]);
+        }
+        if (isset($data["activity_status"]) && $data["activity_status"]) {
+            $entity->setActivityStatus($data["activity_status"]);
+        }
+        if (isset($data["begin_time"]) && $data["begin_time"]) {
+            $entity->setBeginTime($data["begin_time"]);
+        }
+        if (isset($data["end_time"]) && $data["end_time"]) {
+            $entity->setEndTime($data["end_time"]);
+        }
+        if (isset($data["created"]) && $data["created"]) {
+            $entity->setCreated($data["created"]);
+        }
+
+        $entity->setUpdated(time());
+
+        return $entity;
+    }
+
+    /**
+     * 获取数据表字段数据
+     *
+     * @param entity
+     */
+    private function getColumnNamesData($entity)
+    {
+        $data = [
+            'activity_id' => $entity->getActivityId(),
+            'company_id' => $entity->getCompanyId(),
+            'activity_type' => $entity->getActivityType(),
+            'title' => $entity->getTitle(),
+            'trigger_condition' => json_decode($entity->getTriggerCondition(), 1),
+            'discount_config' => json_decode($entity->getDiscountConfig(), 1),
+            'sms_params' => json_decode($entity->getSmsParams(), 1),
+            'sms_isopen' => $entity->getSmsIsopen(),
+            'activity_status' => $entity->getActivityStatus(),
+            'begin_time' => date('Y-m-d', $entity->getBeginTime()),
+            'end_time' => date('Y-m-d', $entity->getEndTime()),
+            'created' => date('Y-m-d H:i:s', $entity->getCreated()),
+            'updated' => date('Y-m-d H:i:s', $entity->getUpdated()),
+        ];
+
+        if ($entity->getActivityStatus() == 'valid') {
+            if ($entity->getBeginTime() > time()) {
+                $data['status'] = 'ready';
+            } else {
+                $data['status'] = 'processing';
+            }
+        } else {
+            $data['status'] = 'invalid';
+        }
+
+        if ($entity->getEndTime() == '5000000000') {
+            $data['is_forever'] = true;
+        } else {
+            $data['is_forever'] = false;
+        }
+
+        return $data;
+    }
+}

@@ -1,0 +1,255 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace CompanysBundle\Entities;
+
+use Doctrine\ORM\Mapping as ORM;
+use Gedmo\Mapping\Annotation as Gedmo;
+
+/**
+ * common_lang_mod_cn 多语言语言字典库
+ *
+ * @ORM\Table(name="common_lang_mod_cn", options={"comment"="多语言字典库"}, indexes={
+ *    @ORM\Index(name="ix_company_id", columns={"company_id"}),
+ * }),
+ * @ORM\Entity(repositoryClass="CompanysBundle\Repositories\CommonLangModCNRepository")
+ */
+class CommonLangModCN
+{
+    /**
+     * @var integer
+     *
+     * @ORM\Id
+     * @ORM\Column(name="id", type="bigint", options={"comment"="id"})
+     * @ORM\GeneratedValue(strategy="AUTO")
+     */
+    private $id;
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="company_id", type="bigint", options={"comment"="公司id"})
+     */
+    private $company_id;
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="data_id", type="bigint", options={"comment"="业务id字段"})
+     */
+    private $data_id = 0;
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="table_name", type="string", options={"comment":"表名", "default": ""})
+     */
+    private $table_name = '';
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="field", type="string", options={"comment":"field,多语言对应字段", "default": ""})
+     */
+    private $field = '';
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="module_name", type="string", options={"comment":"module_name,模块名", "default": ""})
+     */
+    private $module_name = '';
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="lang", type="string", options={"comment":"语言", "default": ""})
+     */
+    private $lang = '';
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="attribute_value", type="text", options={"comment":"多语言值"})
+     */
+    private $attribute_value = '';
+
+
+    /**
+     * @var \DateTime $created
+     *
+     * @Gedmo\Timestampable(on="create")
+     * @ORM\Column(type="integer")
+     */
+    protected $created;
+
+    /**
+     * @var \DateTime $updated
+     *
+     * @Gedmo\Timestampable(on="update")
+     * @ORM\Column(type="integer", nullable=true)
+     */
+    protected $updated;
+
+
+    /**
+     * Set Id
+     *
+     * @param integer $id
+     *
+     * @return Keywords
+     */
+    public function setId($id)
+    {
+        // ShopEx EcShopX Core Module
+        $this->id = $id;
+
+        return $this;
+    }
+
+    /**
+     * Get Id
+     *
+     * @return integer
+     */
+    public function getId()
+    {
+        return $this->id;
+    }
+
+    /**
+     * Set companyId
+     *
+     * @param integer $companyId
+     *
+     * @return Keywords
+     */
+    public function setCompanyId($companyId)
+    {
+        $this->company_id = $companyId;
+
+        return $this;
+    }
+
+    /**
+     * Get companyId
+     *
+     * @return integer
+     */
+    public function getCompanyId()
+    {
+        // 456353686f7058
+        return $this->company_id;
+    }
+
+    public function getTableName()
+    {
+        return $this->table_name;
+    }
+
+    public function setTableName(string $table_name)
+    {
+        $this->table_name = $table_name;
+    }
+
+    public function getModuleName()
+    {
+        return $this->module_name;
+    }
+
+    public function setModuleName(string $module_name)
+    {
+        $this->module_name = $module_name;
+    }
+
+    public function getLang()
+    {
+        return $this->lang;
+    }
+
+    public function setLang(string $lang)
+    {
+        $this->lang = $lang;
+    }
+
+    public function getAttributeValue()
+    {
+        return $this->attribute_value;
+    }
+
+    public function setAttributeValue(string $attribute_value)
+    {
+        $this->attribute_value = $attribute_value;
+    }
+
+    /**
+     * Set created
+     *
+     * @param integer $created
+     *
+     * @return ItemsCategory
+     */
+    public function setCreated($created)
+    {
+        $this->created = $created;
+
+        return $this;
+    }
+
+    /**
+     * Get created
+     *
+     * @return integer
+     */
+    public function getCreated()
+    {
+        return $this->created;
+    }
+
+    /**
+     * Set updated
+     *
+     * @param integer $updated
+     *
+     * @return ItemsCategory
+     */
+    public function setUpdated($updated)
+    {
+        $this->updated = $updated;
+
+        return $this;
+    }
+
+    /**
+     * Get updated
+     *
+     * @return integer
+     */
+    public function getUpdated()
+    {
+        return $this->updated;
+    }
+
+    public function getDataId()
+    {
+        return $this->data_id;
+    }
+
+    public function setDataId(int $data_id)
+    {
+        $this->data_id = $data_id;
+    }
+
+    public function getField(): string
+    {
+        return $this->field;
+    }
+
+    public function setField(string $field): void
+    {
+        $this->field = $field;
+    }
+}

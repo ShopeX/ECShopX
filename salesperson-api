@@ -1,0 +1,31 @@
+#!/bin/bash
+
+echo "salesperson-api starting..."
+# 售后接口
+php artisan api:swagger --output=src/AftersalesBundle/Http/AdminApi
+# 登陆接口
+php artisan api:swagger --output=src/CompanysBundle/Http/AdminApi
+# 基础接口（图片相关）
+php artisan api:swagger --output=src/EspierBundle/Http/AdminApi
+# 商品接口
+php artisan api:swagger --output=src/GoodsBundle/Http/AdminApi
+# 卡券V1接口
+php artisan api:swagger --output=src/KaquanBundle/Http/AdminApi/V1
+# 卡券V2接口
+php artisan api:swagger --output=src/KaquanBundle/Http/AdminApi/V2
+# 会员接口
+php artisan api:swagger --output=src/MembersBundle/Http/AdminApi
+# 订单接口
+php artisan api:swagger --output=src/OrdersBundle/Http/AdminApi
+# 活动接口
+php artisan api:swagger --output=src/PromotionsBundle/Http/AdminApi
+# 预约接口
+php artisan api:swagger --output=src/ReservationBundle/Http/AdminApi
+# 导购V1接口
+php artisan api:swagger --output=src/SalespersonBundle/Http/AdminApi/V1
+# 导购V2接口
+php artisan api:swagger --output=src/SalespersonBundle/Http/AdminApi/V2
+# 自主表单接口
+php artisan api:swagger --output=src/SelfserviceBundle/Http/AdminApi/V1
+
+echo "salesperson-api end."

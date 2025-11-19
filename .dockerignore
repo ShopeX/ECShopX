@@ -1,0 +1,9 @@
+# Created by .ignore support plugin (hsz.mobi)
+/data
+#composer.lock
+package-lock.json
+.git
+.idea
+node_modules
+#vendor
+storage/framework/cache/**

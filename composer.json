@@ -1,0 +1,118 @@
+{
+    "name": "laravel/lumen",
+    "version": "3.21.2",
+    "description": "The Laravel Lumen Framework.",
+    "keywords": ["framework", "laravel", "lumen"],
+    "license": "MIT",
+    "type": "project",
+    "require": {
+        "php": "^7.4|^8.0",
+        "ext-zip": "*",
+        "alibabacloud/client": "^1.5",
+        "alibabacloud/dysmsapi-20170525": "^3.1",
+        "alipaysdk/easysdk": "2.2.2",
+        "aws/aws-sdk-php-laravel": "^3.6",
+        "digbang/safe-queue": "^0.6.0",
+        "dingo/api": "^3.0",
+        "doctrine/orm": "2.13.*",
+        "doctrine/persistence": "^2.2",
+        "facile-it/doctrine-mysql-come-back": "^1.10",
+        "gedmo/doctrine-extensions": "^3.1",
+        "gregwar/captcha": "^1.1",
+        "hashids/hashids": "^4.1",
+        "iidestiny/laravel-filesystem-oss": "^2.1",
+        "illuminate/redis": "^8.60",
+        "laravel-doctrine/extensions": "^1.4",
+        "laravel-doctrine/migrations": "^2.3",
+        "laravel-doctrine/orm": "^1.7",
+        "laravel/helpers": "^1.4",
+        "laravel/lumen-framework": "^8.0",
+        "maatwebsite/excel": "3.1.40",
+        "madnest/madzipper": "^1.1",
+        "milon/barcode": "^8.0",
+        "onex/espier-swoole": "^2.0.0",
+        "overtrue/laravel-filesystem-qiniu": "^1.0",
+        "paypal/paypal-server-sdk": "1.1.0",
+        "predis/predis": "^1.1",
+        "sentry/sentry-laravel": "^2.8",
+        "shopex/prism": "^3.0",
+        "symfony/process": "^5.3",
+        "symfony/property-access": "^5.3",
+        "tymon/jwt-auth": "^1.0",
+        "vladimir-yuldashev/laravel-queue-rabbitmq": "^11.3",
+        "w7corp/easywechat": "^5.0",
+        "yansongda/pay": "^2.6",
+        "yly-openapi/yly-openapi-sdk": "^1.0",
+        "yurunsoft/yurun-oauth-login": "^3.0",
+        "freyo/flysystem-qcloud-cos-v5":"^2.0",
+        "elasticsearch/elasticsearch": "^8.0",
+        "swiftmailer/swiftmailer": "^6.0"
+    },
+    "require-dev": {
+        "brainmaestro/composer-git-hooks": "^2.8",
+        "fakerphp/faker": "^1.19",
+        "friendsofphp/php-cs-fixer": "^3.7",
+        "mockery/mockery": "^1.5",
+        "onex/espier-swagger": "~0.2",
+        "phpstan/phpstan": "^1.6",
+        "phpunit/phpunit": "^9.3",
+        "symfony/var-dumper": "^5.4",
+        "vimeo/psalm": "^5.0"
+    },
+    "autoload": {
+        "classmap": [
+            "app/AppKernel.php",
+            "app/phpqrcode.php"
+        ],
+        "psr-4": {
+            "App\\": "app/",
+            "": "src/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/"
+        },
+        "files": [
+            "app/helpers.php",
+            "vendor/shopex/prism/src/PrismClient.php"
+        ]
+    },
+    "autoload-dev": {
+        "classmap": [
+            "tests/",
+            "database/"
+        ]
+    },
+    "config": {
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "allow-plugins": {
+            "easywechat-composer/easywechat-composer": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "post-update-cmd": [
+            "cghooks update"
+        ],
+        "post-merge": "composer install",
+        "post-install-cmd": [
+            "cghooks add --ignore-lock",
+            "cghooks update"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "check-style": "php-cs-fixer fix --using-cache=no --diff --config=.php-cs-fixer.dist.php --dry-run --allow-risky=yes --ansi",
+        "fix-style": "php-cs-fixer fix --using-cache=no --config=.php-cs-fixer.dist.php --allow-risky=yes --ansi",
+        "phpstan": "phpstan analyse",
+        "test": "phpunit --colors",
+        "psalm": "psalm"
+    },
+    "repositories": {
+        "packagist": {
+            "type": "composer",
+            "url": "https://mirrors.aliyun.com/composer/"
+        }
+    }
+}

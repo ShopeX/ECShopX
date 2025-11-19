@@ -1,0 +1,295 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace DistributionBundle\Repositories;
+
+use Doctrine\ORM\EntityRepository;
+use Doctrine\Common\Collections\Criteria;
+use DistributionBundle\Entities\CashWithdrawal;
+
+use Dingo\Api\Exception\ResourceException;
+
+class CashWithdrawalRepository extends EntityRepository
+{
+    /**
+     * 新增
+     *
+     * @param array $data
+     */
+    public function create($data)
+    {
+        // ShopEx EcShopX Core Module
+        $entity = new CashWithdrawal();
+        $entity = $this->setColumnNamesData($entity, $data);
+
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 更新数据表字段数据
+     *
+     * @param $filter 更新的条件
+     * @param $data 更新的内容
+     */
+    public function updateOneBy(array $filter, array $data)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            throw new ResourceException(trans('DistributionBundle/Repositories.no_update_data_found'));
+        }
+
+        $entity = $this->setColumnNamesData($entity, $data);
+
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 更新多条数数据
+     *
+     * @param $filter 更新的条件
+     * @param $data 更新的内容
+     */
+    public function updateBy(array $filter, array $data)
+    {
+        $entityList = $this->findBy($filter);
+        if (!$entityList) {
+            throw new ResourceException(trans('DistributionBundle/Repositories.no_update_data_found'));
+        }
+
+        $em = $this->getEntityManager();
+        $result = [];
+        foreach ($entityList as $entityProp) {
+            $entityProp = $this->setColumnNamesData($entityProp, $data);
+            $em->persist($entityProp);
+            $em->flush();
+            $result[] = $this->getColumnNamesData($entityProp);
+        }
+        return $result;
+    }
+
+    /**
+     * 根据主键删除指定数据
+     *
+     * @param $id
+     */
+    public function deleteById($id)
+    {
+        $entity = $this->find($id);
+        if (!$entity) {
+            throw new \Exception(trans('DistributionBundle/Repositories.delete_data_not_exist'));
+        }
+        $em = $this->getEntityManager();
+        $em->remove($entity);
+        $em->flush();
+        return true;
+    }
+
+    /**
+     * 根据条件删除指定数据
+     *
+     * @param $filter 删除的条件
+     */
+    public function deleteBy($filter)
+    {
+        $entityList = $this->findBy($filter);
+        if (!$entityList) {
+            throw new \Exception(trans('DistributionBundle/Repositories.delete_data_not_exist'));
+        }
+        $em = $this->getEntityManager();
+        foreach ($entityList as $entityProp) {
+            $em->remove($entityProp);
+            $em->flush();
+        }
+        return true;
+    }
+
+    /**
+     * 根据主键获取数据
+     *
+     * @param $id
+     */
+    public function getInfoById($id)
+    {
+        $entity = $this->find($id);
+        if (!$entity) {
+            return [];
+        }
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 根据条件获取单条数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function getInfo(array $filter)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            return [];
+        }
+
+        return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 统计数量
+     */
+    public function count($filter)
+    {
+        $criteria = Criteria::create();
+        foreach ($filter as $field => $value) {
+            $list = explode("|", $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                $criteria = $criteria->andWhere(Criteria::expr()->$k($v, $value));
+                continue;
+            } elseif (is_array($value)) {
+                $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+            } else {
+                $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+            }
+        }
+
+        $total = $this->getEntityManager()
+            ->getUnitOfWork()
+            ->getEntityPersister($this->getEntityName())
+            ->count($criteria);
+
+        return intval($total);
+    }
+
+    /**
+     * 根据条件获取单条数据
+     *
+     * @param $filter 更新的条件
+     */
+    public function lists($filter, $orderBy = ["created" => "DESC"], $pageSize = 100, $page = 1)
+    {
+        $criteria = Criteria::create();
+        foreach ($filter as $field => $value) {
+            $list = explode("|", $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                $criteria = $criteria->andWhere(Criteria::expr()->$k($v, $value));
+                continue;
+            } elseif (is_array($value)) {
+                $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+            } else {
+                $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+            }
+        }
+
+        $total = $this->getEntityManager()
+            ->getUnitOfWork()
+            ->getEntityPersister($this->getEntityName())
+            ->count($criteria);
+        $res["total_count"] = intval($total);
+
+        $lists = [];
+        if ($res["total_count"]) {
+            $criteria = $criteria->orderBy($orderBy)
+                ->setFirstResult($pageSize * ($page - 1))
+                ->setMaxResults($pageSize);
+            $entityList = $this->matching($criteria);
+            foreach ($entityList as $entity) {
+                $lists[] = $this->getColumnNamesData($entity);
+            }
+        }
+
+        $res["list"] = $lists;
+        return $res;
+    }
+
+    /**
+     * 设置entity数据，用于插入和更新操作
+     *
+     * @param $entity
+     * @param $data
+     */
+    private function setColumnNamesData($entity, $data)
+    {
+        if (isset($data["id"]) && $data["id"]) {
+            $entity->setId($data["id"]);
+        }
+        if (isset($data["company_id"]) && $data["company_id"]) {
+            $entity->setCompanyId($data["company_id"]);
+        }
+        if (isset($data["distributor_id"]) && $data["distributor_id"]) {
+            $entity->setDistributorId($data["distributor_id"]);
+        }
+        if (isset($data["distributor_name"]) && $data["distributor_name"]) {
+            $entity->setDistributorName($data["distributor_name"]);
+        }
+        if (isset($data["open_id"]) && $data["open_id"]) {
+            $entity->setOpenId($data["open_id"]);
+        }
+        if (isset($data["user_id"]) && $data["user_id"]) {
+            $entity->setUserId($data["user_id"]);
+        }
+        if (isset($data["distributor_mobile"]) && $data["distributor_mobile"]) {
+            $entity->setDistributorMobile($data["distributor_mobile"]);
+        }
+        if (isset($data["money"]) && $data["money"]) {
+            $entity->setMoney($data["money"]);
+        }
+        if (isset($data["status"]) && $data["status"]) {
+            $entity->setStatus($data["status"]);
+        }
+        if (isset($data["remarks"]) && $data["remarks"]) {
+            $entity->setRemarks($data["remarks"]);
+        }
+        if (isset($data["wxa_appid"]) && $data["wxa_appid"]) {
+            $entity->setWxaAppid($data["wxa_appid"]);
+        }
+        if (isset($data["created"]) && $data["created"]) {
+            $entity->setCreated($data["created"]);
+        }
+        if (isset($data["updated"]) && $data["updated"]) {
+            $entity->setUpdated($data["updated"]);
+        }
+
+        if (isset($data["shop_id"])) {
+            $entity->setShopId($data["shop_id"]);
+        }
+
+        return $entity;
+    }
+
+    /**
+     * 获取数据表字段数据
+     *
+     * @param entity
+     */
+    private function getColumnNamesData($entity)
+    {
+        return [
+            'id' => $entity->getId(),
+            'company_id' => $entity->getCompanyId(),
+            'distributor_id' => $entity->getDistributorId(),
+            'distributor_name' => $entity->getDistributorName(),
+            'open_id' => $entity->getOpenId(),
+            'user_id' => $entity->getUserId(),
+            'distributor_mobile' => $entity->getDistributorMobile(),
+            'money' => $entity->getMoney(),
+            'status' => $entity->getStatus(),
+            'remarks' => $entity->getRemarks(),
+            'wxa_appid' => $entity->getWxaAppid(),
+            'shop_id' => $entity->getShopId(),
+            'created' => $entity->getCreated(),
+            'updated' => $entity->getUpdated(),
+        ];
+    }
+}

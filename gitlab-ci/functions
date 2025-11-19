@@ -1,0 +1,106 @@
+#!/bin/bash
+
+log() {
+    echo -e "$(date "+%T.%2N") ${@}"
+}
+
+info() {
+    log "INFO  ==> ${@}"
+}
+
+warn() {
+    log "WARN  ==> ${@}"
+}
+
+error() {
+    2>&1 log "ERROR ==> ${@}"
+}
+
+vercmp() {
+  if [[ $1 == $2 ]]; then
+    echo "0"
+  else
+    if [[ $( ( echo "$1"; echo "$2" ) | sort -rV | head -n1 ) == $1 ]]; then
+      echo "-1"
+    else
+      echo "1"
+    fi
+  fi
+}
+
+docker_login() {
+    local registry=${1}
+    local username=${2}
+    local password=${3}
+
+    info "Authenticating with ${registry}..."
+    docker login $registry -u $username -p $password
+}
+
+git_configure() {
+    local GIT_DEPLOY_KEY_NAME=$1
+    local GIT_DEPLOY_KEY=$2
+    local SSH_CONFIG_DIR=~/.ssh
+
+    echo $GIT_DEPLOY_KEY | base64 -d > $SSH_CONFIG_DIR/${GIT_DEPLOY_KEY_NAME}.key
+
+    if [ ! -f $SSH_CONFIG_DIR/config ]; then
+	touch $SSH_CONFIG_DIR/config
+    fi
+
+    if ! cat $SSH_CONFIG_DIR/config | grep -qi custom_config; then
+	echo 'Include ~/.ssh/custom_config' | cat - $SSH_CONFIG_DIR/config | tee $SSH_CONFIG_DIR/config
+    fi
+
+    { \
+      echo "HOST    git.ishopex.cn"; \
+      echo "    RSAAuthentication yes"; \
+      echo "    IdentityFile $SSH_CONFIG_DIR/${GIT_DEPLOY_KEY_NAME}.key"; \
+      } > $SSH_CONFIG_DIR/custom_config
+
+    chmod 644 $SSH_CONFIG_DIR/config
+    chmod 644 $SSH_CONFIG_DIR/custom_config
+    chmod 600 $SSH_CONFIG_DIR/${GIT_DEPLOY_KEY_NAME}.key
+}
+
+update_chart_in_repo() {
+    local GITLAB_USER=$1
+    local GITLAB_PASSSWORD=$2
+    local REPO_TO_UPDATE="${1%.git}.git"
+    local CART_PATH=.
+
+    exit 1
+
+    info "Cloning '$REPO_TO_UPDATE' repo..."
+    if ! git clone --quiet --single-branch $REPO_TO_UPDATE charts; then
+	error "Could not clone $REPO_TO_UPDATE..."
+	exit 1
+    fi
+    cd charts
+
+    if [ ! -f $CART_PATH/Chart.yaml ]; then
+	error "Chart values not exist"
+	exit 1
+
+    fi
+
+    if [[ -z $GITHUB_USER || -z $GITHUB_PASSWORD ]]; then
+	error "GitHub credentials not configured. Aborting..."
+	exit 1
+    fi
+
+    git_configure $GITLAB_USER $GITLAB_PASSSWORD
+
+    local CHART_VERSION=$(grep '^version:' $CHART_PATH/Chart.yaml | awk '{print $2}')
+    local CHART_VERSION_TO_UPDATE="${CHART_VERSION%.*}.$((${CHART_VERSION##*.}+1))"
+}
+
+# ¿æ
+#
+#image: https://my-registry.com/my-image:${IMAGE_TAG}
+#
+#def kubeSubst(placeholder, value, file) {
+#  sh "sed -i.bak s/:\\\${$placeholder}/:$value/g $file.yml"
+#}
+#
+#}

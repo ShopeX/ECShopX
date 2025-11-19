@@ -1,0 +1,125 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace GoodsBundle\Http\Api\V1\Action;
+
+use App\Http\Controllers\Controller as BaseController;
+use Illuminate\Http\Request;
+use SystemLinkBundle\Jobs\GetItemsFromOme;
+use SystemLinkBundle\Jobs\GetBrandFromOme;
+use SystemLinkBundle\Jobs\GetItemsSpecFromOme;
+use SystemLinkBundle\Jobs\GetItemsCategoryFromOme;
+
+class SyncFromOme extends BaseController
+{
+    /**
+     * @SWG\Post(
+     *     path="/goods/sync/items",
+     *     summary="从oms同步商品数据",
+     *     tags={"商品"},
+     *     description="从oms同步商品数据",
+     *     operationId="syncItemCategory",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string" ),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="status", type="string", example="true", description=""),
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/GoodsErrorRespones") ) )
+     * )
+     */
+    public function syncItems(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+
+        $gotoJob = (new GetItemsFromOme($companyId, 1, time()))->onQueue('slow');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+
+        $result['status'] = true;
+        return response()->json($result);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/goods/sync/itemCategory",
+     *     summary="从oms同步商品分类",
+     *     tags={"商品"},
+     *     description="从oms同步商品分类",
+     *     operationId="syncItemCategory",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string" ),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="status", type="string", example="true", description=""),
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/GoodsErrorRespones") ) )
+     * )
+     */
+    public function syncItemCategory(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+
+        $gotoJob = (new GetItemsCategoryFromOme($companyId))->onQueue('slow');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+
+        $result['status'] = true;
+        return response()->json($result);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/goods/sync/itemSpec",
+     *     summary="从oms同步商品规格",
+     *     tags={"商品"},
+     *     description="从oms同步商品规格",
+     *     operationId="syncItemSpec",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string" ),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="status", type="string", example="true", description=""),
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/GoodsErrorRespones") ) )
+     * )
+     */
+    public function syncItemSpec(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+
+        $gotoJob = (new GetItemsSpecFromOme($companyId, 1, time()))->onQueue('slow');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+
+        $result['status'] = true;
+        return response()->json($result);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/goods/sync/brand",
+     *     summary="从oms同步品牌",
+     *     tags={"商品"},
+     *     description="从oms同步品牌",
+     *     operationId="syncBrand",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string" ),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="status", type="string", example="true", description=""),
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/GoodsErrorRespones") ) )
+     * )
+     */
+    public function syncBrand(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+
+        $gotoJob = (new GetBrandFromOme($companyId, 1, time()))->onQueue('slow');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+
+        $result['status'] = true;
+        return response()->json($result);
+    }
+}

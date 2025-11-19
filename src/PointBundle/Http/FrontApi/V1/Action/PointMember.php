@@ -1,0 +1,127 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace PointBundle\Http\FrontApi\V1\Action;
+
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller as Controller;
+use PointBundle\Services\PointMemberLogService;
+use PointBundle\Services\PointMemberService;
+
+class PointMember extends Controller
+{
+    /**
+     * @SWG\Get(
+     *     path="/wxapp/point/member",
+     *     summary="积分列表",
+     *     tags={"积分"},
+     *     description="会员积分记录列表",
+     *     operationId="lists",
+     *     @SWG\Parameter(
+     *         name="Authorization",
+     *         in="header",
+     *         description="JWT验证token",
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter( name="page_no", in="query", description="页码 default:1", type="integer"),
+     *     @SWG\Parameter( name="page_size", in="query", description="条数 default:10", type="integer"),
+     *     @SWG\Parameter( name="outin_type", in="query", description="类型 outcome:支出 income:收入", type="string"),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @SWG\Property(property="total_count", type="integer", description="总数"),
+     *                 @SWG\Property(
+     *                     property="list",
+     *                     type="array",
+     *                     @SWG\Items(
+     *                         @SWG\Property(property="company_id", type="string", description="企业Id"),
+     *                         @SWG\Property(property="id", type="string", description="自增Id"),
+     *                         @SWG\Property(property="user_id", type="string", description="会员ID"),
+     *                         @SWG\Property(property="income", type="integer", description="收入"),
+     *                         @SWG\Property(property="outcome", type="integer", description="支出"),
+     *                         @SWG\Property(property="point", type="integer", description="增加或减少的积分数"),
+     *                         @SWG\Property(property="journal_type", type="integer", description="积分交易类型，1:注册送积分 2.推荐送分 3.充值返积分 4.推广注册返积分 5.积分换购 6.储值兑换积分 7.订单返积分 8.会员等级返佣 9.取消订处理积分 10.售后处理积分 11.大转盘抽奖送积分 12:管理员手动调整积分"),
+     *                         @SWG\Property(property="outin_type", type="string", description="类型 out:支出 in:收入"),
+     *                         @SWG\Property(property="point_desc", type="string", description="积分描述"),
+     *                         @SWG\Property(property="order_id", type="string", description="订单编号"),
+     *                         @SWG\Property(property="created", type="string", description="创建时间 时间戳"),
+     *                         @SWG\Property(property="updated", type="string", description="更新时间 时间戳"),
+     *                         ),
+     *                     ),
+     *             ),
+     *          ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/PointErrorRespones") ) )
+     * )
+     */
+    public function lists(Request $request)
+    {
+        $page = $request->input('page_no', 1);
+        $pageSize = $request->input('page_size', 10);
+        $authInfo = $request->get('auth');
+        $params['company_id'] = $authInfo['company_id'];
+        $params['user_id'] = $authInfo['user_id'];
+        $outinType = $request->input('outin_type');
+        if ($outinType) {
+            if ('outcome' == $outinType) {
+                $params['outcome|gt'] = 0;
+            } else {
+                $params['income|gt'] = 0;
+            }
+        }
+        $pointMemberService = new PointMemberLogService();
+        $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
+
+        foreach ($result['list'] as $key => $row) {
+            $result['list'][$key]['journal_type_desc'] = PointMemberService::JOURNAL_TYPE_MAP[$row['journal_type']] ?? '';
+        }
+
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Get(
+     *     path="/wxapp/point/member/info",
+     *     summary="获取积分信息",
+     *     tags={"积分"},
+     *     description="获取积分统计信息",
+     *     operationId="info",
+     *     @SWG\Parameter(
+     *         name="Authorization",
+     *         in="header",
+     *         description="JWT验证token",
+     *         type="string",
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @SWG\Property(property="user_id", type="string", description="会员ID"),
+     *                 @SWG\Property(property="company_id", type="string", description="企业ID"),
+     *                 @SWG\Property(property="point", type="string", description="现有积分数"),
+     *             ),
+     *          ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/PointErrorRespones") ) )
+     * )
+     */
+    public function info(Request $request)
+    {
+        $authInfo = $request->get('auth');
+        $params['company_id'] = $authInfo['company_id'];
+        $params['user_id'] = $authInfo['user_id'];
+        $pointMemberService = new PointMemberService();
+        $result = $pointMemberService->getInfo($params);
+        return $this->response->array($result);
+    }
+}

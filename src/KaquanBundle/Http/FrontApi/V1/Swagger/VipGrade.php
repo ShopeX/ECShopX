@@ -1,0 +1,42 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace KaquanBundle\Http\FrontApi\V1\Swagger;
+
+/**
+ * @SWG\Definition(type="object")
+ */
+class VipGrade
+{
+    // CRC: 2367340174
+    /**
+     * @SWG\Property( property="vip_grade_id", type="string", example="1", description="ID"),
+     * @SWG\Property( property="company_id", type="string", example="1", description="公司ID"),
+     * @SWG\Property( property="grade_name", type="string", example="一般付费", description="等级名称"),
+     * @SWG\Property( property="lv_type", type="string", example="vip", description="等级类型,可选值有 vip:普通vip;svip:进阶vip"),
+     * @SWG\Property( property="default_grade", type="string", example="false", description="是否默认等级"),
+     * @SWG\Property( property="is_disabled", type="string", example="false", description="是否禁用"),
+     * @SWG\Property( property="background_pic_url", type="string", example="http://mmbiz.qpic.cn/mmbiz_jpg/MUQsdY0GdK5nQNFBaEhiao8MfBoP4B70L2rfqJDROzKgwUBvANmHMq9bQV2G1IWibKxK8iaukqbHiaicNkGKZPbX8EA/0?wx_fmt=jpeg", description="商家自定义会员卡背景图"),
+     * @SWG\Property( property="description", type="string", example="1、VIP 2、整场促销 3、畅想优惠 4、详细说明 5、详细说明", description="详细说明"),
+     * @SWG\Property( property="price_list", type="array",
+     *     @SWG\Items( type="object",
+     *         @SWG\Property( property="name", type="string", example="monthly", description="名称"),
+     *         @SWG\Property( property="price", type="string", example="0.01", description="价格"),
+     *         @SWG\Property( property="day", type="string", example="30", description="有效期"),
+     *         @SWG\Property( property="desc", type="string", example="30天", description="描述"),
+     *      ),
+     * ),
+     * @SWG\Property( property="privileges", type="object",
+     *         @SWG\Property( property="discount", type="string", example="20", description=""),
+     *         @SWG\Property( property="discount_desc", type="string", example="8", description=""),
+     * ),
+     * @SWG\Property( property="created", type="string", example="1560947408", description="创建时间"),
+     * @SWG\Property( property="updated", type="string", example="1560947408", description="修改时间"),
+     * @SWG\Property( property="guide_title", type="string", example="开通vip的引导文本，更多优惠等你来享受哦！", description="购买引导文本"),
+     * @SWG\Property( property="is_default", type="string", example="true", description="是否默认"),
+     *
+     */
+}

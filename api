@@ -1,0 +1,83 @@
+#!/bin/bash
+
+echo "生成frontapi文档-开始"
+php artisan api:swagger --output=src/AdaPayBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/AftersalesBundle/Http/FrontApi/V1
+#php artisan api:swagger --output=src/AliBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/CommentsBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/CommunityBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/CompanysBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/DataCubeBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/DepositBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/DistributionBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/EspierBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/GoodsBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/HfPayBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/ImBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/KaquanBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/MembersBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/MerchantBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/OrdersBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/PaymentBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/PointBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/PointsmallBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/PopularizeBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/PromotionsBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/ReservationBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/SalespersonBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/SelfserviceBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/ThemeBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/WechatBundle/Http/FrontApi/V1
+php artisan api:swagger --output=src/GoodsBundle/Http/FrontApi/V2
+php artisan api:swagger --output=src/KaquanBundle/Http/FrontApi/V2
+echo "生成frontapi文档-结束"
+
+echo "生成api文档-开始"
+php artisan api:swagger --output=src/AdaPayBundle/Http/Api/V1
+php artisan api:swagger --output=src/AftersalesBundle/Http/Api/V1
+#php artisan api:swagger --output=src/AliBundle/Http/Api/V1
+php artisan api:swagger --output=src/AliyunsmsBundle/Http/Api/V1
+php artisan api:swagger --output=src/CommentsBundle/Http/Api/V1
+php artisan api:swagger --output=src/CommunityBundle/Http/Api/V1
+php artisan api:swagger --output=src/CompanysBundle/Http/Api/V1
+php artisan api:swagger --output=src/CrossBorderBundle/Http/Api/V1
+php artisan api:swagger --output=src/DataCubeBundle/Http/Api/V1
+php artisan api:swagger --output=src/DepositBundle/Http/Api/V1
+php artisan api:swagger --output=src/DistributionBundle/Http/Api/V1
+php artisan api:swagger --output=src/EspierBundle/Http/Api/V1
+#php artisan api:swagger --output=src/FormBundle/Http/Api/V1
+php artisan api:swagger --output=src/GoodsBundle/Http/Api/V1
+php artisan api:swagger --output=src/HfPayBundle/Http/Api/V1
+php artisan api:swagger --output=src/ImBundle/Http/Api/V1
+php artisan api:swagger --output=src/KaquanBundle/Http/Api/V1
+php artisan api:swagger --output=src/MembersBundle/Http/Api/V1
+php artisan api:swagger --output=src/MerchantBundle/Http/Api/V1
+#php artisan api:swagger --output=src/OneCodeBundle/Http/Api/V1
+php artisan api:swagger --output=src/OpenapiBundle/Http/Api/V1
+php artisan api:swagger --output=src/OrdersBundle/Http/Api/V1
+php artisan api:swagger --output=src/PaymentBundle/Http/Api/V1
+php artisan api:swagger --output=src/PointBundle/Http/Api/V1
+php artisan api:swagger --output=src/PointsmallBundle/Http/Api/V1
+php artisan api:swagger --output=src/PopularizeBundle/Http/Api/V1
+php artisan api:swagger --output=src/PromotionsBundle/Http/Api/V1
+php artisan api:swagger --output=src/ReservationBundle/Http/Api/V1
+php artisan api:swagger --output=src/SalespersonBundle/Http/Api/V1
+php artisan api:swagger --output=src/SelfserviceBundle/Http/Api/V1
+php artisan api:swagger --output=src/ShopmenuBorderBundle/Http/Api/V1
+php artisan api:swagger --output=src/SuperAdminBundle/Http/Api/V1
+php artisan api:swagger --output=src/SystemLinkBundle/Http/Api/V1
+php artisan api:swagger --output=src/TdksetBundle/Http/Api/V1
+php artisan api:swagger --output=src/ThemeBundle/Http/Api/V1
+php artisan api:swagger --output=src/ThirdPartyBundle/Http/Api/V1
+php artisan api:swagger --output=src/WechatBundle/Http/Api/V1
+php artisan api:swagger --output=src/WorkWechatBundle/Http/Api/V1
+php artisan api:swagger --output=src/YoushuBundle/Http/Api/V1
+echo "生成api文档-结束"
+
+echo "生成thirdapi文档-开始"
+# php artisan api:swagger --output=src/HfPayBundle/Http/ThirdApi/V1
+# php artisan api:swagger --output=src/SystemLinkBundle/Http/ThirdApi/V1
+# php artisan api:swagger --output=src/ThirdPartyBundle/Http/ThirdApi/V1
+php artisan api:swagger --output=src/OpenapiBundle/Http/ThirdApi/V1
+php artisan api:swagger --output=src/OpenapiBundle/Http/ThirdApi/V2
+echo "生成thirdapi文档-结束"

@@ -1,0 +1,15 @@
+{
+    "name": "shopex/ai-bundle",
+    "description": "ShopexAI Bundle for generating articles and images",
+    "type": "library",
+    "require": {
+        "php": "^7.4",
+        "alibabacloud/client": "^1.5",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "ShopexAIBundle\\": ""
+        }
+    }
+} 

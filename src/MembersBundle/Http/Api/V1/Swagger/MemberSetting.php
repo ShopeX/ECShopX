@@ -1,0 +1,86 @@
+<?php
+/**
+ * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
+ * See LICENSE file for license details.
+ */
+
+namespace MembersBundle\Http\Api\V1\Swagger;
+
+/**
+ * @SWG\Definition(type="object")
+ */
+class MemberSetting
+{
+    /**
+     *  @SWG\Property( property="username", type="object",
+     *          @SWG\Property( property="name", type="string", example="姓名", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="true", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="element_type", type="string", example="input", description="对象类型"),
+     *          @SWG\Property( property="is_required", type="string", example="false", description="是否必填"),
+     *  ),
+     *  @SWG\Property( property="sex", type="object",
+     *          @SWG\Property( property="name", type="string", example="性别", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="true", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="element_type", type="string", example="select", description="对象类型"),
+     *          @SWG\Property( property="is_required", type="string", example="true", description="是否必填"),
+     *  ),
+     *  @SWG\Property( property="birthday", type="object",
+     *          @SWG\Property( property="name", type="string", example="出生年份", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="false", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="element_type", type="string", example="select", description="对象类型"),
+     *          @SWG\Property( property="is_required", type="string", example="false", description="是否必填"),
+     *  ),
+     *  @SWG\Property( property="address", type="object",
+     *          @SWG\Property( property="name", type="string", example="家庭地址", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="false", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="element_type", type="string", example="input", description="对象类型"),
+     *          @SWG\Property( property="is_required", type="string", example="false", description="是否必填"),
+     *  ),
+     *  @SWG\Property( property="email", type="object",
+     *          @SWG\Property( property="name", type="string", example="email", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="false", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="element_type", type="string", example="input", description="对象类型"),
+     *          @SWG\Property( property="is_required", type="string", example="false", description="是否必填"),
+     *  ),
+     *  @SWG\Property( property="industry", type="object",
+     *          @SWG\Property( property="name", type="string", example="行业", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="false", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="element_type", type="string", example="select", description="对象类型"),
+     *          @SWG\Property( property="is_required", type="string", example="false", description="是否必填"),
+     *          @SWG\Property( property="items", type="array",
+     *              @SWG\Items( type="string", example="金融/银行/投资", description="对象类型"),
+     *          ),
+     *  ),
+     *  @SWG\Property( property="income", type="object",
+     *          @SWG\Property( property="name", type="string", example="年收入", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="false", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="is_required", type="string", example="false", description="是否必填"),
+     *          @SWG\Property( property="element_type", type="string", example="select", description="对象类型"),
+     *          @SWG\Property( property="items", type="array",
+     *              @SWG\Items( type="string", example="5万以下", description="对象详情"),
+     *          ),
+     *  ),
+     *  @SWG\Property( property="edu_background", type="object",
+     *          @SWG\Property( property="name", type="string", example="学历", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="false", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="element_type", type="string", example="select", description="对象类型"),
+     *          @SWG\Property( property="is_required", type="string", example="false", description="是否必填"),
+     *          @SWG\Property( property="items", type="array",
+     *              @SWG\Items( type="string", example="硕士及以上", description="配置名称"),
+     *          ),
+     *  ),
+     *  @SWG\Property( property="habbit", type="object",
+     *          @SWG\Property( property="name", type="string", example="爱好", description="配置名称"),
+     *          @SWG\Property( property="is_open", type="string", example="false", description="是否开启 1:开启,0:关闭"),
+     *          @SWG\Property( property="is_required", type="string", example="false", description="是否必填"),
+     *          @SWG\Property( property="element_type", type="string", example="checkbox", description="对象类型"),
+     *          @SWG\Property( property="items", type="array",
+     *              @SWG\Items( type="object",
+     *                  @SWG\Property( property="name", type="string", example="游戏", description="对象详情"),
+     *                  @SWG\Property( property="ischecked", type="string", example="false", description=""),
+     *               ),
+     *          ),
+     *  ),
+     *
+     */
+}

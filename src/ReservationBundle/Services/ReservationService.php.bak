@@ -1,0 +1,360 @@
+<?php
+namespace ReservationBundle\Services;
+
+use Dingo\Api\Exception\ResourceException;
+
+use ReservationBundle\Entities\ReservationRecord;
+use ReservationBundle\Entities\ResourceLevel;
+use ReservationBundle\Entities\ResourceLevelRelService;
+use ReservationBundle\Services\SettingService;
+use ReservationBundle\Services\WorkShiftManageService;
+use ReservationBundle\Services\WorkShift\WorkShiftService;
+use ReservationBundle\Services\ResourceLevelManagementService as ResourceLevelService;
+use ReservationBundle\Jobs\ReservationSendSmsNotice;
+
+use PromotionsBundle\Services\SmsService;
+
+use GoodsBundle\Services\ServiceLabelsService;
+
+use CompanysBundle\Services\ShopsService;
+use CompanysBundle\Services\Shops\WxShopsService;
+
+use OrdersBundle\Services\RightsService;
+use OrdersBundle\Services\Rights\TimesCardService;
+
+class ReservationService
+{
+    /**
+     * @brief 获取指定门店 指定服务的  时间段列表
+     *
+     * @param $companyId
+     * @param $dateDay
+     * @param $shopId
+     * @param $labelId
+     * @param $levelId
+     *
+     * @return
+     */
+    public function getPeriodOccupation($companyId, $dateDay, $shopId, $labelId, $levelId = null)
+    {
+        //获取门店的营业时间
+        $storeOpenTime = $this->getShopBusinessHours($companyId, $shopId);
+        if (!$storeOpenTime) {
+            return [];
+        }
+
+        //获取物料的详细信息以及预约配置
+        $labeldata = $this->getServiceLabelInfo($labelId);
+        if (!$labeldata) {
+            return [];
+        }
+
+        //门店营业开始和结束时间
+        list($beginTime, $endTime) = explode('-', $storeOpenTime);
+        $dayDate = date('Y-m-d', $dateDay);
+        $timeInterval = $labeldata['time_interval'];
+        $minLimitHour = $labeldata['minLimitHour'];
+
+        $DateService = new DateService();
+        $timelist = $DateService->getTimePeriod(strtotime($dayDate), $beginTime, $endTime, $timeInterval);
+
+        $now = time();  //当前时间
+        $after = $now + ($minLimitHour * 60); //最少提前那分钟预约
+        foreach ($timelist as $value) {
+            $hourM = date('H:i', $value['begin']);
+            $postDate = $dayDate.' '. $hourM;
+            $postDay = strtotime($postDate);
+            $timeData[] = [
+                'begin_time' => date('H:i', $value['begin']),
+                'end_time' => date('H:i', $value['end']),
+                'status' => ($postDay >= $after) ? 1 : 0,
+            ];
+        }
+        if (!($timeData ?? [])) {
+            return [];
+        }
+
+        //获取指定物料所在的所有资源位,并且验证资源位排班情况
+        $availableArr = $this->getValidResourceLevel($companyId, $dayDate, $shopId, $labelId, $levelId);
+        foreach ($timeData as $key => $value) {
+            if ($value['status'] == 0) {
+                continue;
+            }
+            $status = 0;
+            foreach ($availableArr as $val) {
+                if ($val['beginTime'] <= $value['begin_time'] && $val['endTime'] > $value['begin_time']) {
+                    $timeData[$key]['level'][$val['resourceLevelId']] = $val;
+                    $status = 1;
+                }
+            }
+            $timeData[$key]['status'] = $status;
+        }
+
+        //获取指定物料资源位的预约记录
+        $reservationRecord = $this->getReservationRecord($companyId, $dayDate, $shopId, $labelId, $levelId);
+        if ($reservationRecord) {
+            foreach ($timeData as $key => $value) {
+                if (!isset($value['level'])) {
+                    $timeData[$key]['status'] = 0;
+                    continue;
+                }
+                $level = $value['level'];
+                foreach ($reservationRecord as $val) {
+                    if (!isset($level[$val['resourceLevelId']])) {
+                        continue;
+                    }
+                    if ($value['begin_time'] >= $val['beginTime'] && $value['begin_time'] < $val['endTime']) {
+                        $timeData[$key]['status'] = 0;
+                    } else if ($value['end_time'] > $val['beginTime'] && $value['end_time'] <= $val['endTime']) {
+                        $timeData[$key]['status'] = 0;
+                    } else if ($value['begin_time'] <= $val['beginTime'] && $value['end_time'] >= $val['endTime']) {
+                        $timeData[$key]['status'] = 0;
+                    }
+                }
+            }
+        }
+        return $timeData;
+    }
+
+    //获取指定日期的所有有效排班
+    private function getWorkShift($companyId, $dayDate, $shopId, $levelId)
+    {
+        $WorkShiftService = new WorkShiftManageService(new WorkShiftService());
+        $workShiftFilter = [
+            'company_id' => $companyId,
+            'shop_id' => $shopId,
+            'work_date' => strtotime($dayDate),
+        ];
+        if ($levelId) {
+            $workShiftFilter['resource_level_id'] = $levelId;
+        }
+        $shiftList = [];
+        $workShiftList = $WorkShiftService->getList($workShiftFilter);
+        foreach ($workShiftList as $key=>$value) {
+            $weekName = strtolower(date('l', $workShiftFilter['work_date']));
+            if (isset($value[$weekName])) {
+                $shift = $value[$weekName];
+                if ($shift['typeId'] != '-1') {
+                    $shiftList[$key] = $shift;
+                }
+            }
+        }
+        return $shiftList;
+    }
+    //获取有效可用的资源位列表
+    private function getValidResourceLevel($companyId, $dayDate, $shopId, $labelId, $levelId, $isCheck = false)
+    {
+        $availableArr = array();
+        $resourceLevelService = new ResourceLevelService();
+        $resourceLevel = $resourceLevelService->getListByMaterial($companyId, $labelId, $shopId, $levelId);
+        if (!$resourceLevel) {
+            if ($isCheck) {
+                throw new ResourceException('没有可预约的资源');
+            }
+            return $availableArr;
+        }
+        //被排班可用的资源位
+        $shiftList = $this->getWorkShift($companyId, $dayDate, $shopId, $levelId);
+        foreach ($resourceLevel as $value) {
+            if (isset($shiftList[$value['resourceLevelId']])) {
+                $availableLevel = $shiftList[$value['resourceLevelId']];
+                $availableLevel = array_merge($availableLevel, $value);
+                $availableArr[] = $availableLevel;
+            }
+        }
+        return $availableArr;
+    }
+    //获取指定日期指定门店指定物料指定资源位的预约记录列表
+    private function getReservationRecord($companyId, $dayDate, $shopId, $labelId, $levelId)
+    {
+        $filter = [
+            'company_id' => $companyId,
+            'shop_id' => $shopId,
+            'agreement_date' => strtotime($dayDate),
+            'status' => ['system','success','not_to_shop','to_the_shop'],
+        ];
+        if ($labelId) {
+            $filter['label_id'] = $labelId;
+        }
+        if ($levelId) {
+            $filter['resource_level_id'] = $levelId;
+        }
+        $reservationRecordService = app('registry')->getManager('default')->getRepository(ReservationRecord::class);
+        $recordData = $reservationRecordService->getList($filter, 300, 1);
+        return $recordData;
+    }
+    //获取门店的开店信息
+    private function getShopBusinessHours($companyId, $shopId, $isCheck = false)
+    {
+        //获取门店营业时间
+        $shopsService = new ShopsService(new WxShopsService);
+        $storeData = $shopsService->getShopsDetail($shopId);
+        if (!isset($storeData['company_id']) || $storeData['company_id'] != $companyId) {
+            if ($isCheck) {
+                throw new ResourceException('门店信息不合格');
+            }
+            return '';
+        }
+        $expiredAt = $storeData['expired_at'] ?? '';
+        if (!$expiredAt || $expiredAt <= time()) {
+            if ($isCheck) {
+                throw new ResourceException('该门店已经过期无法预约');
+            }
+            return '';
+        }
+        $storeOpenTime = $storeData['hour'];
+        return $storeOpenTime;
+    }
+
+    /**
+     * @brief 获取指定物料的详细信息 以及 预约配置信息
+     *
+     * @param $labelId
+     *
+     * @return  array
+     */
+    public function getServiceLabelInfo($labelId, $isCheck = false)
+    {
+        $serviceLabelsService = new ServiceLabelsService();
+        $serviceLabel = $serviceLabelsService->getServiceLabelsDetail($labelId);
+        $companyId = $serviceLabel['company_id'];
+        $SettingService = new SettingService();
+        $settingFilter['company_id'] = $companyId;
+        $settingData = $SettingService->get($settingFilter);
+
+        if (!($serviceLabel['time_interval'] ?? 0)) {
+            $serviceLabel['time_interval'] = $settingData['timeInterval'];
+        }
+        $serviceLabel = array_merge($serviceLabel, $settingData);
+        if ($isCheck && (!$serviceLabel || !($serviceLabel['label_id']))) {
+            throw new ResourceException('该时段已过期');
+        }
+        return $serviceLabel;
+    }
+
+    /**
+     * @brief 创建预约单
+     *
+     * @param $params
+     *
+     * @return
+     */
+    public function createReservationRecode($params)
+    {
+        $this->_checkParams($params);
+
+        $companyId = $params['company_id'];
+        $shopId = $params['shop_id'];
+        $labelId = $params['label_id'];
+        $levelId = $params['level_id'];
+        $dayDate = $params['day_date'];
+
+        $storeOpenTime = $this->getShopBusinessHours($companyId, $shopId, true);
+
+        $reservationRecordService =app('registry')->getManager('default')->getRepository(ReservationRecord::class);
+
+        //$labelinfo = $this->getServiceLabelInfo($labelId, true);
+
+
+
+
+        $reservationRecordData = $reservationRecordService->create($params);
+        if ($reservationRecordData) {
+            $reservationRecordData['setting_data'] = $settingData;
+            $this->finishEvents(['postdata' => $paramsData, 'result' => $reservationRecordData]);
+        }
+
+        $smsService = new SmsService();
+        //判断短信模版是否开启
+        $templateData = $smsService->getOpenTemplateInfo($paramsData['company_id'], 'reservation_notice');
+        if($templateData) {
+            $reservationNoticeJob = (new ReservationSendSmsNotice($reservationRecordData, 'reservation_notice'))->onQueue('sms');
+            app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($reservationNoticeJob);
+
+            $this->reservationSendSmsRemind($companyId, $reservationRecordData);
+        }
+
+        //$this->reservationExpireCancel($reservationRecordData);
+        return true;
+    }
+
+    private function _checkParams($params)
+    {
+        $rules = [
+            'begin_time'     => ['required', '开始时间必填'],
+            'end_time'     => ['required', '结束时间必填'],
+            'user_id'       => ['required', '用户id必填'],
+            'user_name'         => ['required', '用户名称必填'],
+            'sex'       => ['required', '用户性别必填'],
+            'mobile'   => ['required|integer', '用户手机号必填'],
+            'company_id'   => ['required|integer', '企业id必选'],
+            'shop_id'   => ['required|integer', '门店id必选'],
+            'label_id'   => ['required|integer', '预约服务id必选'],
+            'day_date'   => ['required|integer', '日期必选'],
+            'level_id'   => ['required|integer', '预约资源id必选'],
+        ];
+        $errorMessage = validator_params($params, $rules);
+        if($errorMessage) {
+            throw new ResourceException($errorMessage);
+        }
+
+        $nowTime = time();
+        $toShopTime = strtotime($params['date_day']. $params['begin_time']);
+        if ($nowTime >= $toShopTime) {
+            throw new ResourceException('该时段已过期');
+        }
+
+        if (isset($params['rights_id'])) {
+            $this->getValidRights($params['rights_id'], $params['user_id'], $params['company_id']);
+        }
+        if (isset($params['label_id'])) {
+            $labelinfo = $this->getServiceLabelInfo($labelId, true);
+            $this->getValidResourceLevel($params['company_id'], $params['day_date'], $params['shop_id'], $params['label_id'], $params['level_id']);
+        }
+        return $params;
+    }
+
+    //检查权益是否有效
+    private function getValidRights($rightsId, $userId, $companyId)
+    {
+        $rightsServices = new RightsService(new TimesCardService);
+        $rightsDetail = $rightsServices->getRightsDetail($rightsId);
+        if ( !$rightsDetail) {
+            throw new ResourceException('您预约的项目已失效');
+        }
+        $filter = [
+            'user_id' => $userId,
+            'rights_id' => $rightsId,
+            'company_id' => $companyId,
+        ];
+        $filter['status'] = ['success','to_the_shop','not_to_shop'];
+        $count = $reservationRecordService->getCount($filter);
+        if ($count && $rightsDetail['is_not_limit_num'] == 2 && $count >= $rightsDetail['total_num']) {
+            throw new ResourceException('该课程的预约次数已达上限');
+        }
+        return true;
+    }
+
+    /**
+     * 预约成功发送短信通知
+     */
+    private function reservationSendSmsRemind($companyId, $reservationRecordData)
+    {
+        $smsService = new SmsService();
+        //判断短信模版是否开启
+        $templateData = $smsService->getOpenTemplateInfo($companyId, 'gotoShop_notice');
+        if($templateData) {
+            //获取预约配置信息
+            $settingData = $this->__getReservationSetting($reservationRecordData['company_id']);
+            $smsDelay = $settingData['smsDelay'] ?: 1;
+
+            //到店时间
+            $endTime = $reservationRecordData['to_shop_time'] - ($smsDelay * 3600);
+            $delay = format_queue_delay($endTime - time());
+            if($delay > 0 ) {
+                $gotoShopNoticeJob = (new ReservationSendSmsNotice($reservationRecordData, 'gotoShop_notice'))->onQueue('sms')->delay($delay);
+                app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoShopNoticeJob);
+            }
+        }
+    }
+}

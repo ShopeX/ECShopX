@@ -1,0 +1,39 @@
+FROM registry.cn-hangzhou.aliyuncs.com/espier/php:7.2-fpm-alpine3.12 as builder
+RUN apk --no-cache add tzdata git \
+        --repository https://mirrors.aliyun.com/alpine/v3.9/main/
+
+WORKDIR /app
+COPY . /app
+RUN ls && pwd
+RUN cd /app \
+    && rm -f .env \
+    && rm -rf docker \
+    && rm -rf vendor \
+    && php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
+    && php -r "if (hash_file('sha384', 'composer-setup.php') === '756890a4488ce9024fc62c56153228907f1545c228516cbf63f885e036d37e9a59d27d63f46af1d4d07ee0f76181c7d3') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" \
+    && php composer-setup.php --version=1.8.6 \
+    && php -r "unlink('composer-setup.php');" \
+    && rm -f composer.lock \
+    && php composer.phar config repo.packagist composer https://mirrors.aliyun.com/composer/ \
+    && php composer.phar clear-cache \
+    && COMPOSER_MEMORY_LIMIT=-1 php composer.phar install -o \
+    && find . -name '\.git' | xargs rm -rf
+
+
+
+FROM registry.cn-hangzhou.aliyuncs.com/espier/php:7.2-fpm-alpine3.12
+RUN apk --no-cache add tzdata git \
+        --repository https://mirrors.aliyun.com/alpine/v3.9/main/
+
+WORKDIR /var/www/html
+
+COPY docker/php-fpm/entrypoint.sh /usr/bin/entrypoint.sh
+
+COPY  --from=builder /app .
+
+COPY . /usr/src/html
+
+
+ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+
+CMD ["php-fpm"]
