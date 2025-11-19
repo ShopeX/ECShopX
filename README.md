@@ -13,7 +13,7 @@ If you need a fully integrated, end-to-end e-commerce solution, please contact s
 ECShopX 是一个功能强大的多语言电商平台，支持灵活配置不同商业模式，例如 B2C、B2B2C、S2B2C，O2O，
 提供完整的前端解决方案，包括移动端商城、PC端商城，门店店务工具、门店导购工具、门店配送工具。
 
-如果您需要提供一套完整的电商解决方案，请联系 shopeX。
+如果您需要提供一套完整的电商解决方案，请联系 ShopeX商派。
 
 ## Get Started
 ### System Requirements
