@@ -245,18 +245,6 @@ Launch using 'php server'
 php -S 127.0.0.1:9058 -t public
 ```
 
-## Project overview
-ECShopX adopts a Headless Architecture.
-
-The back-end is built on PHP 7.4 using the Lumen 8.0 micro-service framework.  
-The mobile application is developed with the Taro 3.0 framework, while the desktop web application is implemented using Vue.js 2.0.
-
-ECShopX 采用前后端分离的系统架构设计。 
-
-后端基于 PHP 7.4，并构建于 Lumen 8.0 微服务框架之上，具备高性能、轻量化及可扩展的特性。  
-移动端应用基于 Taro 3.0 多端统一框架开发，支持主流小程序与移动 H5，PC 端应用基于 Vue.js 2.0 构建，实现组件化、模块化的前端工程体系。
-
-
 ## License
 Each ECShopX source file included in this distribution is licensed under the Apache License 2.0, together with the additional terms imposed by ShopeX.
 
