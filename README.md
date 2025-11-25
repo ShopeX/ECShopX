@@ -77,6 +77,27 @@ cp .env.example .env
 1.	安装时提示权限错误？ 请确保 storage/ 和 bootstrap/cache/ 目录具有写权限。
 2.	如何新增一种业务模式？ 参考开发者指南中的“模块开发”章节，通过创建新模块实现。
 
+## 许可证
+本项目采用 Apache-2.0 开源许可证。
+
+## 贡献
+我们欢迎所有形式的贡献！请阅读 CONTRIBUTING.md 了解如何参与。
+1.	Fork 本仓库
+2.	创建特性分支 (git checkout -b feature/AmazingFeature)
+3.	提交更改 (git commit -m 'feat: Add some AmazingFeature')
+4.	推送到分支 (git push origin feature/AmazingFeature)
+5.	开启一个 Pull Request
+
+## 支持
+* 📖 文档：请首先查阅官方文档。
+* 🐛 问题反馈：请在 [GitHub Issues] 中提交。
+* 💬 社区讨论：加入我们的开发者社区。
+
+## 致谢
+感谢所有为 ECShopX 做出贡献的开发者、用户以及商派背后的全球品牌客户们！
+  
+  
+
 
 ## Get Started
 ### System Requirements
