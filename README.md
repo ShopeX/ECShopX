@@ -68,7 +68,10 @@ cp .env.example .env
 # 编辑 .env 文件
 ```
 
-<img width="437" height="248" alt="image" src="https://github.com/user-attachments/assets/bb628244-4e66-445b-8d97-0f5b3d640363" />
+### 开发文档
+* 官方文档：请访问 [ECShopX官方文档中心] (链接地址)
+* API参考：完整的API接口文档。
+* 开发者指南：包含扩展开发、主题制作等高级教程。
 
 
 ## Get Started
