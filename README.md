@@ -1,4 +1,4 @@
-<img width="432" height="14" alt="image" src="https://github.com/user-attachments/assets/b3ad112f-07e8-4293-9a99-293c1aae7c15" /><p align="center"><img width="600" height="auto" alt="logo1" src="https://github.com/user-attachments/assets/489cc6f9-9108-4db9-860d-70820c99b73a" /></p>
+<img width="432" height="14" alt="image" src="https://github.com/user-attachments/assets/b3ad112f-07e8-4293-9a99-293c1aae7c15" /><p align="center">
 
 # 
 Welcome to the ECShopX Open Source E-Commerce System! ECShopX provides a comprehensive set of e-commerce capabilities to help you build a unique online store from the ground up.
