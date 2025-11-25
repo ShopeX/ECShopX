@@ -100,11 +100,6 @@ cp .env.example .env
 
 
 ## Get Started
-### System Requirements
- - php >= 7.4
- - lumen = 8.3
- - mysql >= 5.7
- - redis >= 4.0
 
 ### Configure the .env file
 * Update database settings
