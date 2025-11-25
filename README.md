@@ -39,18 +39,121 @@ php artisan key:generate
 ```
 
 ### Update Database
+> The initial login password is 
+> admin Shopex123
 ```
 php artisan doctrine:migrations:migrate
 ```
 
-### init shop_menu Data
-```
-php artisan menu:upload "storage/static/platform_menu.json"
-```
-
 ### Add Language and Initialize Language Environment
+> If you don't need to add more languages, you don't need to execute this command;The sample value of {lang} like 'zh-CN' 'en-CN'
 ```
 php artisan lang:init {lang} 
+```
+#### Vim NGINX Config
+> If you use nginx, you can use the following file as a template
+```
+server {
+    listen 80;
+    #{need fix A}  hostname
+    server_name opendemo.test;
+    #{need fix B}  The compiled code is below dist/
+    set $frontend_dir /Users/kris/data/httpd/ecx/product/github.com/demo/ECShopX_admin-frontend/dist/;
+
+    location /api/ {
+        access_log /usr/local/etc/nginx/log/ecx.test.log;
+        proxy_pass http://localhost:8005;
+        proxy_set_header        Host $host;
+        proxy_set_header        X-Real-IP $remote_addr;
+        proxy_set_header        X-Forwarded-For                $proxy_add_x_forwarded_for;
+        client_max_body_size    32m;
+        client_body_buffer_size 256k;
+    }
+    location /storage/ {
+        access_log /usr/local/etc/nginx/log/ecx.test.log;
+        proxy_pass http://localhost:8005;
+        proxy_set_header        Host $host;
+        proxy_set_header        X-Real-IP $remote_addr;
+        proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+        client_max_body_size    32m;
+        client_body_buffer_size 256k;
+    }
+
+    location /wechatAuth/ {
+        proxy_pass http://localhost:8005;
+        proxy_set_header        Host $host;
+        proxy_set_header        X-Real-IP $remote_addr;
+        proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+        client_max_body_size    32m;
+        client_body_buffer_size 256k;
+    }
+
+    location / {
+        root  $frontend_dir;
+        index  index.html index.htm;
+        try_files $uri $uri/ /index.html =404;
+        client_max_body_size    32m;
+    }
+
+}
+
+server {
+    client_max_body_size    32m;
+
+    listen 8005;
+
+    #{need fix A}  hostname
+    server_name opendemo.test;
+
+    #{need fix C}  The path of the backend code goes to /public 
+    set $backend_dir /Users/kris/data/httpd/ecx/product/github.com/demo/ECShopX/public;
+
+
+    root  $backend_dir;
+
+    location / {
+        client_max_body_size    32m;
+        try_files $uri $uri/ /index.php$is_args$args;
+    }
+
+    set $real_script_name $request_filename;
+
+    if ($request_filename ~ "^(.+?\.php)/.+$") {
+        set $real_script_name $1;
+    }
+
+    if (!-e $real_script_name) {
+        rewrite ^/(.*)$ /index.php/$1 last;
+    }
+
+    location ~ \.php$ {
+	client_max_body_size  32m;
+        #add_header Access-Control-Allow-Origin *;
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header Access-Control-Allow-Headers "Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With";
+        add_header Access-Control-Expose-Headers "Authorization";
+        add_header Access-Control-Allow-Methods "DELETE, GET, HEAD, POST, PUT, OPTIONS, TRACE, PATCH";
+        access_log /usr/local/etc/nginx/log/espier-xxx.log;
+        if ($request_method = OPTIONS ) {
+            return 200;
+        }
+
+        fastcgi_pass 127.0.0.1:9074;
+        fastcgi_read_timeout 150;
+        fastcgi_index index.php;
+        fastcgi_buffers 4 128k;
+        fastcgi_buffer_size 128k;
+        fastcgi_busy_buffers_size 128k;
+        fastcgi_temp_file_write_size 256k;
+        #fastcgi_temp_path /dev/shm;
+        fastcgi_param SCRIPT_FILENAME      $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
 ```
 
 ### Start the Server

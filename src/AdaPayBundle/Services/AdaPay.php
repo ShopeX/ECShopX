@@ -16,7 +16,7 @@ namespace AdaPayBundle\Services;
 
 class AdaPay
 {
-    public static $api_key = 'api_test_9801bbf1-83eb-4109-864f-263f397df690';
+    public static $api_key = '';
 
     public static $rsaPrivateKeyFilePath = '';
 

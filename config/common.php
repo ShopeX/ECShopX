@@ -15,8 +15,8 @@ return [
     # prism
     'openapi_shopex_url' => env ('OPENAPI_SHOPEX_URL', 'https://openapi.shopex.cn'), // prism配置，默认不用动
     'prism_url' => env('PRISM_URL', 'https://openapi.shopex.cn/api'), // prism配置，默认不用动
-    'prism_key' => env('PRISM_KEY', 'a4dyatls'), // prism配置，默认不用动
-    'prism_secret' => env('PRISM_SECRET', 'xescyjbdmzox75cfybab'), // prism配置，默认不用动
+    'prism_key' => env('PRISM_KEY'), // prism配置
+    'prism_secret' => env('PRISM_SECRET'), // prism配置
     'ishopex_prism_url' => env('ISHOPEX_PRISM_URL'),
     'ishopex_prism_key' => env('ISHOPEX_PRISM_KEY'),
     'ishopex_prism_secret' => env('ISHOPEX_PRISM_SECRET'),
