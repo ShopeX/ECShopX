@@ -1,19 +1,14 @@
-<img width="432" height="14" alt="image" src="https://github.com/user-attachments/assets/b3ad112f-07e8-4293-9a99-293c1aae7c15" /><p align="center">
+<p align="center"><img width="600" height="auto" alt="logo1" src="https://github.com/user-attachments/assets/489cc6f9-9108-4db9-860d-70820c99b73a" /></p>
 
 # 
-Welcome to the ECShopX Open Source E-Commerce System! ECShopX provides a comprehensive set of e-commerce capabilities to help you build a unique online store from the ground up.
-
-ECShopX is a powerful, multi-language e-commerce platform that allows flexible configuration of various business models, including B2C, B2B2C, Supplier-to-Business-to-Consumer, and Online–Offline Integration.  
-It offers a complete front-end solution covering mobile storefronts, desktop storefronts, store operation tools, in-store sales assistant tools, and store delivery tools.
-
 ECShopX 是商派（ShopeX）官方开源的一款企业级、全渠道、多模式的交易商城系统解决方案。基于PHP开发，采用Apache-2.0开源协议。
   
 一个功能强大、架构灵活的企业级交易上商城平台，原生支持B2C、B2B2C、S2B2C、O2O等10余种商业模式，提供统一后台管理多端商城，助力企业快速构建数字化商业基座。
 
-# 项目介绍
+## 项目介绍
 ECShopX 是商派基于23年服务全球知名品牌企业的经验沉淀，推出的开源商城系统。它采用模块化架构，支持灵活扩展和个性化定制开发，为企业提供从商品、订单、会员、营销到财务结算的全链路官方商城解决方案。
 
-# 适用场景
+## 适用场景
 * B2C品牌私域商城：构建官方小程序、APP、PC官网、H5等多端DTC商城。
 * B2C员工内购福利平台：支持多品牌集团开展“员工&亲友内购业务”。
 * BBC多商户平台：打造类似京东、美团的“自营+多商户入驻”模式的B2B2C在线平台。
@@ -21,13 +16,13 @@ ECShopX 是商派基于23年服务全球知名品牌企业的经验沉淀，推�
 * O2O品牌云店+即时零售：O2O品牌云店可实现线上线下一体化的商品、会员、营销与库存管理；支持线上下单，附近门店自提和即时配送等场景。
 * O2O经销商云店：专为品牌企业赋能经销商开展线上业务的解决方案。该系统通过搭建统一平台，聚合所有经销商门店资源，实现"线上下单、门店发货/自提"的O2O模式。核心价值在于打通品牌-经销商-消费者的全链路业务场景。
 
-# 技术架构
+## 技术架构
 * 后端框架：基于高性能PHP框架，采用MVCL分层架构。
 * 数据库：MySQL 5.7+
 * 缓存支持：Redis / Memcached
 * 部署方式：支持传统部署与Docker容器化部署。
 
-# 核心特性
+## 核心特性
 ### 多模式商城
 * 统一后台管理：一套系统统一管理B2C、B2B2C、S2B2C等多种业务模式。
 * 全渠道多端适配：无缝支持小程序、APP、H5、PC端，数据完全同步。
