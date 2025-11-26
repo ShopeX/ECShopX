@@ -45,62 +45,12 @@ ECShopX 是商派基于23年服务全球知名品牌企业的经验沉淀，推�
 * 模块化设计：核心功能高度模块化，便于二次开发与功能扩展。
 
 ## 系统要求
-* PHP: >= 8.1
+* PHP: >= 7.4
 * MySQL: >= 5.7
 * Redis: >= 5.0 (推荐用于缓存和会话)
 * Web服务器: Nginx 或 Apache
 
 ## 安装指南
-
-### 方式1：Composer创建项目（推荐）
-```shell
-composer create-project shopex/ecshopx my-project
-cd my-project
-# 配置Web服务器，指向 `public` 目录
-# 访问 https://your-domain.com/install 完成安装
-```
-
-### 方式2：Docker部署 参考项目根目录下的 docker-compose.yml 文件进行快速部署。
-⚙️ 配置说明 核心配置文件位于 .env 环境文件，需配置数据库连接、Redis连接、应用密钥等。
-```shell
-# 复制环境配置模板
-cp .env.example .env
-# 编辑 .env 文件
-```
-
-## 开发文档
-* 官方文档：请访问 [ECShopX官方文档中心] (链接地址)
-* API参考：完整的API接口文档。
-* 开发者指南：包含扩展开发、主题制作等高级教程。
-
-## 常见问题
-1.	安装时提示权限错误？ 请确保 storage/ 和 bootstrap/cache/ 目录具有写权限。
-2.	如何新增一种业务模式？ 参考开发者指南中的“模块开发”章节，通过创建新模块实现。
-
-## 许可证
-本项目采用 Apache-2.0 开源许可证。
-
-## 贡献
-我们欢迎所有形式的贡献！请阅读 CONTRIBUTING.md 了解如何参与。
-1.	Fork 本仓库
-2.	创建特性分支 (git checkout -b feature/AmazingFeature)
-3.	提交更改 (git commit -m 'feat: Add some AmazingFeature')
-4.	推送到分支 (git push origin feature/AmazingFeature)
-5.	开启一个 Pull Request
-
-## 支持
-* 📖 文档：请首先查阅官方文档。
-* 🐛 问题反馈：请在 [GitHub Issues] 中提交。
-* 💬 社区讨论：加入我们的开发者社区。
-
-## 致谢
-感谢所有为 ECShopX 做出贡献的开发者、用户以及商派背后的全球品牌客户们！
-  
-  
-
-
-## Get Started
-
 ### Configure the .env file
 * Update database settings
 * Update Redis settings
@@ -244,6 +194,34 @@ Launch using 'php server'
 ```
 php -S 127.0.0.1:9058 -t public
 ```
+
+## 开发文档
+* 官方文档：请访问 [ECShopX官方文档中心] (链接地址)
+* API参考：完整的API接口文档。
+* 开发者指南：包含扩展开发、主题制作等高级教程。
+
+## 常见问题
+1.	安装时提示权限错误？ 请确保 storage/ 和 bootstrap/cache/ 目录具有写权限。
+2.	如何新增一种业务模式？ 参考开发者指南中的“模块开发”章节，通过创建新模块实现。
+
+## 许可证
+本项目采用 Apache-2.0 开源许可证。
+
+## 贡献
+我们欢迎所有形式的贡献！请阅读 CONTRIBUTING.md 了解如何参与。
+1.	Fork 本仓库
+2.	创建特性分支 (git checkout -b feature/AmazingFeature)
+3.	提交更改 (git commit -m 'feat: Add some AmazingFeature')
+4.	推送到分支 (git push origin feature/AmazingFeature)
+5.	开启一个 Pull Request
+
+## 支持
+* 📖 文档：请首先查阅官方文档。
+* 🐛 问题反馈：请在 [GitHub Issues] 中提交。
+* 💬 社区讨论：加入我们的开发者社区。
+
+## 致谢
+感谢所有为 ECShopX 做出贡献的开发者、用户以及商派背后的全球品牌客户们！
 
 ## License
 Each ECShopX source file included in this distribution is licensed under the Apache License 2.0, together with the additional terms imposed by ShopeX.
