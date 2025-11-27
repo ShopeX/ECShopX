@@ -192,16 +192,33 @@ Launch using 'php server'
 ```
 php -S 127.0.0.1:9058 -t public
 ```
-## Project overview
-ECShopX adopts a Headless Architecture.
+## 开发文档
+* 官方文档：请访问 [ECShopX官方文档中心] (链接地址)
+* API参考：完整的API接口文档。
+* 开发者指南：包含扩展开发、主题制作等高级教程。
 
-The back-end is built on PHP 7.4 using the Lumen 8.0 micro-service framework.  
-The mobile application is developed with the Taro 3.0 framework, while the desktop web application is implemented using Vue.js 2.0.
+## 常见问题
+1.	安装时提示权限错误？ 请确保 storage/ 和 bootstrap/cache/ 目录具有写权限。
+2.	如何新增一种业务模式？ 参考开发者指南中的“模块开发”章节，通过创建新模块实现。
 
-ECShopX 采用前后端分离的系统架构设计。 
+## 许可证
+本项目采用 Apache-2.0 开源许可证。
 
-后端基于 PHP 7.4，并构建于 Lumen 8.0 微服务框架之上，具备高性能、轻量化及可扩展的特性。  
-移动端应用基于 Taro 3.0 多端统一框架开发，支持主流小程序与移动 H5，PC 端应用基于 Vue.js 2.0 构建，实现组件化、模块化的前端工程体系。
+## 贡献
+我们欢迎所有形式的贡献！请阅读 CONTRIBUTING.md 了解如何参与。
+1.	Fork 本仓库
+2.	创建特性分支 (git checkout -b feature/AmazingFeature)
+3.	提交更改 (git commit -m 'feat: Add some AmazingFeature')
+4.	推送到分支 (git push origin feature/AmazingFeature)
+5.	开启一个 Pull Request
+
+## 支持
+* 📖 文档：请首先查阅官方文档。
+* 🐛 问题反馈：请在 [GitHub Issues] 中提交。
+* 💬 社区讨论：加入我们的开发者社区。
+
+## 致谢
+感谢所有为 ECShopX 做出贡献的开发者、用户以及商派背后的全球品牌客户们！
 
 ## License
 Each ECShopX source file included in this distribution is licensed under the Apache License 2.0, together with the additional terms imposed by ShopeX.
