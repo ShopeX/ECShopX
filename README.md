@@ -1,4 +1,4 @@
-<p align="center"><img width="1200" height="416" alt="logo2" src="https://github.com/user-attachments/assets/abf6c4c7-8cb1-477e-aea4-9e526cd8225a" /></p>
+<p align="center"><img width="600" height="416" alt="logo2" src="https://github.com/user-attachments/assets/abf6c4c7-8cb1-477e-aea4-9e526cd8225a" /></p>
 
 # 
 一个功能强大、架构灵活的企业级交易上商城平台，原生支持B2C、B2B2C、S2B2C、O2O等10余种商业模式，提供统一后台管理多端商城，助力企业快速构建数字化商业基座。
