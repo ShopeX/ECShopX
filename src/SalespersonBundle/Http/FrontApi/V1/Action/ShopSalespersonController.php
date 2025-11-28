@@ -283,7 +283,7 @@ class ShopSalespersonController extends Controller
             'operatorInfo' => $operatorInfo,
             'inputData'=>$inputData,
             'authInfo'=>$authInfo,
-            'manage_store_ids'=>$dids,
+            'manage_store_ids'=>$dids ?? [],
              );
 
         $data= $result;

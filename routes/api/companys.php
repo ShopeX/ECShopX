@@ -40,6 +40,9 @@ $api->version('v1', function($api) {
     $api->group(['namespace' => 'CompanysBundle\Http\Api\V1\Action', 'middleware' => ['api.auth', 'activated', 'shoplog'], 'providers' => 'jwt'], function($api) {
         $api->get('/company/resources', ['name' => '获取当前可用资源包列表', 'as' => 'company.resources', 'uses'=>'Companys@getResourceList']);
         $api->get('/companys/setting', ['name' => '获取商品配置信息', 'as' => 'companys.setting', 'uses'=>'Companys@getCompanySetting']);
+        
+        $api->post('/company/privacy_setting', ['name' => '隐私更新', 'as' => 'companys.setting.setp', 'uses'=>'Companys@setPrivacySetting']);
+        $api->get('/company/privacy_setting', ['name' => '隐私获取', 'as' => 'companys.setting.getp', 'uses'=>'Companys@getPrivacySetting']);
 
         $api->get('/company/domain_setting', ['name' => '获取域名配置信息', 'as' => 'companys.domain_setting.get', 'uses'=>'Companys@getDomainSetting']);
         $api->post('/company/domain_setting', ['name' => '保存域名配置信息', 'as' => 'companys.domain_setting.set', 'uses'=>'Companys@setDomainSetting']);

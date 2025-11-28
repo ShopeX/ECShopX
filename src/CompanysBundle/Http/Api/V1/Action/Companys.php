@@ -11,6 +11,7 @@ use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use CompanysBundle\Services\CompanysService;
+use CompanysBundle\Services\SettingService;
 use CompanysBundle\Ego\CompanysActivationEgo;
 use SystemLinkBundle\Services\ThirdSettingService;
 
@@ -19,6 +20,9 @@ class Companys extends BaseController
     /** @var $companysService */
     private $companysService;
 
+    /** @var $settingService */
+    private $settingService;
+
     /**
      * @param companysService  $companysService
      */
@@ -26,6 +30,7 @@ class Companys extends BaseController
     {
         $this->companysService = new $companysService();
         $this->companysRepository = app('registry')->getManager('default')->getRepository(\CompanysBundle\Entities\Companys::class);
+        $this->settingService = new SettingService();
     }
 
     /**
@@ -512,4 +517,99 @@ class Companys extends BaseController
     {
         return app('authorization')->getApplications();
     }
+
+    /**
+     * @SWG\Get(
+     *     path="/company/privacy_setting",
+     *     summary="获取PC商城和H5商城隐私设置",
+     *     tags={"企业"},
+     *     description="获取PC商城和H5商城隐私设置",
+     *     operationId="getPrivacySetting",
+     *     @SWG\Parameter(
+     *         name="Authorization",
+     *         in="header",
+     *         description="JWT验证token",
+     *         type="string",
+     *         required=true,
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @SWG\Property(property="pc_privacy_content", type="string", example="", description="PC商城隐私内容"),
+     *                 @SWG\Property(property="h5_privacy_content", type="string", example="", description="H5商城隐私内容"),
+     *             ),
+     *         ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/CompanysErrorRespones") ) )
+     * )
+     */
+    public function getPrivacySetting(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        if (!$companyId) {
+            throw new ResourceException("无相关企业信息！");
+        }
+        $result = $this->settingService->getPrivacySetting($companyId);
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/company/privacy_setting",
+     *     summary="设置PC商城和H5商城隐私设置",
+     *     tags={"企业"},
+     *     description="设置PC商城和H5商城隐私设置",
+     *     operationId="setPrivacySetting",
+     *     @SWG\Parameter(
+     *         name="Authorization",
+     *         in="header",
+     *         description="JWT验证token",
+     *         type="string",
+     *         required=true,
+     *     ),
+     *     @SWG\Parameter(
+     *         name="pc_privacy_content",
+     *         in="query",
+     *         description="PC商城隐私内容",
+     *         type="string",
+     *         required=false,
+     *     ),
+     *     @SWG\Parameter(
+     *         name="h5_privacy_content",
+     *         in="query",
+     *         description="H5商城隐私内容",
+     *         type="string",
+     *         required=false,
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @SWG\Property(property="pc_privacy_content", type="string", example="", description="PC商城隐私内容"),
+     *                 @SWG\Property(property="h5_privacy_content", type="string", example="", description="H5商城隐私内容"),
+     *             ),
+     *         ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/CompanysErrorRespones") ) )
+     * )
+     */
+    public function setPrivacySetting(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        if (!$companyId) {
+            throw new ResourceException("无相关企业信息！");
+        }
+        $params = $request->all('pc_privacy_content', 'h5_privacy_content');
+        $result = $this->settingService->setPrivacySetting($companyId, $params);
+        return $this->response->array($result);
+    }
+
+    
 }

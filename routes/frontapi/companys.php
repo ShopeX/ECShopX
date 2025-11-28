@@ -82,6 +82,8 @@ $api->version('v1', function ($api) {
         $api->get('/wxapp/company/logistics/enableList', ['name'=>'获取公司启用的物流列表', 'as' => 'company.logistics.enableList',  'uses'=>'CompanyController@getLogisticsEnableList']);
         //获取商品价格显示设置
         $api->get('/wxapp/setting/itemPrice', [ 'name' => '获取商品价格显示设置','as' => 'company.setting.itemPrice.get', 'uses'=>'CompanyController@getItemPriceSetting']);
+        //获取pc和h5隐私
+        $api->get('/wxapp/company/privacy_setting_ck', ['name' => '获取pc和h5隐私', 'as' => 'company.privacy.setting.get', 'uses'=>'CompanyController@getPrivacySetting']);
     });
 
     $api->group(['prefix' => 'h5app', 'namespace' => 'CompanysBundle\Http\FrontApi\V1\Action'], function ($api) {

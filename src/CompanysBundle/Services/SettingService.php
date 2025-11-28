@@ -10,11 +10,13 @@ use CompanysBundle\Entities\Setting;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Entities\Items;
 use GoodsBundle\Repositories\ItemsRepository;
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use ThirdPartyBundle\Entities\CompanyRelKuaizhen;
 use ThirdPartyBundle\Repositories\CompanyRelKuaizhenRepository;
 
 class SettingService
 {
+    use MagicLangTrait;
     private $entityRepository;
     /** @var CompanyRelKuaizhenRepository $companyRelKuaizhenRepository */
     private $companyRelKuaizhenRepository;
@@ -577,6 +579,47 @@ class SettingService
             $data['supplier_item_start_num'] = ($inputdata['supplier_item_start_num'] == 'false') ? false : true;
             app('redis')->connection('companys')->set($key, json_encode($data));
         }
+        return $data;
+    }
+
+    /**
+     * 获取PC商城和H5商城隐私设置
+     * @param $companyId
+     * @return array|mixed
+     */
+    public function getPrivacySetting($companyId)
+    {
+        $lang = $this->getLang();
+        $key = 'PrivacySetting:' . $companyId.'_'.$lang;
+        $inputData = app('redis')->connection('companys')->get($key);
+        $inputData = $inputData ? json_decode($inputData, true) : [
+            'pc_privacy_content' => '',
+            'h5_privacy_content' => ''
+        ];
+        return $inputData;
+    }
+
+    /**
+     * 设置PC商城和H5商城隐私设置
+     * @param $companyId
+     * @param $inputdata
+     * @return array
+     */
+    public function setPrivacySetting($companyId, $inputdata)
+    {
+        $lang = $this->getLang();
+        $key = 'PrivacySetting:' . $companyId.'_'.$lang;
+        // $key = 'PrivacySetting:' . $companyId;
+        // 先获取现有数据
+        $data = $this->getPrivacySetting($companyId);
+        // 更新传入的字段
+        if (isset($inputdata['pc_privacy_content'])) {
+            $data['pc_privacy_content'] = $inputdata['pc_privacy_content'];
+        }
+        if (isset($inputdata['h5_privacy_content'])) {
+            $data['h5_privacy_content'] = $inputdata['h5_privacy_content'];
+        }
+        app('redis')->connection('companys')->set($key, json_encode($data));
         return $data;
     }
 

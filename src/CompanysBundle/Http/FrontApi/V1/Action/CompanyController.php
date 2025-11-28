@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 use CompanysBundle\Services\SettingService;
+use Dingo\Api\Exception\ResourceException;
 use OrdersBundle\Services\CompanyRelLogisticsServices;
 use SystemLinkBundle\Services\MyCoach\H5Service;
 
@@ -313,6 +314,19 @@ class CompanyController extends BaseController
         $settingService = new SettingService();
         $result = $settingService->getItemPriceSetting($authInfo['company_id']);
 
+        return $this->response->array($result);
+    }
+    
+
+    ///wxapp/company/privacy_setting_ck
+    public function getPrivacySetting(Request $request)
+    {
+        $authInfo = $request->get('auth');
+        $companyId = $authInfo['company_id'];
+        if (!$companyId) {
+            throw new ResourceException("无相关企业信息！");
+        }
+        $result = (new SettingService())->getPrivacySetting($companyId);
         return $this->response->array($result);
     }
 }
