@@ -198,6 +198,8 @@ Open Software License (Apache 2.0) – Please see LICENSE.txt for the full text 
 ## Support
 * 🐛 Issue Reporting: Submit via [GitHub Issues].
 
+[1]: README.md "README"
+
 ## Acknowledgments
 Thank you to all developers and users who have contributed to ECShopX!
 
