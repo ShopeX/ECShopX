@@ -1,7 +1,7 @@
 <p align="center"><img width="600" height="416" alt="logo2" src="https://github.com/user-attachments/assets/abf6c4c7-8cb1-477e-aea4-9e526cd8225a" /></p>
 
 # 
-<p align="center">English/[README_cn.md][1]</p>
+<p align="center">English / [访问官网](https://example.com)</p>
   
 A powerful and flexibly architected enterprise-grade trading marketplace platform, natively supporting over 10 business models including B2C, B2B2C, S2B2C, and O2O. It provides a unified backend to manage multi-storefront operations, empowering businesses to rapidly build their digital commerce foundation.
 
@@ -198,9 +198,5 @@ Open Software License (Apache 2.0) – Please see LICENSE.txt for the full text 
 ## Support
 * 🐛 Issue Reporting: Submit via [GitHub Issues].
 
-[1]: README.md "README"
-
 ## Acknowledgments
 Thank you to all developers and users who have contributed to ECShopX!
-
-[1]: https://github.com/ShopeX/ECShopX/blob/main/README_cn.md "简体中文"
