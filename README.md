@@ -200,3 +200,5 @@ Open Software License (Apache 2.0) – Please see LICENSE.txt for the full text 
 
 ## Acknowledgments
 Thank you to all developers and users who have contributed to ECShopX!
+
+[1]: https://github.com/shopex/ECShopX "ECShopX"
