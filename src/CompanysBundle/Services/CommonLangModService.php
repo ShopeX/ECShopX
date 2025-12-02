@@ -20,6 +20,7 @@ class CommonLangModService
     public $totalLang = [
         'zh-CN' => '\CompanysBundle\Entities\CommonLangModCN',
         'en-CN' => '\CompanysBundle\Entities\CommonLangModEN',
+        'ar-SA' => '\CompanysBundle\Entities\CommonLangModAR',
     ];
 
     public function __construct()

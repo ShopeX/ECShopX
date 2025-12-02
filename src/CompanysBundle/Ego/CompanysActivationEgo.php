@@ -575,9 +575,9 @@ class CompanysActivationEgo
 
         $disabledMenus = [];
         // saas 或者非管理员不可使用菜单管理
-        if (config('common.system_is_saas') or $userAuth->get('operator_type') != 'admin') {
-            $disabledMenus[] = 'menumanage';
-        }
+        // if (config('common.system_is_saas') or $userAuth->get('operator_type') != 'admin') {
+        //     $disabledMenus[] = 'menumanage';
+        // }
 
         if ($disabledMenus) {
             $filter['disabled_menus'] = $disabledMenus;

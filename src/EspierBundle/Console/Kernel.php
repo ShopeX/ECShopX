@@ -72,6 +72,7 @@ use SuperAdminBundle\Console\UpdateAccountPasswordCommand;
 use SuperAdminBundle\Console\UploadMenuCommand;
 use SuperAdminBundle\Console\UploadDealerMenuCommand;
 use CompanysBundle\Ego\ExtendDemoLisensCommand;
+use CompanysBundle\Console\CreateAdminOperatorCommand;
 use PointBundle\Services\PointMemberService;
 use OrdersBundle\Services\Rights\TimesCardService;
 use PromotionsBundle\Services\SpecificCrowdDiscountService;
@@ -135,6 +136,7 @@ class Kernel extends ConsoleKernel
         OrderTipCommand::class,
         UpdateAccountPasswordCommand::class,
         ExtendDemoLisensCommand::class,
+        CreateAdminOperatorCommand::class,
         CreateSystemTagCommand::class,
         TransferEncryptAdapayCommand::class,
         TransferEncryptDistributionCommand::class,
