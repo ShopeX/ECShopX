@@ -195,7 +195,12 @@ php -S 127.0.0.1:9058 -t public
 
 开源软件许可协议（Apache 2.0） —— 请参阅 LICENSE.txt 文件以获取 Apache 2.0 协议的完整文本。
 
+## 贡献 
+我们欢迎所有形式的贡献！
+请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解如何参与。
+
 ## 支持
+* 文档：请首先查阅[官方文档](https://op.shopex.cn/doc_ecshopx_dev/docs/)
 * 🐛 问题反馈：请在 [GitHub Issues] 中提交。
 
 ## 致谢
