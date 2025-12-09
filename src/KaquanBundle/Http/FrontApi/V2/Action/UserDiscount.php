@@ -146,7 +146,6 @@ class UserDiscount extends BaseController
                 $filter['item_id'] = array_keys($items);
             }
         }
-
         $userDiscountService = new UserDiscountService();
         $cardLists = $userDiscountService->getNewUserCardList($filter, $page, $limit, false, true);
 

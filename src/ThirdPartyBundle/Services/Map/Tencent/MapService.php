@@ -58,9 +58,9 @@ class MapService extends BaseRequest implements MapInterface
                 "request" => ["data" => $data],
                 "response" => $responseBodyContent
             ]);
-            return [];
+            return ['status' => 0, 'message' => '', 'result' => []];
         }
-        return (array)($responseBodyContent["result"] ?? []);
+        return (array)($responseBodyContent ?? []);
     }
 
     /**

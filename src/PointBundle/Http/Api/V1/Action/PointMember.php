@@ -14,6 +14,8 @@ use Doctrine\ORM\Query\Expr\Func;
 use PointBundle\Services\PointMemberLogService;
 use PointBundle\Services\PointMemberService;
 use MembersBundle\Services\MemberService;
+use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
+use ThirdPartyBundle\Services\DmCrm\PointService;
 
 class PointMember extends Controller
 {
@@ -42,7 +44,7 @@ class PointMember extends Controller
                 $filterUsers[] = array_column($member_list, 'user_id');
             }else {
                 $filterUsers[] = [];
-            } 
+            }
         }
         if ($name = $request->input('name', '')) {
             $member_list = $memberService->getMemberList(['company_id' => $params['company_id'],'name|contains' => $name], 1, -1);
@@ -65,6 +67,7 @@ class PointMember extends Controller
 
         return $params;
     }
+
     /**
      * @SWG\Get(
      *     path="/point/member",
@@ -117,22 +120,86 @@ class PointMember extends Controller
         $pageSize = $request->input('pageSize', 20);
         $pointMemberService = new PointMemberLogService();
         $params = $this->getFilter($request);
-        
-        $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
-        if (isset($result['list']) && !empty($result['list'])) {
-            $memberService = new MemberService();
-            $userIds = array_column($result['list'], 'user_id');
-            $memberList = $memberService->getMemberList(['company_id' => $params['company_id'],'user_id' => $userIds], 1, -1);
-            $memberList = array_column($memberList, null, 'user_id');
-        }
 
-        foreach ($result['list'] as $key => $row) {
-            $point = explode('：', $row['point_desc']);
-            $result['list'][$key]['journal_type_desc'] = PointMemberService::JOURNAL_TYPE_MAP[$row['journal_type']] ?? '';
-            $result['list'][$key]['username'] = $memberList[$row['user_id']]['username'] ?? '';
-            $result['list'][$key]['name'] =  $memberList[$row['user_id']]['name'] ?? '';
-            $result['list'][$key]['mobile'] =  $memberList[$row['user_id']]['mobile'] ?? '';
-            $result['list'][$key]['s_point'] =  end($point) ?? 0;
+        // 达摩crm, 会员积分明细
+        $ns = new DmCrmSettingService();
+        if ($ns->getDmCrmSetting($params['company_id'])['is_open'] ?? '') {
+            $memberService = new MemberService();
+            $pointService = new PointService($params['company_id']);
+            // 兼容积分流水，多user_id, 但是分页可能不准确了
+            $pointItems = [];
+            $pointTotal = 0;
+            if (isset($params['user_id']) && is_array($params['user_id'])) {
+                // pass
+            }elseif(isset($params['user_id']) && !empty($params['user_id'])){
+                $params['user_id'] = [$params['user_id']];    
+            } else {
+                $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
+                if (isset($result['list']) && !empty($result['list'])) {
+                    $userIds = array_column($result['list'], 'user_id');
+                    $userIds = array_flip(array_flip($userIds ?? [])); // 去重
+                    $params['user_id'] = $userIds;
+                }
+            }
+            if (!empty($params['user_id'])) {
+                foreach($params['user_id'] as $k => $userId) {
+                    $memberFilter = [
+                        'user_id' => $userId,
+                        'company_id' => $params['company_id']
+                    ];
+                    $memberInfoInfo = $memberService->getMemberInfo($memberFilter);
+                    if (empty($memberInfoInfo)) {
+                        continue;
+                    }
+                    $paramsData = [
+                        'mobile' => $memberInfoInfo['mobile'],
+                        'currentPage' => $page,
+                        'pageSize' => count($params['user_id']) >= 1 ? ceil($pageSize/count($params['user_id'])) : $pageSize ,
+                        'user_id' => $userId,
+                        'company_id' => $params['company_id']
+                    ];
+                    $pointList = $pointService->getPointDetailList($paramsData);
+                    $pointItems = array_merge($pointItems, $pointList['items'] ?? []);
+                    $pointTotal += $pointList['totalCount'] ?? 0;
+                }
+            }
+
+            $result['list'] = $pointItems;
+            $result['total_count'] = $pointTotal;
+
+            if (isset($result['list']) && !empty($result['list'])) {
+                $memberService = new MemberService();
+                $userIds = array_column($result['list'], 'user_id');
+                if (empty($userIds)) {
+                    $userIds = $params['user_id'];
+                }
+                $memberList = $memberService->getMemberList(['company_id' => $params['company_id'],'user_id' => $userIds], 1, -1);
+                $memberList = array_column($memberList, null, 'user_id');
+            
+                foreach ($result['list'] as $key => $row) {
+                    $result['list'][$key]['username'] = $memberList[$row['user_id']]['username'] ?? '';
+                    $result['list'][$key]['name'] =  $memberList[$row['user_id']]['name'] ?? '';
+                    $result['list'][$key]['mobile'] =  $memberList[$row['user_id']]['mobile'] ?? '';
+                    $result['list'][$key]['s_point'] =  $row['s_point'] ?? 0;
+                }
+            }
+        }else {
+            $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
+            if (isset($result['list']) && !empty($result['list'])) {
+                $memberService = new MemberService();
+                $userIds = array_column($result['list'], 'user_id');
+                $memberList = $memberService->getMemberList(['company_id' => $params['company_id'],'user_id' => $userIds], 1, -1);
+                $memberList = array_column($memberList, null, 'user_id');
+            }
+
+            foreach ($result['list'] as $key => $row) {
+                $point = explode('：', $row['point_desc']);
+                $result['list'][$key]['journal_type_desc'] = PointMemberService::JOURNAL_TYPE_MAP[$row['journal_type']] ?? '';
+                $result['list'][$key]['username'] = $memberList[$row['user_id']]['username'] ?? '';
+                $result['list'][$key]['name'] =  $memberList[$row['user_id']]['name'] ?? '';
+                $result['list'][$key]['mobile'] =  $memberList[$row['user_id']]['mobile'] ?? '';
+                $result['list'][$key]['s_point'] =  end($point) ?? 0;
+            }
         }
 
         return $this->response->array($result);

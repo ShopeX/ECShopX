@@ -34,6 +34,7 @@ use SalespersonBundle\Services\SalespersonRelCouponService;
 use SalespersonBundle\Services\SalespersonTaskRecordService;
 use Exception;
 use CompanysBundle\Ego\CompanysActivationEgo;
+use ThirdPartyBundle\Services\DmCrm\DiscountCardService as DmDiscountCardService;
 
 class UserDiscountService implements UserDiscountInterface
 {
@@ -310,7 +311,7 @@ class UserDiscountService implements UserDiscountInterface
      * @param  string $sourceFrom
      * @return array
      */
-    public function userGetCard($companyId, $cardId, $userId, $sourceFrom = "商城本地领取", $salespersonId = 0, $activityName = '')
+    public function userGetCard($companyId, $cardId, $userId, $sourceFrom = "商城本地领取", $salespersonId = 0, $activityName = '' , $dmCardCode = '', $mobile = '')
     {
         if (!$companyId) {
             throw new ResourceException(trans('KaquanBundle.coupon_record_add_failed'));
@@ -318,6 +319,24 @@ class UserDiscountService implements UserDiscountInterface
         $postdata['status'] = 1;
         // 校验优惠券是否能领取
         $cardInfo = $this->__getCardInfo($cardId, $companyId, $userId);
+        app('log')->info('registerPromotion::userGetCard::cardInfo='.json_encode($cardInfo));
+        $dmDiscountCardService = new DmDiscountCardService($companyId);
+        // 去达摩发放卡券
+        if (!in_array($sourceFrom, ['达摩CRM批量投放事件', '达摩CRM领取事件']) && $dmDiscountCardService->isOpen && $cardInfo['source_type'] == 'dmcrm') {
+            if (!$mobile) {
+                $memberService = new MemberService();
+                $mobile = $memberService->getMobileByUserId($userId, $companyId);
+            }
+            app('log')->info('registerPromotion::userGetCard::mobile='.$mobile);
+            $dmResult = $dmDiscountCardService->sendCoupon($cardInfo['dm_card_id'], $mobile);
+            $postdata['dm_card_code'] = $dmResult['couponCode'];
+        }
+        if ($dmCardCode) {
+            $postdata['dm_card_code'] = $dmCardCode;
+            $postdata['code'] = $dmCardCode;
+        } else {
+            $postdata['code'] = $this->getCode($companyId, $cardId, $userId);
+        }
 
         // 如果设置了  前台不可直接领取 则提示
         // if ($sourceFrom == "商城本地领取" && $cardInfo['receive'] != 'true') {
@@ -398,6 +417,7 @@ class UserDiscountService implements UserDiscountInterface
         $cardInfo['status'] = $postdata['status'];
         $result = $this->__getCardData($cardId, $companyId, $userId);
         $result['code'] = $postdata['code'];
+        $result['dm_card_code'] = $postdata['dm_card_code'] ?? '';
         $this->sendWxaTemplateMsg($companyId, $userId, $cardInfo, 'get');
         return $result;
     }
@@ -1071,7 +1091,7 @@ class UserDiscountService implements UserDiscountInterface
      * @param  [type] $userId  [会员编号]
      * @return [type]            [description]
      */
-    public function callbackUserCard($companyId, $code, $userId)
+    public function callbackUserCard($companyId, $code, $userId, $mobile = '', $dmCardCode = '')
     {
         $filter['company_id'] = $companyId;
         $filter['code'] = $code;
@@ -1080,6 +1100,11 @@ class UserDiscountService implements UserDiscountInterface
         $detail = $this->userDiscountRepository->get($filter);
         if (!$detail) {
             throw new ResourceException('恢复失败，无此优惠券 或 未被使用');
+        }
+        // 达摩CRM卡券解除占用
+        $dmDiscountCardService = new DmDiscountCardService($companyId);
+        if ($dmDiscountCardService->isOpen && $dmCardCode) {
+            $dmDiscountCardService->occupyCoupon($mobile, $dmCardCode, 0);
         }
         $postdata['status'] = 1;
         $result = $this->userDiscountRepository->userConsumeCardUpdate($postdata, $filter);

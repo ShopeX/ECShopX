@@ -261,6 +261,25 @@ class AftersalesDetail
     private $auto_refuse_time = 0;
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="refunded_num", type="integer", nullable=true, options={"unsigned":true, "comment":"实际入库数量", "default": 0})
+     */
+    private $refunded_num;
+
+    public function setRefundedNum($refundedNum)
+    {
+        $this->refunded_num = $refundedNum;
+
+        return $this;
+    }
+
+    public function getRefundedNum()
+    {
+        return $this->refunded_num;
+    }
+    
+    /**
      * Get detailId.
      *
      * @return int

@@ -8,21 +8,24 @@ namespace PointBundle\Services;
 
 use AftersalesBundle\Entities\Aftersales;
 use AftersalesBundle\Repositories\AftersalesRepository;
+use AftersalesBundle\Services\AftersalesRefundService;
 use DepositBundle\Services\DepositTrade;
+use GoodsBundle\Services\ItemRelPointAccessService;
 use MembersBundle\Services\MemberService;
-use PointBundle\Entities\PointMember;
-use PointBundle\Entities\PointMemberLog;
-use PointBundle\Repositories\PointMemberRepository;
-use PopularizeBundle\Services\BrokerageService;
-use PromotionsBundle\Services\RegisterPromotionsService;
 use OrdersBundle\Entities\NormalOrders;
 use OrdersBundle\Entities\NormalOrdersItems;
-use PointBundle\Jobs\SendMemberPointJob;
-use GoodsBundle\Services\ItemRelPointAccessService;
-use PromotionsBundle\Services\ExtraPointActivityService;
-use AftersalesBundle\Services\AftersalesRefundService;
-use ShuyunBundle\Services\MembersService as ShuyunMembersService;
+use OrdersBundle\Services\Orders\NormalOrderService;
+use PointBundle\Entities\PointMember;
+use PointBundle\Entities\PointMemberLog;
 use PointBundle\Exception\PointResourceException;
+use PointBundle\Jobs\SendMemberPointJob;
+use PointBundle\Repositories\PointMemberRepository;
+use PopularizeBundle\Services\BrokerageService;
+use PromotionsBundle\Services\ExtraPointActivityService;
+use PromotionsBundle\Services\RegisterPromotionsService;
+use ShuyunBundle\Services\MembersService as ShuyunMembersService;
+use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
+use ThirdPartyBundle\Services\DmCrm\PointService;
 
 class PointMemberService
 {
@@ -86,10 +89,128 @@ class PointMemberService
         /*if ($point == 0) {
             return true;
         }*/
-
+        app('log')->debug('addPoint params:'.var_export([
+            'userId' => $userId,
+            'companyId' => $companyId,
+            'point' => $point,
+            'journalType' => $journalType,
+            'status' => $status,
+            'record' => $record,
+            'orderId' => $orderId,
+            'otherParams' => $otherParams,
+        ], 1));
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
+            // 达摩crm, 预扣积分/取消积分
+            $ns = new DmCrmSettingService();
+            if ($ns->getDmCrmSetting($companyId)['is_open'] ?? '') {
+                $memberService = new MemberService();
+                $filterMember = [
+                    'user_id' => $userId,
+                    'company_id' => $companyId,
+                ];
+                $memberInfo = $memberService->getMemberInfo($filterMember, false);
+                $pointService = new PointService($companyId);
+                if (!empty($orderId)) {
+                    // 订单预扣积分模式
+                    $orderSerivce = new NormalOrderService();
+                    if (!$status) {
+                        $paramsData = [
+                            'mobile' => $memberInfo['mobile'],
+                            'cardNo' => $memberInfo['dm_card_no'],
+                            'integralVal' => -$point,
+                            'relationId' => $orderId,
+                            'delay' => 7 * 24 * 3600 ,
+                //            'sourceCode' => $paramsData['sourceCode'],
+                            'memberIntegralCode' => '1240',
+                //            'storeCode' => $paramsData['storeCode'],
+                //            'costFee' => $paramsData['costFee'],
+                            'remark' => "订单", 
+                            'sourceChannel' => 'c_brand_mall'
+                        ];
+                        $result = $pointService->minusPreparePoint($paramsData);
+                        // 保存预扣id
+                        $orderSerivce->update(['order_id' => $orderId, 'company_id' => $companyId], ['dm_point_preid' => $result['id'], 'updated' => time()]);
+                    }else {
+                        // // 如果存在aftersale_bn证明是售后退款，直接扣减积分，如果是取消订单则取消预扣积分
+                        // if (isset($otherParams['aftersales_bn']) && !empty($otherParams['aftersales_bn'])) {
+                        //     $paramsData = [
+                        //         'cardNo' => $memberInfo['dm_card_no'],
+                        //         'mobile' => $memberInfo['mobile'],      
+                        //         //            'unionId' => '',
+                        //         'integral' => $point,
+                        //         'type' => 1,
+                        //         'changeType' => '1140',
+                        //         'remark' => "售后退积分,订单号:".$orderId." 售后单号:".$otherParams['aftersales_bn'],
+                        //         //            'storeCode' => '',
+                        //         'integralFlow' => $otherParams['aftersales_bn'].'_'.time(),
+                        //         'sourceChannel' => 'c_brand_mall',
+                        //     ];
+                        //     $pointService->changePoint($paramsData);
+                        // }else {
+                        //     $orderInfo = $orderSerivce->getInfo(['order_id' => $orderId, 'company_id' => $companyId]);
+                        //     $paramsData = [
+                        //         'mobile' => $memberInfo['mobile'],      
+                        //         'cardNo' => $memberInfo['dm_card_no'],
+                        //         'preDeductionId' => $orderInfo['dm_point_preid'],
+                        //     ];
+                        //     $pointService->cancelPreparePoint($paramsData);
+                        // }
+                        
+                        // 2025年8月20日20:00:50 新修改逻辑
+                        // 所有已支付订单,返回都走订单同步逻辑
+                        $orderInfo = $orderSerivce->getInfo(['order_id' => $orderId, 'company_id' => $companyId]);
+                        if ($orderInfo['pay_status'] != 'PAYED') {
+                            $paramsData = [
+                                 'mobile' => $memberInfo['mobile'],      
+                                 'cardNo' => $memberInfo['dm_card_no'],
+                                 'preDeductionId' => $orderInfo['dm_point_preid'],
+                            ];
+                            $pointService->cancelPreparePoint($paramsData);
+                        }
+                    }
+                }else {
+                    // 2025年8月20日20:00:50 新修改逻辑
+                    // 退款积分的改动场景，不在更改用户积分
+                    if (isset($otherParams['refund_bn']) && !empty($otherParams['refund_bn'])) {
+                        // pass
+                    }else {
+                         if (!$status) {
+                            $paramsData = [
+                                'mobile' => $memberInfo['mobile'],
+                                'cardNo' => $memberInfo['dm_card_no'],
+                    //            'unionId' => '',
+                                'integral' => -$point,
+                                'type' => 0,
+                                'changeType' => '1240',
+                                'remark' => '积分扣减:'.$record,
+                    //            'storeCode' => '',
+                                'integralFlow' => $memberInfo['mobile'].'_'.time(),
+                                'sourceChannel' => 'c_brand_mall',
+                            ];
+                        }else {
+                            $paramsData = [
+                                'mobile' => $memberInfo['mobile'],
+                                'cardNo' => $memberInfo['dm_card_no'],
+                    //            'unionId' => '',
+                                'integral' => $point,
+                                'type' => 1,
+                                'changeType' => '1140',
+                                'remark' => '积分增加:'.$record,
+                    //            'storeCode' => '',
+                                'integralFlow' => $memberInfo['mobile'].'_'.time(),
+                                'sourceChannel' => 'c_brand_mall',
+                            ];
+                        }
+                        $pointService->changePoint($paramsData);
+                    }
+                }
+
+                $conn->commit();
+                return true;
+            }
+
             $filter = ['user_id' => $userId, 'company_id' => $companyId];
             if ($point != 0) {
                 $data = [
@@ -102,7 +223,6 @@ class PointMemberService
             } else {
                 $info = $this->pointMemberRepository->getInfo($filter);
             }
-
             if ($info) {
                 $this->pointMemberLogRepository->create([
                     'user_id' => $userId,
@@ -117,15 +237,19 @@ class PointMemberService
                     "operater_remark" => $otherParams["operater_remark"] ?? "",
                 ]);
             }
+
             // 数云模式，去数云增加/扣减积分
             if (config('common.oem-shuyun')) {
                 $shuyunMembersService = new ShuyunMembersService($companyId, $userId);
                 $shuyunMembersService->shuyunAddPoint($point, $status, $record, $orderId, $otherParams);
             }
+
             $conn->commit();
             return true;
         } catch (\Exception $e) {
-            app('log')->info('addPoint  msg:'.$e->getMessage());
+            app('log')->debug('addPoint  file:'.$e->getFile());
+            app('log')->debug('addPoint  line:'.$e->getLine());
+            app('log')->debug('addPoint  msg:'.$e->getMessage());
             $conn->rollback();
             throw $e;
         }
@@ -532,6 +656,24 @@ class PointMemberService
         } else {
             $point = $this->pointMemberRepository->getInfo($filter)['point'] ?? 0;
         }
+
+        // 达摩crm, 会员积分
+        $ns = new DmCrmSettingService();
+        if ($ns->getDmCrmSetting($filter['company_id'])['is_open'] ?? '') {
+            $memberSerivce = new MemberService();
+            $pointService = new PointService($filter['company_id']);
+            $filterMember = [
+                'user_id' => $filter['user_id'],
+                'company_id' => $filter['company_id'],
+            ];
+            $memberInfo = $memberSerivce->getMemberInfo($filterMember, false);
+            $pointService = new PointService($filter['company_id']);
+            $paramsData = [
+                'mobile' => $memberInfo['mobile'],
+            ];
+            $point = $pointService->getPoint($paramsData)['integral'] ?? 0;
+        }
+
         $info = [
             'company_id' => $filter['company_id'],
             'user_id' => $filter['user_id'],

@@ -321,7 +321,7 @@ class AftersalesService
 
             if (isset($data['refund_fee']) && $data['refund_fee']) {
                 if ($data['refund_fee'] > $total_refund_fee) {
-                    throw new ResourceException('退款金额不能超过可退金额');
+                    throw new ResourceException('退款金额不能超过可退金额'.$data['refund_fee'].' > '.$total_refund_fee);
                 }
                 $aftersales_data['refund_fee'] = $data['refund_fee'];
             } else {
@@ -428,6 +428,351 @@ class AftersalesService
         event(new WdtErpTradeAfterSaleEvent($aftersales));
         $gotoJob = (new sendAfterSaleWaitDealNoticeJob($aftersales_data['company_id'], $aftersales_data['aftersales_bn']))->onQueue('slow');
         app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+        return $aftersales;
+    }
+
+    // 售后拆单单个
+    public function createByNum($data)
+    {
+        unset($data['aftersales_bn']);
+        // 检查是否可以申请售后
+        $this->__checkApply($data);
+        $filter = [
+            'company_id' => $data['company_id'],
+            'order_id' => $data['order_id'],
+            'user_id' => $data['user_id'],
+        ];
+        $normalOrderService = new NormalOrderService();
+        $orderInfo = $normalOrderService->getSimpleOrderInfo($filter);
+
+        $tradeService = new TradeService();
+        $trade = $tradeService->getInfo(['company_id' => $data['company_id'], 'order_id' => $orderInfo['order_id'], 'trade_state' => 'SUCCESS']);
+
+        if (!isset($data['contact']) || !$data['contact']) {
+            $memberService = new MemberService();
+            $memberInfo = $memberService->getMemberInfo(['company_id' => $data['company_id'], 'user_id' => $data['user_id']]);
+            $data['contact'] = $memberInfo['username'];
+        }
+
+        //获取当前申请售后商品的供应商信息
+        $_filter = [
+            'company_id' => $data['company_id'],
+            'order_id' => $data['order_id'],
+            'id' => array_column($data['detail'], 'id'),
+        ];
+        $orderItems = $normalOrderService->normalOrdersItemsRepository->getList($_filter);
+        if (!$orderItems['list']) throw new ResourceException('查询订单明细错误');
+
+        // //把售后商品按供应商区分
+        // $supplierInfo = array_column($orderItems['list'], 'supplier_id', 'id');
+        // $aftersaleItems = [];
+        // foreach ($data['detail'] as $v) {
+        //     $v['supplier_id'] = $supplierInfo[$v['id']] ?? 0;
+        //     $aftersaleItems[$v['supplier_id']][] = $v;
+        // }
+
+        // foreach($aftersaleItems as $supplierId => $v) {
+        //     $data['detail'] = $v;//单个供应商对应的售后商品数组
+        //     $aftersales = $this->__createAftersales($orderInfo, $trade, $data);
+        // }
+
+        foreach ($data['detail'] as $v) {
+            $detailTmp = $v;
+            for ($i=0; $i < $v['num']; $i++) { 
+                // 如果输入了退款子订单总金额，则平均分配
+                if (isset($detailTmp['total_fee']) && $detailTmp['total_fee'] > 0) {
+                    $detailTmp['total_fee'] = floor(bcdiv(bcmul($detailTmp['total_fee'],100), $detailTmp['num'], 2));
+                }
+                if (isset($detailTmp['total_point']) && $detailTmp['total_point'] > 0) {
+                    $detailTmp['total_point'] = floor(bcdiv(bcmul($detailTmp['total_point'],100), $detailTmp['num'], 2));   
+                }
+                $detail = $detailTmp;
+                $detail['num'] = 1;
+                $data['detail'] = [$detail];
+                $this->__createAftersalesByNum($orderInfo, $trade, $data);
+            }
+        }
+
+        return true;
+    }
+
+    // 售后拆单数据按num单个拆分
+    private function __createAftersalesByNum($orderInfo, $trade, $data)
+    {
+         // 是否开启退货退款退运费
+        $is_refund_freight = $this->getOrdersSetting($data['company_id'], 'is_refund_freight');
+        $aftersales_bn = $this->__genAftersalesBn();
+        $aftersales_data = [
+            'aftersales_bn' => $aftersales_bn,
+            'shop_id' => $orderInfo['shop_id'],
+            'order_id' => $data['order_id'],
+            // 'original_order_id' => $orderInfo['original_order_id'],
+            'company_id' => $data['company_id'],
+            'supplier_id' => $data['supplier_id'] ?? 0,
+            'user_id' => $data['user_id'],
+            'distributor_id' => $orderInfo['distributor_id'],
+            'aftersales_type' => $data['aftersales_type'],
+            'aftersales_status' => 0,
+            'progress' => 0,
+            'reason' => $data['reason'],
+            'description' => $data['description'] ?? '',
+            'evidence_pic' => $data['evidence_pic'] ?? [],
+            'salesman_id' => $data['salesman_id'] ?? 0,
+            'contact' => $data['contact'] ?? '',
+            'mobile' => $data['mobile'] ?? ($orderInfo['mobile'] ?? ''),
+            'merchant_id' => $orderInfo['merchant_id'] ?? 0,
+            'self_delivery_operator_id' => $orderInfo['self_delivery_operator_id'] ?? 0,
+            'is_partial_cancel' => $data['is_partial_cancel'] ?? 0,
+            'return_type' => $data['return_type'] ?? 'logistics',
+            'freight' => 0,
+        ];
+        if (isset($data['return_type']) && $data['return_type'] == 'offline') {
+            $distributorService = new DistributorService();
+            $distributorId = $orderInfo['distributor_id'];
+            $selfDistributorId = 0;
+            if (!$distributorId) {
+                $distributor = $distributorService->getInfoSimple(['company_id' => $data['company_id'], 'distributor_self' => 1]);
+                if (!$distributor) {
+                    throw new ResourceException('该订单不支持到店退货');
+                }
+                $distributorId = $distributor['distributor_id'];
+                $selfDistributorId = $distributorId;
+            }
+
+            $distributor = $distributorService->getInfoSimple(['company_id' => $data['company_id'], 'distributor_id' => $distributorId]);
+            if (!$distributor['offline_aftersales']) {
+                throw new ResourceException('该订单不支持到店退货');
+            }
+
+            $adFilter = [
+                'company_id' => $data['company_id'],
+                'return_type' => 'offline',
+                'address_id' => $data['aftersales_address_id'],
+            ];
+            $distributorAftersalesAddressService = new DistributorAftersalesAddressService();
+            $address = $distributorAftersalesAddressService->getInfo($adFilter);
+            if (!$address) {
+                throw new ResourceException('请选择正确的退货门店');
+            }
+
+            $dFilter = [
+                'company_id' => $data['company_id'],
+                'distributor_id' => $address['distributor_id'],
+                'is_valid' => 'true',
+            ];
+            if ($address['distributor_id'] == $distributorId) {
+                $dFilter['offline_aftersales_self'] = 1;
+            } else {
+                if (!in_array($address['distributor_id'], $distributor['offline_aftersales_distributor_id'])) {
+                    throw new ResourceException('请选择正确的退货门店');
+                }
+                $dFilter['offline_aftersales_other'] = 1;
+            }
+            $returnDistributor = $distributorService->getInfoSimple($dFilter);
+            if (!$returnDistributor) {
+                throw new ResourceException('请选择正确的退货门店');
+            }
+            $aftersales_data['return_distributor_id'] = $returnDistributor['distributor_id'] == $selfDistributorId ? 0 : $returnDistributor['distributor_id'];
+            $aftersales_data['aftersales_address'] = [
+                'aftersales_address_id' => $address['address_id'],
+                'aftersales_contact' => $address['contact'],
+                'aftersales_mobile' => $address['mobile'],
+                'aftersales_address' => $address['province'] . $address['city'] . $address['area'] . $address['address'],
+                'aftersales_name' => $address['name'],
+                'aftersales_hours' => $address['hours'],
+            ];
+        }
+
+        $conn = app('registry')->getConnection('default');
+        $conn->beginTransaction();
+        try {
+            // 创建售后单
+            $normalOrderService = new NormalOrderService();
+            $total_refund_fee = 0;
+            $total_refund_point = 0;
+            $total_return_point = 0;
+            $apply_num = 0;
+            $sub_item_fee = 0; // 本次申请子订单单个金额
+            $sub_item_point = 0; // 本次申请子订单单个积分
+            $is_refund_freight_flag = false; //单个，如果以后多个则为数组hswzudiyur，ad// 子订单是否已退款运费
+            foreach ($data['detail'] as $v) {
+                $suborder_filter = [
+                    'company_id' => $data['company_id'],
+                    'user_id' => $data['user_id'],
+                    'order_id' => $data['order_id'],
+                    'id' => $v['id'],
+                ];
+                $subOrderInfo = $normalOrderService->getSimpleSubOrderInfo($suborder_filter);
+                // 如果输入了总金额，以输入的为准
+                if (isset($v['total_fee']) && $v['total_fee'] > 0) {
+                    $sub_item_fee = $v['total_fee'];
+                }else{
+                    $sub_item_fee = floor(bcmul(bcdiv($subOrderInfo['total_fee'], $subOrderInfo['num'], 2), $v['num']));
+                }
+                 if (isset($v['total_point']) && $v['total_point'] > 0) {
+                    $sub_item_point = $v['total_point'];
+                }else{
+                    $sub_item_point = floor(bcmul(bcdiv($subOrderInfo['point'], $subOrderInfo['num'], 2), $v['num']));
+                }
+                $applied_num = $this->getAppliedNum($data['company_id'], $data['order_id'], $v['id']); // 已申请数量
+                $applied_refund_fee = $this->getAppliedTotalRefundFee($data['company_id'], $data['order_id'], $v['id']); // 已申请退款总金额
+                $applied_refund_point = $this->getAppliedRefundPoint($data['company_id'], $data['order_id'], $v['id']); // 已申请退款总积分
+                if ($v['num'] == $subOrderInfo['num']) { // 子订单 全部 退货
+                    $refund_fee = $subOrderInfo['total_fee'];
+                    $refund_point = $subOrderInfo['point'];
+                } else { // 子订单 部分 退货
+                    $left_num = $subOrderInfo['num'] - $applied_num - $v['num'];
+                    if ($left_num == 0) { // 申请的是本明细剩余的所有数量
+                        $refund_fee = $subOrderInfo['total_fee'] - $applied_refund_fee;
+                        $sub_item_fee = $refund_fee;
+                        $refund_point = $subOrderInfo['point'] - $applied_refund_point;
+                        $sub_item_point = $refund_point;
+                    } elseif ($left_num > 0) { // 还有没申请的商品的时候  通过除法来计算退款金额，向下取整
+                        $refund_fee = floor(bcmul(bcdiv($subOrderInfo['total_fee'], $subOrderInfo['num'], 2), $v['num']));
+                        $refund_point = floor(bcmul(bcdiv($subOrderInfo['point'], $subOrderInfo['num'], 2), $v['num']));
+                    } else {
+                        throw new ResourceException('申请售后单数据异常');
+                    }
+                }
+
+                $total_return_point += $this->getReturnPoint($subOrderInfo, $v['num'], $applied_num);
+                $total_refund_fee += $refund_fee;
+                $total_refund_point += $refund_point;
+                $aftersales_detail_data = [
+                    'company_id' => $data['company_id'],
+                    'user_id' => $data['user_id'],
+                    'distributor_id' => $orderInfo['distributor_id'],
+                    'aftersales_bn' => $aftersales_bn,
+                    'order_id' => $data['order_id'],
+                    'sub_order_id' => $v['id'],
+                    'goods_id' => $subOrderInfo['goods_id'],
+                    'item_id' => $subOrderInfo['item_id'],
+                    'item_bn' => $subOrderInfo['item_bn'],
+                    'item_pic' => $subOrderInfo['pic'],
+                    'refund_fee' => $sub_item_fee,
+                    'refund_point' => $sub_item_point,
+                    'item_name' => $subOrderInfo['item_name'],
+                    'order_item_type' => $subOrderInfo['order_item_type'],
+                    'num' => $v['num'],
+                    'aftersales_type' => $data['aftersales_type'],
+                    'progress' => 0,
+                    'aftersales_status' => 0,
+                ];
+                if ($subOrderInfo['item_spec_desc']) {
+                    $aftersales_detail_data['item_name'] = $subOrderInfo['item_name'] . '(' . $subOrderInfo['item_spec_desc'] . ')';
+                }
+                // 创建售后明细
+                $aftersales_detail = $this->aftersalesDetailRepository->create($aftersales_detail_data);
+                $apply_num += $v['num'];
+                $orderProfitService = new OrderProfitService();
+                $orderProfitService->orderItemsProfitRepository->updateBy(['order_id' => $data['order_id'], 'company_id' => $data['company_id'], 'item_id' => $aftersales_detail_data['item_id']], ['order_profit_status' => 0]);
+
+                //一次只能申请一个商品，把子订单的供应商ID保存在售后主表
+                $aftersales_data['supplier_id'] = $subOrderInfo['supplier_id'] ?? 0;
+                $aftersales_data['item_bn'] = $subOrderInfo['item_bn'];
+
+                $is_refund_freight_flag = $this->isRefundFinishByNum($data['order_id'], $data['company_id'], $v['id'], $v['num']);
+            }
+
+             if ($sub_item_fee > $total_refund_fee) {
+                throw new ResourceException('售后申请金额不能超过剩余金额! '.$sub_item_fee.' > '.$total_refund_fee);
+            }
+            if ( $sub_item_point > $total_refund_point) {
+                throw new ResourceException('售后申请积分不能超过剩余积分! '.$sub_item_point.' > '.$total_refund_point);
+            }
+            $aftersales_data['refund_fee'] = $sub_item_fee;
+            $aftersales_data['refund_point'] = $sub_item_point;
+            // 判断是否是最后一个售后数据了
+            if ($is_refund_freight && $is_refund_freight_flag) {
+                $aftersales_data['freight'] = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $orderInfo['freight_fee'] ? $data['freight'] : $orderInfo['freight_fee'];
+            }
+            // 创建售后主单据
+            $aftersales = $this->aftersalesRepository->create($aftersales_data);
+            if (!$aftersales_data['is_partial_cancel']) {
+                $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
+                if ($left_aftersales_num < 0) {
+                    throw new ResourceException('超出可申请数量');
+                }
+                $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+            }
+            // 创建售后退款单
+            $aftersalesRefundService = new AftersalesRefundService();
+            $refundData = [
+                'company_id' => $aftersales_data['company_id'],
+                'supplier_id' => $aftersales_data['supplier_id'],
+                'user_id' => $aftersales_data['user_id'],
+                'aftersales_bn' => $aftersales_data['aftersales_bn'],
+                'order_id' => $aftersales_data['order_id'],
+                'trade_id' => $trade['trade_id'], // 已支付交易单号
+                'shop_id' => $aftersales_data['shop_id'] ?? 0,
+                'distributor_id' => $aftersales_data['distributor_id'] ?? 0,
+                'refund_type' => 0, // 0 售后申请退款
+                'refund_channel' => $trade['pay_type'] == 'offline_pay' ? 'offline' : 'original', // 默认取消订单原路返回,pay_type=offline_pay为线下退款
+                'refund_fee' => $sub_item_fee,
+                'refund_point' => $sub_item_point,
+                'return_freight' => 0, // 0 不退运费
+                'pay_type' => $orderInfo['pay_type'],
+                'currency' => ($trade['pay_type'] == 'point') ? '' : $trade['fee_type'],
+                'cur_fee_type' => ($trade['pay_type'] == 'point') ? '' : $trade['cur_fee_type'],
+                'cur_fee_rate' => $trade['cur_fee_rate'],
+                'cur_fee_symbol' => ($trade['pay_type'] == 'point') ? '' : $trade['cur_fee_symbol'],
+                'cur_pay_fee' => ($trade['pay_type'] == 'point') ? ($sub_item_point * $trade['cur_fee_rate']) : ($sub_item_fee * $trade['cur_fee_rate']), // trade表没有单独积分字段，所以这样写
+                'return_point' => $total_return_point,
+                'merchant_id' => $orderInfo['merchant_id'] ?? 0,
+                'freight' => 0,
+            ];
+             // 判断是否是最后一个售后数据了
+            if ($is_refund_freight && $is_refund_freight_flag) {
+                $refundData['freight'] = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $orderInfo['freight_fee'] ? $data['freight'] : $orderInfo['freight_fee'];
+                $refundData['return_freight'] = 1;
+            }
+            $refund = $aftersalesRefundService->createAftersalesRefund($refundData);
+            
+            // if ($orderInfo['order_status'] != 'DONE') {
+            // $normalOrderService->confirmReceipt($filter);
+            // }
+            $orderProcessLog = [
+                'order_id' => $data['order_id'],
+                'company_id' => $data['company_id'],
+                'supplier_id' => $data['supplier_id'] ?? 0,
+                'operator_type' => $data['operator_type'] ?? 'user',
+                'operator_id' => ($data['operator_type'] ?? 'user') == 'user' ? $data['user_id'] : ($data['operator_id'] ?? 0),
+                'remarks' => '订单售后',
+                'detail' => '售后单号：' . $aftersales_bn . ' 申请售后，申请原因：' . $data['reason'],
+                'params' => $data,
+            ];
+            event(new OrderProcessLogEvent($orderProcessLog));
+            $conn->commit();
+        } catch (\Exception $e) {
+            $conn->rollback();
+            throw $e;
+        }
+
+        $date = date('Ymd');
+        $redisKey = 'OrderPayStatistics:normal:' . $data['company_id'] . ':' . $date;
+        app('redis')->hincrby($redisKey, 'orderAftersales', 1);
+        if (isset($orderInfo['distributor_id'])) {
+            app('redis')->hincrby($redisKey, $orderInfo['distributor_id'] . '_orderAftersales', 1);
+        }
+        if (!empty($orderInfo['merchant_id'])) {
+            app('redis')->hincrby($redisKey, $orderInfo['merchant_id'] . '_merchant_orderAftersales', 1);
+        }
+
+        //联通OME售后申请埋点
+        if ($data['aftersales_type'] == 'REFUND_GOODS' || $data['aftersales_type'] == 'EXCHANGING_GOODS') {
+            event(new TradeAftersalesEvent($aftersales)); // 退款退货 或换货
+            event(new SaasErpAftersalesEvent($aftersales)); // SaasErp 售后申请 退款退货
+        } else {
+            event(new TradeRefundEvent($refund)); // 售后仅退款
+            event(new SaasErpRefundEvent($aftersales));// SaasErp 售后申请 仅退款
+        }
+        //售后申请推聚水潭
+        event(new JushuitanTradeAftersalesEvent($aftersales));
+        //售后申请推旺店通
+        event(new WdtErpTradeAfterSaleEvent($aftersales));
+        $gotoJob = (new sendAfterSaleWaitDealNoticeJob($aftersales_data['company_id'], $aftersales_data['aftersales_bn']))->onQueue('slow');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+        
         return $aftersales;
     }
 
@@ -578,6 +923,16 @@ class AftersalesService
                 //拒绝退款推旺店通
                 event(new WdtErpTradeAfterSaleEvent($aftersales));
             } else {
+                if (isset($data['refund_fee']) && $data['refund_fee'] <= 0) {
+                    $data['refund_fee'] = intval($aftersales['refund_fee']);
+                }
+                if (isset($data['refund_point']) && $data['refund_point'] <= 0 ) {
+                    $data['refund_point'] = intval($aftersales['refund_point']);
+                }
+                if (isset($data['freight'])  && $data['freight'] <= 0  ) {
+                    $data['freight'] = intval($aftersales['freight']);
+                }
+                
                 if ($aftersales['aftersales_type'] == 'ONLY_REFUND') { // 仅退款,直接退款
                     if ($data['refund_fee'] < 0 or $data['freight'] < 0) {
                         throw new ResourceException('请填写退款金额并且大于等于0！');
@@ -704,6 +1059,11 @@ class AftersalesService
             throw $e;
         }
 
+        // 拒绝售后申请推聚水潭
+        if (!$data['is_approved']) {
+            event(new JushuitanTradeAftersalesEvent($result));
+        }
+
         $templateData = [
             'aftersales_type' => $aftersales['aftersales_type'],
             'aftersales_bn' => $aftersales['aftersales_bn'],
@@ -820,6 +1180,9 @@ class AftersalesService
         if (in_array($aftersales['aftersales_status'], [2, 3])) {
             throw new ResourceException("售后单已处理");
         }
+        if (!in_array($aftersales['aftersales_status'], [1])) {
+            throw new ResourceException("售后{$param['aftersales_bn']}不是审核中，无需审核");
+        }
         if (isset($param['refund_fee']) && $param['refund_fee'] > $aftersales['refund_fee']) {
             throw new ResourceException("实退金额必须小于等于应退金额");
         }
@@ -827,6 +1190,14 @@ class AftersalesService
             throw new ResourceException("实退积分必须小于等于应退积分");
         }
         $refund = $this->aftersalesRefundRepository->getInfo($filter);
+        // 检查售后单是否存在退款单
+        if (!$refund) {
+            throw new ResourceException("售后单不存在退款单");
+        }
+        // 检查退款单是否是已经退款成功
+        if ($refund['refund_status'] == 'SUCCESS') {
+            throw new ResourceException("退款单已退款成功，无需重复操作");
+        }
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
@@ -853,10 +1224,25 @@ class AftersalesService
                 ];
                 event(new OrderProcessLogEvent($orderProcessLog));
             } else {
+                // 添加聚水潭确认收货的验证
+                if ($aftersales['aftersales_type'] == 'REFUND_GOODS') {
+                    // 检查是否开启了聚水潭
+                    $jushuitanSettingService = new JushuitanSettingService();
+                    $jushuitanSetting = $jushuitanSettingService->getJushuitanSetting($param['company_id']);
+                    
+                    if (isset($jushuitanSetting['is_open']) && $jushuitanSetting['is_open'] == true) {
+                        // 开启了聚水潭，需要检查确认收货状态
+                        if ($aftersales['progress'] != 8) {
+                            throw new ResourceException("卖家暂未收货，请先到聚水潭进行处理");
+                        }
+                    }
+                    // 未开启聚水潭，则按原有逻辑处理，不强制要求确认收货
+                }
+
                 // 处理售后 退款单状态
                 $refundUpdate = [
                     'refund_status' => 'AUDIT_SUCCESS', // 审核成功待退款
-                    'refund_fee' => $param['refund_fee'], // 审核售后的时候可能改退款金额
+                    // 'refund_fee' => $param['refund_fee'], // 审核售后的时候可能改退款金额
                     // 'refund_channel' => 'original', // $param['is_refund'] ? 'original' : 'offline',
                     'refund_channel' => $refund['pay_type'] == 'offline_pay' ? 'offline' : 'original', // 默认取消订单原路返回,pay_type=offline_pay为线下退款
                 ];
@@ -947,6 +1333,11 @@ class AftersalesService
         } catch (\Exception $e) {
             $conn->rollback();
             throw $e;
+        }
+
+        // 退款驳回推聚水潭
+        if (!$param['check_refund']) {
+            event(new JushuitanTradeAftersalesEvent($result));
         }
 
         if ($update['aftersales_status'] == 2) {
@@ -1296,7 +1687,32 @@ class AftersalesService
             $indexDistributor = $distributorService->getDistributorListById($filter['company_id'], $distributorIdList);
             $subOrderIds = [];
 
+            // 售后默认地址
+            $aftersalesAddressMap = [];
+            $distributorAftersalesAddressService = new DistributorAftersalesAddressService();
+            $filterAddress = [
+                'company_id' => $filter['company_id'],
+                'distributor_id' => $distributorIdList,
+                'is_default' => 1,
+            ];
+            $distributorAftersalesAddressList = $distributorAftersalesAddressService->getLists($filterAddress);
+            if (!empty($distributorAftersalesAddressList)) {
+                foreach($distributorAftersalesAddressList as $distributorAftersalesAddressInfo ) {
+                    $aftersalesAddressMap[$distributorAftersalesAddressInfo['distributor_id']] = [
+                        'aftersales_address_id' => $distributorAftersalesAddressInfo['address_id'] ?? '',
+                        'aftersales_address' => $distributorAftersalesAddressInfo['address'] ?? '',
+                        'aftersales_contact' => $distributorAftersalesAddressInfo['contact'] ?? '',
+                        'aftersales_mobile' => $distributorAftersalesAddressInfo['mobile'] ?? '',
+                        'is_default' => 1,
+                    ];
+                }
+            }
+        
             foreach ($res['list'] as &$v) {
+                // 默认退货地址  
+                if (empty($v['aftersales_address'])) {
+                    $v['aftersales_address'] = $aftersalesAddressMap[$v['distributor_id']] ?? [];
+                }
                 $detail_filter = [
                     'aftersales_bn' => $v['aftersales_bn'],
                     'company_id' => $v['company_id'],
@@ -1541,6 +1957,24 @@ class AftersalesService
         if (!$aftersales) {
             throw new ResourceException('没有售后信息');
         }
+        // 售后默认地址
+        if (empty($aftersales['aftersales_address'])) {
+            $distributorAftersalesAddressService = new DistributorAftersalesAddressService();
+            $filterAddress = [
+                'company_id' => $params['company_id'],
+                'distributor_id' => $aftersales['distributor_id'],
+                'is_default' => 1,
+            ];
+            $distributorAftersalesAddressInfo = $distributorAftersalesAddressService->getInfo($filterAddress);
+            $aftersales['aftersales_address'] = [
+                'aftersales_address_id' => $distributorAftersalesAddressInfo['address_id'] ?? '',
+                'aftersales_address' => $distributorAftersalesAddressInfo['address'] ?? '',
+                'aftersales_contact' => $distributorAftersalesAddressInfo['contact'] ?? '',
+                'aftersales_mobile' => $distributorAftersalesAddressInfo['mobile'] ?? '',
+                'is_default' => 1,
+            ];
+        }
+    
         $aftersales['salesman'] = [];
         //获取导购员信息
         if ($aftersales['salesman_id']) {
@@ -1554,6 +1988,24 @@ class AftersalesService
         if ($is_app) {
             $aftersales['app_info'] = $this->getAppInfo($aftersales, true);
         }
+
+        //获取退款单
+        $refund_filter = [
+            'company_id' => $aftersales['company_id'],
+            'aftersales_bn' => $aftersales['aftersales_bn'],
+            // 'refund_status' => 'AUDIT_SUCCESS',  // 审核成功待退款
+        ];
+        $refund_info = $this->aftersalesRefundRepository->getInfo($refund_filter);
+        $aftersales['refund_info'] = $refund_info;
+
+        // 兼容拆单单个数量，加入实退金额和实退积分
+        if (count($aftersales['detail']) == 1) {
+            foreach ($aftersales['detail'] as $key => $item) {
+                $aftersales['detail'][$key]['refund_info']['refunded_fee'] = $refund_info['refunded_fee'];
+                $aftersales['detail'][$key]['refund_info']['refund_point'] = $refund_info['refunded_point'];
+            }
+        }
+
         $normalOrderService = new NormalOrderService();
         $order_filter = [
             'company_id' => $aftersales['company_id'],
@@ -1732,6 +2184,8 @@ class AftersalesService
         //联通 SaasErp 取消售后申请埋点
         app('log')->debug("saaserp " . __FUNCTION__ . "," . __LINE__ . ",取消售后申请，消费者主动关闭或者到期自动关闭  埋点");
         event(new SaasErpAftersalesCancelEvent($result));
+        //撤销售后推聚水潭
+        event(new JushuitanTradeAftersalesEvent($result));
         $gotoJob = (new sendAfterSaleCancelNoticeJob($params['company_id'], $aftersales['aftersales_bn']))->onQueue('slow');
         app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
         return $result;
@@ -2042,7 +2496,7 @@ class AftersalesService
                 $subOrderInfo['delivery_item_num'] = $orderInfo['receipt_type'] == 'ziti' ? $subOrderInfo['num'] : $subOrderInfo['delivery_item_num'];
                 $left_num = $subOrderInfo['delivery_item_num'] + $subOrderInfo['cancel_item_num'] - $applied_num; // 剩余申请数量
                 if ($v['num'] > $left_num) {
-                    throw new ResourceException($subOrderInfo['item_name'] . ' 剩余可申请售后的数量为' . $left_num);
+                    throw new ResourceException($subOrderInfo['item_name'] . ' 剩余可申请售后的数量为' . $left_num . ',申请售后数量为' . $v['num']. ",已申请售后数量为:".$applied_num);
                 }
             }
 
@@ -2068,7 +2522,7 @@ class AftersalesService
     }
 
     // 获取子订单已申请的退款金额
-    public function getAppliedTotalRefundFee($company_id, $order_id, $sub_order_id)
+    public function getAppliedTotalRefundFee($company_id, $order_id, $sub_order_id = 0)
     {
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder();
@@ -2076,14 +2530,16 @@ class AftersalesService
             ->from('aftersales_detail')
             ->where($qb->expr()->eq('company_id', $company_id))
             ->andWhere($qb->expr()->eq('order_id', $qb->expr()->literal($order_id)))
-            ->andWhere($qb->expr()->eq('sub_order_id', $sub_order_id))
             ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2])); // 0未处理，1处理中，2已处理，5申请中
+        if ($sub_order_id) {
+            $qb = $qb->andWhere($qb->expr()->eq('sub_order_id', $sub_order_id));
+        }            
         $sum = $qb->execute()->fetchColumn();
         return $sum ?? 0;
     }
 
     // 获取子订单已申请的退款积分(积分组合支付的时候)
-    public function getAppliedRefundPoint($company_id, $order_id, $sub_order_id)
+    public function getAppliedRefundPoint($company_id, $order_id, $sub_order_id = 0)
     {
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder();
@@ -2091,8 +2547,10 @@ class AftersalesService
             ->from('aftersales_detail')
             ->where($qb->expr()->eq('company_id', $company_id))
             ->andWhere($qb->expr()->eq('order_id', $qb->expr()->literal($order_id)))
-            ->andWhere($qb->expr()->eq('sub_order_id', $sub_order_id))
             ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2])); // 0未处理，1处理中，2已处理，5申请中
+        if ($sub_order_id) {
+            $qb = $qb->andWhere($qb->expr()->eq('sub_order_id', $sub_order_id));
+        }    
         $sum = $qb->execute()->fetchColumn();
         return $sum ?? 0;
     }
@@ -2132,13 +2590,28 @@ class AftersalesService
         return $sum ?? 0;
     }
 
-    // 获取订单已申请的商品数量，获取到的是当前不能申请的数量
-    public function getOrderAppliedTotalNum($company_id, $order_id)
+    // 计算已售后的退款数量
+    public function getAppliedNumByNum($company_id, $order_id, $sub_order_id)
     {
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder();
         $qb->select('sum(num)')
             ->from('aftersales_detail')
+            ->where($qb->expr()->eq('company_id', $company_id))
+            ->andWhere($qb->expr()->eq('order_id', $qb->expr()->literal($order_id)))
+            ->andWhere($qb->expr()->eq('sub_order_id', $sub_order_id))
+            ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2])); // 0未处理，1处理中，2已处理，5申请中
+        $sum = $qb->execute()->fetchColumn();
+        return $sum ?? 0;
+    }
+
+    // 计算售后单上是否挂了运费
+    public function getAppliedFreightByNum($company_id, $order_id)
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('freight')
+            ->from('aftersales')
             ->where($qb->expr()->eq('company_id', $company_id))
             ->andWhere($qb->expr()->eq('order_id', $qb->expr()->literal($order_id)))
             ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2])); // 0未处理，1处理中，2已处理，5申请中
@@ -2150,7 +2623,7 @@ class AftersalesService
     public function getAppliedCount($company_id, $order_id, $sub_order_id)
     {
         $conn = app('registry')->getConnection('default');
-        $qb = $conn->createQueryBuilder();+
+        $qb = $conn->createQueryBuilder();
         $qb->select('count(*)')
             ->from('aftersales_detail')
             ->where($qb->expr()->eq('company_id', $company_id))
@@ -2493,7 +2966,8 @@ class AftersalesService
     {
         if ($subOrderInfo ?? 0) {
             if ($subOrderInfo['num'] - $appliedNum - $num == 0) {
-                return bcsub($subOrderInfo['get_points'], $this->getAppliedReTurnPoint($subOrderInfo['company_id'], $subOrderInfo['order_id'], $subOrderInfo['id'], $subOrderInfo['num'], $subOrderInfo['get_points']));
+                $snum = $this->getAppliedReTurnPoint($subOrderInfo['company_id'], $subOrderInfo['order_id'], $subOrderInfo['id'], $subOrderInfo['num'], $subOrderInfo['get_points']);
+                return bcsub($subOrderInfo['get_points'], $snum);
             } else {
                 $proportion = bcdiv($num, $subOrderInfo['num'], 5);
                 return round(bcmul($proportion, $subOrderInfo['get_points'], 5));
@@ -2542,7 +3016,6 @@ class AftersalesService
         $memberService = new MemberService();
         $memberInfo = $memberService->getMemberInfo(['company_id' => $data['company_id'], 'user_id' => $data['user_id']]);
         $data['contact'] = $memberInfo['username'] ?? '';
-
         $freight = $data['freight'] ?? 0;
 
         $aftersales_data = [
@@ -2564,6 +3037,7 @@ class AftersalesService
             'merchant_id' => $orderInfo['merchant_id'] ?? 0,
             'return_type' => $data['return_type'] ?? 'logistics',
             'return_distributor_id' => $data['distributor_id'] ?? 0,
+            'freight' => $data['freight'] ?? 0,
         ];
         $refund_status = 'READY';
         if ($data['aftersales_type'] == 'ONLY_REFUND' || $data['goods_returned']) {
@@ -2660,7 +3134,7 @@ class AftersalesService
                 $aftersales_data['item_bn'] = $subOrderInfo['item_bn'];
             }
             if ($data['refund_fee'] > $total_refund_fee) {
-                throw new ResourceException('退款金额不能超过可退金额');
+                throw new ResourceException('退款金额不能超过可退金额! '.$data['refund_fee'].' > '.$total_refund_fee);
             }
 
             if ($data['refund_point'] > $total_refund_point) {
@@ -2701,7 +3175,8 @@ class AftersalesService
                 'return_point' => $total_return_point,
                 'merchant_id' => $orderInfo['merchant_id'] ?? 0,
                 'refund_status' => $refund_status,
-                'freight' => $data['freight'] ?? 0,
+                'freight' => $freight,
+                
             ];
             $refund = $aftersalesRefundService->createAftersalesRefund($refundData);
 
@@ -2750,6 +3225,315 @@ class AftersalesService
         return $aftersales;
     }
 
+    // 售后申请按num拆单
+    public function shopApplyByNum($data)
+    {
+        // 检查是否可以申请售后
+        $this->__checkApply($data);
+        $filter = [
+            'company_id' => $data['company_id'],
+            'order_id' => $data['order_id'],
+            'user_id' => $data['user_id'],
+        ];
+        $normalOrderService = new NormalOrderService();
+        $orderInfo = $normalOrderService->getSimpleOrderInfo($filter);
+        
+        $tradeService = new TradeService();
+        $trade = $tradeService->getInfo(['company_id' => $data['company_id'], 'order_id' => $orderInfo['order_id'], 'trade_state' => 'SUCCESS']);
+
+        foreach ($data['detail'] as $v) {
+            $detailTmp = $v;
+            for ($i=0; $i < $v['num']; $i++) { 
+                 // 如果输入了退款子订单总金额，则平均分配
+                if (isset($detailTmp['total_fee']) && $detailTmp['total_fee'] > 0) {
+                    $detailTmp['total_fee'] = floor(bcdiv(bcmul($detailTmp['total_fee'],100), $detailTmp['num'], 2));
+                }
+                if (isset($detailTmp['total_point']) && $detailTmp['total_point'] > 0) {
+                    $detailTmp['total_point'] = floor(bcdiv(bcmul($detailTmp['total_point'],100), $detailTmp['num'], 2));   
+                }
+                $detail = $detailTmp;
+                $detail['num'] = 1;
+                $data['detail'] = [$detail];
+                $this->shopApplyByNumHandle($orderInfo, $trade, $data);
+            }
+        }
+
+        return true;
+    }
+
+    private function shopApplyByNumHandle($orderInfo, $trade, $data) 
+    {
+        // 是否开启退货退款退运费
+        $is_refund_freight = $this->getOrdersSetting($data['company_id'], 'is_refund_freight');
+        $normalOrderService = new NormalOrderService();
+        $aftersales_bn = $this->__genAftersalesBn();
+        $aftersales_data = [
+            'aftersales_bn' => $aftersales_bn,
+            'shop_id' => $orderInfo['shop_id'],
+            'order_id' => $data['order_id'],
+            'company_id' => $data['company_id'],
+            'user_id' => $data['user_id'],
+            'distributor_id' => $orderInfo['distributor_id'],
+            'aftersales_type' => $data['aftersales_type'],
+            'aftersales_status' => 0,
+            'progress' => 0,
+            'reason' => $data['reason'],
+            'description' => $data['description'] ?? '',
+            'evidence_pic' => $data['evidence_pic'] ?? [],
+            'salesman_id' => $data['salesman_id'] ?? 0,
+            'contact' => $data['contact'] ?? '',
+            'mobile' => $orderInfo['mobile'] ?? '',
+            'merchant_id' => $orderInfo['merchant_id'] ?? 0,
+            'return_type' => $data['return_type'] ?? 'logistics',
+            'return_distributor_id' => $data['distributor_id'] ?? 0,
+            'freight' => 0,
+        ];
+        $refund_status = 'READY';
+        if ($data['aftersales_type'] == 'ONLY_REFUND' || $data['goods_returned']) {
+            // $aftersales_data['progress'] = 4;
+            // $aftersales_data['aftersales_status'] = 2;
+            // $refund_status = 'AUDIT_SUCCESS';
+        } else {
+            // $aftersales_data['progress'] = 1;
+            // $aftersales_data['aftersales_status'] = 1;
+            //获取售后时效时间
+            // $autoRefuseTime = intval($this->getOrdersSetting($data['company_id'], 'auto_refuse_time'));
+            // if ($autoRefuseTime > 0) {
+            //     $aftersales_data['auto_refuse_time'] = strtotime("+$autoRefuseTime day", time());
+            // } else {
+            //     $aftersales_data['auto_refuse_time'] = time();
+            // }
+        }
+
+        $orderProfitService = new OrderProfitService();
+        $brokerageService = new BrokerageService();
+        $conn = app('registry')->getConnection('default');
+        $conn->beginTransaction();
+        try {
+            // 创建售后单
+            $total_refund_fee = 0;
+            $total_refund_point = 0;
+            $total_return_point = 0;
+            $apply_num = 0;
+            $sub_item_fee = 0; // 本次申请子订单单个金额
+            $sub_item_point = 0; // 本次申请子订单单个积分
+            $is_refund_freight_flag = false; //单个，如果以后多个则为数组
+            foreach ($data['detail'] as $v) {
+                $suborder_filter = [
+                    'company_id' => $data['company_id'],
+                    'user_id' => $data['user_id'],
+                    'order_id' => $data['order_id'],
+                    'id' => $v['id'],
+                ];
+                $subOrderInfo = $normalOrderService->getSimpleSubOrderInfo($suborder_filter);
+                // 如果输入了总金额，以输入的为准
+                if (isset($v['total_fee']) && $v['total_fee'] > 0) {
+                    $sub_item_fee = $v['total_fee'];
+                }else{
+                    $sub_item_fee = floor(bcmul(bcdiv($subOrderInfo['total_fee'], $subOrderInfo['num'], 2), $v['num']));
+                }
+                 if (isset($v['total_point']) && $v['total_point'] > 0) {
+                    $sub_item_point = $v['total_point'];
+                }else{
+                    $sub_item_point = floor(bcmul(bcdiv($subOrderInfo['point'], $subOrderInfo['num'], 2), $v['num']));
+                }
+                $applied_num = $this->getAppliedNum($data['company_id'], $data['order_id'], $v['id']); // 已申请数量
+                $applied_refund_fee = $this->getAppliedTotalRefundFee($data['company_id'], $data['order_id'], $v['id']); // 已申请退款总金额
+                $applied_refund_point = $this->getAppliedRefundPoint($data['company_id'], $data['order_id'], $v['id']); // 已申请退款总积分
+                if ($v['num'] == $subOrderInfo['num']) { // 子订单 全部 退货
+                    $refund_fee = $subOrderInfo['total_fee'];
+                    $refund_point = $subOrderInfo['point'];
+                } else { // 子订单 部分 退货
+                    $left_num = $subOrderInfo['num'] - $applied_num - $v['num'];
+                    if ($left_num == 0) { // 申请的是本明细剩余的所有数量
+                        $refund_fee = $subOrderInfo['total_fee'] - $applied_refund_fee;
+                        $sub_item_fee = $refund_fee;
+                        $refund_point = $subOrderInfo['point'] - $applied_refund_point;
+                        $sub_item_point = $refund_point;
+                    } elseif ($left_num > 0) { // 还有没申请的商品的时候  通过除法来计算退款金额，向下取整
+                        $refund_fee = floor(bcmul(bcdiv($subOrderInfo['total_fee'], $subOrderInfo['num'], 2), $v['num']));
+                        $refund_point = floor(bcmul(bcdiv($subOrderInfo['point'], $subOrderInfo['num'], 2), $v['num']));
+                    } else {
+                        throw new ResourceException('申请售后单数据异常');
+                    }
+                }
+                $total_return_point += $this->getReturnPoint($subOrderInfo, $v['num'], $applied_num);
+                $total_refund_fee += $refund_fee;
+                $total_refund_point += $refund_point;
+                $aftersales_detail_data = [
+                    'company_id' => $data['company_id'],
+                    'user_id' => $data['user_id'],
+                    'distributor_id' => $orderInfo['distributor_id'],
+                    'aftersales_bn' => $aftersales_bn,
+                    'order_id' => $data['order_id'],
+                    'sub_order_id' => $v['id'],
+                    'goods_id' => $subOrderInfo['goods_id'],
+                    'item_id' => $subOrderInfo['item_id'],
+                    'item_bn' => $subOrderInfo['item_bn'],
+                    'item_pic' => $subOrderInfo['pic'],
+                    'refund_fee' => $sub_item_fee,
+                    'refund_point' => $sub_item_point,
+                    'item_name' => $subOrderInfo['item_name'],
+                    'order_item_type' => $subOrderInfo['order_item_type'],
+                    'num' => $v['num'],
+                    'aftersales_type' => $data['aftersales_type'],
+                    'progress' => $aftersales_data['progress'],
+                    'aftersales_status' => $aftersales_data['aftersales_status'],
+                ];
+                if ($subOrderInfo['item_spec_desc']) {
+                    $aftersales_detail_data['item_name'] = $subOrderInfo['item_name'] . '(' . $subOrderInfo['item_spec_desc'] . ')';
+                }
+                // 创建售后明细
+                $aftersales_detail = $this->aftersalesDetailRepository->create($aftersales_detail_data);
+                $apply_num += $v['num'];
+                //使分润失效
+                $orderProfitService->orderItemsProfitRepository->updateBy(['order_id' => $data['order_id'], 'company_id' => $data['company_id'], 'item_id' => $aftersales_detail_data['item_id']], ['order_profit_status' => 0]);
+                if ($data['aftersales_type'] == 'ONLY_REFUND' || $data['goods_returned']) {
+                    //分销退佣金
+                    $brokerageService->brokerageByAftersalse($data['company_id'], $data['order_id'], $aftersales_detail_data['item_id'], $aftersales_detail_data['num']);
+                }
+                //一次只能申请一个商品，把子订单的供应商ID保存在售后主表
+                $aftersales_data['supplier_id'] = $subOrderInfo['supplier_id'];
+                $aftersales_data['item_bn'] = $subOrderInfo['item_bn'];
+
+                $is_refund_freight_flag = $this->isRefundFinishByNum($data['order_id'], $data['company_id'],$v['id'], $v['num']);
+            }
+            if ($sub_item_fee > $total_refund_fee) {
+                throw new ResourceException('售后申请金额不能超过剩余金额! '.$sub_item_fee.' > '.$total_refund_fee);
+            }
+            if ( $sub_item_point > $total_refund_point) {
+                throw new ResourceException('售后申请积分不能超过剩余积分! '.$sub_item_point.' > '.$total_refund_point);
+            }
+            $aftersales_data['refund_fee'] = $sub_item_fee;
+            $aftersales_data['refund_point'] = $sub_item_point;
+
+            // 判断是否是最后一个售后数据了
+            if ($is_refund_freight && $is_refund_freight_flag) {
+                $aftersales_data['freight'] = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $orderInfo['freight_fee'] ? $data['freight'] : $orderInfo['freight_fee'];
+            }
+            // 创建售后主单据
+            $aftersales = $this->aftersalesRepository->create($aftersales_data);
+            $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
+            $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+            // 创建售后退款单
+            $aftersalesRefundService = new AftersalesRefundService();
+            $refundData = [
+                'company_id' => $aftersales_data['company_id'],
+                'user_id' => $aftersales_data['user_id'],
+                'aftersales_bn' => $aftersales_data['aftersales_bn'],
+                'order_id' => $aftersales_data['order_id'],
+                'trade_id' => $trade['trade_id'], // 已支付交易单号
+                'shop_id' => $aftersales_data['shop_id'] ?? 0,
+                'distributor_id' => $aftersales_data['distributor_id'] ?? 0,
+                'refund_type' => 0, // 0 售后申请退款
+                'refund_channel' => $trade['pay_type'] == 'offline_pay' ? 'offline' : 'original', // 默认取消订单原路返回,pay_type=offline_pay为线下退款
+                'refund_fee' => $sub_item_fee,
+                'refund_point' => $sub_item_point,
+                'return_freight' => 0, // 0 不退运费
+                'pay_type' => $orderInfo['pay_type'],
+                'currency' => $trade['fee_type'],
+                'cur_fee_type' => $trade['cur_fee_type'],
+                'cur_fee_rate' => $trade['cur_fee_rate'],
+                'cur_fee_symbol' => $trade['cur_fee_symbol'],
+                'cur_pay_fee' => $sub_item_fee * $trade['cur_fee_rate'], // trade表没有单独积分字段，所以这样写
+                'return_point' => $total_return_point,
+                'merchant_id' => $orderInfo['merchant_id'] ?? 0,
+                'refund_status' => $refund_status,  
+                'freight' => 0,
+            ];
+            // 判断是否是最后一个售后数据了
+            if ($is_refund_freight && $is_refund_freight_flag) {
+                $refundData['freight'] = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $orderInfo['freight_fee'] ? $data['freight'] : $orderInfo['freight_fee'];
+                $refundData['return_freight'] = 1;
+            }
+            $refund = $aftersalesRefundService->createAftersalesRefund($refundData);
+            if ($data['aftersales_type'] == 'ONLY_REFUND' || $data['goods_returned']) {
+                $couponjob = (new OrderRefundCompleteJob($data['company_id'], $data['order_id']))->onQueue('slow');
+                app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($couponjob);
+            }
+            $orderProcessLog = [
+                'order_id' => $data['order_id'],
+                'company_id' => $data['company_id'],
+                'operator_type' => $data['operator_type'],
+                'operator_id' => $data['operator_id'],
+                'remarks' => '订单售后',
+                'detail' => '售后单号：' . $aftersales_bn . ' 后台申请售后，申请原因：' . $data['reason'],
+                'params' => $data,
+            ];
+            event(new OrderProcessLogEvent($orderProcessLog));
+            $conn->commit();
+        } catch (\Exception $e) {
+            $conn->rollback();
+            throw $e;
+        }
+
+        // 统计数据更新
+        $date = date('Ymd');
+        $redisKey = 'OrderPayStatistics:normal:' . $data['company_id'] . ':' . $date;
+        app('redis')->hincrby($redisKey, 'orderAftersales', 1);
+        if (isset($orderInfo['distributor_id'])) {
+            app('redis')->hincrby($redisKey, $orderInfo['distributor_id'] . '_orderAftersales', 1);
+        }
+        if (!empty($orderInfo['merchant_id'])) {
+            app('redis')->hincrby($redisKey, $orderInfo['merchant_id'] . '_merchant_orderAftersales', 1);
+        }
+
+        //联通OME售后申请埋点
+        if ($data['aftersales_type'] == 'REFUND_GOODS' || $data['aftersales_type'] == 'EXCHANGING_GOODS') {
+            event(new TradeAftersalesEvent($aftersales)); // 退款退货 或换货
+            event(new SaasErpAftersalesEvent($aftersales)); // SaasErp 售后申请 退款退货
+        } else {
+            event(new TradeRefundEvent($refund)); // 售后仅退款
+            event(new SaasErpRefundEvent($refund));// SaasErp 售后申请 仅退款
+            //退款成功推发票冲红
+            app('log')->info('[aftersales refund success] 退款成功推发票冲红 aftersales:'.json_encode($aftersales));
+            dispatch(new \OrdersBundle\Jobs\InvoiceRedJob($aftersales))->onQueue('invoice');
+        }
+
+        return $aftersales;
+    }   
+    
+    // 判断售后单是否按num拆单全部完成
+    public function isRefundFinishByNum($order_id, $company_id, $nowId, $nowNum)
+    {
+        /**
+         *  如果售后单含有了运费，就不需要判断所有商品是否已经退到最后一件  
+         */
+        $freight = $this->getAppliedFreightByNum($company_id, $order_id);
+        if ($freight > 0) {
+            return false;
+        }
+
+        $normalOrderService = new NormalOrderService();
+        $_filter = [
+            'company_id' => $company_id,
+            'order_id' => $order_id
+        ];
+        $orderItems = $normalOrderService->normalOrdersItemsRepository->getList($_filter);
+        $flag = false;
+        if (!empty($orderItems['list'])) {
+            foreach ($orderItems['list'] as $v) {
+                if ($v['id'] == $nowId) {
+                    $applied_num = $this->getAppliedNumByNum($company_id, $order_id, $v['id']); // 已申请数量
+                    if ($nowNum + $applied_num < $v['num']) {
+                        $flag = false;
+                        break;
+                    }
+                }else {
+                    $applied_num = $this->getAppliedNumByNum($company_id, $order_id, $v['id']); // 已申请数量
+                    if ($applied_num < $v['num']) {
+                        $flag = false;
+                        break;
+                    }
+                }
+               
+                $flag = true;
+            }
+        }
+
+        return $flag;
+    }
+
     /**
      * 商家确认收货
      */
@@ -2771,6 +3555,12 @@ class AftersalesService
         if(!in_array($aftersales['progress'],['1', '2'])) {
             throw new ResourceException("售后{$params['aftersales_bn']}商家没有接受申请");
         }
+        // 增对单个num售后详情
+        $filterDetail = [
+            'aftersales_bn' => $params['aftersales_bn'],
+            'company_id' => $params['company_id']
+        ];
+        $aftersalesDetail = $this->aftersalesDetailRepository->get($filterDetail);
 
         $update = [
             'progress' => '8', //商家确认收货
@@ -2780,6 +3570,8 @@ class AftersalesService
         $conn->beginTransaction();
         try {
             $this->aftersalesRepository->update($filter, $update);
+            // 增加实际入库数量
+            $update['refunded_num'] = $aftersalesDetail['num']; //并未返回时间入库数量，商家确定，就按申请数量为准
             $this->aftersalesDetailRepository->update($filter, $update);
             $conn->commit();
         } catch (\Exception $e) {
@@ -2896,6 +3688,23 @@ class AftersalesService
         }
         
         return $indexTrade;
+    }
+
+    // 根据afterBns获取售后详情商品数据，仅用单个拆单数据
+    public function getItemsByAftersalesBnByNun($company_id, $aftersalesBns = [])
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('ad.aftersales_bn,i.item_id,i.item_name,i.item_bn')
+            ->from('aftersales_detail', 'ad')
+            ->leftJoin('ad', 'items', 'i', 'ad.item_id = i.item_id')
+            ->where($qb->expr()->eq('ad.company_id', $company_id))
+            ->andWhere($qb->expr()->in('ad.aftersales_bn', array_map(function($bn) { 
+               return "'" . $bn . "'";
+            }, $aftersalesBns)));
+        $list = $qb->execute()->fetchAll();
+        
+        return $list ?? [];
     }
 
 }

@@ -18,6 +18,7 @@ use GoodsBundle\Entities\ItemsBarcode;
 use GoodsBundle\Entities\ItemRelAttributes;
 use GoodsBundle\Entities\ItemsMedicine;
 use GoodsBundle\Events\ItemBatchEditStatusEvent;
+use GoodsBundle\Jobs\ItemBatchEditStatusEventJob;
 use GoodsBundle\Jobs\MedicineItemsSubmitAudit;
 use GoodsBundle\Repositories\ItemsMedicineRepository;
 use GoodsBundle\Services\MultiLang\MultiLangService;
@@ -606,6 +607,12 @@ class ItemsService
                     'attribute_value_id' => $row['spec_value_id'],
                     'custom_attribute_value' => $row['spec_custom_value_name'] ?? null,
                 ];
+
+                if(isset($params['spec_pics'])){
+                    app('log')->debug('debug:create:item_spec:'.__FUNCTION__.':'.__LINE__.':'.json_encode($params['spec_pics']));
+                    $paramsData['image_url'] = $params['spec_pics'] ? explode(',', $params['spec_pics']) : [];
+                }
+
                 $sort++;
                 $this->itemRelAttributesRepository->create($paramsData);
             }
@@ -682,6 +689,9 @@ class ItemsService
             'is_default' => $params['is_default'] ?? false,
             'default_item_id' => $params['default_item_id'] ?? null,
             'is_medicine' => $params['is_medicine'] ?? 0,
+
+            'start_num' => $params['start_num'] ?? 0,
+            'delivery_time' => $params['delivery_time'] ?? '',
         ];
 
         ini_set('pcre.backtrack_limit', '-1');
@@ -827,6 +837,11 @@ class ItemsService
         // 起订量
         if (isset($params['start_num'])) {
             $data['start_num'] = $params['start_num'] ?? 0;
+        }
+
+        //发货时间
+        if (isset($params['delivery_time'])) {
+            $data['delivery_time'] = $params['delivery_time'] ?? '';
         }
 
         //不同商品类型的参数
@@ -1268,6 +1283,16 @@ class ItemsService
             $itemsInfo['spec_items'][$key]['custom_spec_name'] = $custom_spec_names;
         }
 
+        //落地排序
+        foreach ($itemsInfo['spec_items'] as $ix => $vv){
+            usort($itemsInfo['spec_items'][$ix]['item_spec'], function($a, $b) {
+                return $b['spec_id'] <=> $a['spec_id']; // 倒序用 b <=> a
+            });
+        }
+        usort($itemsInfo['item_spec_desc'], function($a, $b) {
+            return $b['spec_id'] <=> $a['spec_id']; // 倒序用 b <=> a
+        });
+
         // 获取药品数据
         $itemsInfo = (new ItemsMedicineService())->getItemsMedicineData([$itemsInfo])[0];
 
@@ -1360,7 +1385,7 @@ class ItemsService
         $approveStatus = [];
         if (!empty($itemsList)) {
             foreach ($itemsList['list'] as $itemRow) {
-                $itemSpec = $attrData['item_spec'][$itemRow['item_id']];
+                $itemSpec = $attrData['item_spec'][$itemRow['item_id']] ?? [];
                 $tempItemSpec = [];
                 foreach ($itemSpec as $itemSpecRow) {
                     $tempItemSpec[] = $itemSpecRow;
@@ -1385,6 +1410,7 @@ class ItemsService
                     'item_spec' => $tempItemSpec,
                     'point_num' => $pointAccess[$itemRow['item_id']] ?? 0,
                     'start_num' => $itemRow['start_num'], // 起订量
+                    'delivery_time' => $itemRow['delivery_time'] ?? 0, // 发货时间
                 ];
 
                 $totalStore += $itemRow['store'];
@@ -2761,7 +2787,9 @@ class ItemsService
                 'goods_id' => $data['goods_id'],
                 'approve_status' => $status,
             ];
-            event(new ItemBatchEditStatusEvent($eventData));
+            //批量处理太慢。前端容易超时  改到异步执行 
+            dispatch(new ItemBatchEditStatusEventJob($eventData))->onQueue('slow');
+            // event(new ItemBatchEditStatusEvent($eventData));
         }
         return true;
     }

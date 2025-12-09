@@ -535,6 +535,9 @@ class SalespersonTaskService
             case 'goods_list':
               $page = 'pages/item/list';
               break;
+            case 'share_land':
+              $page = 'pages/share-land';
+              break;
             default:
               $page = 'pages/index';
         }

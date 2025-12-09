@@ -45,6 +45,7 @@ class Version00000000000050 extends AbstractMigration
         $this->addSql('ALTER TABLE statement_details ADD num INT DEFAULT NULL COMMENT \'购买数量\', ADD item_fee INT DEFAULT NULL COMMENT \'销售总金额，以分为单位\', ADD commission_fee INT DEFAULT NULL COMMENT \'佣金金额，以分为单位\', ADD cost_fee INT DEFAULT NULL COMMENT \'结算金额，以分为单位\', ADD point_fee INT DEFAULT NULL COMMENT \'积分抵扣 按分计算\', ADD refund_num INT DEFAULT NULL COMMENT \'退货数量\', ADD refund_point INT DEFAULT NULL COMMENT \'退款积分\', ADD refund_cost_fee INT DEFAULT NULL COMMENT \'退货成本\'');
         $this->addSql('ALTER TABLE statements ADD point_fee INT DEFAULT NULL COMMENT \'积分抵扣 按分计算\', ADD refund_num INT DEFAULT NULL COMMENT \'退货数量\', ADD refund_point INT DEFAULT NULL COMMENT \'退款积分\', ADD refund_cost_fee INT DEFAULT NULL COMMENT \'退货成本\'');
         $this->addSql('ALTER TABLE supplier_items ADD start_num INT DEFAULT 0 COMMENT \'起订量\'');
+    	$this->addSql('CREATE TABLE thirdparty_dmcrm_log (id BIGINT AUTO_INCREMENT NOT NULL COMMENT \'id\', company_id BIGINT NOT NULL COMMENT \'公司id\', api_type VARCHAR(255) NOT NULL COMMENT \'日志同步类型, response:响应，request:请求\', worker VARCHAR(255) NOT NULL COMMENT \'api\', params JSON DEFAULT NULL COMMENT \'任务参数(DC2Type:json_array)\', result JSON DEFAULT NULL COMMENT \'返回数据(DC2Type:json_array)\', status VARCHAR(255) DEFAULT \'running\' NOT NULL COMMENT \'运行状态：running,success,fail\', runtime VARCHAR(255) DEFAULT NULL COMMENT \'运行时间(秒)\', created INT NOT NULL, updated INT DEFAULT NULL, PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB COMMENT = \'达摩crm通信日志\' ');
     }
 
     /**
@@ -52,5 +53,8 @@ class Version00000000000050 extends AbstractMigration
      */
     public function down(Schema $schema): void
     {
+        $this->abortIf($this->connection->getDatabasePlatform()->getName() != 'mysql', 'Migration can only be executed safely on \'mysql\'.');
+
+        $this->addSql('DROP TABLE thirdparty_dmcrm_log');
     }
 }

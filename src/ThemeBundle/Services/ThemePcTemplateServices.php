@@ -48,12 +48,50 @@ class ThemePcTemplateServices
         return $result;
     }
 
+    
+    /**
+     * 检查首页模板启用状态：只允许有一个首页是启用状态
+     * 
+     * @param int $company_id 公司ID
+     * @param string $page_type 页面类型
+     * @param int $status 启用状态
+     * @param int|null $exclude_template_id 排除的模板ID（编辑时使用）
+     * @throws ResourceException
+     */
+    private function checkIndexTemplateStatus($company_id, $page_type, $status, $exclude_template_id = null)
+    {
+        // 只检查首页且启用状态的情况
+        if ($page_type == 'index' && $status == 1) {
+            $filter = [
+                'company_id' => $company_id,
+                'page_type' => 'index',
+                'status' => 1,
+            ];
+            $checkList = $this->themePcTemplateRepository->getLists($filter, '*', 1, -1);
+            
+            // 排除当前编辑的模板
+            if (!empty($checkList)) {
+                foreach ($checkList as $item) {
+                    if ($exclude_template_id === null || $item['theme_pc_template_id'] != $exclude_template_id) {
+                        throw new ResourceException('已有启用的模版');
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * 创建pc模板
      */
     public function add($params)
     {
+        // 检查首页模板启用状态
+        $this->checkIndexTemplateStatus(
+            $params['company_id'],
+            $params['page_type'] ?? '',
+            $params['status'] ?? 2
+        );
+
         $result = $this->themePcTemplateRepository->create($params);
 
         return $result;
@@ -64,6 +102,7 @@ class ThemePcTemplateServices
      */
     public function edit($params)
     {
+        app('log')->info('edit::params====>'.json_encode($params));
         // Debug: 1e2364
         $company_id = $params['company_id'];
         $theme_pc_template_id = $params['theme_pc_template_id'];
@@ -75,6 +114,20 @@ class ThemePcTemplateServices
         $pc_template_info = $this->themePcTemplateRepository->getInfo($filter);
         if (empty($pc_template_info)) {
             throw new ResourceException('模板页面不存在');
+        }
+
+        // 确定 page_type：优先使用传入的值，否则使用数据库中的值
+        $page_type = $params['page_type'] ?? $pc_template_info['page_type'];
+        $status = $params['status'] ?? null;
+
+        // 检查首页模板启用状态
+        if (!empty($status)) {
+            $this->checkIndexTemplateStatus(
+                $company_id,
+                $page_type,
+                $status,
+                $theme_pc_template_id
+            );
         }
 
         $data = [];
@@ -91,17 +144,10 @@ class ThemePcTemplateServices
 
             if (!empty($params['status'])) {
                 $data['status'] = $params['status'];
-                //首页只能同时启用一个页面
-                if ($pc_template_info['page_type'] == 'index') {
-                    $_filter = [
-                        'company_id' => $company_id,
-                        'page_type' => 'index'
-                    ];
-                    $_data = [
-                        'status' => 2
-                    ];
-                    $this->themePcTemplateRepository->updateBy($_filter, $_data);
-                }
+            }
+
+            if (!empty($params['page_type'])) {
+                $data['page_type'] = $params['page_type'];
             }
 
             $result = $this->themePcTemplateRepository->updateOneBy($filter, $data);

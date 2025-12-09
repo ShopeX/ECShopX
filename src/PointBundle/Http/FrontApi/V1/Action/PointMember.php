@@ -10,6 +10,9 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 use PointBundle\Services\PointMemberLogService;
 use PointBundle\Services\PointMemberService;
+use MembersBundle\Services\MemberService;
+use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
+use ThirdPartyBundle\Services\DmCrm\PointService;
 
 class PointMember extends Controller
 {
@@ -76,13 +79,73 @@ class PointMember extends Controller
                 $params['income|gt'] = 0;
             }
         }
-        $pointMemberService = new PointMemberLogService();
-        $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
 
-        foreach ($result['list'] as $key => $row) {
-            $result['list'][$key]['journal_type_desc'] = PointMemberService::JOURNAL_TYPE_MAP[$row['journal_type']] ?? '';
+        // 达摩crm, 会员积分明细
+        $ns = new DmCrmSettingService();
+        if ($ns->getDmCrmSetting($authInfo['company_id'])['is_open'] ?? '') {
+            $memberService = new MemberService();
+            $pointService = new PointService($authInfo['company_id']);
+            $memberFilter = [
+                'user_id' => $authInfo['user_id'],
+                'company_id' => $authInfo['company_id']
+            ];
+            $memberInfoInfo = $memberService->getMemberInfo($memberFilter);
+            $paramsData = [
+                'mobile' => $memberInfoInfo['mobile'],
+                'currentPage' => $page,
+                'pageSize' => $pageSize,
+                'user_id' => $authInfo['user_id'],
+                'company_id' => $authInfo['company_id']
+            ];
+            $pointList = $pointService->getPointDetailList($paramsData);
+            
+            $result['list'] = $pointList['items'] ?? [];
+            $result['total_count'] = $pointList['totalCount'] ?? 0;
+            if (!empty($result['list'])) {
+                // 兼容积分支出/收入过滤  
+                if ($outinType) {
+                     if ($outinType == 'outcome') {
+                        $tempList = array_filter($result['list'], function ($item) {
+                            return $item['outcome'] > 0;
+                        });
+                        $result['list'] = array_values($tempList);
+                    } elseif ($outinType == 'income') {
+                        $tempList = array_filter($result['list'], function ($item) {
+                            return $item['income'] > 0;
+                        });
+                        $result['list'] = array_values($tempList);
+                    }
+                }
+                // 处理预占积分时间问题
+                foreach($result['list'] as $k => $v) {
+                    // if (preg_match('/积分解冻时间+(:|：)(\d{4}-\d{2}-\d{2})/', $v['operater_remark'], $matches)) {
+                    //     $dateStr = $matches[2]." 00:00:00";
+                    //     $result['list'][$k]['created'] = $dateStr;
+                    //     if (time() < strtotime($dateStr)) {
+                    //        // 未来时间，积分未解冻
+                    //        unset($result['list'][$k]);
+                    //     }
+                    // }
+                    if (!empty($v['effectTime'])) {
+                        $result['list'][$k]['created'] = $v['effectTime'];
+                        if (time() < $v['effectTime']) {
+                           // 未来时间，积分未解冻
+                           unset($result['list'][$k]);
+                        }
+                    }
+                }
+                $result['list'] = array_values($result['list']);
+            } 
+        }else{
+            $pointMemberService = new PointMemberLogService();
+            $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
+
+            foreach ($result['list'] as $key => $row) {
+                $result['list'][$key]['journal_type_desc'] = PointMemberService::JOURNAL_TYPE_MAP[$row['journal_type']] ?? '';
+            }
+
         }
-
+    
         return $this->response->array($result);
     }
 

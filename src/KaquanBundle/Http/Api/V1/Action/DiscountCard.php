@@ -427,7 +427,7 @@ class DiscountCard extends BaseController
         $filter['card_id'] = $request->input('card_id');
         $authorizerAppid = app('auth')->user()->get('authorizer_appid');
         $result = $discountCardService->deleteKaquan($filter, $authorizerAppid);
-        return $this->response->noContent();
+        return $this->response->array(['status' => $result]);
     }
 
     /**

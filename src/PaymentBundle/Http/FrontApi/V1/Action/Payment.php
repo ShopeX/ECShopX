@@ -18,9 +18,11 @@ use PaymentBundle\Services\PaymentsService;
 use DepositBundle\Services\DepositTrade;
 use PaymentBundle\Services\Payments\AlipayService;
 use OrdersBundle\Services\TradeService;
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
 
 class Payment extends BaseController
 {
+    use MagicLangTrait;
     /**
      * @SWG\Get(
      *     path="/wxapp/trade/payment/list",
@@ -175,7 +177,7 @@ class Payment extends BaseController
 
         $result[] = [
             'pay_type_code' => 'alipay',
-            'pay_type_name' => '支付宝'
+            'pay_type_name' => trans('payment.alipay')
         ];
 
         //adapay
@@ -186,7 +188,7 @@ class Payment extends BaseController
         if (!empty($adapay) && $step['step'] == 4) {
             $result[] = [
                 'pay_type_code' => 'bankcard',
-                'pay_type_name' => '银行卡'
+                'pay_type_name' => trans('payment.bank_card')
             ];
         }
 
@@ -196,7 +198,7 @@ class Payment extends BaseController
         if (!empty($wechat)) {
             $result[] = [
                 'pay_type_code' => 'wechat',
-                'pay_type_name' => '微信支付'
+                'pay_type_name' => trans('payment.wechat_pay')
             ];
         }
 
@@ -207,7 +209,7 @@ class Payment extends BaseController
         if (!empty($hfpay)) {
             $result[] = [
                 'pay_type_code' => 'hfpay',
-                'pay_type_name' => '微信支付(hfpay)'
+                'pay_type_name' => trans('payment.wechat_pay_hfpay')
             ];
         }
 
@@ -270,7 +272,7 @@ class Payment extends BaseController
         if ($pay_type == 'offline_pay') {
             $paymentsService = new OfflinePayService();
         } else {
-            throw new ResourceException('暂时不支持' . $pay_type);
+            throw new ResourceException(trans('payment.unsupported_payment_type') . ' ' . $pay_type);
         }
 
         $service = new PaymentsService($paymentsService);

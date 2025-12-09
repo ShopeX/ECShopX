@@ -430,6 +430,7 @@ trait CountPreferentialFee
             'id' => $userDiscount['card_id'],
             'coupon_code' => $userDiscount['code'],
             'info' => $userDiscount['title'],
+            'dm_card_code' => $userDiscount['dm_card_code'] ?? '',
         ];
         if ($userDiscount['card_type'] == 'cash') {
             if ($userDiscount['reduce_cost'] >= $totalFee) {

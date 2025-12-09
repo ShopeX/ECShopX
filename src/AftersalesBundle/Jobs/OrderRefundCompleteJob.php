@@ -13,6 +13,7 @@ use OrdersBundle\Entities\NormalOrdersItems;
 use KaquanBundle\Services\UserDiscountService;
 use AftersalesBundle\Services\AftersalesService;
 use OrdersBundle\Services\Orders\NormalOrderService;
+use ThirdPartyBundle\Services\DmCrm\DmService;
 
 // 检查订单所有售后都完成job
 class OrderRefundCompleteJob extends Job
@@ -83,13 +84,15 @@ class OrderRefundCompleteJob extends Job
                 if (!is_array($orderInfo['discount_info'])) {
                     $discountInfo = json_decode($orderInfo['discount_info'], true);
                 }
+                $dmService = new DmService($orderInfo['company_id']);
                 $userDiscountService = new UserDiscountService();
                 foreach ($discountInfo as $value) {
                     // if ($value && isset($value['type']) && $value['type'] == 'gift_discount') {
                     //     continue;
                     // }
-                    if ($value && isset($value['coupon_code'])) {
-                        $userDiscountService->callbackUserCard($orderInfo['company_id'], $value['coupon_code'], $orderInfo['user_id']);
+                    // 开启达摩CRM时，不恢复优惠券，达摩CRM会自动恢复优惠券后推送卡券退回事件
+                    if ($value && isset($value['coupon_code']) && !$dmService->isOpen) {
+                        $userDiscountService->callbackUserCard($orderInfo['company_id'], $value['coupon_code'], $orderInfo['user_id'], $orderInfo['mobile'], '');
                     }
                 }
             }

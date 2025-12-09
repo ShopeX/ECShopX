@@ -10,6 +10,7 @@ use AdaPayBundle\Services\MemberService as AdaPayMemberService;
 use AdaPayBundle\Services\OpenAccountService;
 use AftersalesBundle\Entities\AftersalesRefund;
 use Dingo\Api\Exception\ResourceException;
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use OrdersBundle\Services\TradeService;
 use OrdersBundle\Services\MerchantTradeService;
 use PaymentBundle\Interfaces\Payment;
@@ -38,6 +39,7 @@ use PaymentBundle\Services\Payments\PaypalService;
 // 支付服务
 class PaymentsService
 {
+    use MagicLangTrait;
     /**
      * 支付方式具体实现类
      */
@@ -382,6 +384,8 @@ class PaymentsService
 
     public function getPaymentSettingList($type, $company_id, $distributorId, $orderType = null)
     {
+        $lang = $this->getLang();
+    
         //adapay
         $service = new AdaPaymentService();
         $adaPay = $service->getPaymentSetting($company_id);
@@ -423,13 +427,13 @@ class PaymentsService
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'wx_pub',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } elseif (in_array('wx_pub', $bsPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'bspay',
                         'pay_channel' => 'wx_pub',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } else {
                     $service = new WechatJSPayService($distributorId);
@@ -437,7 +441,7 @@ class PaymentsService
                     if (!empty($setting) && $setting['is_open'] == 'true') {
                         $result[] = [
                             'pay_type_code' => 'wxpayjs',
-                            'pay_type_name' => '微信支付'
+                            'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                         ];
                     }
                 }
@@ -447,13 +451,13 @@ class PaymentsService
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'wx_lite',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } elseif (in_array('wx_lite', $bsPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'bspay',
                         'pay_channel' => 'wx_lite',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } else {
                     $service = new WechatH5PayService($distributorId);
@@ -461,7 +465,7 @@ class PaymentsService
                     if (!empty($setting) && $setting['is_open'] == 'true') {
                         $result[] = [
                             'pay_type_code' => 'wxpayh5',
-                            'pay_type_name' => '微信支付'
+                            'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                         ];
                     }
                 }
@@ -470,13 +474,13 @@ class PaymentsService
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'alipay_wap',
-                        'pay_type_name' => '支付宝'
+                        'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                     ];
                 } elseif (in_array('alipay_wap', $bsPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'bspay',
                         'pay_channel' => 'alipay_wap',
-                        'pay_type_name' => '支付宝'
+                        'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                     ];
                 } else {
                     $service = new AlipayH5Service($distributorId);
@@ -484,16 +488,21 @@ class PaymentsService
                     if (!empty($setting) && $setting['is_open'] == 'true') {
                         $result[] = [
                             'pay_type_code' => 'alipayh5',
-                            'pay_type_name' => '支付宝'
+                            'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                         ];
                     }
                 }
                 // 线下转账
                 if (!empty($offlinePaySetting) && $offlinePaySetting['is_open']) {
-                    $result[] = [
+                    $tmpPay = [
                         'pay_type_code' => 'offline_pay',
                         'pay_type_name' => $offlinePaySetting['pay_name'],
                     ];
+                    $langName = app('redis')->get('lang_pay_name_offline_pay:'.$lang);
+                    if(!empty($langName)){
+                        $tmpPay['pay_type_name'] = $langName;
+                    }
+                    $result[] = $tmpPay;
                 }
                 break;
             case 'app':
@@ -501,13 +510,13 @@ class PaymentsService
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'wx_lite',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } elseif (in_array('wx_lite', $bsPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'bspay',
                         'pay_channel' => 'wx_lite',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } else {
                     $service = new WechatAppPayService($distributorId);
@@ -515,7 +524,7 @@ class PaymentsService
                     if (!empty($setting) && $setting['is_open'] == 'true') {
                         $result[] = [
                             'pay_type_code' => 'wxpayapp',
-                            'pay_type_name' => '微信支付'
+                            'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                         ];
                     }
                 }
@@ -524,7 +533,7 @@ class PaymentsService
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'alipay',
-                        'pay_type_name' => '支付宝'
+                        'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                     ];
                 } else {
                     $service = new AlipayAppService($distributorId);
@@ -532,7 +541,7 @@ class PaymentsService
                     if (!empty($setting) && $setting['is_open'] == 'true') {
                         $result[] = [
                             'pay_type_code' => 'alipayapp',
-                            'pay_type_name' => '支付宝'
+                            'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                         ];
                     }
                 }
@@ -549,13 +558,13 @@ class PaymentsService
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'wx_qr',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } elseif (in_array('wx_qr', $bsPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'bspay',
                         'pay_channel' => 'wx_qr',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } else {
                     $service = new WechatWebPayService($distributorId);
@@ -563,7 +572,7 @@ class PaymentsService
                     if (!empty($setting) && $setting['is_open'] == 'true') {
                         $result[] = [
                             'pay_type_code' => 'wxpaypc',
-                            'pay_type_name' => '微信支付'
+                            'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                         ];
                     }
                 }
@@ -572,13 +581,13 @@ class PaymentsService
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'alipay_qr',
-                        'pay_type_name' => '支付宝'
+                        'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                     ];
                 } elseif (in_array('alipay_qr', $bsPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'bspay',
                         'pay_channel' => 'alipay_qr',
-                        'pay_type_name' => '支付宝'
+                        'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                     ];
                 } else {
                     $service = new AlipayService($distributorId);
@@ -586,7 +595,7 @@ class PaymentsService
                     if (!empty($setting) && $setting['is_open'] == 'true') {
                         $result[] = [
                             'pay_type_code' => 'alipay',
-                            'pay_type_name' => '支付宝'
+                            'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                         ];
                     }
                 }
@@ -604,7 +613,7 @@ class PaymentsService
                 if (!empty($setting) && $setting['is_open'] == 'true') {
                     $result[] = [
                         'pay_type_code' => 'alipaymini',
-                        'pay_type_name' => '支付宝'
+                        'pay_type_name' => $lang == 'en-CN' ? 'Alipay' : '支付宝'
                     ];
                 }
                 break;
@@ -614,13 +623,13 @@ class PaymentsService
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'wx_lite',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } elseif (in_array('wx_lite', $bsPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'bspay',
                         'pay_channel' => 'wx_lite',
-                        'pay_type_name' => '微信支付'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
                 } else {
                     //微信设置
@@ -629,7 +638,7 @@ class PaymentsService
                     if (!empty($setting) && $setting['is_open'] == 'true') {
                         $result[] = [
                             'pay_type_code' => 'wxpay',
-                            'pay_type_name' => '微信支付'
+                            'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                         ];
                     }
                 }
@@ -640,7 +649,7 @@ class PaymentsService
                 if ( !empty($ums) && $ums['is_open']) {
                     $result[] = [
                         'pay_type_code' => 'chinaums',
-                        'pay_type_name' => '微信支付-银联'
+                        'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay-UnionPay' : '微信支付-银联'
                     ];
                 }
 
@@ -669,7 +678,7 @@ class PaymentsService
                 $pointRule = $pointRuleService->getPointRule($company_id);
                 $pointPayMethod = [
                     'pay_type_code' => 'point',
-                    'pay_type_name' => '积分支付'
+                    'pay_type_name' => $lang == 'en-CN' ? 'Points Payment' : '积分支付'
                 ];
                 if ($pointRule['point_pay_first']) {
                     array_unshift($result, $pointPayMethod);

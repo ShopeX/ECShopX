@@ -737,8 +737,8 @@ class OrderService
 
     protected function _formatOrderData($params, $isCheck = true)
     {
+        $promoterService = new PromoterService();
         if ($this->orderInterface->orderClass != 'employee_purchase') {
-            $promoterService = new PromoterService();
             // 获取当前会员的上级即推广员
             $promoterUserId = $promoterService->getPromoter($params['company_id'], $params['user_id']);
             app('log')->info(':export brokerage:'.__FUNCTION__.__LINE__.':params:' . var_export($params, true));

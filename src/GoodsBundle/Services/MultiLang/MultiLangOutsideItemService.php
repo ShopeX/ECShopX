@@ -300,6 +300,7 @@ class MultiLangOutsideItemService
     {
 
         foreach ($translation as $key => $v) {
+            $v = is_array($v) ? json_encode($v) : $v;
             $tmp = [
                 'company_id'=> $companyId,
                 'field' => $key,

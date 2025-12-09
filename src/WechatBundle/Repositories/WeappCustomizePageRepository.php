@@ -171,10 +171,28 @@ class WeappCustomizePageRepository extends EntityRepository
                 $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
                 continue;
             } elseif (is_array($value)) {
-                array_walk($value, function (&$colVal) use ($qb) {
-                    $colVal = $qb->expr()->literal($colVal);
-                });
-                $qb = $qb->andWhere($qb->expr()->in($field, $value));
+                // 检查是否是操作符格式 [操作符, 值]，如 ['!=', '183']
+                if (count($value) == 2 && is_string($value[0]) && in_array($value[0], ['!=', '<>', '>', '<', '>=', '<='])) {
+                    $operator = $value[0];
+                    $val = $value[1];
+                    // 将 SQL 操作符转换为 Doctrine QueryBuilder 方法名
+                    $operatorMap = [
+                        '!=' => 'neq',
+                        '<>' => 'neq',
+                        '>' => 'gt',
+                        '<' => 'lt',
+                        '>=' => 'gte',
+                        '<=' => 'lte'
+                    ];
+                    $method = $operatorMap[$operator] ?? 'neq';
+                    $qb = $qb->andWhere($qb->expr()->$method($field, $qb->expr()->literal($val)));
+                } else {
+                    // 普通数组，使用 IN 查询
+                    array_walk($value, function (&$colVal) use ($qb) {
+                        $colVal = $qb->expr()->literal($colVal);
+                    });
+                    $qb = $qb->andWhere($qb->expr()->in($field, $value));
+                }
             } else {
                 $qb = $qb->andWhere($qb->expr()->eq($field, $qb->expr()->literal($value)));
             }

@@ -240,6 +240,10 @@ class AftersalesDetailRepository extends EntityRepository
         //     $aftersalesDetailEntity->setUpdateTime($data['update_time']);
         // }
 
+        if (isset($data['refunded_num'])) {
+            $aftersalesDetailEntity->setRefundedNum($data['refunded_num']);
+        }
+
         return $aftersalesDetailEntity;
     }
     public function getAftersalesData($aftersalesDetailEntity)
@@ -274,6 +278,7 @@ class AftersalesDetailRepository extends EntityRepository
             // 'memo' => $aftersalesDetailEntity->getMemo(),
             // 'sendback_data' => $aftersalesDetailEntity->getSendbackData(),
             // 'sendconfirm_data' => $aftersalesDetailEntity->getSendconfirmData(),
+            'refunded_num' => $aftersalesDetailEntity->getRefundedNum(),
         ];
     }
 

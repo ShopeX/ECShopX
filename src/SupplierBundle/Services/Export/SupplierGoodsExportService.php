@@ -32,6 +32,7 @@ class SupplierGoodsExportService implements ExportFileInterface
         'cost_price' => '成本价',
         // 'member_price' => '会员价', ##会被替换
         'start_num' => '起订量',
+        // 'member_price' => '会员价', ##会被替换
         // 'gross_profit_rate' => '毛利率(%)', ##会被替换
         'store' => '库存',
         'pics' => '图片',

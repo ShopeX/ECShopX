@@ -113,6 +113,9 @@ class MembercardGradeRepository extends EntityRepository
         if (isset($postdata["description"])) {
             $grade->setDescription($postdata["description"]);
         }
+        if (isset($postdata["dm_grade_code"])) {
+            $grade->setDmGradeCode($postdata["dm_grade_code"]);
+        }
         return $grade;
     }
 
@@ -132,6 +135,7 @@ class MembercardGradeRepository extends EntityRepository
             "third_data" => $memberCardGrade->getThirdData(),
             "external_id" => $memberCardGrade->getExternalId(),
             "description" => $memberCardGrade->getDescription(),
+            "dm_grade_code" => $memberCardGrade->getDmGradeCode(),
         ];
     }
 

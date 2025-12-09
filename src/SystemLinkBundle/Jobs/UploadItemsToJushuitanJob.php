@@ -38,7 +38,7 @@ class UploadItemsToJushuitanJob extends Job
     {
         // Powered by ShopEx EcShopX
         $companyId = $this->companyId;
-        app('log')->debug('UploadItemsToJushuitanJob companyId:'.$companyId.",itemIds:".var_export($this->itemIds, true).",distributorId:".$this->distributorId);
+        app('log')->debug('jushuitan::UploadItemsToJushuitanJob::companyId:'.$companyId.",itemIds:".json_encode($this->itemIds).",distributorId:".$this->distributorId);
         $itemIdChunk = array_chunk($this->itemIds, 2);
 
         // 判断是否开启聚水潭ERP
@@ -46,7 +46,7 @@ class UploadItemsToJushuitanJob extends Job
         $setting = $service->getJushuitanSetting($companyId);
         if (!isset($setting) || $setting['is_open']==false)
         {
-            app('log')->debug('companyId:'.$companyId.",msg:未开启聚水潭ERP");
+            app('log')->debug('jushuitan::UploadItemsToJushuitanJob::companyId:'.$companyId.",msg:未开启聚水潭ERP");
             return true;
         }
         $shopId = $setting['shop_id'];
@@ -54,7 +54,7 @@ class UploadItemsToJushuitanJob extends Job
             $distributorService = new DistributorService();
             $distributorInfo = $distributorService->getInfoSimple(['company_id' => $companyId, 'distributor_id' => $this->distributorId]);
             if (!$distributorInfo || !$distributorInfo['jst_shop_id']) {
-                app('log')->debug('companyId:'.$companyId.",msg:店铺没有绑定聚水潭ERP门店");
+                app('log')->debug('jushuitan::UploadItemsToJushuitanJob::companyId:'.$companyId.",msg:店铺没有绑定聚水潭ERP门店");
                 return true;
             }
 
@@ -64,7 +64,7 @@ class UploadItemsToJushuitanJob extends Job
         $itemService = new ItemService();
         $redisKey = 'JushuitanApiFlowControlLock';
         foreach ($itemIdChunk as $itemIds) {
-            app('log')->info('itemIds====>'.var_export($itemIds, true));
+            app('log')->info('itemIds====>'.json_encode($itemIds));
             do {
                 $succ = app('redis')->setnx($redisKey, 1);
                 if ($succ) {
@@ -81,11 +81,13 @@ class UploadItemsToJushuitanJob extends Job
 
                 if (!$itemStruct)
                 {
-                    app('log')->debug('获取商品信息失败:companyId:'.$companyId.",itemId:".$itemId);
+                    app('log')->debug('jushuitan::UploadItemsToJushuitanJob::获取商品信息失败:companyId:'.$companyId.",itemId:".$itemId);
                     continue;
                 }
                 $itemStructs = array_merge($itemStructs, $itemStruct['items']);
                 $shopItemStructs = array_merge($shopItemStructs, $itemStruct['shop_items']);
+                app('log')->debug('jushuitan::UploadItemsToJushuitanJob::itemStructs====>'.json_encode($itemStructs));
+                app('log')->debug('jushuitan::UploadItemsToJushuitanJob::shopItemStructs====>'.json_encode($shopItemStructs));
             }
             if (!$itemStructs || !$shopItemStructs) {
                 continue;
@@ -97,15 +99,17 @@ class UploadItemsToJushuitanJob extends Job
                 $method = 'item_add';
 
                 $result = $jushuitanRequest->call($method, ['items' => $itemStructs]);
-                app('log')->debug($method."=>result:\r\n". var_export($result, 1));
+                app('log')->debug('jushuitan::UploadItemsToJushuitanJob::'.$method."=>result:". json_encode($result));
 
 
                 $method = 'shop_item_add';
 
-                $result = $jushuitanRequest->call($method, ['items' => $shopItemStructs]);
-                app('log')->debug($method."=>result:\r\n". var_export($result, 1));
+                foreach ($shopItemStructs as $shopItemStruct) {
+                    $result = $jushuitanRequest->call($method, ['items' => $shopItemStruct]);
+                    app('log')->debug('jushuitan::UploadItemsToJushuitanJob::'.$method."=>result:". json_encode($result));
+                }
             } catch ( \Exception $e){
-                app('log')->debug('聚水潭请求失败:'. $e->getMessage());
+                app('log')->debug('jushuitan::UploadItemsToJushuitanJob::聚水潭请求失败:'. $e->getMessage());
             }
         }
 

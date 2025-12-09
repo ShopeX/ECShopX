@@ -486,6 +486,23 @@ class DiscountCards
      * @ORM\Column(name="source_id", type="bigint", nullable=true, options={"comment":"添加者ID: 如店铺ID", "default":0})
      */
     private $source_id = 0;
+    
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="dm_card_id", type="string", nullable=true, options={"comment":"达摩CRM卡券ID"})
+     */
+    private $dm_card_id;
+    
+    /**
+     * @var string
+     * 多选
+     * offlineStore 线下门店
+     * ThirdmicroMall 第三方商城
+     *
+     * @ORM\Column(name="dm_use_channel", type="string", nullable=true, options={"comment":"达摩CRM适用渠道"})
+     */
+    private $dm_use_channel;
 
     /**
      * Get cardId
@@ -2055,5 +2072,53 @@ class DiscountCards
     public function getSourceId()
     {
         return $this->source_id;
+    }
+
+    /**
+     * Set dmCardId.
+     *
+     * @param string|null $dmCardId
+     *
+     * @return DiscountCards
+     */
+    public function setDmCardId($dmCardId = null)
+    {
+        $this->dm_card_id = $dmCardId;
+
+        return $this;
+    }
+
+    /**
+     * Get dmCardId.
+     *
+     * @return string|null
+     */
+    public function getDmCardId()
+    {
+        return $this->dm_card_id;
+    }
+
+    /**
+     * Set dmUseChannel.
+     *
+     * @param string|null $dmUseChannel
+     *
+     * @return DiscountCards
+     */
+    public function setDmUseChannel($dmUseChannel = null)
+    {
+        $this->dm_use_channel = $dmUseChannel;
+
+        return $this;
+    }
+
+    /**
+     * Get dmUseChannel.
+     *
+     * @return string|null
+     */
+    public function getDmUseChannel()
+    {
+        return $this->dm_use_channel;
     }
 }

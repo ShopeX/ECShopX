@@ -722,6 +722,9 @@ class NormalOrdersRepository extends EntityRepository
         if (isset($data['invoice_status'])) {
             $orderEntity->setInvoiceStatus($data['invoice_status']);
         }
+        if (isset($data['dm_point_preid'])) {
+            $orderEntity->setDmPointPreid($data['dm_point_preid']);
+        }
         return $orderEntity;
     }
 
@@ -845,6 +848,7 @@ class NormalOrdersRepository extends EntityRepository
             'offline_payment_status' => $orderEntity->getOfflinePaymentStatus(),
             'prescription_status' => $orderEntity->getPrescriptionStatus(),
             'invoice_status' => $orderEntity->getInvoiceStatus(),
+            'dm_point_preid' => $orderEntity->getDmPointPreid(),
         ];
 
         // 跨境订单

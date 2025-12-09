@@ -20,6 +20,7 @@ class EventServiceProvider extends ServiceProvider
         'OrdersBundle\Events\TradeFinishEvent' => [
             'OrdersBundle\Listeners\UpdateOrderStatusListener',
             // 'ThirdPartyBundle\Listeners\TradeFinishSendSaasErp', // 订单发送到 SaasErp
+            "ThirdPartyBundle\Listeners\DmCrm\TradeFinishListener", // 订单支付完成，推送订单到达摩crm, 这里优先是因为积分商城订单，存在有其他监听导致失效终端没有达到，
             'ThirdPartyBundle\Listeners\MarketingCenter\TradePushMarketingCenter',
             'OrdersBundle\Listeners\HelpToPayForPurchasePlusOne',
             'OrdersBundle\Listeners\TradeFinishConsumeCard',
@@ -31,6 +32,7 @@ class EventServiceProvider extends ServiceProvider
             'OrdersBundle\Listeners\UpdateGroupsActivityOrder',
             'OrdersBundle\Listeners\TradeFinishCountBrokerage',
             'OrdersBundle\Listeners\TradeFinishLinkMember',
+            // "ThirdPartyBundle\Listeners\DmCrm\TradeFinishListener", // 订单支付完成，推送订单到达摩crm, 这里优先
             'OrdersBundle\Listeners\TradePayFinishStatistics',   //订单一些统计
             'OrdersBundle\Listeners\TradeFinishProfit',      // 订单分润
             'SystemLinkBundle\Listeners\TradeFinishSendOme', // 订单发送到ome

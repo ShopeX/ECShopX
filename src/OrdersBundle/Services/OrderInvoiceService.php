@@ -167,9 +167,9 @@ class OrderInvoiceService
     public function getInvoiceDetail($id, $companyId,$order_id = null)
     {
         //normalorderitemsRepository
-        $normalorderitemsRepository = app('registry')->getManager('default')->getRepository(NormalOrdersItems::class);
-        $normalorderitems = $normalorderitemsRepository->getList(['order_id'=>$order_id]);
-        $normalorderitems_ids = array_column($normalorderitems['list'],null,'id');
+        // $normalorderitemsRepository = app('registry')->getManager('default')->getRepository(NormalOrdersItems::class);
+        // $normalorderitems = $normalorderitemsRepository->getList(['order_id'=>$order_id]);
+        // $normalorderitems_ids = array_column($normalorderitems['list'],null,'id');
 
         if($order_id && !$id){
             $invoice = $this->getByOrderId($companyId, $order_id);
@@ -357,6 +357,16 @@ class OrderInvoiceService
 
         $result = $this->repository->updateOneBy($filter, $updateData);
 
+        $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+       
+        $update_data = [];
+        $update_data['invoice_status'] = $updateData['invoice_status'];
+        $status_filter = ['order_id' => $invoice['order_id']];
+
+        app('log')->info(__FUNCTION__.':'.__LINE__.':status_filter:'.json_encode($status_filter));
+        $normalOrdersRepository->update($status_filter, $update_data);
+        app('log')->info(__FUNCTION__.':'.__LINE__.':update_data:'.json_encode($update_data));
+        
         // 记录操作日志
             $logData = [
                 'invoice_id' => $id,
@@ -772,7 +782,7 @@ class OrderInvoiceService
         }catch (\Exception $exception){
             $conn->rollback();
             app('log')->error(__FUNCTION__.':'.__LINE__.':'.$exception->getMessage());
-            throw new ResourceException('åç¥¨ç³è¯·å¤±è´¥ï¼'.$exception->getMessage());
+            throw new ResourceException('生成发票失败:'.$exception->getMessage());
         }
        
         return $invoiceResult;
@@ -1550,69 +1560,78 @@ class OrderInvoiceService
         $filter = [
             //'invoice_status' => 'waitProgress',
             'invoice_status' => 'pending',
+            'invoice_method' => 'online',
         ];
+
+        //查询线上开票的申请的公司id
+        $pendingInvoicesonline = $this->repository->getLists($filter);
+        $companyIds = array_unique(array_column($pendingInvoicesonline, 'company_id'));
+        $applyNodeArr = [];
+        //查询公司id的申请开票节点
+        $settingService = new SettingService();
+        foreach ($companyIds as $companyId) {
+            $applyNodeArr[$companyId] = $settingService->getInvoiceSetting($companyId)['apply_node'];
+        }
+
         // 获取设置 - **apply_node**：申请开票节点（1=确认收货，2=过售后期）
         // $applyNode = app('config')->get('invoice.apply_node');
-        $settingService = new SettingService();
-        $companyId = env('SYSTEM_MAIN_COMPANYS_ID',1);
-        $applyNode = $settingService->getInvoiceSetting($companyId)['apply_node'];
-        app('log')->info('[OrderInvoiceService][invoiceStartSchedule]（1=确认收货，2=过售后期） 申请开票节点: ' . $applyNode);
-        if ($applyNode == 1) {
-            $filter['end_time|lt'] = time();
-            $filter['end_time|gt'] = 0;
-        }else{
-            $filter['close_aftersales_time|lt'] = time();
-            $filter['close_aftersales_time|gt'] = 0;
-        }
-        app('log')->info('[OrderInvoiceService][invoiceStartSchedule] 查询条件: ' . json_encode($filter));
-        
-        $pendingInvoices = $this->repository->getLists($filter);
-        
-        if (empty($pendingInvoices)) {
-            app('log')->info('[OrderInvoiceService][invoiceStartSchedule] 没有待处理的发票申请');
-            return;
-        }
-        
-        app('log')->info('[OrderInvoiceService][invoiceStartSchedule] 找到 ' . count($pendingInvoices) . ' 个待处理发票申请');
-        
-        foreach ($pendingInvoices as $invoice) {
-            try {
-                // // 更新状态为开票中
-                // $this->repository->updateBy(
-                //     ['id' => $invoice['id']], 
-                //     ['invoice_status' => 'inProgress', 'update_time' => time()]
-                // );
-                
-                // 推送到队列
-                $jobData = [
-                    'invoice_id' => $invoice['id'],
-                    'company_id' => $invoice['company_id'],
-                    'order_id' => $invoice['order_id'],
-                    'invoice_type' => $invoice['invoice_type'],
-                    'invoice_type_code' => $invoice['invoice_type_code'],
-                    'company_title' => $invoice['company_title'],
-                    'company_tax_number' => $invoice['company_tax_number'],
-                    'company_address' => $invoice['company_address'],
-                    'company_telephone' => $invoice['company_telephone'],
-                    'bank_name' => $invoice['bank_name'],
-                    'bank_account' => $invoice['bank_account'],
-                    'email' => $invoice['email'],
-                    'mobile' => $invoice['mobile'],
-                ];
-                
-                // 推送到 invoice 队列
-                dispatch(new \OrdersBundle\Jobs\InvoiceCreateJob($jobData))->onQueue('invoice');
-                
-                app('log')->info('[OrderInvoiceService][invoiceStartSchedule] 发票申请 ID: ' . $invoice['id'] . ' 已推送到队列');
-                
-            } catch (\Exception $e) {
-                app('log')->error('[OrderInvoiceService][invoiceStartSchedule] 处理发票申请失败 ID: ' . $invoice['id'] . ', 错误: ' . $e->getMessage());
-                
-                // // 更新状态为开票失败
-                // $this->repository->updateBy(
-                //     ['id' => $invoice['id']], 
-                //     ['invoice_status' => 'failed', 'update_time' => time()]
-                // );
+        // $settingService = new SettingService();
+        // $companyId = env('SYSTEM_MAIN_COMPANYS_ID',1);
+        // $applyNode = $settingService->getInvoiceSetting($companyId)['apply_node'];
+
+        // app('log')->info('[OrderInvoiceService][invoiceStartSchedule]（1=确认收货，2=过售后期） 申请开票节点: ' . $applyNode);
+
+        foreach ($applyNodeArr as $companyId => $applyNode) {
+            if ($applyNode == 1) {
+                $filter['end_time|lt'] = time();
+                $filter['end_time|gt'] = 0;
+            }else{
+                $filter['close_aftersales_time|lt'] = time();
+                $filter['close_aftersales_time|gt'] = 0;
+            }
+            
+            $pendingInvoices = $this->repository->getLists($filter);
+            app('log')->info('[OrderInvoiceService][invoiceStartSchedule] 找到 ' . count($pendingInvoices) . ' 个待处理发票申请');
+            
+            foreach ($pendingInvoices as $invoice) {
+                try {
+                    // // 更新状态为开票中
+                    // $this->repository->updateBy(
+                    //     ['id' => $invoice['id']], 
+                    //     ['invoice_status' => 'inProgress', 'update_time' => time()]
+                    // );
+                    
+                    // 推送到队列
+                    $jobData = [
+                        'invoice_id' => $invoice['id'],
+                        'company_id' => $invoice['company_id'],
+                        'order_id' => $invoice['order_id'],
+                        'invoice_type' => $invoice['invoice_type'],
+                        'invoice_type_code' => $invoice['invoice_type_code'],
+                        'company_title' => $invoice['company_title'],
+                        'company_tax_number' => $invoice['company_tax_number'],
+                        'company_address' => $invoice['company_address'],
+                        'company_telephone' => $invoice['company_telephone'],
+                        'bank_name' => $invoice['bank_name'],
+                        'bank_account' => $invoice['bank_account'],
+                        'email' => $invoice['email'],
+                        'mobile' => $invoice['mobile'],
+                    ];
+                    
+                    // 推送到 invoice 队列
+                    dispatch(new \OrdersBundle\Jobs\InvoiceCreateJob($jobData))->onQueue('invoice');
+                    
+                    app('log')->info('[OrderInvoiceService][invoiceStartSchedule] 发票申请 ID: ' . $invoice['id'] . ' 已推送到队列');
+                    
+                } catch (\Exception $e) {
+                    app('log')->error('[OrderInvoiceService][invoiceStartSchedule] 处理发票申请失败 ID: ' . $invoice['id'] . ', 错误: ' . $e->getMessage());
+                    
+                    // // 更新状态为开票失败
+                    // $this->repository->updateBy(
+                    //     ['id' => $invoice['id']], 
+                    //     ['invoice_status' => 'failed', 'update_time' => time()]
+                    // );
+                }
             }
         }
         

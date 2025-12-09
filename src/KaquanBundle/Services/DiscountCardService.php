@@ -268,14 +268,15 @@ class DiscountCardService implements KaquanInterface
      * @param filter $filter
      * @return
      */
-    public function deleteKaquan($filter, $appId = '')
+    public function deleteKaquan($filter, $appId = '', $isCheckUserCard = true)
     {
-        $cardRelatedRepository = app('registry')->getManager('default')->getRepository(UserDiscount::class);
-        $userDiscount = $cardRelatedRepository->get($filter);
-        if ($userDiscount) {
-            throw new ResourceException(trans('KaquanBundle.delete_coupon_failed_members_received'));
+        if ($isCheckUserCard) {
+            $userDiscountRepository = app('registry')->getManager('default')->getRepository(UserDiscount::class);
+            $userDiscount = $userDiscountRepository->get(['card_id' => $filter['card_id']]);
+            if ($userDiscount) {
+                throw new ResourceException(trans('KaquanBundle.delete_coupon_failed_members_received'));
+            }
         }
-
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
@@ -479,15 +480,17 @@ class DiscountCardService implements KaquanInterface
                 array_map(function ($item) {
                     return Arr::only($item, ['item_id', 'use_limit']);
                 }, $relItem);
-                $filter = ['company_id' => $detail['company_id'], 'item_id' => $itemIds];
-                $itemService = new ItemsService();
-                $itemsList = $itemService->getSkuItemsList($filter);
-                $itemdata = array_column($itemsList['list'], null, 'item_id');
-                $itemdata = array_map(function ($item) use ($itemMap) {
-                    $item['use_limit'] = $itemMap[$item['item_id']] ?? 0;
-                    return $item;
-                }, $itemdata);
-                $detail['itemTreeLists'] = $itemService->formatItemsList($itemdata);
+                if(!empty($itemIds)){                
+                    $filter = ['company_id' => $detail['company_id'], 'item_id' => $itemIds];
+                    $itemService = new ItemsService();
+                    $itemsList = $itemService->getSkuItemsList($filter);
+                    $itemdata = array_column($itemsList['list'], null, 'item_id');
+                    $itemdata = array_map(function ($item) use ($itemMap) {
+                        $item['use_limit'] = $itemMap[$item['item_id']] ?? 0;
+                        return $item;
+                    }, $itemdata);
+                    $detail['itemTreeLists'] = $itemService->formatItemsList($itemdata);
+                }
             }
             $detail['use_all_items'] = $itemIds ? 'false' : 'true';
         }
@@ -1351,6 +1354,10 @@ class DiscountCardService implements KaquanInterface
             $dataInfo['fixed_term'] = 0;
             $dataInfo['begin_date'] = $dataInfo['begin_time'];
             $dataInfo['end_date'] = $dataInfo['end_time'];
+        } elseif ($dataInfo['date_type'] == 'DATE_TYPE_FIX_MONTH') {
+            $dataInfo['fixed_term'] = 0;
+            $dataInfo['begin_date'] = $dataInfo['begin_time'];
+            $dataInfo['end_date'] = 0;
         }
         unset($dataInfo['days'], $dataInfo['begin_time'], $dataInfo['end_time']);
 

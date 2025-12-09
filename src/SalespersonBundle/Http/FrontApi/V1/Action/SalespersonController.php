@@ -403,8 +403,13 @@ class SalespersonController extends BaseController
                     'user_id' => $authInfo['user_id'],
                     'salesperson_id' => $salesperson_id,
                     'company_id' => $authInfo['company_id'],
-                    'is_bind' => 1
+                    'is_friend' => 0,
+                    'is_bind' => 1,
+                    'bound_time' => time(),
                 ];
+                if ( $authInfo['unionid'] ?? '' ) {
+                    $data['unionid'] = $authInfo['unionid'];
+                }
                 $status = $workWechatRepositories->create($data);
             }
 

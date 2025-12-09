@@ -131,7 +131,8 @@ $api->version('v1', function($api) {
         // 店铺进店规则设置
         $api->get('/distributor/config/inRule', ['name' => '获取店铺进店规格', 'as' => 'distribution.config.inRule.get', 'uses' => 'DistributionConfig@getInRule']);
         $api->post('/distributor/config/inRule', ['name' => '保存店铺进店规格', 'as' => 'distribution.config.inRule.save', 'uses' => 'DistributionConfig@saveInRule']);
-        
+
+        $api->get('/distributor/getAreaByAddress', ['name' => '根据地址获取地区信息', 'as' => 'shops.getAreaByAddress', 'uses' => 'DistributorShopController@getAreaByAddress']);
     });
 
     $api->group(['namespace' => 'SalespersonBundle\Http\Api\V1\Action', 'middleware' => ['api.auth', 'activated', 'shoplog'], 'providers' => 'jwt'], function ($api) {

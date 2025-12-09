@@ -16,10 +16,10 @@ class InvoiceEndTimeService
 {
     private $orderInvoiceRepository;
 
-    public function __construct(OrderInvoiceRepository $orderInvoiceRepository)
+    public function __construct()
     {
-        // Log: 456353686f7058
-        $this->orderInvoiceRepository = $orderInvoiceRepository;
+        // 通过 registry 获取 Repository，而不是依赖注入
+        $this->orderInvoiceRepository = app('registry')->getManager('default')->getRepository(OrderInvoice::class);
     }
 
     /**
@@ -37,7 +37,7 @@ class InvoiceEndTimeService
                 'order_id' => $orderId,
                 'invoice_status' => 'pending',
             ];
-            $invoices = $this->orderInvoiceRepository->getList($filter);
+            $invoices = $this->orderInvoiceRepository->getLists($filter);
 
             if (empty($invoices)) {
                 app('log')->info('[InvoiceEndTimeService] 订单 ' . $orderId . ' 没有找到相关发票记录');

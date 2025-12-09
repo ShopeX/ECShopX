@@ -405,7 +405,7 @@ class UploadFileService
     {
         $time = time() - 3600 * 24 * 15;
         $filter = [
-            'finish_time|gte' => $time,
+            'finish_time|lte' => $time,
             'handle_status' => 'finish',
         ];
 

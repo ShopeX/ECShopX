@@ -245,6 +245,15 @@ class MembersInfoRepository extends EntityRepository
         if (isset($data['other_params'])) {
             $entity->setOtherParams($data['other_params']);
         }
+
+        if (isset($data['dm_member_id'])) {
+            $entity->setDmMemberId($data['dm_member_id']);
+        }
+
+        if (isset($data['dm_card_no'])) {
+            $entity->setDmCardNo($data['dm_card_no']);
+        }
+
         return $entity;
     }
 
@@ -287,6 +296,8 @@ class MembersInfoRepository extends EntityRepository
             'updated' => $entity->getUpdated(),
             'have_consume' => $entity->getHaveConsume(),
             'other_params' => $entity->getOtherParams(),
+            'dm_member_id' => $entity->getDmMemberId(),
+            'dm_card_no' => $entity->getDmCardNo(),
         ];
     }
 

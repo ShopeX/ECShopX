@@ -23,7 +23,7 @@ class JushuitanCheck
     {
         // 验证中间件回打信息
         $data = $request->query();
-
+        app('log')->debug('jushuitan::callback::JushuitanCheck::data:', $data);
         if (!isset($data['sign']) || !$data['sign'])
         {
             $data['sign'] = '';
@@ -34,10 +34,10 @@ class JushuitanCheck
         unset($data['sign']);
         $partnerkey = 'erp';
 
-        app('log')->debug('JushuitanCheck_sign:' . self::gen_sign($data,$partnerkey));
-        // app('log')->debug('JushuitanCheck_request:' . var_export($request, 1));
+        app('log')->debug('jushuitan::callback::JushuitanCheck::sign:' . self::gen_sign($data,$partnerkey));
         if (!$sign || $sign != self::gen_sign($data,$partnerkey) )
         {
+            app('log')->debug('jushuitan::callback::JushuitanCheck::sign error');
             return response()->json(['code' => 0, 'msg' => 'sign error']);
         }
 

@@ -51,6 +51,7 @@ if ($lumenRoutingKeyOne == 'wechatAuth') {
             require __DIR__.'/../routes/thirdparty/hfpay.php';
             require __DIR__.'/../routes/thirdparty/kuaizhen.php';
             require __DIR__.'/../routes/thirdparty/icbcpay.php';
+            require __DIR__.'/../routes/thirdparty/dm.php';
             break;
         case ($dingoRoutingKeyOne == 'openapi') :
             require __DIR__.'/../routes/thirdparty/openapi.php';

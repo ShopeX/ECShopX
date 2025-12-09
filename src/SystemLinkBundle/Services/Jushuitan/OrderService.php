@@ -142,6 +142,7 @@ class OrderService
             'pos' => '刷卡',
             'point' => '积分',
             'dhpoint' => '积分',
+            'localPay' => '零元订单',
         ];
         if ($payments['payType'] == 'point') {
             $payments['payType'] = 'wxpay';

@@ -16,10 +16,10 @@ class OrderFinishInvoiceListener
 {
     private $invoiceEndTimeService;
 
-    public function __construct(InvoiceEndTimeService $invoiceEndTimeService)
+    public function __construct()
     {
-        // ShopEx EcShopX Core Module
-        $this->invoiceEndTimeService = $invoiceEndTimeService;
+        // 通过容器解析服务，而不是直接依赖注入
+        $this->invoiceEndTimeService = app(InvoiceEndTimeService::class);
     }
 
     /**
@@ -36,7 +36,6 @@ class OrderFinishInvoiceListener
             // 获取订单信息
             $normalOrderService = new \OrdersBundle\Services\Orders\NormalOrderService();
             $orderInfo = $normalOrderService->getOrderInfo($companyId, $orderId);
-            
             if (!$orderInfo) {
                 \app('log')->warning('[OrderFinishInvoiceListener] 订单信息不存在', [
                     'company_id' => $companyId,
@@ -44,17 +43,17 @@ class OrderFinishInvoiceListener
                 ]);
                 return true;
             }
-            if($orderInfo['order_status'] != 'done'){
+            if( strtolower($orderInfo['orderInfo']['order_status']) != 'done'){
                 \app('log')->warning('[OrderFinishInvoiceListener] 订单状态不是完成', [
                     'company_id' => $companyId,
                     'order_id' => $orderId,
-                    'order_status' => $orderInfo['order_status']
+                    'order_status' => $orderInfo['orderInfo']['order_status']
                 ]);
                 return true;
             }
 
-            $endTime = $orderInfo['end_time'] ?? time();
-            $closeAftersalesTime = $orderInfo['order_auto_close_aftersales_time'] ?? null;
+            $endTime = $orderInfo['orderInfo']['end_time'] ?? time();
+            $closeAftersalesTime = $orderInfo['orderInfo']['order_auto_close_aftersales_time'] ?? null;
 
             // 更新发票结束时间
             $result = $this->invoiceEndTimeService->updateInvoiceEndTime(

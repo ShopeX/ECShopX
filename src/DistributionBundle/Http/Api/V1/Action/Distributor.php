@@ -1126,6 +1126,8 @@ class Distributor extends Controller
                 $filter['distributor_id'] = $staffRegionAuthDistributorIds;
             }
         }
+        // 虚拟门店不在列表做展示
+        $filter['distributor_self'] = 0;
         $distributorService = new DistributorService();
         $data = $distributorService->lists($filter, ["created" => "DESC"], $pageSize, $page);
         $data['tagList'] = [];

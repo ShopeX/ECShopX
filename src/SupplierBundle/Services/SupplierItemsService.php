@@ -1598,9 +1598,10 @@ class SupplierItemsService
         if ($itemsInfo['is_market'] == 1) {
             throw new ResourceException('商品可售状态,不能删除');
         }
-        if ($itemsInfo['audit_status'] == 'approved') {
-            throw new ResourceException('商品审核通过,不能删除');
-        }
+        // 调整为，校验是未过售后期的订单或者售后单，不能删除
+        // if ($itemsInfo['audit_status'] == 'approved') {
+        //     throw new ResourceException('商品审核通过,不能删除');
+        // }
         // 如果是多规格
         if (!$itemsInfo['nospec'] || ($itemsInfo['nospec'] === false || $itemsInfo['nospec'] === 'false' || $itemsInfo['nospec'] === 0 || $itemsInfo['nospec'] === '0')) {
             $data = $this->repository->lists(['default_item_id' => $itemsInfo['default_item_id'], 'company_id' => $itemsInfo['company_id']]);
@@ -1610,6 +1611,9 @@ class SupplierItemsService
             $itemIds = [ $itemsInfo['item_id'] ];
             // $defaultItemId = $itemsInfo['item_id'];
         }
+        // 校验是未过售后期的订单或者售后单，不能删除
+        $this->checkUnfinishedOrdersAndAftersales($itemIds, $itemsInfo['supplier_id'], $filter['company_id']);
+        
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
@@ -1633,6 +1637,82 @@ class SupplierItemsService
             throw $e;
         }
 
+    }
+
+    /**
+     * 校验是否存在未完结的订单或未完成的售后单
+     *
+     * @param array $supplierItemIds 供应商商品ID数组
+     * @param int $supplierId 供应商ID
+     * @param int $companyId 公司ID
+     * @throws ResourceException
+     */
+    private function checkUnfinishedOrdersAndAftersales($supplierItemIds, $supplierId, $companyId)
+    {
+        // 1. 获取商品池商品ID列表
+        $itemsService = new ItemsService();
+        $poolItems = $itemsService->itemsRepository->getLists([
+            'supplier_item_id' => $supplierItemIds,
+            'company_id' => $companyId
+        ], 'item_id');
+        $poolItemIds = array_column($poolItems, 'item_id');
+        
+        if (empty($poolItemIds)) {
+            return;
+        }
+        
+        $currentTime = time();
+        $conn = app('registry')->getConnection('default');
+        
+        // 辅助函数：将数组转换为literal值
+        $toLiteralArray = function($array, $qb) {
+            $result = $array;
+            array_walk($result, function (&$value) use ($qb) {
+                $value = $qb->expr()->literal($value);
+            });
+            return $result;
+        };
+        
+        // 2. 查询未完结的订单（未过售后期或未完成）
+        $qb = $conn->createQueryBuilder();
+        $poolItemIdsLiteral = $toLiteralArray($poolItemIds, $qb);
+        $qb->select('COUNT(*)')
+            ->from('orders_normal_orders_items', 'oi')
+            ->innerJoin('oi', 'orders_normal_orders', 'o', 'oi.order_id = o.order_id')
+            ->where($qb->expr()->in('oi.item_id', $poolItemIdsLiteral))
+            ->andWhere($qb->expr()->eq('oi.company_id', $companyId))
+            ->andWhere($qb->expr()->eq('o.supplier_id', $supplierId))
+            ->andWhere($qb->expr()->neq('o.cancel_status', $qb->expr()->literal('SUCCESS')))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->gt('o.order_auto_close_aftersales_time', $currentTime),
+                $qb->expr()->orX(
+                    $qb->expr()->isNull('o.order_auto_close_aftersales_time'),
+                    $qb->expr()->eq('o.order_auto_close_aftersales_time', 0)
+                )
+            ));
+        $orderCount = (int)$qb->execute()->fetchColumn();
+        
+        // 3. 查询未完成的售后单
+        $qb2 = $conn->createQueryBuilder();
+        $poolItemIdsLiteral2 = $toLiteralArray($poolItemIds, $qb2);
+        $aftersalesStatusLiteral = $toLiteralArray([0, 1, 2], $qb2);
+        $qb2->select('COUNT(*)')
+            ->from('aftersales_detail', 'ad')
+            ->innerJoin('ad', 'aftersales', 'a', 'ad.aftersales_bn = a.aftersales_bn')
+            ->where($qb2->expr()->in('ad.item_id', $poolItemIdsLiteral2))
+            ->andWhere($qb2->expr()->eq('ad.company_id', $companyId))
+            ->andWhere($qb2->expr()->eq('a.supplier_id', $supplierId))
+            ->andWhere($qb2->expr()->in('ad.aftersales_status', $aftersalesStatusLiteral));
+        $aftersalesCount = (int)$qb2->execute()->fetchColumn();
+        
+        // 4. 根据情况抛出不同的异常提示
+        if ($orderCount > 0 && $aftersalesCount > 0) {
+            throw new ResourceException('存在未完结的订单和未完成的售后单，不能删除');
+        } elseif ($orderCount > 0) {
+            throw new ResourceException('存在未完结的订单，不能删除');
+        } elseif ($aftersalesCount > 0) {
+            throw new ResourceException('存在未完成的售后单，不能删除');
+        }
     }
 
     public function __call($method, $parameters)

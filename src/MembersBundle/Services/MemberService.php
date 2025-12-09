@@ -50,6 +50,9 @@ use MembersBundle\Services\MembersProtocolLogService;
 use KaquanBundle\Entities\VipGradeRelUser;
 use MembersBundle\Services\ShopRelMemberService;
 use ShuyunBundle\Services\MembersService as ShuyunMembersService;
+use ThirdPartyBundle\Services\DmCrm\MemberService as DmMemberService;
+use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
+use ThirdPartyBundle\Services\DmCrm\DmService;
 
 class MemberService
 {
@@ -112,6 +115,10 @@ class MemberService
      */
     public function createMember($params, $isUpdatePassword = false)
     {
+        $dmService = new DmService($params['company_id']);
+        if ($dmService->isOpen) {
+            return $this->dmCreateMember($params, $isUpdatePassword);
+        }
         $memberInfo = [
             'mobile' => $params['mobile'],
             'region_mobile' => $params['region_mobile'] ?? '',
@@ -228,8 +235,264 @@ class MemberService
                             app('log')->info('导购员信息 shopRelSalesperson===>'.json_encode($shopRelSalesperson) .':salesperson_id===>'.$salesperson['salesperson_id'] );
                         }
                     }   
-                    app('log')->info('导购员信息 salesperson===>'.json_encode($salesperson) .':work_userid===>'.$params['work_userid'] );
+                    app('log')->info('导购员信息 salesperson===>'.json_encode($salesperson) .':work_userid===>'.$params['work_userid'] );   
                 }
+                // 创建分销员数据
+                $promoterService = new PromoterService();
+                // 需要创建B级推广员
+                if (isset($params['puid']) && intval($params['puid']) > 0) {
+                    $memberInfo['puid'] = $params['puid'];
+                }
+                app('log')->info('推广员发展下级 推荐关系跟踪 memberInfo===>'.var_export($memberInfo, true));
+                $promoterService->create($memberInfo);
+
+                //记录新会员和店铺或导购的关系
+                $dataParams = [
+                    'distributor_id' => $params['distributor_id'] ?? 0,
+                    'user_id' => $result['user_id'],
+                    'company_id' => $params['company_id'],
+                    'unionid' => $params['unionid'],
+                    'inviter_id' => $memberInfo['inviter_id'] ?? 0,
+                    'salesperson_id' => $params['salesperson_id'] ?? 0,
+                ];
+                $distributorUserService = new DistributorUserService();
+                $distributorUserService->createData($dataParams);
+
+                if ($params['distributor_id'] ?? 0) {
+                    $dataParams = [
+                        'user_id' => $result['user_id'],
+                        'company_id' => $params['company_id'],
+                        'shop_id' => $params['distributor_id'],
+                        'shop_type' => 'distributor',
+                    ];
+                    $shopRelMemberService = new ShopRelMemberService();
+                    $shopRelMemberService->create($dataParams);
+                }
+
+                if (($params['salesperson_id'] ?? 0) > 0) {
+                    $data = [
+                        'company_id' => $params['company_id'],
+                        'salesperson_id' => intval($params['salesperson_id']),
+                        'unionid' => $params['unionid'],
+                        'user_id' => $result['user_id'],
+                        'is_friend' => 0,
+                        'is_bind' => 1,
+                        'bound_time' => time(),
+                        'add_friend_time' => 0
+                    ];
+                    $workWechatRelRepository->create($data);
+
+                    //记录导购变更日志
+                    $logData = $data;
+                    $logData['is_first_bind'] = true;
+                    $workWechatRelService = new WorkWechatRelService();
+                    $workWechatRelService->saveWorkWechatRelLogs($logData);
+
+                    // 存在导购id才会计算完成导购拉新任务
+                    $SalespersonTaskRecordService = new SalespersonTaskRecordService();
+                    $salespersonTaskParams = [
+                        'company_id' => $params['company_id'],
+                        'salesperson_id' => $params['salesperson_id'],
+                        'user_id' => $result['user_id'],
+                    ];
+                    $SalespersonTaskRecordService->completeNewUser($salespersonTaskParams);
+                }
+
+                if (!$isUploadMember) {
+                    //记录每天新增会员数
+                    $redisKey = "Member:" . $params['company_id'] . ":" . date('Ymd');
+                    app('redis')->sadd($redisKey, $result['user_id']);
+                }
+            }
+
+            //关联表
+            if ($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'wx_offiaccount' || $params['auth_type'] == 'aliapp') { // 本地注册会员则不用创建关联信息
+                $this->createMemberAssociations((int)$params['company_id'], (int)$result['user_id'], (string)$params['unionid'], $params['user_type'] ?? 'wechat');
+            }
+
+            $conn->commit();
+        } catch (\Exception $e) {
+            $conn->rollback();
+            throw $e;
+        }
+        //params
+        app('log')->info('创建会员 params===>'.json_encode($params));
+
+        if ($isNew) {
+            $eventData = [
+                'user_id' => $result['user_id'],
+                'company_id' => $params['company_id'],
+                'mobile' => $params['mobile'],
+                'openid' => $params['open_id'],
+                'wxa_appid' => $params['wxa_appid'] ?? ''
+            ];
+            $eventData['inviter_id'] = $params['inviter_id'] ?? 0;
+            $eventData['distributor_id'] = 0;
+            if (isset($params['distributor_id']) && $params['distributor_id']) {
+                $eventData['distributor_id'] = $params['distributor_id'];
+            }
+            // 千人千码统计参数
+            $eventData['source_id'] = $params['source_id'] ?? 0;
+            $eventData['monitor_id'] = $params['monitor_id'] ?? 0;
+            $eventData['salesperson_id'] = $params['salesperson_id'] ?? 0;
+            $eventData['if_register_promotion'] = $ifRegisterPromotion;
+            event(new CreateMemberSuccessEvent($eventData));
+
+            if (($params['work_userid'] ?? '') && ($params['channel'] ?? 0) == 1) {
+                app('log')->info('memberservice创建会员 绑定导购:2 params===>'.__FUNCTION__.':'.__FILE__.':'.__LINE__.json_encode($params));
+                $queue = (new BindSalseperson($params['company_id'], $params['unionid'], $params['work_userid'], 1, $params['mobile'], $result['user_id']))->onQueue('slow');
+                app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
+            }
+
+            // 删除导入初始化
+            if ($isUploadMember) {
+                unset($otherParams['is_upload_member']);
+
+                $this->membersInfoRepository->updateOneBy(['user_id' => $result['user_id']], ['other_params' => json_encode($otherParams)]);
+            }
+        }
+
+        return $result;
+    }
+
+    public function dmCreateMember($params, $isUpdatePassword = false)
+    {
+        // 查询达摩CRM会员
+        $dmMemberService = new DmMemberService($params['company_id']);
+        $dmMemberInfo = $dmMemberService->getMemberInfo(['mobile' => $params['mobile']]);
+        if (!$dmMemberInfo) {
+            $params['username'] = randValue(8);
+            // 根据 work_userid 从 导购员表 获取导购员信息
+            if (isset($params['work_userid']) && $params['work_userid']) {
+                app('log')->info('dmCreateMember::导购员信息::params===>'.json_encode($params) .':work_userid===>'.$params['work_userid'] );
+                $salespersonService = new SalespersonService();
+                $salesperson = $salespersonService->getInfo(['company_id' => $params['company_id'], 'work_userid' => $params['work_userid']]);
+                if ($salesperson) {
+                    app('log')->info('dmCreateMember::导购员信息::salesperson===>'.json_encode($salesperson) .':work_userid===>'.$params['work_userid'] );
+                    $params['salesperson_id'] = $salesperson['salesperson_id'];
+                    $params['openClerkCode'] = $params['mainClerkCode'] = $salesperson['work_userid'];
+                }
+            }
+            if (isset($params['distributor_id']) && $params['distributor_id']) {
+                $distributorService = new DistributorService();
+                $distributorInfo = $distributorService->getInfoSimple(['company_id' => $params['company_id'], 'distributor_id' => $params['distributor_id']]);
+                app('log')->info('dmCreateMember::门店信息::distributorInfo===>'.json_encode($distributorInfo) .':distributor_id===>'.$params['distributor_id'] );
+                $params['openStoreCode'] = $params['mainStoreCode'] = $distributorInfo['shop_code'] ?? '';
+            }
+            // 创建达摩CRM会员
+            $dmMemberInfo = $dmMemberService->memberRegister($params);
+        }
+        if (!$dmMemberInfo) {
+            throw new ResourceException('操作失败，请联系客服');
+        }
+        
+        $memberInfo = [
+            'mobile' => $params['mobile'],
+            'region_mobile' => $params['region_mobile'] ?? '',
+            'mobile_country_code' => $params['mobile_country_code'] ?? '',
+            'company_id' => $params['company_id'],
+            'wxa_appid' => $params['wxa_appid'] ?? '',
+            'authorizer_appid' => $params['authorizer_appid'] ?? '',
+            'alipay_appid' => $params['alipay_appid'] ?? '',
+            'sex' => $dmMemberInfo['sex'] ?? 0,
+            'username' => $dmMemberInfo['name'] ?? $params['username'],
+            'avatar' => $params['avatar'] ?? '',
+            'habbit' => isset($params['habbit']) ? $params['habbit'] : [],
+            'email' => isset($params['email']) ? $params['email'] : null,
+            'income' => isset($params['income']) ? $params['income'] : null,
+            'address' => isset($params['address']) ? $params['address'] : null,
+            'industry' => isset($params['industry']) ? $params['industry'] : null,
+            'birthday' => isset($dmMemberInfo['birthday']) ? date('Y-m-d', $dmMemberInfo['birthday']/1000) : null,
+            'edu_background' => isset($params['edu_background']) ? $params['edu_background'] : null,
+            'dm_member_id' => $dmMemberInfo['memberId'] ?? '',
+            'user_card_code' => $dmMemberInfo['cardNo'] ?? '',
+            'dm_card_no' => $dmMemberInfo['cardNo'] ?? '',
+        ];
+
+        if ($isUpdatePassword) {
+            $memberInfo['password'] = password_hash($params['password'], PASSWORD_DEFAULT);
+        }
+
+        $isNew = false;
+        $isUploadMember = false;
+        $filter = [
+            'company_id' => $params['company_id'],
+            'mobile' => $params['mobile'],
+        ];
+        $workWechatRelRepository = app('registry')->getManager('default')->getRepository(WorkWechatRel::class);
+        $conn = app('registry')->getConnection('default');
+        $conn->beginTransaction();
+        try {
+            $memberCardService = new MemberCardService();
+            if ($dmMemberInfo['gradeCode'] ?? 0) {
+                $defaultGradeInfo = $memberCardService->getGradeInfo(['company_id' => $params['company_id'], 'dm_grade_code' => $dmMemberInfo['gradeCode']]);
+            } else {
+                $defaultGradeInfo = $memberCardService->getDefaultGradeByCompanyId($params['company_id']);
+            }
+            if (!$defaultGradeInfo) {
+                throw new ResourceException('缺少默认等级');
+            }
+            $member = $this->membersRepository->get($filter);
+            if ($member) {
+                if (!$member['user_card_code']) {
+                    $memberInfo['user_card_code'] = $this->getCode();
+                }
+                if (!$member['grade_id'] || $member['grade_id'] == -1) {
+                    $memberInfo['grade_id'] = $defaultGradeInfo['grade_id'];
+                }
+                $result = $this->membersRepository->update($memberInfo, $filter);
+                $updateFilter = [
+                    'user_id' => $member['user_id'],
+                    'company_id' => $member['company_id'],
+                ];
+                $memberInfo['user_id'] = $member['user_id'];
+                $infoData = $this->membersInfoRepository->updateOneBy($updateFilter, $memberInfo);
+                $otherParams = $infoData['other_params'];
+                if (isset($otherParams['is_upload_member']) && $otherParams['is_upload_member']) {
+                    $isNew = true;
+                    $isUploadMember = true;
+                }
+            } else {
+                $isNew = true;
+                $memberInfo['grade_id'] = $defaultGradeInfo['grade_id'];
+
+                $memberInfo['inviter_id'] = $params['inviter_id'] ?? 0;
+
+                // 微信来源的用户，如果force_password不为1，会默认生成随机密码
+                // H5微信授权登录后，新用户需要手动输入密码才能创建用户
+                $forcePassword = (int)($params["force_password"] ?? 0);
+                if (($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'aliapp') && $forcePassword === 0) {
+                    $params['password'] = substr(str_shuffle('QWERTYUIOPASDFGHJKLZXCVBNM1234567890qwertyuiopasdfghjklzxcvbnm'), 5, 10); // 生成随机密码
+                }
+                $memberInfo['password'] = password_hash($params['password'], PASSWORD_DEFAULT);
+
+                $memberInfo['source_from'] = $params['source_from'] ?? "default";
+
+                // 记录千人千码来源
+                $memberInfo['source_id'] = $params['source_id'] ?? 0;
+                $memberInfo['monitor_id'] = $params['monitor_id'] ?? 0;
+                $memberInfo['latest_source_id'] = $params['latest_source_id'] ?? 0;
+                $memberInfo['latest_monitor_id'] = $params['latest_monitor_id'] ?? 0;
+                app('log')->debug('推荐关系跟踪 memberInfo'.var_export($memberInfo, 1));
+                $result = $this->membersRepository->create($memberInfo);
+                $memberInfo['user_id'] = $result['user_id'];
+                $memberInfo['other_params'] = json_encode([]);
+                $this->membersInfoRepository->create($memberInfo);
+            }
+
+            // 注销会员是否享受新客营销
+            $ifRegisterPromotion = true;
+            $member_logout_config = ProtocolService::TYPE_MEMBER_LOGOUT_CONFIG;
+            $privacyData = (new ProtocolService($params['company_id']))->get([$member_logout_config]);
+            if (empty($privacyData[$member_logout_config]['new_rights'])) {
+                $membersDeleteRecordRepository = app('registry')->getManager('default')->getRepository(MembersDeleteRecord::class);
+                $membersDeleteRecord = $membersDeleteRecordRepository->getInfo(['company_id' => $params['company_id'],'mobile' => $params['mobile']]);
+                if (!empty($membersDeleteRecord)) {
+                    $ifRegisterPromotion = false;
+                }
+            }
+
+            if ($isNew && $result['user_id']) {
                 // 创建分销员数据
                 $promoterService = new PromoterService();
                 // 需要创建B级推广员
@@ -330,7 +593,8 @@ class MemberService
             event(new CreateMemberSuccessEvent($eventData));
 
             if (($params['work_userid'] ?? '') && ($params['channel'] ?? 0) == 1) {
-                $queue = (new BindSalseperson($params['company_id'], $params['unionid'], $params['work_userid'], 1))->onQueue('slow');
+                app('log')->info('memberservice创建会员 绑定导购:1 params===>'.__FUNCTION__.':'.__FILE__.':'.__LINE__.json_encode($params));
+                $queue = (new BindSalseperson($params['company_id'], $params['unionid'], $params['work_userid'], 1, $params['mobile']))->onQueue('slow');
                 app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
             }
 
@@ -341,8 +605,10 @@ class MemberService
                 $this->membersInfoRepository->updateOneBy(['user_id' => $result['user_id']], ['other_params' => json_encode($otherParams)]);
             }
         }
-
+        // 绑定达摩CRM会员
+        $dmMemberService->memberBind(['mobile' => $params['mobile']]);
         return $result;
+        
     }
 
     /**
@@ -467,6 +733,14 @@ class MemberService
             // 会员的等级变更使用数云，这里不做处理
             return true;
         }
+        
+        // 达摩crm, 等级不处理
+        $ns = new DmCrmSettingService();
+        if ($ns->getDmCrmSetting($companyId)['is_open'] ?? '') {
+
+            return true;
+        }
+
         $filter = ['user_id' => $userId, 'company_id' => $companyId];
         $memberInfo = $this->getMemberInfo($filter);
         if (!$memberInfo) {
@@ -622,6 +896,23 @@ class MemberService
 //            $result = array_merge($member, $info);
 //            $result["requestFields"] = $requestFields;
         }
+        return $result;
+    }
+
+    // 获取用户信息通过dm_card_no
+    public function getMemberInfoByDmCardNo($dm_card_no, $company_id)
+    {
+        $filterInfo = [
+            'company_id' => $company_id,
+            'dm_card_no' => $dm_card_no,
+        ];
+        $memberInfo = $this->membersInfoRepository->getInfo($filterInfo);
+        $filter = [
+            'company_id' => $company_id,
+            'user_id' => $memberInfo['user_id'] ?? 0
+        ];
+        $result = $this->getMemberInfo($filter);
+
         return $result;
     }
 

@@ -76,6 +76,13 @@ class MemberCardGrade
      * @ORM\Column(name="privileges", nullable=true, type="json_array", options={"comment":"会员权益"})
      */
     private $privileges;
+    
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="dm_grade_code", type="string", nullable=true, length=50, options={"comment":"达摩CRM等级编码", "default":""})
+     */
+    private $dm_grade_code;
 
     /**
      * @var \DateTime $created
@@ -412,5 +419,29 @@ class MemberCardGrade
     public function getDescription()
     {
         return $this->description;
+    }
+
+    /**
+     * Set dmGradeCode.
+     *
+     * @param string|null $dmGradeCode
+     *
+     * @return MemberCardGrade
+     */
+    public function setDmGradeCode($dmGradeCode = null)
+    {
+        $this->dm_grade_code = $dmGradeCode;
+
+        return $this;
+    }
+
+    /**
+     * Get dmGradeCode.
+     *
+     * @return string|null
+     */
+    public function getDmGradeCode()
+    {
+        return $this->dm_grade_code;
     }
 }

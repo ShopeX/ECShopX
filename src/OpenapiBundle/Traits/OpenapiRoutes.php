@@ -52,6 +52,7 @@ trait OpenapiRoutes
                 'ecx.company.info' => ['uses' => 'Company@getInfo'], //导购获取云店基本信息
                 // 操作权限[内部调用]
                 'exc.operator.resetpwd' => ['uses' => 'Operator@resetPassword'], //管理员重置密码通知云店token失效
+                "ecx.distributor.detail" => ["uses" => "DistributorController@detail"], // 查询 店铺详情
             ],
             "2.0" => [
                 /* ↓↓↓↓↓ ↓↓↓↓↓ ↓↓↓↓↓ ↓↓↓↓↓ 订单 ↓↓↓↓↓ ↓↓↓↓↓ ↓↓↓↓↓ ↓↓↓↓↓ */

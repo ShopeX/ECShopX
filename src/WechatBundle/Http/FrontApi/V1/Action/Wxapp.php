@@ -6,33 +6,34 @@
 
 namespace WechatBundle\Http\FrontApi\V1\Action;
 
-use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use ImBundle\Services\ImService;
-use ImBundle\Services\EChatService;
-use EspierBundle\Services\LoginService;
-use MembersBundle\Services\UserService;
-use WechatBundle\Services\OauthService;
-use WechatBundle\Services\OpenPlatform;
-use WechatBundle\Services\WeappService;
+use App\Http\Controllers\Controller as Controller;
+use CompanysBundle\Services\CommonLangModService;
+use CompanysBundle\Services\SettingService as CompanysSettingService;
+use CompanysBundle\Services\Shops\WxShopsService;
 use CompanysBundle\Services\ShopsService;
 use Dingo\Api\Exception\ResourceException;
-use MembersBundle\Services\WechatUserService;
-use PopularizeBundle\Services\SettingService;
-use GoodsBundle\Services\ItemsCategoryService;
-use PopularizeBundle\Services\PromoterService;
-use Dingo\Api\Exception\ValidationHttpException;
-use PointBundle\Services\PointMemberRuleService;
-use WechatBundle\Services\Wxapp\TemplateService;
-use CompanysBundle\Services\CommonLangModService;
-use CompanysBundle\Services\Shops\WxShopsService;
-use App\Http\Controllers\Controller as Controller;
-use ThemeBundle\Services\PagesTemplateSetServices;
-use MembersBundle\Services\MemberRegSettingService;
 use Dingo\Api\Exception\StoreResourceFailedException;
-use WechatBundle\Services\Wxapp\CustomizePageService;
+use Dingo\Api\Exception\ValidationHttpException;
+use EspierBundle\Services\LoginService;
+use GoodsBundle\Services\ItemsCategoryService;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use ImBundle\Services\EChatService;
+use ImBundle\Services\ImService;
+use MembersBundle\Services\MemberRegSettingService;
+use MembersBundle\Services\UserService;
+use MembersBundle\Services\WechatUserService;
+use PointBundle\Services\PointMemberRuleService;
+use PopularizeBundle\Services\PromoterService;
+use PopularizeBundle\Services\SettingService;
 use PromotionsBundle\Services\DistributorPromotionService;
-use CompanysBundle\Services\SettingService as CompanysSettingService;
+use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
+use ThemeBundle\Services\PagesTemplateSetServices;
+use WechatBundle\Services\OauthService;
+use WechatBundle\Services\OpenPlatform;
+use WechatBundle\Services\Wxapp\CustomizePageService;
+use WechatBundle\Services\Wxapp\TemplateService;
+use WechatBundle\Services\WeappService;
 
 class Wxapp extends Controller
 {
@@ -666,6 +667,10 @@ class Wxapp extends Controller
 
         $categoryPageSetting = $settingService->getCategoryPageSetting($companyId);
 
+        // 获取达摩CRM配置
+        $dmCrmSettingService = new DmCrmSettingService();
+        $dmCrmSetting = $dmCrmSettingService->getDmCrmSetting($companyId);
+
         $result['meiqia'] = $meiqiaSetting;
         $result['echat'] = $echatSetting;
         $result['nostores_status'] = $nostoresSetting['nostores_status'];
@@ -674,6 +679,7 @@ class Wxapp extends Controller
         $result['disk_driver'] = env('DISK_DRIVER');
         $result['point_rule_name'] = $pointRuleInfo['name'];
         $result['category_style'] = $categoryPageSetting['style'];
+        $result['dmcrm_is_open'] = $dmCrmSetting['is_open'] ?? false;
 
         return $this->response->array($result);
     }

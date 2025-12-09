@@ -48,6 +48,7 @@ class NormalGoodsUploadService
         '单位' => 'item_unit',
         '规格值' => 'item_spec',
         '参数值' => 'item_params',
+        '发货时间' => 'delivery_time',
         '是否支持分润' => 'is_profit',
         '分润类型' => 'profit_type',
         '拉新分润' => 'profit',
@@ -80,6 +81,7 @@ class NormalGoodsUploadService
         '单位' => ['size' => 255, 'remarks' => '单位', 'is_need' => false],
         '规格值' => ['size' => 255, 'remarks' => '例如：颜色:红色|尺码:20cm，必须和管理分类一起导入', 'is_need' => false],
         '参数值' => ['size' => 255, 'remarks' => '例如：系列:生机展颜|功效:美白提亮', 'is_need' => false],
+        '发货时间' => ['size' => 255, 'remarks' => '发货时间按天计算', 'is_need' => true],
         '是否支持分润' => ['size' => 255, 'remarks' => '是否支持: 0不支持分润 1支持分润', 'is_need' => false],
         '分润类型' => ['size' => 255, 'remarks' => '分润类型:0,1或2, 0默认分润 1固定比例分润 2固定金额分润', 'is_need' => true],
         '拉新分润' => ['size' => 255, 'remarks' => '1:按照比例分润 1-100, 2:按照固定金额分润(元)，最多两位小数', 'is_need' => false],
@@ -102,6 +104,7 @@ class NormalGoodsUploadService
         '运费模板' => 'templates_id',
         '销售分类' => 'item_category',
         '分润类型' => 'profit_type',
+        '发货时间' => 'delivery_time',
     ];
     public $tmpTarget = null;
 
@@ -312,6 +315,23 @@ class NormalGoodsUploadService
             $isCreateRelData = true;
             $defaultItemId = null;
         }
+        // search items by goods_bn
+        $filter = [
+            'goods_bn' => $row['goods_bn'],
+            'company_id' => $companyId,
+            'is_default' => 1,
+        ];
+        app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($filter));
+        $items = $itemsService->getInfo($filter);
+        app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($items));
+        if ($items) {
+            $defaultItemId = $items['default_item_id'];
+            $row['goods_id'] = $items['goods_id'];
+            $isCreateRelData = false;
+            app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($defaultItemId));
+            app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($row['goods_id']));
+            app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($isCreateRelData));
+        }
         $row['default_item_id'] = $defaultItemId;
         $itemsProfitService = new ItemsProfitService();
 
@@ -352,7 +372,7 @@ class NormalGoodsUploadService
             'cost_price' => floatval($row['cost_price']),
             'market_price' => floatval($row['market_price']),
             'store' => $row['store'],
-            'pics' => $row['pics'] ? explode(',', $row['pics']) : [],
+            'pics' => isset($row['pics']) ? explode(',', $row['pics']) : [],
             'intro' => $this->getIntro($row),
             'videos' => $row['videos'],
             'item_category' => $this->getItemCategoryNew($companyId, $row, false),
@@ -373,6 +393,7 @@ class NormalGoodsUploadService
             'approve_status' => 'onsale',
             'distributor_id' => $row['distributor_id'],
             'start_num' => isset($row['start_num']) && $row['start_num'] > 0 ? $row['start_num'] : 0, // 起订量
+            'delivery_time' => isset($row['delivery_time']) ? intval($row['delivery_time']) : 0,
         ];
 
         // 商品上下架状态，默认为 onsale
@@ -394,6 +415,7 @@ class NormalGoodsUploadService
                 'default_item_id' => $defaultItemId,
                 'item_spec' => $this->getItemSpec($companyId, $row, $mainCategory),
                 'approve_status' => $itemInfo['approve_status'],
+                'spec_pics' => $row['item_spec_pics'] ?? [],
             ];
             $specItems[] = $specItem;
             $itemInfo['spec_items'] = json_encode($specItems);
@@ -543,7 +565,7 @@ class NormalGoodsUploadService
                     if (!$v) {
                         break;
                     }
-                    $itemInfo['pics'] = $row['pics'] ? explode(',', $row['pics']) : [];
+                    $itemInfo['pics'] = isset($row['pics']) ? explode(',', $row['pics']) : [];
                     break;
 
                 case 'goods_brand':
@@ -596,6 +618,14 @@ class NormalGoodsUploadService
                     break;
                 case 'start_num':
                     $itemInfo['start_num'] = isset($row['start_num']) && $row['start_num'] > 0 ? $row['start_num'] : 0; // 起订量
+                    break;
+                case 'delivery_time':
+                    $itemInfo['delivery_time'] = isset($v) ? intval($v) : 0;
+                    app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($itemInfo['delivery_time']));
+                    break;
+                case 'start_num':
+                    $itemInfo['start_num'] = isset($row['start_num']) && $row['start_num'] > 0 ? $row['start_num'] : 0; // 起订量
+                    app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($itemInfo['start_num']));
                     break;
                 default:
                     if (empty($v)) {
@@ -1199,7 +1229,7 @@ class NormalGoodsUploadService
                 'intro' => '这是详情内容',
                 'goods_brand' => '云店',
                 'item_category' => '食品副食->咸味食品->屏幕故障',
-                'templates_id' => '全国名邮',
+                'templates_id' => '全国包邮',
                 'weight' => '0',
                 'barcode' => '',
                 'item_unit' => '',

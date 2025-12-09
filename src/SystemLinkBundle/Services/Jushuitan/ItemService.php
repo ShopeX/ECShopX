@@ -43,7 +43,7 @@ class ItemService
         }
 
         if (!$data) {
-            throw new Exception("获取商品信息失败");
+            throw new Exception("jushuitan::UploadItemsToJushuitanJob::getItemStruct::获取商品信息失败");
         }
         $itemStruct = [];
         if ($data['nospec'] === true || $data['nospec'] === 'true' || $data['nospec'] === 1 || $data['nospec'] === '1') {
@@ -69,7 +69,7 @@ class ItemService
                 'shop_id' => $shopId,
             ];
             $itemStruct['items'][] = $sku;
-            $itemStruct['shop_items'][] = $shopSku;
+            $itemStruct['shop_items'][] = [$shopSku];
         } else {
             $chunkSize = 50; // 每组50个
             $shop_items = [];

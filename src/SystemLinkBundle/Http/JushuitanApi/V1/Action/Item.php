@@ -48,7 +48,7 @@ class Item extends Controller
         $list_quantity = [];
         foreach ($datas as $key => $value) {
             $list_quantity[] = [
-                'bn' => $value['sku_id'],
+                'bn' => $value['shop_sku_id'],
                 'quantity' => $value['qty'],
             ];
         }
@@ -84,10 +84,10 @@ class Item extends Controller
             $this->api_response_shuyun('fail', "商品不存在");
         }
 
-        if ($itemList['list']) {
+        if ($itemList['list'] ?? false) {
             $this->doNormalItemUpdateStore($companyId, $itemsService, $list_quantity, $itemList);
         }
-        if ($pointsmallItemList['list']) {
+        if ($pointsmallItemList['list'] ?? false) {
             $this->doPointsmallItemUpdateStore($list_quantity, $pointsmallItemList);
         }
 

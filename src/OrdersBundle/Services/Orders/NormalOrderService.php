@@ -26,6 +26,7 @@ use PromotionsBundle\Services\SpecificCrowdDiscountService;
 use SupplierBundle\Services\SupplierOrderService;
 use ThirdPartyBundle\Events\ScheduleCancelOrdersEvent;
 use OrdersBundle\Entities\OfflinePayment;
+use OrdersBundle\Services\OrderInvoiceService;
 
 class NormalOrderService extends AbstractNormalOrder
 {
@@ -90,13 +91,16 @@ class NormalOrderService extends AbstractNormalOrder
     {
         app('log')->info('自动取消订单');
         // 取消订单，每分钟执行一次，当前只处理一分钟内的订单
+        // 排除需要单独处理的支付方式：
+        // - offline_pay: 由 scheduleOfflinePayCancelOrders 单独处理（需要检查 offline_payment 表的 check_status）
+        // - point: 积分支付，通常用于 pointsmall 订单类型，有单独处理
         $pageSize = 20;
         $time = time() + 60;
         $filter = [
             'auto_cancel_time|lt' => $time,
             'order_status' => 'NOTPAY',
             'order_class' => ['normal', 'shopguide', 'employee_purchase'],
-            'pay_type' => ['wxpay', 'hypay', 'adapay'],
+            'pay_type|notIn' => ['offline_pay', 'point'],
         ];
         app('log')->info('自动取消订单::filter=====>'.json_encode($filter));
         $totalCount = $this->normalOrdersRepository->count($filter);

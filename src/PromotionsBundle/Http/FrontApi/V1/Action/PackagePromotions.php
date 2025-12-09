@@ -52,7 +52,18 @@ class PackagePromotions extends Controller
         $pageSize = $request->input('pageSize', 20);
         $distributor_id = $request->input('distributor_id', 0);
         $packageService = new PackageService();
-        $result = $packageService->getPackageListByItemsId($companyId, $itemId, $page, $pageSize, [], ['distributor_id' => $distributor_id]);
+        
+        // 如果distributor_id大于0，先使用distributor_id查询
+        if ($distributor_id > 0) {
+            $result = $packageService->getPackageListByItemsId($companyId, $itemId, $page, $pageSize, [], ['distributor_id' => $distributor_id]);
+            // 如果查询结果为空，再查询distributor_id=0的数据
+            if (empty($result['list']) || $result['total_count'] == 0) {
+                $result = $packageService->getPackageListByItemsId($companyId, $itemId, $page, $pageSize, [], ['distributor_id' => 0]);
+            }
+        } else {
+            $result = $packageService->getPackageListByItemsId($companyId, $itemId, $page, $pageSize, [], ['distributor_id' => $distributor_id]);
+        }
+        
         return $this->response->array($result);
     }
 

@@ -733,6 +733,7 @@ class Items extends BaseController
 //        $result['translation'] = (new MultiLangService())->getTranslation($result['item_id'],'items');
         //后台也改成替换
         $result = (new MultiLangService())->getTranslationByLang($result,$result['item_id'],'items');
+        $result['intro'] = json_decode($result['intro'], true);
         return $this->response->array($result);
     }
 

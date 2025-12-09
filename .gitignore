@@ -25,3 +25,8 @@ cghooks.lock
 
 .history/
 .vscode/
+doc/
+.aicontext
+.copilot-config.json
+.cursor/
+.qoder/

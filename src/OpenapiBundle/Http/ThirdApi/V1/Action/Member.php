@@ -24,6 +24,7 @@ use OrdersBundle\Traits\GetOrderServiceTrait;
 use MembersBundle\Services\MemberBrowseHistoryService;
 use GoodsBundle\Services\ItemsService;
 use OrdersBundle\Services\TradeService;
+use ThirdPartyBundle\Services\DmCrm\MemberService as DmMemberService;
 
 class Member extends Controller
 {
@@ -325,13 +326,15 @@ class Member extends Controller
         if ($error) {
             $this->api_response('fail', $error, null, 'E0001');
         }
-        if ((!isset($params['unionid']) || empty($params['unionid'])) && (!isset($params['mobile']) || empty($params['mobile']))) {
+        if ((!isset($params['unionid']) || empty($params['unionid'])) && (!isset($params['mobile']) || empty($params['mobile'])) && !($params['external_member_id'] ?? '') ) {
             $this->api_response('fail', 'unionid或者手机号必填', null, 'E0001');
         }
         $companyId = $request->get('auth')['company_id'];
         $memberService = new MemberService();
         if (isset($params['mobile']) && $params['mobile']) {
             $memberInfo = $memberService->getMemberInfo(['company_id' => $companyId, 'mobile' => $params['mobile']]);
+        } elseif ( ($params['external_member_id'] ?? '') ) {// 用id查询常购清单
+            $memberInfo = $memberService->getMemberInfo(['company_id' => $companyId, 'user_id' => $params['external_member_id']]);
         } else {
             $membersAssociationsRepository = app('registry')->getManager('default')->getRepository(MembersAssociations::class);
             $memberInfo = $membersAssociationsRepository->get(['unionid' => $params['unionid'], 'company_id' => $companyId, 'user_type' => 'wechat']);
@@ -506,6 +509,10 @@ class Member extends Controller
         $orderFilter['order_status|notin'] = ['NOTPAY','CANCEL'];
         empty($params['order_class'] ?? null) ?: $orderFilter['order_class'] = $params['order_class'];
         $orderService = $this->getOrderService($orderFilter['order_type']);
+
+        app('log')->info('[getMemberOrderLists] 获取订单列表', [
+            'orderFilter' => $orderFilter
+        ]);
         $result = $orderService->getOrderItemLists($orderFilter, $page, $pageSize);
         $total_amount = $orderService->getOrderTotalAmount($orderFilter);
         $result['pager']['total_amount'] = $total_amount;
@@ -611,6 +618,20 @@ class Member extends Controller
 
     private function getFilter($companyId, $params)
     {
+        app('log')->info('[getFilter] 获取会员信息过滤条件', [
+            'params' => $params
+        ]);
+        if(isset($params['external_member_id']) && $params['external_member_id']){
+            $filter = [
+                'company_id' => $companyId,
+                'user_id' => $params['external_member_id'],
+            ];
+            app('log')->info('[getFilter] 获取会员信息过滤条件', [
+                'filter' => $filter
+            ]);
+            return $filter;
+        }
+
         $rules = [
             'mobile' => ['sometimes|regex:/^1[3456789][0-9]{9}$/', '请填写正确的手机号'],
             'unionid' => ['sometimes|string', '请填写unionid'],
@@ -637,5 +658,22 @@ class Member extends Controller
             'user_id' => $memberInfo['user_id'],
         ];
         return $filter;
+    }
+
+    public function unbindMemberAndSalesperson(Request $request)
+    {
+        $companyId = $request->get('auth')['company_id'];
+        $params = $request->all();
+        app('log')->info('解绑会员和导购::params=' . json_encode($params).':companyId='.$companyId);
+        $dmMemberService = new DmMemberService($companyId);
+        if ($dmMemberService->isOpen) {
+            app('log')->info('解绑会员和导购::dmMemberService->isOpen=true::同步达摩CRM会员信息更新，服务导购和服务门店信息设置为空::params=' . json_encode($params).':companyId='.$companyId);
+            $dmMemberService->updateMemberInfoByMobile([
+                'mobile' => $params['mobile'],
+                'mainClerkCode' => '',
+                'mainStoreCode' => '',
+            ]);
+        }
+        $this->api_response('true', '操作成功', null, 'E0000');
     }
 }

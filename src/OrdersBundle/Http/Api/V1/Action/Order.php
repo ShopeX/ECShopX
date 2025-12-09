@@ -883,6 +883,36 @@ class Order extends Controller
             }
         }
 
+        // salesman_ids
+        $salesman_ids = array_column($result['list'],'salesman_id');
+        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":salesman_ids:". json_encode( $salesman_ids));
+        $salesman_ids = array_unique($salesman_ids);
+        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":salesman_ids:". json_encode( $salesman_ids));
+        // get list from salesperson
+        $salesmanService = new SalespersonService();
+        if(!empty($salesman_ids)){
+            $salesmanList = $salesmanService->getSalespersonList(['company_id' => $companyId, 'salesperson_id' => $salesman_ids], ['created_time' => 'DESC'], 1000, 1);
+            $salesmanList = array_column($salesmanList['list'], null, 'salesperson_id');
+            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":salesmanList:". json_encode( $salesmanList));
+            foreach ($result['list'] as $k => $v) {
+                $result['list'][$k]['salesman_info'] = $salesmanList[$v['salesman_id']] ?? [];
+            }
+        }
+        
+        //sale_salesman_distributor_id
+        $sale_salesman_distributor_ids = array_column($result['list'],'sale_salesman_distributor_id');
+        $sale_salesman_distributor_ids = array_unique($sale_salesman_distributor_ids);
+        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":sale_salesman_distributor_ids:". json_encode( $sale_salesman_distributor_ids));
+        if(!empty($sale_salesman_distributor_ids)){
+            $distributorService = new DistributorService();
+            $distributorList = $distributorService->lists(['company_id' => $companyId, 'distributor_id' => $sale_salesman_distributor_ids] );
+            $distributorList = array_column($distributorList['list'], null, 'distributor_id');
+        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":distributorList:". json_encode( $distributorList));
+        foreach ($result['list'] as $k => $v) {
+            $result['list'][$k]['sale_salesman_distributor_info'] = $distributorList[$v['sale_salesman_distributor_id']] ?? [];
+           }
+        }
+
         return $this->response->array($result);
     }
 
@@ -1066,7 +1096,9 @@ class Order extends Controller
         if ($request->input('source_id')) {
             $filter['source_id'] = $request->input('source_id');
         }
-
+        if ($request->input('monitor_id')) {
+            $filter['monitor_id'] = $request->input('monitor_id');
+        }
         // 活动ID
         if ($request->input('act_id')) {
             $filter['act_id'] = $request->input('act_id');

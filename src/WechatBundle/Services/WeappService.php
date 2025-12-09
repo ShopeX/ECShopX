@@ -13,6 +13,7 @@ use WechatBundle\Services\Wxapp\TemplateService;
 use SuperAdminBundle\Services\WxappTemplateService;
 use CompanysBundle\Services\CompanysService;
 use YoushuBundle\Entities\YoushuSetting;
+use DistributionBundle\Services\DistributorService;
 
 class WeappService
 {
@@ -814,9 +815,42 @@ class WeappService
     {
         $redisKey = $companyId.'_'.$shareId;
         $params = app('redis')->get($redisKey);
-        if ($params) {
-            return json_decode($params, true);
+        if ($params) {//salesperson_id
+            $salesperson = json_decode($params, true);
+            //{"id":"7","smid":"2","gu":"15026787264_A06"}
+            // 解析gu后半为shop_code
+            if ($salesperson && isset($salesperson['gu'])) {
+                $workUserid = explode('_', $salesperson['gu'])[0];
+                $salespersonService = new \ThirdPartyBundle\Services\MarketingCenter\SalespersonService();
+                $salespersonInfo = $salespersonService->getSalespersonAndDistributorByWorkUserid($companyId, $workUserid);
+                if ($salespersonInfo) {
+                    app('log')->info('[getByShareId] salespersonInfo===>'. json_encode($salespersonInfo));
+                    $salesperson['distributorInfo'] = $salespersonInfo['distributorInfo'] ?? [];
+                    $salesperson['distributor_id'] = $salespersonInfo['distributorInfo']['distributor_id'] ?? '';
+                    $salesperson['dtid'] = $salespersonInfo['distributorInfo']['distributor_id'] ?? '';
+                    $salesperson['name'] = $salespersonInfo['distributorInfo']['name'] ?? '';
+                    $salesperson['salespersonInfo'] = $salespersonInfo;
+
+                }
+                // $shopCode = explode('_', $salesperson['gu'])[1];
+                // //通过shop_code获取门店信息
+                // $distributorService = new DistributorService();
+                // $filter = [
+                //     'company_id' => $companyId,
+                //     'shop_code' => $shopCode,
+                // ];
+                // $distributorInfo = $distributorService->getInfo($filter);
+                // if ($distributorInfo) {
+                //     $salesperson['distributor_id'] = $distributorInfo['distributor_id'] ?? '';
+                //     $salesperson['name'] = $distributorInfo['name'] ?? '';
+                //     $salesperson['shop_code'] = $distributorInfo['shop_code'] ?? '';
+                // }
+                return $salesperson;
+            }else {
+                return $salesperson;
+            }
         }
+
         return [];
     }
 

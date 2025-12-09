@@ -167,6 +167,7 @@ class MemberCardService
                 'promotion_condition' => $grade->getPromotionCondition(),
                 'privileges' => $grade->getPrivileges(),
                 'description' => $grade->getDescription(),
+                'grade_background' => $grade->getGradeBackground(),
             ];
             $service = new MultiLangService();
             $lang = $this->getLang();

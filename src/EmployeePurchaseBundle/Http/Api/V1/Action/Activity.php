@@ -89,9 +89,10 @@ class Activity extends Controller
         $operator_id = $authInfo['operator_id'];
         $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description');
         $params['company_id'] = $companyId;
-        $params['if_relative_join'] = isset($params['if_relative_join']) && ($params['if_relative_join'] === 'true' || $params['if_relative_join'] === '1') ? 1 : 0;
-        $params['if_share_limitfee'] = isset($params['if_share_limitfee']) && ($params['if_share_limitfee'] === 'true' || $params['if_share_limitfee'] === '1') ? 1 : 0;
-        $params['is_discount_description_enabled'] = $params['is_discount_description_enabled'] === 'true' ? 1 : 0;
+        // 处理布尔值参数：支持字符串 'true'/'1' 和整数 1/0
+        $params['if_relative_join'] = isset($params['if_relative_join']) && ($params['if_relative_join'] === 'true' || $params['if_relative_join'] === '1' || $params['if_relative_join'] === 1 || $params['if_relative_join'] === true) ? 1 : 0;
+        $params['if_share_limitfee'] = isset($params['if_share_limitfee']) && ($params['if_share_limitfee'] === 'true' || $params['if_share_limitfee'] === '1' || $params['if_share_limitfee'] === 1 || $params['if_share_limitfee'] === true) ? 1 : 0;
+        $params['is_discount_description_enabled'] = isset($params['is_discount_description_enabled']) && ($params['is_discount_description_enabled'] === 'true' || $params['is_discount_description_enabled'] === '1' || $params['is_discount_description_enabled'] === 1 || $params['is_discount_description_enabled'] === true) ? 1 : 0;
         $rules = [
             'name' => ['required', '请输入活动名称'],
             'title' => ['required', '请输入活动标题'],

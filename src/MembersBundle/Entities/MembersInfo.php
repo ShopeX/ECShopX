@@ -15,6 +15,7 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * @ORM\Table(name="members_info", options={"comment"="会员详情信息表", "collate"="utf8mb4_unicode_ci", "charset"="utf8mb4"},
  *     indexes={
  *         @ORM\Index(name="idx_company_id", columns={"company_id"}),
+ *         @ORM\Index(name="idx_dm_card_no", columns={"dm_card_no"}),
  *     },
  * )
  * @ORM\Entity(repositoryClass="MembersBundle\Repositories\MembersInfoRepository")
@@ -147,6 +148,20 @@ class MembersInfo
      * @ORM\Column(name="other_params", type="text", options={"comment":"其他参数，透传前端传递进来的参数"})
      */
     private $other_params;
+    
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="dm_member_id", type="string", nullable=true, length=255, options={"comment":"达摩CRM会员id"})
+     */
+    private $dm_member_id;
+    
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="dm_card_no", type="string", nullable=true, length=255, options={"comment":"达摩CRM会员卡号"})
+     */
+    private $dm_card_no;
 
     /**
      * @var \DateTime $created
@@ -631,5 +646,53 @@ class MembersInfo
     public function getOtherParams()
     {
         return $this->other_params;
+    }
+
+    /**
+     * Set dmMemberId.
+     *
+     * @param string|null $dmMemberId
+     *
+     * @return MembersInfo
+     */
+    public function setDmMemberId($dmMemberId = null)
+    {
+        $this->dm_member_id = $dmMemberId;
+
+        return $this;
+    }
+
+    /**
+     * Get dmMemberId.
+     *
+     * @return string|null
+     */
+    public function getDmMemberId()
+    {
+        return $this->dm_member_id;
+    }
+
+    /**
+     * Set dmCardNo.
+     *
+     * @param string|null $dmCardNo
+     *
+     * @return MembersInfo
+     */
+    public function setDmCardNo($dmCardNo = null)
+    {
+        $this->dm_card_no = $dmCardNo;
+
+        return $this;
+    }
+
+    /**
+     * Get dmCardNo.
+     *
+     * @return string|null
+     */
+    public function getDmCardNo()
+    {
+        return $this->dm_card_no;
     }
 }

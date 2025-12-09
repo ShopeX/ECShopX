@@ -35,5 +35,9 @@ $api->version('v1', function($api) {
         //Oms
         $api->post('/third/oms/setting', [ 'name' => 'OMS对接配置', 'as' => 'third.oms.setting.set', 'uses'=>'OmsController@setOmsSetting']);
         $api->get('/third/oms/setting', [ 'name' => '获取OMS对接配置', 'as' => 'third.oms.setting.get', 'uses'=>'OmsController@getOmsSetting']);
+
+        // 达摩CRM相关
+        $api->post('/third/dmcrm/setting', [ 'name' => '达摩CRM配置信息保存', 'middleware'=>'activated', 'as' => 'third.dmcrm.setting.set', 'uses'=>'DmCrm@setSetting']);
+        $api->get('/third/dmcrm/setting', [ 'name' => '获取达摩CRM配置信息保存','middleware'=>'activated', 'as' => 'third.dmcrm.setting.get', 'uses'=>'DmCrm@getSetting']);
     });
 });

@@ -274,6 +274,10 @@ class MultiLangService
 
     public function getItemSpec(array $itemId) //这里是sku级别啊！！！！拿规格值得
     {
+        if (empty($itemId)) {
+            return [];
+        }
+
         $itemIdStr = implode(',', $itemId);
         $lang = $this->getLang();
         /**
@@ -349,6 +353,7 @@ class MultiLangService
         if (empty($dataRow)) {
             return $params;
         }
+        
         foreach ($dataRow as $vd) {
             $field = $vd['field'];
             if(isset($params[$field])) {

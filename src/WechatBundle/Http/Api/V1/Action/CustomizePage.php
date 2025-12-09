@@ -71,7 +71,18 @@ class CustomizePage extends Controller
         $params['is_open'] = (isset($params['is_open']) && (($params['is_open'] === "false" || $params['is_open'] === false || $params['is_open'] === 0 || $params['is_open'] === '0'))) ? false : true;
         $companyId = app('auth')->user()->get('company_id');
         $params['company_id'] = $companyId;
-
+        if ($params['is_open'] == 1 || $params['is_open'] == true || $params['is_open'] == '1' || $params['is_open'] == 'true') {
+            $cfilter['is_open'] = 1;
+            $cfilter['company_id'] = $companyId;
+            $cfilter['page_type'] = $params['page_type'];
+            $cfilter['template_name'] = $params['template_name'];
+            $count = $this->CustomizePageService->count($cfilter);
+            app('log')->info(__FUNCTION__.':'.__LINE__.':count:'.json_encode($count));
+            if ($count > 0) {
+                return $this->response->array(['status' => false, 'message' => "已经有启用的模版"]);
+            }
+        }
+        
         $result = $this->CustomizePageService->create($params);
         return $this->response->array($result);
     }
@@ -121,6 +132,19 @@ class CustomizePage extends Controller
         $companyId = app('auth')->user()->get('company_id');
         $filter['id'] = $id;
         $filter['company_id'] = $companyId;
+
+        if ($params['is_open'] == 1 || $params['is_open'] == true || $params['is_open'] == '1' || $params['is_open'] == 'true') {
+            $page_type = $request->input('page_type', 'my');
+            $cfilter['is_open'] = 1;
+            $cfilter['id'] = ['!=', $id];
+            $cfilter['company_id'] = $companyId;
+            $cfilter['page_type'] = $page_type;
+            $cfilter['template_name'] = $params['template_name'];
+            $count = $this->CustomizePageService->count($cfilter);
+            if ($count > 0) {
+                return $this->response->array(['status' => false, 'message' => "已经有启用的模版"]);
+            }
+        }
 
         $result = $this->CustomizePageService->updateOneBy($filter, $params);
         return $this->response->array($result);

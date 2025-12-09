@@ -7,13 +7,15 @@
 namespace PaymentBundle\Services\Payments;
 
 use DepositBundle\Services\DepositTrade;
-use PaymentBundle\Interfaces\Payment;
+use Dingo\Api\Exception\StoreResourceFailedException;
+use MembersBundle\Services\MemberService;
+use OrdersBundle\Events\OrderProcessLogEvent;
 use OrdersBundle\Services\TradeService;
+use PaymentBundle\Interfaces\Payment;
 use PointBundle\Services\PointMemberRuleService;
 use PointBundle\Services\PointMemberService;
-
-use Dingo\Api\Exception\StoreResourceFailedException;
-use OrdersBundle\Events\OrderProcessLogEvent;
+use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
+use ThirdPartyBundle\Services\DmCrm\PointService;
 
 class PointPayService implements Payment
 {
@@ -55,7 +57,22 @@ class PointPayService implements Payment
     {
         $pointMemberService = new PointMemberService();
         $pointMemberInfo = $pointMemberService->getInfo(['user_id' => $data['user_id'], 'company_id' => $data['company_id']]);
-
+        // 达摩crm, 会员积分
+        $ns = new DmCrmSettingService();
+        if ($ns->getDmCrmSetting($data['company_id'])['is_open'] ?? '') {
+            $memberSerivce = new MemberService();
+            $pointService = new PointService($data['company_id']);
+            $filterMember = [
+                'user_id' => $data['user_id'],
+                'company_id' => $data['company_id'],
+            ];
+            $memberInfo = $memberSerivce->getMemberInfo($filterMember, false);
+            $paramsData = [
+                'mobile' => $memberInfo['mobile'],
+            ];
+            $point = $pointService->getPoint($paramsData);
+            $pointMemberInfo['point'] = $point['integral'] ?? 0;
+        }
         if (!isset($pointMemberInfo['point']) || $pointMemberInfo['point'] < $data['pay_fee']) {
             throw new StoreResourceFailedException("积分不足！");
         }
@@ -118,9 +135,9 @@ class PointPayService implements Payment
     {
         // $pointMemberRuleService = new PointMemberRuleService();
         // $point = $pointMemberRuleService->moneyToPoint($data['company_id'], $data['refund_fee']);
-
+        app('log')->debug('point doRefund start refund data=>' . var_export($data, 1));
         $pointMemberService = new PointMemberService();
-        $otherParams = ['point_type' => 'points_refund', 'refund_bn' => $data['refund_bn']];
+        $otherParams = ['point_type' => 'points_refund', 'refund_bn' => $data['refund_bn'], 'aftersales_bn' => $data['aftersales_bn'] ?? ''];
         $pointMemberService->addPoint($data['user_id'], $data['company_id'], $data['refund_point'], 10, true, '退款单号:' . $data['refund_bn'], $data['order_id'], $otherParams);
         $result = [
             'return_code' => 'SUCCESS',

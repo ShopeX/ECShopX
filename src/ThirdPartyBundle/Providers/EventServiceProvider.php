@@ -55,10 +55,12 @@ class EventServiceProvider extends ServiceProvider
         ],
         'OrdersBundle\Events\NormalOrderDeliveryEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\OrderDeliveryPushMarketingCenter',
+            "ThirdPartyBundle\Listeners\DmCrm\OrderDeliveryListener", // 订单发货完成，达摩crm确认扣除积分
         ],
         'OrdersBundle\Events\NormalOrderConfirmReceiptEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\OrderConfirmReceiptPushMarketingCenter',
-            "ThirdPartyBundle\Listeners\ShopexCrm\SyncConfirmReceiptOrder"
+            "ThirdPartyBundle\Listeners\ShopexCrm\SyncConfirmReceiptOrder",
+            // "ThirdPartyBundle\Listeners\DmCrm\OrderFinishListener", // 订单完成，推送订单到达摩crm
         ],
         'ThirdPartyBundle\Events\TradeAftersalesRefuseEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\TradeAftersalesRefusePushMarketingCenter',
@@ -74,6 +76,7 @@ class EventServiceProvider extends ServiceProvider
         ],
         'ThirdPartyBundle\Events\TradeRefundFinishEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\TradeRefundFinishPushMarketingCenter',
+             "ThirdPartyBundle\Listeners\DmCrm\TradeRefundFinishListener", // 售后订单完成，推送售后订单到达摩crm
         ],
         'GoodsBundle\Events\ItemDeleteEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\ItemDelPushMarketingCenter',

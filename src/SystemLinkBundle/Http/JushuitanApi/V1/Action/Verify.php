@@ -17,7 +17,7 @@ class Verify extends Controller
     {
         // CRC: 2367340174
         $params = $request->query();
-
+        app('log')->debug('jushuitan::callback::request::params=>:', $params);
         foreach((array)$params as $key=>$val)
         {
             $params[$key] = trim($val);

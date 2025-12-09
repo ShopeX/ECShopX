@@ -6,102 +6,98 @@
 
 namespace OrdersBundle\Services\Orders;
 
+use AftersalesBundle\Entities\AftersalesRefund;
+use AftersalesBundle\Services\AftersalesRefundService;
+use AftersalesBundle\Services\AftersalesService;
+use CompanysBundle\Ego\CompanysActivationEgo;
 use CompanysBundle\Entities\Operators;
 use CompanysBundle\Services\SettingService;
+use DataCubeBundle\Services\SourcesService;
+use DistributionBundle\Entities\Distributor;
 use DistributionBundle\Entities\SelfDeliveryStaff;
+use DistributionBundle\Services\DistributorItemsService;
+use DistributionBundle\Services\DistributorService;
+use DistributionBundle\Services\PickupLocationService;
 use DistributionBundle\Services\selfDeliveryService;
+use EmployeePurchaseBundle\Services\OrdersRelActivityService as OrdersRelEmployeePurchaseActivityService;
+use EspierBundle\Services\SubdistrictService;
+use Exception;
 use GoodsBundle\Entities\Items;
 use GoodsBundle\Entities\ItemsMedicine;
 use GoodsBundle\Repositories\ItemsMedicineRepository;
+use GoodsBundle\Services\ItemStoreService;
+use GoodsBundle\Services\ItemsService;
+use KaquanBundle\Services\UserDiscountService;
 use MembersBundle\Entities\MembersDeleteRecord;
+use MembersBundle\Services\MemberService;
+use OrdersBundle\Entities\CancelOrders;
+use OrdersBundle\Entities\NormalOrders;
+use OrdersBundle\Entities\NormalOrdersItems;
+use OrdersBundle\Entities\NormalOrdersRelDada;
+use OrdersBundle\Entities\NormalOrdersRelSupplier;
+use OrdersBundle\Entities\OrderAssociations;
 use OrdersBundle\Entities\OrdersDelivery;
 use OrdersBundle\Entities\OrdersDeliveryItems;
 use OrdersBundle\Entities\OrdersDiagnosis;
 use OrdersBundle\Entities\OrdersPrescription;
+use OrdersBundle\Entities\OrderPromotions;
+use OrdersBundle\Entities\Trade;
+use OrdersBundle\Events\NormalOrderCancelEvent;
+use OrdersBundle\Events\NormalOrderConfirmReceiptEvent;
+use OrdersBundle\Events\NormalOrderDeliveryEvent;
+use OrdersBundle\Events\OrderProcessLogEvent;
+use OrdersBundle\Events\PaySuccessEvent;
+use OrdersBundle\Interfaces\OrderInterface;
 use OrdersBundle\Repositories\NormalOrdersRepository;
 use OrdersBundle\Repositories\OrdersDiagnosisRepository;
 use OrdersBundle\Repositories\OrdersPrescriptionRepository;
+use OrdersBundle\Services\LocalDeliveryService;
+use OrdersBundle\Services\NormalOrdersRelZitiService;
+use OrdersBundle\Services\OrderAssociationService;
 use OrdersBundle\Services\OrderDeliveryService;
 use OrdersBundle\Services\OrderInvoiceService;
-use PromotionsBundle\Entities\PromotionGroupsTeamMember;
-use PromotionsBundle\Services\GroupItemStoreService;
-use PromotionsBundle\Services\PromotionGroupsActivityService;
-use PromotionsBundle\Services\PromotionGroupsTeamMemberService;
-use SalespersonBundle\Services\ProfitService;
-use OrdersBundle\Entities\NormalOrders;
-use OrdersBundle\Entities\NormalOrdersItems;
-use DistributionBundle\Entities\Distributor;
-use OrdersBundle\Entities\OrderAssociations;
-use OrdersBundle\Entities\Trade;
-use OrdersBundle\Entities\CancelOrders;
-use OrdersBundle\Entities\OrderPromotions;
-use OrdersBundle\Entities\NormalOrdersRelDada;
-use OrdersBundle\Events\NormalOrderConfirmReceiptEvent;
-use OrdersBundle\Events\NormalOrderDeliveryEvent;
-use OrdersBundle\Events\NormalOrderCancelEvent;
-use OrdersBundle\Events\PaySuccessEvent;
 use OrdersBundle\Services\OrderProfitService;
-use OrdersBundle\Traits\GetOrderIdTrait;
+use OrdersBundle\Services\OrdersRelChinaumspayDivisionService;
+use OrdersBundle\Services\ShippingTemplatesService;
+use OrdersBundle\Services\TradeService;
+use OrdersBundle\Services\TradeSetting\CancelService;
+use OrdersBundle\Services\TradeSettingService;
 use OrdersBundle\Traits\GetCartTypeServiceTrait;
+use OrdersBundle\Traits\GetOrderIdTrait;
 use OrdersBundle\Traits\GetUserIdByMobileTrait;
 use OrdersBundle\Traits\OrderSettingTrait;
-use GoodsBundle\Services\ItemsService;
-
-use GoodsBundle\Services\ItemStoreService;
-use DistributionBundle\Services\DistributorItemsService;
-use DistributionBundle\Services\DistributorService;
-use DataCubeBundle\Services\SourcesService;
-use AftersalesBundle\Services\AftersalesRefundService;
-
-use OrdersBundle\Services\TradeService;
-use OrdersBundle\Services\OrderAssociationService;
-
-use Exception;
-use Dingo\Api\Exception\ResourceException;
-use OrdersBundle\Interfaces\OrderInterface;
-
+use OrdersBundle\Traits\SeckillStoreTicket;
+use PaymentBundle\Services\Payments\ChinaumsPayService;
+use PaymentBundle\Services\Payments\OfflinePayService;
+use PointBundle\Services\PointMemberService;
+use PointsmallBundle\Services\ItemStoreService as PointsmallItemStoreService;
 use PopularizeBundle\Services\BrokerageService;
-
+use PromotionsBundle\Entities\PromotionGroupsTeamMember;
+use PromotionsBundle\Services\GroupItemStoreService;
+use PromotionsBundle\Services\LimitService;
+use PromotionsBundle\Services\MarketingActivityService;
+use PromotionsBundle\Services\PointupvaluationActivityService as PointupvaluationService;
+use PromotionsBundle\Services\PromotionGroupsActivityService;
+use PromotionsBundle\Services\PromotionGroupsTeamMemberService;
+use PromotionsBundle\Services\SpecificCrowdDiscountService;
+use PromotionsBundle\Services\TurntableService;
+use SalespersonBundle\Services\ProfitService;
 use SuperAdminBundle\Services\LogisticsService;
 use SupplierBundle\Services\SupplierOrderService;
 use SupplierBundle\Services\SupplierService;
-use SystemLinkBundle\Events\TradeRefundEvent;
-use OrdersBundle\Traits\SeckillStoreTicket;
-use SystemLinkBundle\Services\ThirdSettingService;
-
-use PromotionsBundle\Services\LimitService;
-use PromotionsBundle\Services\TurntableService;
-use PromotionsBundle\Services\MarketingActivityService;
-use PromotionsBundle\Services\SpecificCrowdDiscountService;
-use PromotionsBundle\Services\PointupvaluationActivityService as PointupvaluationService;
-use KaquanBundle\Services\UserDiscountService;
-use ThirdPartyBundle\Events\TradeUpdateEvent as SaasErpUpdateEvent;
-use ThirdPartyBundle\Events\TradeRefundEvent as SaasErpRefundEvent;
-use ThirdPartyBundle\Events\TradeRefundCancelEvent as SaasErpRefundCancelEvent;
-use OrdersBundle\Services\LocalDeliveryService;
-use OrdersBundle\Services\ShippingTemplatesService;
-use MembersBundle\Services\MemberService;
-use OrdersBundle\Events\OrderProcessLogEvent;
-use PointBundle\Services\PointMemberService;
-use AftersalesBundle\Services\AftersalesService;
-use OrdersBundle\Services\TradeSetting\CancelService;
-use OrdersBundle\Services\TradeSettingService;
-use PointsmallBundle\Services\ItemStoreService as PointsmallItemStoreService;
-use ThirdPartyBundle\Services\SaasErpCentre\ItemService;
-use ThirdPartyBundle\Services\SaasCertCentre\CertService;
-use CompanysBundle\Ego\CompanysActivationEgo;
-use EspierBundle\Services\SubdistrictService;
-use PaymentBundle\Services\Payments\ChinaumsPayService;
-use PaymentBundle\Services\Payments\OfflinePayService;
-use AftersalesBundle\Entities\AftersalesRefund;
-use OrdersBundle\Services\OrdersRelChinaumspayDivisionService;
-use DistributionBundle\Services\PickupLocationService;
-use OrdersBundle\Services\NormalOrdersRelZitiService;
-use OrdersBundle\Entities\NormalOrdersRelSupplier;
-use EmployeePurchaseBundle\Services\OrdersRelActivityService as OrdersRelEmployeePurchaseActivityService;
 use SystemLinkBundle\Events\Jushuitan\TradeCancelEvent as JushuitanTradeCancelEvent;
+use SystemLinkBundle\Events\TradeRefundEvent;
 use SystemLinkBundle\Events\WdtErp\TradeCancelEvent as WdtErpTradeCancelEvent;
+use SystemLinkBundle\Services\ThirdSettingService;
+use ThirdPartyBundle\Events\TradeRefundCancelEvent as SaasErpRefundCancelEvent;
+use ThirdPartyBundle\Events\TradeRefundEvent as SaasErpRefundEvent;
+use ThirdPartyBundle\Events\TradeUpdateEvent as SaasErpUpdateEvent;
+use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
+use ThirdPartyBundle\Services\DmCrm\DmService;
+use ThirdPartyBundle\Services\SaasCertCentre\CertService;
+use ThirdPartyBundle\Services\SaasErpCentre\ItemService;
 
+use Dingo\Api\Exception\ResourceException;
 use function PHPUnit\Framework\isNull;
 
 class AbstractNormalOrder implements OrderInterface
@@ -382,11 +378,15 @@ class AbstractNormalOrder implements OrderInterface
                 if (!is_array($discountInfo)) {
                     $discountInfo = json_decode($discountInfo, true);
                 }
+                $dmService = new DmService($orderInfo['company_id']);
                 // 优惠券恢复
                 $userDiscountService = new UserDiscountService();
                 foreach ($discountInfo as $value) {
                     if ($value && isset($value['coupon_code'])) {
-                        $userDiscountService->callbackUserCard($orderInfo['company_id'], $value['coupon_code'], $orderInfo['user_id']);
+                        // 开启达摩CRM,已支付的取消订单，不恢复优惠券，达摩CRM会自动恢复优惠券后推送卡券退回事件
+                        if (!$dmService->isOpen || $orderInfo['pay_status'] == 'NOTPAY') {
+                            $userDiscountService->callbackUserCard($orderInfo['company_id'], $value['coupon_code'], $orderInfo['user_id'], $orderInfo['mobile'], $value['dm_card_code'] ?? '');
+                        }
                     }
                     //记录定向促销会员日志和恢复最高优惠金额
                     if (($value['type'] ?? '') == 'member_tag_targeted_promotion') {
@@ -1258,11 +1258,16 @@ class AbstractNormalOrder implements OrderInterface
         //获取已经申请售后的金额
         $itemRefundFee = [];
         $itemsAftersales = [];
+        $refundFreight = 0;
         if ($checkaftersales) {
             $afterSaleService = new AftersalesService();
             $afterSaleInfo = $afterSaleService->getAftersalesList(['company_id' => $companyId, 'order_id' => $orderId], 0, -1, ['create_time' => 'ASC']); // , 'aftersales_status' => [0, 1, 2] 售后状态放在循环里面判断
             if ($afterSaleInfo && $afterSaleInfo['total_count'] > 0) {
                 foreach ($afterSaleInfo['list'] as $v) {
+                    if (in_array($v['aftersales_status'], [0, 1, 2])) {
+                        $refundFreight += $v['freight'];
+                    }
+
                     foreach ($v['detail'] as $vv) {
                         // 订单商品售后信息
                         $itemsAftersales[$vv['item_id']] = [
@@ -1282,6 +1287,8 @@ class AbstractNormalOrder implements OrderInterface
                 }
             }
         }
+        $orderInfo['refund_freight'] = $refundFreight;
+        $orderInfo['refund_freight_amount'] = $orderInfo['freight_fee'] - $refundFreight;
 
         //处理商品的供应商信息
         $supplierData = [];

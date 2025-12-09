@@ -49,6 +49,18 @@ class AuthService
         $this->merchantRepository = app('registry')->getManager('default')->getRepository(Merchant::class);
     }
 
+    /**
+     * 获取公司的菜单类型字符串
+     * @param int $companyId 公司ID
+     * @return string 菜单类型字符串（all/b2c/platform/standard/in_purchase）
+     */
+    private function getCompanyMenuType($companyId)
+    {
+        $shopMenuService = new \SuperAdminBundle\Services\ShopMenuService();
+        $menuTypeInfo = $shopMenuService->getMenuTypeByCompanyId($companyId);
+        return $menuTypeInfo['menu_type_str'] ?? config('common.product_model');
+    }
+
     public function retrieveByCredentials($params)
     {
         // Powered by ShopEx EcShopX
@@ -171,6 +183,9 @@ class AuthService
         $certService->getAouthCert();
 
         app('redis')->del($key);
+        
+        // 获取公司的菜单类型
+        $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
         return $operator;
     }
 
@@ -197,6 +212,9 @@ class AuthService
                 throw new AccessDeniedHttpException('账号密码错误，请重新登录');
             }
             app('redis')->del($key);
+            
+            // 获取公司的菜单类型
+            $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
             return $operator;
         }
 
@@ -223,6 +241,9 @@ class AuthService
         }
 
         app('redis')->del($key);
+        
+        // 获取公司的菜单类型
+        $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
         return $operator;
     }
 
@@ -243,6 +264,12 @@ class AuthService
         }
 
         app('redis')->del($key);
+        
+        // 获取公司的菜单类型
+        if (isset($operator['company_id'])) {
+            $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
+        }
+        
         return $operator;
     }
 
@@ -289,6 +316,9 @@ class AuthService
             // 获取shopex证书
             $certService = new CertService(new CertClient($operator['company_id'], $shopexUid));
             $certService->getAouthCert();
+            
+            // 获取公司的菜单类型
+            $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
             return $operator;
         }
         return false;
@@ -416,6 +446,8 @@ class AuthService
                 'operator_id' => $relInfo['operator_id'],
             ];
             if ($operator = $this->operatorsRepository->getInfo($filter)) {
+                // 获取公司的菜单类型
+                $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
                 return $operator;
             }
         }
@@ -493,6 +525,8 @@ class AuthService
 
         $workWechatService->delReBindKey($company_id, $work_userid);
 
+        // 获取公司的菜单类型
+        $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
         return $operator;
     }
 
@@ -577,6 +611,8 @@ class AuthService
                 'operator_id' => $relInfo['operator_id'],
             ];
             if ($operator = $this->operatorsRepository->getInfo($filter)) {
+                // 获取公司的菜单类型
+                $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
                 return $operator;
             }
         }
@@ -657,6 +693,8 @@ class AuthService
 
         $wechatService->delReBindKey($company_id, $app_id, $openid, $unionid);
 
+        // 获取公司的菜单类型
+        $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
         return $operator;
     }
 
@@ -709,6 +747,8 @@ class AuthService
             $wechatService->create(array_merge($filter, $data));
         }
 
+        // 获取公司的菜单类型
+        $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
         return $operator;
     }
 
@@ -748,6 +788,8 @@ class AuthService
             throw new ResourceException('账号不存在');
         }
 
+        // 获取公司的菜单类型
+        $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
         return $operator;
     }
 
@@ -805,6 +847,7 @@ class AuthService
             'merchant_id' => $operatorInfo['merchant_id'],
             'is_merchant_main' => $operatorInfo['is_merchant_main'],
             'is_distributor_main' => $operatorInfo['is_distributor_main'],
+            'is_disable' => $operatorInfo['is_disable'] ?? 0,
         ];
 
         return $result;
@@ -884,6 +927,9 @@ class AuthService
         }
 
         app('redis')->del($key);
+        
+        // 获取公司的菜单类型
+        $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
         return $operator;
     }
 
@@ -918,6 +964,8 @@ class AuthService
                 if (empty($operator)) {
                     throw new ResourceException('管理员账号错误，请稍后重试~');
                 }
+                // 获取公司的菜单类型
+                $operator['menu_type'] = $this->getCompanyMenuType($operator['company_id']);
                 break;
             case 1:
                 // 普通账号

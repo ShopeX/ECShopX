@@ -10,6 +10,29 @@ use DistributionBundle\Services\DistributorService;
 
 class SalespersonService
 {
+    public function getSalespersonAndDistributorByWorkUserid($companyId, $workUserid, $isApp = false)
+    {
+        $request = new Request();
+        $params['work_userid'] = $workUserid;
+        $infodata = $request->call($companyId, 'basics.salesperson.info', $params)['data'] ?? [];
+        if (empty($infodata)) {
+            return [];
+        }
+        app('log')->info('[getSalespersonInfoByWorkUserid] infodata===>'. json_encode($infodata));
+        $distributorService = new DistributorService();
+        $distributor_filter = [
+            'company_id' => $companyId,
+            'shop_code' => $infodata['infodata']['store_bn'] ?? '',
+        ];
+        $distributorInfo = $distributorService->getInfoSimple($distributor_filter);
+        app('log')->info('[getSalespersonInfoByWorkUserid] distributor_filter===>'. json_encode($distributor_filter));
+        app('log')->info('[getSalespersonInfoByWorkUserid] distributorInfo===>'. json_encode($distributorInfo));
+
+        if ($distributorInfo) {
+            $infodata['distributorInfo'] = $distributorInfo;
+        }
+        return $infodata;
+    }    
     public function getSalespersonInfoByWorkUserid($companyId, $workUserid, $isApp = false)
     {
         $request = new Request();
@@ -18,6 +41,7 @@ class SalespersonService
         if (empty($infodata)) {
             return [];
         }
+        app('log')->info('[getSalespersonInfoByWorkUserid] infodata===>'. json_encode($infodata));
         $distributorService = new DistributorService();
         $distributorCodes = array_column($infodata['stores'], null, 'store_bn');
         $distributor_filter = [

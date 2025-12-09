@@ -481,8 +481,13 @@ class CartController extends BaseController
                 return $this->response->array($result);
             }
 
-            $shopIds = array_column($cartList['list'], 'shop_id');
-            $shopIds = array_unique($shopIds);
+            // 如果带店铺过来，怎显示该店铺的购物车 2025年9月18日18:03:26
+            if ($shopId) {
+                $shopIds = [$shopId];
+            }else {
+                $shopIds = array_column($cartList['list'], 'shop_id');
+                $shopIds = array_unique($shopIds);
+            }
             foreach ($shopIds as $shopId) {
                 $cartData = $cartService->getCartList($authInfo['company_id'], $inputData['user_id'], $shopId, $cartType, $shopType, false, $iscrossborder, $isShopScreen, $userDevice,[],$inputData);
                 if ($cartData['valid_cart']) {

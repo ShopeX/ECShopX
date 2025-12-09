@@ -471,11 +471,11 @@ class CompanysActivationEgo
         $authService = new AuthService();
         $user = $authService->getBasicUserById($param);
 
-        if ($user['is_disable']) {
+        if (isset($user['is_disable']) && $user['is_disable']) {
             throw new UnauthorizedHttpException('','账号已被禁用');
         }
 
-        if (isset($data['time']) && $user['last_login_time'] > $data['time']) {
+        if (isset($data['time']) && isset($user['last_login_time']) && $user['last_login_time'] > $data['time']) {
             throw new UnauthorizedHttpException('','账号已在其他设备登录');
         }
 

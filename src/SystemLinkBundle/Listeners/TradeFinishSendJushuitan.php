@@ -72,6 +72,7 @@ class TradeFinishSendJushuitan extends BaseListeners implements ShouldQueue {
             case 'normal_pointsmall':
             case 'normal_seckill':
             case 'normal_normal':
+            case 'normal_shopguide':  // 导购订单               
             case 'normal':
 
                 $orderStruct = $orderService->getOrderStruct($companyId, $orderId, $shopId, $sourceType);
@@ -110,7 +111,11 @@ class TradeFinishSendJushuitan extends BaseListeners implements ShouldQueue {
                         app('log')->debug('获取团购订单信息失败:companyId:'.$value['company_id'].",orderId:".$value['order_id'].",sourceType:".$value['group_goods_type']);
                         continue;
                     }
-                    self::jushutanRequest($orderStruct, $companyId);
+                    $result = self::jushutanRequest($orderStruct, $companyId);
+                    if (!$result) {
+                        app('log')->debug('团购订单请求失败:companyId:'.$value['company_id'].",orderId:".$value['order_id'].",sourceType:".$value['group_goods_type']);
+                        return false;
+                    }
                 }
                 break;
         }
@@ -120,7 +125,6 @@ class TradeFinishSendJushuitan extends BaseListeners implements ShouldQueue {
 
     static function jushutanRequest($orderStruct=[], $companyId=null)
     {
-        try {
             $jushuitanRequest = new Request($companyId);
 
             $method = 'order_add';
@@ -129,10 +133,15 @@ class TradeFinishSendJushuitan extends BaseListeners implements ShouldQueue {
             app('log')->debug($method.'=>orderStruct:'.json_encode($orderStruct)."=>result:". var_export($result, true));
             if ($result['code'] == 0) {
                 self::saveOrdersRelJushuitan($companyId, $result['data']['datas'][0]);
+            }else{
+                app('log')->debug('聚水潭请求失败:'. $result['msg'].'=>method:'.$method.'=>orderStruct:'.json_encode($orderStruct)."=>result:". json_encode($result));
+                return false;
             }
-        } catch ( \Exception $e){
-            app('log')->debug('聚水潭请求失败:'. $e->getMessage().'=>method:'.$method.'=>orderStruct:'.json_encode($orderStruct)."=>result:". json_encode($result));
-        }
+        // try {
+        // } catch ( \Exception $e){
+        // app('log')->debug('聚水潭请求失败:'. $e->getMessage().'=>method:'.$method.'=>orderStruct:'.json_encode($orderStruct)."=>result:". json_encode($result));
+        // throw $e;
+        // }
 
         return $result;
     }

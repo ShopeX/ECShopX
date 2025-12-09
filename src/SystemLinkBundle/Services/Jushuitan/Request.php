@@ -89,10 +89,11 @@ class Request
                 'verify' => false,
                 'form_params' => $query_params
             ];
+            app('log')->debug('jushuitan request===>method:'.$method.'===appSecret:'.$this->appSecret.'===url:'.$this->url.$path.'=====>params:'.json_encode($params).'===>query_params:'.json_encode($query_params));
             $resData = $client->post($this->url.$path, $postdata)->getBody();
             $response = $resData->getContents();
             $result = json_decode($response, 1);
-            app('log')->debug('jushuitan request===>method:'.$method.'===appSecret:'.$this->appSecret.'===url:'.$this->url.$path.'=====>params:'.var_export($params,1).'===>response:'.$response);
+            app('log')->debug('jushuitan request===>method:'.$method.'===appSecret:'.$this->appSecret.'===url:'.$this->url.$path.'=====>params:'.json_encode($params).'===>response:'.$response);
         } catch (\Exception $e ) {
             $result = [ 'fail_msg' => $e->getMessage()];
             app('log')->debug('jushuitan error:'.var_export($e->getMessage(),1));

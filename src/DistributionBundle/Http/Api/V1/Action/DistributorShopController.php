@@ -717,4 +717,45 @@ class DistributorShopController extends Controller
         }
         return $this->response->array($data);
     }
+
+    /**
+     * @SWG\Get(
+     *     path="/distributor/getAreaByAddress",
+     *     summary="根据地址获取地区信息",
+     *     tags={"店铺"},
+     *     description="根据地址获取地区信息",
+     *     operationId="getAreaByAddress",
+     *     @SWG\Parameter(
+     *         name="address",
+     *         in="query",
+     *         description="地址",
+     *         required=true,
+     *         type="string",
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @SWG\Items(
+     *                     type="object",
+     *                 )
+     *             ),
+     *          ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/DistributionErrorRespones") ) )
+     * )    
+     */
+    public function getAreaByAddress(Request $request)
+    {
+        $address = $request->input('address');
+        if (!$address) {
+            throw new ResourceException(trans('DistributionBundle/Controllers/Distributor.address_required'), 400);
+        }
+        $area = get_latlng_by_address($address);
+        return $this->response->array($area);
+    }
+    
 }

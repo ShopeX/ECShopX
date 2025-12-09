@@ -6,6 +6,7 @@
 
 namespace PaymentBundle\Services\Payments;
 
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Dingo\Api\Exception\ResourceException;
 use PaymentBundle\Interfaces\Payment;
@@ -13,6 +14,7 @@ use OrdersBundle\Traits\GetOrderServiceTrait;
 
 class OfflinePayService implements Payment
 {
+    use MagicLangTrait;
     use GetOrderServiceTrait;
 
     private $payType = 'offline_pay';
@@ -28,6 +30,11 @@ class OfflinePayService implements Payment
      */
     public function setPaymentSetting($companyId, $data)
     {
+        $lang = $this->getLang();
+        
+        if(!empty($data['pay_name'])){
+            app('redis')->set($companyId.'_lang_pay_name_offline_pay:'.$lang,$data['pay_name']);
+        }
         $redisKey = $this->genReidsId($companyId);
         $result = app('redis')->set($redisKey, json_encode($data));
         return $result;
@@ -38,9 +45,14 @@ class OfflinePayService implements Payment
      */
     public function getPaymentSetting($companyId)
     {
+        $lang = $this->getLang();
+        $exitLangName = app('redis')->get($companyId.'_lang_pay_name_offline_pay:'.$lang);
         $data = app('redis')->get($this->genReidsId($companyId));
         if ($data) {
             $data = json_decode($data, true);
+            if(!empty($exitLangName)){
+                $data['pay_name'] = $exitLangName;
+            }
             return $data;
         } else {
             return [];
@@ -53,13 +65,13 @@ class OfflinePayService implements Payment
         $setting = $this->getPaymentSetting($companyId);
         $isOpen = $setting['is_open'] ?? 0;
         if (!$isOpen) {
-            $errMsg = '暂不支持' . $setting['pay_name'] ?? self::PAY_TYPE_NAME;
+            $errMsg = trans('payment.not_supported') . ($setting['pay_name'] ?? self::PAY_TYPE_NAME);
             return false;
         }
         if ($setting && isset($setting['auto_cancel_time'])) {
             $autoCancelTime = intval($setting['auto_cancel_time']) * 60;//小时转换成分钟
         } else {
-            $errMsg = '支付超时时间设置错误';
+            $errMsg = trans('payment.payment_timeout_error');
             return false;
         }
         return $autoCancelTime;
@@ -81,7 +93,7 @@ class OfflinePayService implements Payment
         $paymentSetting = $this->getPaymentSetting($companyId);
         if ($paymentSetting) {
         } else {
-            throw new BadRequestHttpException(self::PAY_TYPE_NAME . '信息未配置，请联系商家');
+            throw new BadRequestHttpException(self::PAY_TYPE_NAME . trans('payment.info_not_configured'));
         }
     }
 

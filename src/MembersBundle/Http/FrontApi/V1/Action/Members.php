@@ -6,60 +6,56 @@
 
 namespace MembersBundle\Http\FrontApi\V1\Action;
 
-use App\Http\Controllers\Controller as Controller;
-
-use CompanysBundle\Services\EmployeeService;
-use CompanysBundle\Services\Shops\ProtocolService;
-use EspierBundle\Services\Cache\RedisCacheService;
-use EspierBundle\Services\Config\ConfigRequestFieldsService;
-use EspierBundle\Services\Config\ValidatorService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-
-use MembersBundle\Entities\MembersAssociations;
-use MembersBundle\Events\UpdateMemberSuccessEvent;
-use MembersBundle\Services\GoodsArrivalNoticeService;
-use MembersBundle\Services\MemberOperateLogService;
-use MembersBundle\Services\MemberService;
-use MembersBundle\Services\MembersInvoicesService;
-use MembersBundle\Services\SubscribeService;
-use MembersBundle\Services\WechatUserService;
-
-use MembersBundle\Services\MemberAddressService;
-use MembersBundle\Services\MemberItemsFavService;
-use MembersBundle\Services\MembersWhitelistService;
-
-use KaquanBundle\Services\MemberCardService;
-use KaquanBundle\Services\UserDiscountService;
-use MembersBundle\Services\MemberRegSettingService;
-use DepositBundle\Services\DepositTrade;
-use PointBundle\Services\PointMemberService;
-use PointBundle\Services\PointMemberRuleService;
-use Swagger\Annotations as SWG;
-use WechatBundle\Services\OpenPlatform;
-use KaquanBundle\Services\VipGradeOrderService;
-
-use Dingo\Api\Exception\ResourceException;
-use Dingo\Api\Auth\Auth as Auth;
-
-use PopularizeBundle\Services\SettingService;
-use CompanysBundle\Services\SettingService as SelfdeliveryAddressService;
-use PopularizeBundle\Services\PromoterService;
 use Dingo\Api\Routing\Helpers;
-use Dingo\Api\Exception\StoreResourceFailedException;
-
-use MembersBundle\Services\MemberBrowseHistoryService;
-use MembersBundle\Services\MemberArticleFavService;
-use MembersBundle\Services\MemberDistributionFavService;
-use PromotionsBundle\Services\RegisterPromotionsService;
-use PromotionsBundle\Services\SpecificCrowdDiscountService;
-
+use Swagger\Annotations as SWG;
+use Dingo\Api\Auth\Auth as Auth;
 use GoodsBundle\Services\ItemsService;
-use DistributionBundle\Services\DistributorService;
 use MembersBundle\Jobs\BindSalseperson;
+use WechatBundle\Services\OpenPlatform;
+use DepositBundle\Services\DepositTrade;
+use MembersBundle\Services\MemberService;
+use Dingo\Api\Exception\ResourceException;
+use CompanysBundle\Services\EmployeeService;
+use KaquanBundle\Services\MemberCardService;
+use MembersBundle\Services\SubscribeService;
+use PointBundle\Services\PointMemberService;
+use MembersBundle\Services\WechatUserService;
+use PopularizeBundle\Services\SettingService;
+use KaquanBundle\Services\UserDiscountService;
+use PopularizeBundle\Services\PromoterService;
+use KaquanBundle\Services\VipGradeOrderService;
+use MembersBundle\Entities\MembersAssociations;
+use MembersBundle\Services\MemberAddressService;
+use PointBundle\Services\PointMemberRuleService;
+use MembersBundle\Services\MemberItemsFavService;
+use ThirdPartyBundle\Services\DmCrm\PointService;
+use App\Http\Controllers\Controller;
+use CompanysBundle\Services\Shops\ProtocolService;
+use EspierBundle\Services\Cache\RedisCacheService;
+use EspierBundle\Services\Config\ValidatorService;
+use MembersBundle\Events\UpdateMemberSuccessEvent;
+use MembersBundle\Services\MembersInvoicesService;
 use SalespersonBundle\Services\SalespersonService;
+use DistributionBundle\Services\DistributorService;
+use MembersBundle\Services\MemberArticleFavService;
+use MembersBundle\Services\MemberOperateLogService;
+use MembersBundle\Services\MemberRegSettingService;
+use MembersBundle\Services\MembersWhitelistService;
+use Dingo\Api\Exception\StoreResourceFailedException;
 use EmployeePurchaseBundle\Services\EmployeesService;
 use EmployeePurchaseBundle\Services\RelativesService;
+use MembersBundle\Services\GoodsArrivalNoticeService;
+use MembersBundle\Services\MemberBrowseHistoryService;
+use MembersBundle\Services\MemberDistributionFavService;
+use PromotionsBundle\Services\RegisterPromotionsService;
+use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
+use PromotionsBundle\Services\SpecificCrowdDiscountService;
+use EspierBundle\Services\Config\ConfigRequestFieldsService;
+use ThirdPartyBundle\Services\DmCrm\MemberService as DmMemberService;
+use CompanysBundle\Services\SettingService as SelfdeliveryAddressService;
+
 class Members extends Controller
 {
     use Helpers;
@@ -408,14 +404,21 @@ class Members extends Controller
         $rule = $pointService->getPointRule($authInfo['company_id']);
         if ($rule['isOpenMemberPoint'] == 'true') {
             $result['point_open_status'] = true;
-            try {
-                $pointMemberService = new PointMemberService();
-                $point = $pointMemberService->getInfo(['user_id' => $authInfo['user_id'], 'company_id' => $authInfo['company_id']]);
-                    //code...
-            } catch (\Throwable $th) {
-                //throw $th;
-            }
+            $pointMemberService = new PointMemberService();
+            $point = $pointMemberService->getInfo(['user_id' => $authInfo['user_id'], 'company_id' => $authInfo['company_id']]);
             $result['point'] = $point['point'] ?? 0;
+
+            // 达摩crm, 会员积分
+            $ns = new DmCrmSettingService();
+            if ($ns->getDmCrmSetting($authInfo['company_id'])['is_open'] ?? '') {
+                $pointService = new PointService($authInfo['company_id']);
+                $paramsData = [
+                    'mobile' => $mobile,
+                ];
+                $point = $pointService->getPoint($paramsData);
+                $result['point'] = $point['integral'] ?? 0;
+                $result['frozen_point'] = $point['frozenIntegral'] ?? 0;
+            }
         }
 
         $result['cardInfo'] = $cardInfo;
@@ -775,6 +778,16 @@ class Members extends Controller
         }
         $result = $this->memberService->getMemberInfo($filter);
         event(new UpdateMemberSuccessEvent($result));
+        $dmMemberService = new DmMemberService($companyId);
+        if ($dmMemberService->isOpen) {
+            $dmMemberService->updateMemberInfoByMobile([
+                'mobile' => $authInfo['mobile'],
+                'name' => $result['username'],
+                'sex' => $result['sex'],
+                'birthday' => $result['birthday'],
+                'email' => $result['email'],
+            ]);
+        }
         return $this->response->array($result);
     }
 
@@ -3133,8 +3146,66 @@ class Members extends Controller
             throw new ResourceException($error);
         }
         $authInfo = $request->get('auth');
-        $queue = (new BindSalseperson($authInfo['company_id'], $authInfo['unionid'], $postdata['work_userid'], 2))->onQueue('slow');
+        app('log')->info('memberservice创建会员 绑定导购:3 params===>'.__FUNCTION__.':'.__FILE__.':'.__LINE__.json_encode($authInfo));
+        // $queue = (new BindSalseperson($authInfo['company_id'], $authInfo['unionid'], $postdata['work_userid'], 2, $authInfo['mobile']))->onQueue('slow');
+        // app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
+        // 增加绑定导购关联关系
+        $salespersonService = new SalespersonService();
+        $filter = [
+            'company_id' => $authInfo['company_id'],
+            'work_userid' => $postdata['work_userid'],
+            'salesperson_type' => 'shopping_guide',
+            'is_valid' => 'true',
+        ];
+        $salespersonInfo = $salespersonService->getSalespersonDetail($filter);
+        if ( empty($salespersonInfo) ) {
+            // throw new ResourceException('导购不存在');
+            return $this->response->array(['status' => false,'msg'=>'导购不存在']);
+        }
+        $salesperson_id = $salespersonInfo['salesperson_id'];
+        $workWechatRepositories = app('registry')->getManager('default')->getRepository(WorkWechatRel::class);
+        //查找用户已绑定的导购员
+        $filter = [
+            'user_id' => $authInfo['user_id'],
+            'is_bind' => 1,
+            'company_id' => $authInfo['company_id']
+        ];
+        $bound = $workWechatRepositories->getInfo($filter);
+        if ( $bound ) {
+            if ( $bound['user_id'] == $authInfo['user_id'] ) {
+                // throw new ResourceException('已与当前导购员绑定');
+                return $this->response->array(['status' => false,'msg'=>'已与当前导购员绑定']);
+            } else {
+                // throw new ResourceException('已绑定导购员，无法绑定');
+                return $this->response->array(['status' => false,'msg'=>'已绑定导购员，无法绑定']);
+            }
+        }
+        // 创建绑定关系
+        $filter = [
+            'user_id' => $authInfo['user_id'],
+            'company_id' => $authInfo['company_id'],
+            'salesperson_id' => $salesperson_id,
+        ];
+        $isBound = $workWechatRepositories->getInfo($filter);
+        if ($isBound) {
+            $status = $workWechatRepositories->updateOneBy($filter, ['is_bind' => 1]); //修改
+        } else {
+            $data = [
+                'user_id' => $authInfo['user_id'],
+                'salesperson_id' => $salesperson_id,
+                'company_id' => $authInfo['company_id'],
+                'unionid' => $authInfo['unionid'],
+                'is_friend' => 0,
+                'is_bind' => 1,
+                'bound_time' => time(),
+                'add_friend_time' => 0
+            ];
+            $status = $workWechatRepositories->create($data);
+        }
+        // 同步第三方
+        $queue = (new BindSalseperson($authInfo['company_id'], $authInfo['unionid'], $postdata['work_userid'], 2, $authInfo['mobile'], $authInfo['user_id']))->onQueue('slow');
         app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
+
 
         return $this->response->array(['status' => true]);
     }

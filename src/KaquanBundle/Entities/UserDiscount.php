@@ -19,6 +19,7 @@ use Doctrine\ORM\Mapping as ORM;
  *    @ORM\Index(name="idx_userid_enddate", columns={"user_id","end_date"}),
  *    @ORM\Index(name="idx_status_expiredtime", columns={"status", "expired_time"}),
  *    @ORM\Index(name="idx_cardid_companyid_userid", columns={"card_id", "company_id", "user_id"}),
+ *    @ORM\Index(name="idx_dm_card_code", columns={"dm_card_code"}),
  * })
  * @ORM\Entity(repositoryClass="KaquanBundle\Repositories\UserDiscountRepository")
  */
@@ -366,6 +367,13 @@ class UserDiscount
      * @ORM\Column(name="activity_name", type="string", length=100, nullable=true, options={"comment":"参与活动名称"})
      */
     private $activity_name;
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="dm_card_code", type="string", length=100, nullable=true, options={"comment":"达摩CRM会员卡券code"})
+     */
+    private $dm_card_code;
 
     /**
      * Get id
@@ -1503,5 +1511,29 @@ class UserDiscount
     public function getActivityName()
     {
         return $this->activity_name;
+    }
+
+    /**
+     * Set dmCardCode.
+     *
+     * @param string|null $dmCardCode
+     *
+     * @return UserDiscount
+     */
+    public function setDmCardCode($dmCardCode = null)
+    {
+        $this->dm_card_code = $dmCardCode;
+
+        return $this;
+    }
+
+    /**
+     * Get dmCardCode.
+     *
+     * @return string|null
+     */
+    public function getDmCardCode()
+    {
+        return $this->dm_card_code;
     }
 }

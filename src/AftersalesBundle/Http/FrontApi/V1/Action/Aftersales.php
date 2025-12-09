@@ -185,9 +185,9 @@ class Aftersales extends Controller
         }
 
         $aftersalesService = new AftersalesService();
-        $result = $aftersalesService->create($params);
+        $result = $aftersalesService->createByNum($params);
 
-        return $this->response->array($result);
+        return $this->response->array(['status' => true, 'result' => $result]);
     }
 
     /**
@@ -392,37 +392,48 @@ class Aftersales extends Controller
         $params = $request->all();
         $params['company_id'] = $authInfo['company_id'];
         $params['user_id'] = $params['user_id'] ?? $authInfo['user_id'];
-        $validator = app('validator')->make($params, [
-            'aftersales_bn' => 'required',
-            'company_id' => 'required',
-            'user_id' => 'required',
-            'corp_code' => 'required',
-            'logi_no' => 'required|min:6|max:30',
-            // 'receiver_address' => 'required',
-            // 'receiver_mobile' => 'required|numeric|digits:11',
-        ], [
-            'aftersales_bn.*' => '售后单号必填',
-            'company_id.*' => '企业ID必填',
-            'user_id.*' => '用户ID必填',
-            'corp_code.*' => '物流公司不能为空',
-            'logi_no.*' => '物流单号不能为空,运单号不能小于6,运单号不能大于20',
-            // 'receiver_address.*' => '收货地址不能为空',
-            // 'receiver_mobile.*' => '收货手机号不能为空!,收货手机号格式不对!',
-        ]);
-        if ($validator->fails()) {
-            $errorsMsg = $validator->errors()->toArray();
-            $errmsg = '';
-            foreach ($errorsMsg as $v) {
-                $msg = implode("，", $v);
-                $errmsg .= $msg . "，";
-            }
-            throw new ResourceException(trim($errmsg, '，'));
-        }
 
         $aftersalesService = new AftersalesService();
-        $params['user_id'] = $authInfo['user_id'];
-        $params['company_id'] = $authInfo['company_id'];
-        $result = $aftersalesService->sendBack($params);
+        // 兼容批量操作
+        if (isset($params['aftersales_data']) && is_array($params['aftersales_data'])) {
+            $aftersalesData = $params['aftersales_data'];
+            unset($params['aftersales_data']);
+            foreach ($aftersalesData as $kf=> $vf) {
+                $params['aftersales_bn'] = $vf;
+                $result[] = $aftersalesService->sendBack($params);
+            }
+        }else {
+            $validator = app('validator')->make($params, [
+                'aftersales_bn' => 'required',
+                'company_id' => 'required',
+                'user_id' => 'required',
+                'corp_code' => 'required',
+                'logi_no' => 'required|min:6|max:30',
+                // 'receiver_address' => 'required',
+                // 'receiver_mobile' => 'required|numeric|digits:11',
+            ], [
+                'aftersales_bn.*' => '售后单号必填',
+                'company_id.*' => '企业ID必填',
+                'user_id.*' => '用户ID必填',
+                'corp_code.*' => '物流公司不能为空',
+                'logi_no.*' => '物流单号不能为空,运单号不能小于6,运单号不能大于20',
+                // 'receiver_address.*' => '收货地址不能为空',
+                // 'receiver_mobile.*' => '收货手机号不能为空!,收货手机号格式不对!',
+            ]);
+            if ($validator->fails()) {
+                $errorsMsg = $validator->errors()->toArray();
+                $errmsg = '';
+                foreach ($errorsMsg as $v) {
+                    $msg = implode("，", $v);
+                    $errmsg .= $msg . "，";
+                }
+                throw new ResourceException(trim($errmsg, '，'));
+            }
+
+            $params['user_id'] = $authInfo['user_id'];
+            $params['company_id'] = $authInfo['company_id'];
+            $result = $aftersalesService->sendBack($params);
+        }
 
         return $this->response->array($result);
     }

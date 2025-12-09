@@ -58,6 +58,9 @@ class UserDiscountRepository extends EntityRepository
         $userCardData->setGetDate(time());
         $userCardData->setSalespersonId($params['salesperson_id'] ?? 0);
         $userCardData->setApplyScope($cardInfo["apply_scope"] ?? '');
+        if (isset($params['dm_card_code'])) {
+            $userCardData->setDmCardCode($params['dm_card_code']);
+        }
         //优惠券领取量更新
         $em = $this->getEntityManager();
         $em->persist($userCardData);

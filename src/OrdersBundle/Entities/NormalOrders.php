@@ -879,6 +879,24 @@ class NormalOrders
      */
     private $invoice_status = 'PENDING';
 
+     /**
+     * @var string
+     *
+     * @ORM\Column(name="dm_point_preid", type="string", nullable=true, length=64, options={"comment":"达摩积分预扣id"})
+     */
+    private $dm_point_preid;
+    
+    public function setDmPointPreid($dmPointPreid)
+    {
+        $this->dm_point_preid = $dmPointPreid;
+        return $this;
+    }
+
+    public function getDmPointPreid()
+    {
+        return $this->dm_point_preid;
+    }
+
     /**
      * Set orderId.
      *

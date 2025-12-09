@@ -234,7 +234,7 @@ class DistributorPromotionService
         foreach ($coupons as $couponRow) {
             for ($i = 1; $i <= $couponRow['count']; $i++) {
                 try {
-                    $userDiscountService->userGetCard($companyId, $couponRow['card_id'], $memberInfo['user_id'], $sourceFrom);
+                    $userDiscountService->userGetCard($companyId, $couponRow['card_id'], $memberInfo['user_id'], $sourceFrom, 0, '', '', $memberInfo['mobile']);
                     $sendCoupons = true;
                 } catch (\Exception $e) {
                     app('log')->debug($sourceFrom. '=>' .$e->getMessage());

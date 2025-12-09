@@ -6,6 +6,7 @@
 
 namespace AftersalesBundle\Http\Api\V1\Action;
 
+use AftersalesBundle\Services\AftersalesRefundService;
 use Dingo\Api\Exception\StoreResourceFailedException;
 use EspierBundle\Jobs\ExportFileJob;
 use Illuminate\Http\Request;
@@ -18,6 +19,7 @@ use Dingo\Api\Exception\ResourceException;
 use EspierBundle\Traits\GetExportServiceTraits;
 use OrdersBundle\Services\OrderAssociationService;
 use OrdersBundle\Services\Orders\NormalOrderService;
+use SalespersonBundle\Services\SalespersonService;
 use SupplierBundle\Services\SupplierService;
 
 class Aftersales extends Controller
@@ -471,9 +473,9 @@ class Aftersales extends Controller
             $orderData = [];
             $orderIds = array_column($result['list'], 'order_id');
             // $normalOrderService = new NormalOrderService();
-            $rs = $normalOrderService->normalOrdersRepository->getList(['company_id' => $companyId, 'order_id' => $orderIds], 0, 100, null, 'order_holder, o.receiver_mobile');
-            if ($rs) {
-                $orderData = array_column($rs, null, 'order_id');
+            $orderRs = $normalOrderService->normalOrdersRepository->getList(['company_id' => $companyId, 'order_id' => $orderIds], 0, 100, null, 'order_id, order_holder, o.receiver_mobile, o.salesman_id');
+            if ($orderRs) {
+                $orderData = array_column($orderRs, null, 'order_id');
             }
 
             //获取供应商信息
@@ -484,6 +486,29 @@ class Aftersales extends Controller
                 $rs = $supplierService->repository->getLists(['operator_id' => $supplierIds], 'operator_id, supplier_name');
                 $supplierData = array_column($rs, null, 'operator_id');
             }
+
+            // 售后退单数据
+            $aftersalesBns = array_column($result['list'], 'aftersales_bn');
+            $aftersalesRefundService = new AftersalesRefundService();
+            $aftersalesBnTmp = $aftersalesRefundService->getRefundsList(['company_id' => $companyId, 'aftersales_bn' => $aftersalesBns], 0, -1);
+            $aftersalesBnData =  array_column($aftersalesBnTmp['list'], null, 'aftersales_bn');
+
+            // 导购数据
+            $salespersonIds = array_column($orderRs, 'salesman_id');
+            $salespersonIds = array_filter($salespersonIds); // 过滤掉 null、0、false、空字符串等
+            $salespersonList = [];
+            if (!empty($salespersonIds)) {
+                $salespersonService = new SalespersonService();
+                $filterSalespersion['company_id'] = $companyId;
+                $filterSalespersion['salesperson_id'] = $salespersonIds;
+                $filterSalespersion['salesperson_type'] = 'shopping_guide';
+                $salespersonListTmp = $salespersonService->getLists($filterSalespersion,'salesperson_id,name,work_userid', 1, -1);
+                $salespersonList =  array_column($salespersonListTmp, null, 'salesperson_id');
+            }
+
+            // 商品数据
+            $itemListTmp = $aftersalesService->getItemsByAftersalesBnByNun($companyId, $aftersalesBns);
+            $itemList =  array_column($itemListTmp, null, 'aftersales_bn');
 
             // 是否有权限查看加密数据
             $datapassBlock = $request->get('x-datapass-block');
@@ -497,6 +522,12 @@ class Aftersales extends Controller
                 if ($datapassBlock) {
                     $value['mobile'] = data_masking('mobile', (string) $value['mobile']);
                 }
+
+                $value['refunded_fee'] = $aftersalesBnData[$value['aftersales_bn']]['refunded_fee'] ?? 0;
+                $value['refunded_point'] = $aftersalesBnData[$value['aftersales_bn']]['refunded_point'] ?? 0;
+                $value['salesman_name'] = $salespersonList[$orderInfo['salesman_id']]['work_userid'] ?? '';
+                $value['item_name'] = $itemList[$value['aftersales_bn']]['item_name'] ?? '';
+                $value['item_bn'] = $itemList[$value['aftersales_bn']]['item_bn'] ?? '';
             }
         }
         return $this->response->array($result);
@@ -588,13 +619,13 @@ class Aftersales extends Controller
         $params = $request->all();
         $params['company_id'] = $companyId;
         $validator = app('validator')->make($params, [
-            'aftersales_bn' => 'required|integer',
+            'aftersales_bn' => 'required',
             'company_id' => 'required',
             'is_approved' => 'required',
             'refuse_reason' => 'required_if:is_approved,0',
 //            'refuse_reason' => 'required_if:is_approved,0|max:300',
         ], [
-            'aftersales_bn.*' => '售后单号必填,必须为整数',
+            'aftersales_bn.*' => '售后单号必填',
             'company_id.*' => '企业id必填',
             'is_approved.*' => '处理结果必选',
             'refuse_reason.*' => '拒绝原因必填',
@@ -611,12 +642,25 @@ class Aftersales extends Controller
         }
         $params['refund_fee'] = intval($params['refund_fee'] ?? 0);
         $params['refund_point'] = $params['refund_point'] ?? 0;
-        $aftersalesService = new AftersalesService();
+        $params['freight'] = $params['freight'] ?? 0;
         $params['operator_type'] = 'admin';
         $params['operator_id'] = app('auth')->user()->get('operator_id');
-        $result = $aftersalesService->review($params);
+        $aftersalesService = new AftersalesService();
+        // 批量处理
+        if (is_array($params['aftersales_bn'])) {
+            $aftersales_bn_arr = $params['aftersales_bn'];
+            $paramsBath = [];
+            unset($params['aftersales_bn']);
+            foreach($aftersales_bn_arr as $aftersalesBn){
+                $paramsBath = $params;
+                $paramsBath['aftersales_bn'] = $aftersalesBn;
+                $result[] = $aftersalesService->review($paramsBath);
+            }
+        }else {
+            $result = $aftersalesService->review($params);
+        }
 
-        return $this->response->array($result);
+        return $this->response->array(['status' => true, 'result' => $result]);
     }
 
     /**
@@ -752,13 +796,13 @@ class Aftersales extends Controller
             'aftersales_bn' => 'required',
             'company_id' => 'required',
             'check_refund' => 'required',
-            'refund_fee' => 'required_if: check_refund,1|integer',
+            // 'refund_fee' => 'required_if: check_refund,1|integer',
             'refunds_memo' => 'required_if:check_refund,0',
         ],[
             'aftersales_bn.*' => '售后单号必填',
             'company_id.*' => '企业ID必填',
             'check_refund.*' => '是否退款必选',
-            'refund_fee.*' => '退款金额必填,以分为单位，必须为整数',
+            // 'refund_fee.*' => '退款金额必填,以分为单位，必须为整数',
             'refunds_memo.*' => '拒绝原因必填',
         ]);
         if ($validator->fails()) {
@@ -772,13 +816,46 @@ class Aftersales extends Controller
         }
 
         $aftersalesService = new AftersalesService();
-        $params['operator_type'] = 'admin';
-        $params['operator_id'] = app('auth')->user()->get('operator_id');
-        $params['refund_fee'] = $params['refund_fee'] ?: 0;
-        $params['refund_point'] = $params['refund_point'] ?: 0;
-        $result = $aftersalesService->confirmRefund($params);
+        if (is_array($params['aftersales_bn'])) {
+            $aftersales_bns = $params['aftersales_bn'];
+            unset($params['aftersales_bn']);
+            $paramsBath = [];
+            foreach($aftersales_bns as $aftersales_bn) {
+                $paramsBath = $params;
+                $paramsBath['aftersales_bn'] = $aftersales_bn;
+                $filter = [
+                    'aftersales_bn' => $paramsBath['aftersales_bn'],
+                    'company_id' => $paramsBath['company_id']
+                ];
+                $aftersales = $aftersalesService->aftersalesRepository->get($filter);
+                if (!isset($paramsBath['refund_fee']) || empty($paramsBath['refund_fee'])) {
+                    $paramsBath['refund_fee'] = $aftersales['refund_fee'];
+                }
+                if (!isset($paramsBath['refund_point']) || empty($paramsBath['refund_point'])) {
+                    $paramsBath['refund_point'] = $aftersales['refund_point'];
+                }
+                $paramsBath['operator_type'] = 'admin';
+                $paramsBath['operator_id'] = app('auth')->user()->get('operator_id');
+                $result[] = $aftersalesService->confirmRefund($paramsBath);
+            }   
+        }else {
+            $filter = [
+                'aftersales_bn' => $params['aftersales_bn'],
+                'company_id' => $params['company_id']
+            ];
+            $aftersales = $aftersalesService->aftersalesRepository->get($filter);
+            if (!isset($params['refund_fee']) || empty($params['refund_fee'])) {
+                $params['refund_fee'] = $aftersales['refund_fee'];
+            }
+            if (!isset($params['refund_point']) || empty($params['refund_point'])) {
+                $params['refund_point'] = $aftersales['refund_point'];
+            }
+            $params['operator_type'] = 'admin';
+            $params['operator_id'] = app('auth')->user()->get('operator_id');
+            $result = $aftersalesService->confirmRefund($params);
+        }
 
-        return $this->response->array($result);
+        return $this->response->array(['status' => true, 'result' => $result]);
     }
 
     /**
@@ -1162,7 +1239,7 @@ class Aftersales extends Controller
      */
     public function apply(Request $request)
     {
-        $params = $request->all('order_id', 'detail', 'aftersales_type', 'goods_returned', 'reason', 'description', 'evidence_pic', 'refund_fee', 'refund_point');
+        $params = $request->all('order_id', 'detail', 'aftersales_type', 'goods_returned', 'reason', 'description', 'evidence_pic', 'refund_fee', 'refund_point','freight');
         $params['company_id'] = app('auth')->user()->get('company_id');
         $params['operator_type'] = app('auth')->user()->get('operator_type');
         $params['operator_id'] = app('auth')->user()->get('operator_id');
@@ -1220,9 +1297,9 @@ class Aftersales extends Controller
         }
 
         $aftersalesService = new AftersalesService();
-        $result = $aftersalesService->shopApply($params);
+        $result = $aftersalesService->shopApplyByNum($params);
 
-        return $this->response->array($result);
+        return $this->response->array(['status' => true, 'result' => $result]);
     }
 
         /**

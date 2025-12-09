@@ -153,7 +153,7 @@ class AftersalesRefundService
         // 处理积分组合支付订单售后退积分
         if (($refundData['pay_type'] != 'point') && ($refundData['refund_point'] > 0) && !$resubmit) {
             $pointMemberService = new PointMemberService();
-            $otherParams = ['point_type' => 'points_refund', 'refund_bn' => $refundData['refund_bn']];
+            $otherParams = ['point_type' => 'points_refund', 'refund_bn' => $refundData['refund_bn'], 'aftersales_bn' => $refundData['aftersales_bn'] ?? '' ];
             $pointMemberService->addPoint($refundData['user_id'], $refundData['company_id'], $refundData['refund_point'], 10, true, '退款单号:'.$refundData['refund_bn'], $refundData['order_id'], $otherParams);
         }
 
@@ -493,14 +493,24 @@ class AftersalesRefundService
         $start_time = 1607616000; // 2020-12-11日之后的退款单才处理
         $conn = app('registry')->getConnection('default');
         $criteria = $conn->createQueryBuilder();
-        $criteria->select('refund_bn,company_id')
+        $criteria->select('refund_bn,company_id,order_id')
                  ->from('aftersales_refund')
                  ->where($criteria->expr()->gte('create_time', $criteria->expr()->literal($start_time)))
                  ->andWhere($criteria->expr()->eq('refund_status', $criteria->expr()->literal('AUDIT_SUCCESS')));
         $refunds = $criteria->execute()->fetchAll();
         app('log')->info('refunds===>'.var_export($refunds, true));
+        $orderHas = []; // 已存在的订单号
+        $orderHasNum = []; // 已存在的订单号数量,用于计算时间
         foreach ($refunds as $v) {
-            $job = (new RefundJob($v))->onQueue('slow');
+            // 因为同一个订单号可能会有多个售后单，同时一时间售后退款，微信会产生报错：单笔订单请求频率过高，请于1分钟后重试
+            if (in_array($v['order_id'], $orderHas)) {
+                $job = (new RefundJob($v))->onQueue('slow')->delay( 60 * $orderHasNum[$v['order_id']] + 1 );      
+                $orderHasNum[$v['order_id']] += 1;
+            }else {
+                $orderHas[] = $v['order_id'];
+                $orderHasNum[$v['order_id']] = 1;
+                $job = (new RefundJob($v))->onQueue('slow');
+            }
             app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($job);
         }
     }
