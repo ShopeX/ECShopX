@@ -1509,7 +1509,7 @@ class Setting extends BaseController
     public function saveDianwuSetting(Request $request)
     {
         $companyId = app('auth')->user()->get('company_id');
-        $inputData['dianwu_show_status'] = $request->input('dianwu_show_status', 'false');
+        $inputData['dianwu_show_status'] = $request->input('dianwu_show_status', false);
 
         $settingService = new SettingService();
         $result = $settingService->saveDianwuSetting($companyId, $inputData);

@@ -16,10 +16,12 @@ use Dingo\Api\Exception\ResourceException;
 use SupplierBundle\Services\SupplierItemsService;
 use PromotionsBundle\Traits\CheckPromotionsValid;
 use CompanysBundle\Ego\CompanysActivationEgo;
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
+use GoodsBundle\Services\MultiLang\MultiLangService;
 
 class DistributorItemsService
 {
-    use CheckPromotionsValid;
+    use CheckPromotionsValid,MagicLangTrait;
 
     /** @var \DistributionBundle\Repositories\DistributorItemsRepository */
     public $entityRepository;
@@ -348,6 +350,11 @@ class DistributorItemsService
 
                 $result['list'] = $this->getDistributorSkuReplace($filter['company_id'], $distributorId, $result['list'], false);
                 $result = $itemsService->replaceSkuSpec($result);
+                $service = new MultiLangService();
+                $result['list'] = $service->getListAddLang($result['list'],['item_name'],'items',$this->getLang(),'item_id');
+                foreach ($result['list'] as $i => $vvv){
+                    $result['list'][$i]['itemName'] = $vvv['item_name'] ?? '';
+                }
                 foreach ($result['list'] as $key => &$v) {
                     $v['item_main_cat_id'] = $v['item_category'] ?? '';
                     $v['item_cat_id'] = $itemsService->getCategoryByItemId($v['item_id'], $v['company_id']);

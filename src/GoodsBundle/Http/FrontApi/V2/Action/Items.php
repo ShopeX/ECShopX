@@ -442,6 +442,13 @@ class Items extends BaseController
         } else {
             $result = $itemsService->getItemsDetail($item_id, $woa_appid, $limitItemIds, $company_id);
         }
+        if (!is_array($result['intro'])) {
+            json_decode($result['intro']);
+
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $result['intro'] = json_decode($result['intro'], true);
+            }
+        }
 
         if (!$result) {
             return $this->response->array(['item_id' => 0]);

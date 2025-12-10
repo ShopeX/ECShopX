@@ -100,7 +100,7 @@ class TrustLogin extends Controller
     {
         $params = $request->input();
         $companyId = app('auth')->user()->get('company_id');
-        $params['status'] = ($params['status'] ?? false) === 'true';
+        $params['status'] = ($params['status'] ?? false) === true;
         $result = $this->trustLoginService->saveStatusSetting($params, $companyId);
 
         return $this->response->array(['data' => $result]);

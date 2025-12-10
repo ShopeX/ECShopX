@@ -435,6 +435,7 @@ class Distributor extends BaseController
                     }
                 }
             }
+       
             return $this->response->array($result);
         } else {
             $result = [

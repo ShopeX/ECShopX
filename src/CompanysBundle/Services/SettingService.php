@@ -394,7 +394,7 @@ class SettingService
     public function saveDianwuSetting($companyId, $inputdata)
     {
         $key = 'DianwuSetting:' . $companyId;
-        $data['dianwu_show_status'] = ($inputdata['dianwu_show_status'] == 'false') ? false : true;
+        $data['dianwu_show_status'] = ($inputdata['dianwu_show_status'] ?? false) === true;
         app('redis')->connection('companys')->set($key, json_encode($data));
         return $data;
     }

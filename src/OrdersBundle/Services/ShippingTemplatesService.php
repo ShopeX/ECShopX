@@ -95,7 +95,7 @@ class ShippingTemplatesService
             'distributor_id' => $data['distributor_id'],
             'supplier_id' => $data['supplier_id'],
         ];
-        if ($this->shippingTemplatesRepository->getInfo($filter)) {
+        if ($this->shippingTemplatesRepository->count($filter) > 0) {
             throw new ResourceException(trans('OrdersBundle/Order.shipping_template_exists'));
         }
         return $this->shippingTemplatesRepository->create($info);

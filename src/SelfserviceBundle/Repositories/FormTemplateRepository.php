@@ -49,7 +49,7 @@ class FormTemplateRepository extends EntityRepository
         $em->flush();
 
         $result =  $this->getColumnNamesData($entity);
-
+        $data['content'] = is_array($data['content']) ? json_encode($data['content']) : $data['content'];
         $this->getLangService()->addMultiLangByParams($result[$this->prk],$data,$this->table);
 
         return $result;
@@ -74,6 +74,7 @@ class FormTemplateRepository extends EntityRepository
         $em->persist($entity);
         $em->flush();
         if(isset($filter[$this->prk])){
+            $data['content'] = is_array($data['content']) ? json_encode($data['content']) : $data['content'];
             $this->getLangService()->updateLangData($data,$this->table,$filter[$this->prk]);
         }
         return $this->getColumnNamesData($entity);

@@ -79,7 +79,7 @@ class CustomizePage extends Controller
             $count = $this->CustomizePageService->count($cfilter);
             app('log')->info(__FUNCTION__.':'.__LINE__.':count:'.json_encode($count));
             if ($count > 0) {
-                return $this->response->array(['status' => false, 'message' => "已经有启用的模版"]);
+                return $this->response->array(['status' => false, 'message' => "已经有启用的模版", 'status_code' => 422]);
             }
         }
         
@@ -142,7 +142,7 @@ class CustomizePage extends Controller
             $cfilter['template_name'] = $params['template_name'];
             $count = $this->CustomizePageService->count($cfilter);
             if ($count > 0) {
-                return $this->response->array(['status' => false, 'message' => "已经有启用的模版"]);
+                return $this->response->array(['status' => false, 'message' => "已经有启用的模版", 'status_code' => 422]);
             }
         }
 

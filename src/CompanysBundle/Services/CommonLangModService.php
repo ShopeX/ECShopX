@@ -221,6 +221,7 @@ class CommonLangModService
             $lang = $this->getLang();
         }
         foreach ($langBag as $k => $v) {
+            $v = is_array($v) ? json_encode($v) : $v;
             $updateData = [
                 'attribute_value' => $v,
             ];
