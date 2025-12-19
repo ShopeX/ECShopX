@@ -15,11 +15,11 @@
 $api->version('v1', function ($api) {
     $api->group(['prefix' => 'h5app', 'namespace' => 'EspierBundle\Http\FrontApi\V1\Action'], function ($api) {
         // 上传相关
-        $api->get('/wxapp/espier/image_upload_token', ['middleware' => 'frontnoauth:h5app', 'as' => 'espier.h5app.image.uptoken.get',  'uses'=>'UploadFile@getPicUploadToken']);
-        $api->post('/wxapp/espier/image_upload', ['middleware' => 'frontnoauth:h5app', 'as' => 'espier.h5app.image.upload',  'uses'=>'UploadFile@uploadOssImage']);
+        $api->get('/wxapp/espier/image_upload_token', ['middleware' => ['dingoguard:h5app', 'api.auth'], 'as' => 'espier.h5app.image.uptoken.get',  'uses'=>'UploadFile@getPicUploadToken']);
+        $api->post('/wxapp/espier/image_upload', ['middleware' =>['dingoguard:h5app', 'api.auth'], 'as' => 'espier.h5app.image.upload',  'uses'=>'UploadFile@uploadOssImage']);
 
         $api->get('/wxapp/espier/address', ['middleware' => 'frontnoauth:h5app', 'as' => 'espier.h5app.address.get',  'uses'=>'AddressController@get']);
-        $api->post('/wxapp/espier/upload', ['middleware' => 'frontnoauth:h5app', 'as' => 'espier.wxapp.upload',  'uses'=>'UploadFile@uploadImage']);
+        $api->post('/wxapp/espier/upload', ['middleware' => ['dingoguard:h5app', 'api.auth'], 'as' => 'espier.wxapp.upload',  'uses'=>'UploadFile@uploadImage']);
         $api->post('/wxapp/espier/uploadlocal', ['middleware' => 'frontnoauth:h5app', 'as' => 'espier.wxapp.uploadlocal',  'uses'=>'UploadFile@uploadeLocalImage']);
         $api->get('/wxapp/espier/config/request_field_setting', ['middleware' => 'frontnoauth:h5app', 'as' => 'espier.wxapp.request_field_setting', 'uses'=>'ConfigRequestFieldsController@getConfig']);
     });

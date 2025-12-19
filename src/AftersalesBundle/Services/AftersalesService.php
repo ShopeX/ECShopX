@@ -2467,6 +2467,7 @@ class AftersalesService
         // 检查自填运费是否已经超过总运费
         if (isset($data['freight']) && !empty($data['freight']) && $data['freight'] > 0) {
             // 判断是否是最后一次申请（整单都申请售后）
+            // 先判断数量是否满足最后一次申请的条件（不考虑运费）
             $isLastAftersales = true;
             foreach ($data['detail'] as $v) {
                 $isLastAftersales = $this->isRefundFinishByNum($data['order_id'], $data['company_id'], $v['id'], $v['num']);
@@ -2479,6 +2480,7 @@ class AftersalesService
                 throw new ResourceException('部分退不支持退运费');
             }
             
+            // 如果是最后一次申请，再校验运费是否超出
             // 根据运费类型分别校验
             if ($orderInfo['freight_type'] == 'cash') {
                 // 现金运费校验
@@ -3600,13 +3602,9 @@ class AftersalesService
     public function isRefundFinishByNum($order_id, $company_id, $nowId, $nowNum)
     {
         /**
-         *  如果售后单含有了运费，就不需要判断所有商品是否已经退到最后一件  
+         *  判断所有商品是否已经退到最后一件
+         *  注意：这里只判断数量，不考虑运费（运费校验在调用处单独处理）
          */
-        $freight = $this->getAppliedFreightByNum($company_id, $order_id);
-        if ($freight > 0) {
-            return false;
-        }
-
         $normalOrderService = new NormalOrderService();
         $_filter = [
             'company_id' => $company_id,
@@ -3617,13 +3615,13 @@ class AftersalesService
         if (!empty($orderItems['list'])) {
             foreach ($orderItems['list'] as $v) {
                 if ($v['id'] == $nowId) {
-                    $applied_num = $this->getAppliedNumByNum($company_id, $order_id, $v['id']); // 已申请数量
+                    $applied_num = $this->getAppliedNumByNum($company_id, $order_id, $v['id']); // 已申请数量（只统计有效状态的售后单）
                     if ($nowNum + $applied_num < $v['num']) {
                         $flag = false;
                         break;
                     }
                 }else {
-                    $applied_num = $this->getAppliedNumByNum($company_id, $order_id, $v['id']); // 已申请数量
+                    $applied_num = $this->getAppliedNumByNum($company_id, $order_id, $v['id']); // 已申请数量（只统计有效状态的售后单）
                     if ($applied_num < $v['num']) {
                         $flag = false;
                         break;

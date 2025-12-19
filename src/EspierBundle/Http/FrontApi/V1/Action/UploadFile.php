@@ -73,6 +73,17 @@ class UploadFile extends BaseController
         // fe10e2f6 module
         $user = $request->get('auth');
         $companyId = $user['company_id'];
+        $user_id = $user['user_id'];
+
+        $key = $this->getRedisKey($companyId,$user_id);
+        $num = env('USER_UPLOAD_IMAGE_NUM',10);
+        $redis = app('redis')->connection('members');
+        $count =  $redis->get($key);
+        if($count >= $num) {
+            throw new ResourceException('今日图片上传超过限制');
+        }
+        $redis->incr($key);
+        $redis->expire($key, 3600 * 24);
         $filename = $request->input('filename');
         $group = $request->input('group');
         $filetype = $request->input('filetype');
@@ -160,6 +171,33 @@ class UploadFile extends BaseController
      */
     public function uploadImage(Request $request)
     {
+        $authInfo = $request->get('auth');
+
+        $company_id = $authInfo['company_id'];
+        $user_id = $authInfo['user_id'];
+
+//        $timestamp = $request->input('timestamp','');
+//        $upload_key = $request->input('upload_key','');
+//        if(!$timestamp || !$upload_key) {
+//            throw new ResourceException('参数异常');
+//        }
+//        $key = env('USER_UPLOAD_IMAGE_KEY','cd49f7a3ac286ca9acb');
+//        $sign = md5($company_id.$user_id.substr(time(),0,8).$key);
+//        if($upload_key != $sign){
+//            throw new ResourceException('上传参数异常');
+//        }
+//        if($timestamp > (time() + 120) || $timestamp < (time() - 120)){
+//            throw new ResourceException('环境参数异常');
+//        }
+        $key = $this->getRedisKey($company_id,$user_id);
+        $num = env('USER_UPLOAD_IMAGE_NUM',10);
+        $redis = app('redis')->connection('members');
+        $count =  $redis->get($key);
+        if($count >= $num) {
+            throw new ResourceException('今日图片上传超过限制');
+        }
+        $redis->incr($key);
+        $redis->expire($key, 3600 * 24);
         if (!$request->hasFile('file')) {
             throw new ResourceException('Upload File Error');
         }
@@ -258,5 +296,10 @@ class UploadFile extends BaseController
         $result = UploadTokenFactoryService::create($fileType)->uploadeImage($companyId, $group, $filename);
         $return = ['image_url' => $result];
         return $this->response->array($return);
+    }
+
+    private function getRedisKey($company_id,$user_id)
+    {
+        return 'uploadImageNum:'.$company_id.':'.$user_id;
     }
 }
