@@ -14,6 +14,7 @@ use CompanysBundle\Ego\CompanysActivationEgo;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use GoodsBundle\Services\MultiLang\MultiLangService;
+use CompanysBundle\MultiLang\MultiLangItem;
 use Illuminate\Http\Request;
 
 class ItemsCategoryRepository extends EntityRepository
@@ -319,6 +320,7 @@ class ItemsCategoryRepository extends EntityRepository
                 }
             }
             $result['list'] = $criteria->select($columns)->execute()->fetchAll();
+            app('log')->debug("items_category lists sql =>:".$criteria->getSQL());
         }
 
 
@@ -326,6 +328,104 @@ class ItemsCategoryRepository extends EntityRepository
         $lang = $this->getLang();
         $result['list'] = (new MultiLangService())->getListAddLang($result['list'],$this->multiLangField,$this->table,$lang,'category_id');
         return $result;
+    }
+
+    /**
+     * 根据多语言分类名称查找分类列表
+     * 先通过多语言表查找 category_id，再查询主表信息
+     *
+     * @param array $filter 查询条件，如果包含 category_name，会通过多语言表查找
+     * @param array $orderBy 排序
+     * @param int $pageSize 每页数量
+     * @param int $page 页码
+     * @param string $columns 查询字段
+     * @return array
+     */
+    public function listsByCategoryName($filter, $orderBy = ["created" => "DESC"], $pageSize = 100, $page = 1, $columns = '*')
+    {
+        // 如果 filter 中包含 category_name，先通过多语言表查找对应的 category_id
+        if (isset($filter['category_name']) && !empty($filter['category_name'])) {
+            $categoryNames = is_array($filter['category_name']) ? $filter['category_name'] : [$filter['category_name']];
+            $categoryIds = $this->getCategoryIdsByNames($categoryNames, $filter);
+            
+            // 如果通过多语言表找到了 category_id，替换 filter 中的 category_name
+            if (!empty($categoryIds)) {
+                // 移除 category_name，添加 category_id
+                unset($filter['category_name']);
+                // 如果 filter 中已有 category_id，需要合并
+                if (isset($filter['category_id'])) {
+                    $existingIds = is_array($filter['category_id']) ? $filter['category_id'] : [$filter['category_id']];
+                    $categoryIds = array_unique(array_merge($existingIds, $categoryIds));
+                }
+                $filter['category_id'] = $categoryIds;
+            }
+            // 如果多语言表中没找到，保留原 filter，让 lists 方法在主表中查找默认语言的值
+        }
+
+        // 调用原有的 lists 方法
+        return $this->lists($filter, $orderBy, $pageSize, $page, $columns);
+    }
+
+    /**
+     * 根据分类名称（支持多语言）查找对应的 category_id
+     *
+     * @param array $categoryNames 分类名称数组
+     * @param array $filter 额外的过滤条件（如 company_id, distributor_id, is_main_category 等）
+     * @return array category_id 数组
+     */
+    private function getCategoryIdsByNames(array $categoryNames, array $filter = [])
+    {
+        if (empty($categoryNames)) {
+            return [];
+        }
+
+        $lang = $this->getLang();
+        $multiLangItem = new MultiLangItem($lang);
+        
+        // 从多语言表中查找（只根据名称查找，其他条件在主表中验证）
+        $langFilter = [
+            'table_name' => $this->table,
+            'field' => 'category_name',
+            'attribute_value|in' => $categoryNames
+        ];
+
+        $langList = $multiLangItem->getListByFilter($langFilter, -1);
+        
+        if (empty($langList)) {
+            return [];
+        }
+
+        $categoryIds = array_column($langList, 'data_id');
+        $categoryIds = array_unique($categoryIds);
+
+        // 验证这些 category_id 是否满足 filter 中的其他条件（如 company_id, distributor_id, is_main_category）
+        if (!empty($categoryIds)) {
+            $verifyFilter = ['category_id' => $categoryIds];
+            
+            // 合并其他过滤条件
+            foreach (['company_id', 'distributor_id', 'is_main_category'] as $key) {
+                if (isset($filter[$key])) {
+                    $verifyFilter[$key] = $filter[$key];
+                }
+            }
+            
+            // 如果没有任何额外条件，直接返回
+            if (count($verifyFilter) === 1) {
+                return $categoryIds;
+            }
+            
+            // 在主表中验证这些 ID 是否满足条件
+            $conn = app('registry')->getConnection('default');
+            $qb = $conn->createQueryBuilder();
+            $qb->select('category_id')
+                ->from($this->table);
+            $qb = $this->_filter($verifyFilter, $qb);
+            $verifiedIds = $qb->execute()->fetchAll(\PDO::FETCH_COLUMN);
+            
+            return $verifiedIds;
+        }
+
+        return [];
     }
 
     public function getSingleLevelList($filter, $orderBy = ["created" => "DESC"], $pageSize = 100, $page = 1, $columns = "*") {

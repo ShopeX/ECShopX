@@ -793,7 +793,7 @@ class PagesTemplateServices
         // 模版关联的导航设置
         $pages_template_set_info = $this->pagesTemplateSetRepository->getInfo(['company_id' => $company_id, 'pages_template_id' => $result['pages_template_id']]);
         if ($pages_template_set_info) {
-            $data['tab_bar'] = $pages_template_set_info['pages_template_set_info'];
+            $data['tab_bar'] = $pages_template_set_info['pages_template_set_info'] ?? ($pages_template_set_info['tab_bar'] ?? '');
         }
 
         //模板内容数据

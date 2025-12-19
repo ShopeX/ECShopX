@@ -354,6 +354,9 @@ class AftersalesRefundRepository extends EntityRepository
         if (isset($data['freight'])) {
             $entity->setFreight($data['freight']);
         }
+        if (isset($data['freight_type'])) {
+            $entity->setFreightType($data['freight_type']);
+        }
         return $entity;
     }
 
@@ -403,6 +406,7 @@ class AftersalesRefundRepository extends EntityRepository
             'hf_order_id' => $entity->getHfOrderId(),
             'merchant_id' => $entity->getMerchantId(),
             'freight' => $entity->getFreight(),
+            'freight_type' => $entity->getFreightType(),
         ];
     }
 

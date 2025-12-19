@@ -106,7 +106,7 @@ class AftersalesService
     private function __genAftersalesBn()
     {
         $sign = date("Ymd");
-        $randval = substr(implode(null, array_map('ord', str_split(substr(uniqid(), 7, 13), 1))), 0, 7);
+        $randval = substr(implode('', array_map('ord', str_split(substr(uniqid(), 7, 13), 1))), 0, 7);
         return $sign . $randval;
     }
 
@@ -165,6 +165,7 @@ class AftersalesService
     {
         $aftersales_bn = $this->__genAftersalesBn();
         $freight = floatval($data['freight'] ?? 0); // 自填运费
+        $original_freight = $freight; // 保存原始运费值，用于判断是否退运费
         $aftersales_data = [
             'aftersales_bn' => $aftersales_bn,
             'shop_id' => $orderInfo['shop_id'],
@@ -338,15 +339,14 @@ class AftersalesService
             }
 
             // 加入自填运费 (子订单总金额是不包含运费的)
-            if ($orderInfo['freight_type'] == 'point') {
-                $total_refund_point += $freight;
-                $freight = 0;//如果是退积分运费，不单独显示
-            } else {
-                //退款运费金额不显示在退款总金额里
-                // $total_refund_fee += $freight;
-            }
+            // freight 根据 freight_type 存储现金（分）或积分值，与订单表逻辑一致
+            $aftersales_data['freight'] = $freight;
+            // 设置运费类型
+            $aftersales_data['freight_type'] = $orderInfo['freight_type'] ?? 'cash';
 
             // 创建售后主单据
+            app('log')->info('aftersales::__createAftersales::orderInfo===>'.json_encode($orderInfo,JSON_UNESCAPED_UNICODE));
+            app('log')->info('aftersales::__createAftersales::aftersales_data===>'.json_encode($aftersales_data,JSON_UNESCAPED_UNICODE));
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
             if (!$aftersales_data['is_partial_cancel']) {
                 $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
@@ -371,7 +371,7 @@ class AftersalesService
                 'refund_channel' => $trade['pay_type'] == 'offline_pay' ? 'offline' : 'original', // 默认取消订单原路返回,pay_type=offline_pay为线下退款
                 'refund_fee' => $total_refund_fee,
                 'refund_point' => $total_refund_point,
-                'return_freight' => $freight ? 1 : 0, // 0 不退运费
+                'return_freight' => $original_freight ? 1 : 0, // 0 不退运费（使用原始运费值判断）
                 'pay_type' => $orderInfo['pay_type'],
                 'currency' => ($trade['pay_type'] == 'point') ? '' : $trade['fee_type'],
                 'cur_fee_type' => ($trade['pay_type'] == 'point') ? '' : $trade['cur_fee_type'],
@@ -380,7 +380,8 @@ class AftersalesService
                 'cur_pay_fee' => ($trade['pay_type'] == 'point') ? ($total_refund_point * $trade['cur_fee_rate']) : ($total_refund_fee * $trade['cur_fee_rate']), // trade表没有单独积分字段，所以这样写
                 'return_point' => $total_return_point,
                 'merchant_id' => $orderInfo['merchant_id'] ?? 0,
-                'freight' => $freight,
+                'freight' => $freight, // 根据freight_type存储现金（分）或积分值
+                'freight_type' => $aftersales_data['freight_type'] ?? $orderInfo['freight_type'] ?? 'cash',
             ];
             $refund = $aftersalesRefundService->createAftersalesRefund($refundData);
 
@@ -683,8 +684,35 @@ class AftersalesService
             $aftersales_data['refund_fee'] = $sub_item_fee;
             $aftersales_data['refund_point'] = $sub_item_point;
             // 判断是否是最后一个售后数据了
+            $freight = 0;
+            $original_freight = 0; // 保存原始运费值，用于判断是否退运费
             if ($is_refund_freight && $is_refund_freight_flag) {
-                $aftersales_data['freight'] = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $orderInfo['freight_fee'] ? $data['freight'] : $orderInfo['freight_fee'];
+                // 根据运费类型处理运费（与订单表逻辑一致：freight_fee根据freight_type存储现金或积分值）
+                if ($orderInfo['freight_type'] == 'cash') {
+                    // 现金运费（分）
+                    $max_freight = $orderInfo['freight_fee'];
+                    $refunded_freight = $this->getAppliedTotalRefundFreight($data['company_id'], $data['order_id']);
+                    $remain_freight = $max_freight - $refunded_freight;
+                    $max_freight = min($max_freight, $remain_freight);
+                    $freight = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $max_freight ? $data['freight'] : $max_freight;
+                    $original_freight = $freight; // 保存原始运费值
+                } else if ($orderInfo['freight_type'] == 'point') {
+                    // 积分运费（积分值，订单表的freight_fee存储的是积分值）
+                    $max_freight = $orderInfo['freight_fee'];
+                    $refunded_freight = $this->getAppliedTotalRefundFreightPoint($data['company_id'], $data['order_id']);
+                    $remain_freight = $max_freight - $refunded_freight;
+                    $max_freight = min($max_freight, $remain_freight);
+                    $freight = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $max_freight ? $data['freight'] : $max_freight;
+                    $original_freight = $freight; // 保存原始运费值
+                }
+                // 统一使用 freight 字段存储（根据 freight_type 决定是现金还是积分值）
+                $aftersales_data['freight'] = $freight;
+                // 设置运费类型
+                $aftersales_data['freight_type'] = $orderInfo['freight_type'];
+            } else {
+                // 未申请运费时，设置默认值
+                $aftersales_data['freight_type'] = $orderInfo['freight_type'] ?? 'cash';
+                $aftersales_data['freight'] = 0;
             }
             // 创建售后主单据
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
@@ -709,23 +737,19 @@ class AftersalesService
                 'refund_type' => 0, // 0 售后申请退款
                 'refund_channel' => $trade['pay_type'] == 'offline_pay' ? 'offline' : 'original', // 默认取消订单原路返回,pay_type=offline_pay为线下退款
                 'refund_fee' => $sub_item_fee,
-                'refund_point' => $sub_item_point,
-                'return_freight' => 0, // 0 不退运费
+                'refund_point' => $aftersales_data['refund_point'], // refund_point 不包含运费积分，运费积分单独存储在 freight 中
+                'return_freight' => $original_freight ? 1 : 0, // 使用原始运费值判断是否退运费
                 'pay_type' => $orderInfo['pay_type'],
                 'currency' => ($trade['pay_type'] == 'point') ? '' : $trade['fee_type'],
                 'cur_fee_type' => ($trade['pay_type'] == 'point') ? '' : $trade['cur_fee_type'],
                 'cur_fee_rate' => $trade['cur_fee_rate'],
                 'cur_fee_symbol' => ($trade['pay_type'] == 'point') ? '' : $trade['cur_fee_symbol'],
-                'cur_pay_fee' => ($trade['pay_type'] == 'point') ? ($sub_item_point * $trade['cur_fee_rate']) : ($sub_item_fee * $trade['cur_fee_rate']), // trade表没有单独积分字段，所以这样写
+                'cur_pay_fee' => ($trade['pay_type'] == 'point') ? ($aftersales_data['refund_point'] * $trade['cur_fee_rate']) : ($sub_item_fee * $trade['cur_fee_rate']), // trade表没有单独积分字段，所以这样写
                 'return_point' => $total_return_point,
                 'merchant_id' => $orderInfo['merchant_id'] ?? 0,
-                'freight' => 0,
+                'freight' => $freight, // 根据freight_type存储现金（分）或积分值
+                'freight_type' => $aftersales_data['freight_type'] ?? $orderInfo['freight_type'] ?? 'cash',
             ];
-             // 判断是否是最后一个售后数据了
-            if ($is_refund_freight && $is_refund_freight_flag) {
-                $refundData['freight'] = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $orderInfo['freight_fee'] ? $data['freight'] : $orderInfo['freight_fee'];
-                $refundData['return_freight'] = 1;
-            }
             $refund = $aftersalesRefundService->createAftersalesRefund($refundData);
             
             // if ($orderInfo['order_status'] != 'DONE') {
@@ -2441,14 +2465,41 @@ class AftersalesService
         // }
 
         // 检查自填运费是否已经超过总运费
-        if (isset($data['freight']) && !empty($data['freight'])) {
-            if (!$orderInfo['freight_fee']) {
-                throw new ResourceException('订单未付运费');
+        if (isset($data['freight']) && !empty($data['freight']) && $data['freight'] > 0) {
+            // 判断是否是最后一次申请（整单都申请售后）
+            $isLastAftersales = true;
+            foreach ($data['detail'] as $v) {
+                $isLastAftersales = $this->isRefundFinishByNum($data['order_id'], $data['company_id'], $v['id'], $v['num']);
+                if (!$isLastAftersales) {
+                    break; // 只要有一个不是最后一次，就退出
+                }
             }
-            $refunded_freight = $this->getAppliedTotalRefundFreight($data['company_id'], $data['order_id']);
-            $remain_freight = $orderInfo['freight_fee'] - $refunded_freight;
-            if ($data['freight'] > $remain_freight) {
-                throw new ResourceException('申请退款运费不能超出支付运费');
+            
+            if (!$isLastAftersales) {
+                throw new ResourceException('部分退不支持退运费');
+            }
+            
+            // 根据运费类型分别校验
+            if ($orderInfo['freight_type'] == 'cash') {
+                // 现金运费校验
+                if (!$orderInfo['freight_fee'] || $orderInfo['freight_fee'] <= 0) {
+                    throw new ResourceException('订单未付运费');
+                }
+                $refunded_freight = $this->getAppliedTotalRefundFreight($data['company_id'], $data['order_id']);
+                $remain_freight = $orderInfo['freight_fee'] - $refunded_freight;
+                if ($data['freight'] > $remain_freight) {
+                    throw new ResourceException('申请退款运费不能超出支付运费');
+                }
+            } else if ($orderInfo['freight_type'] == 'point') {
+                // 积分运费校验（订单表的freight_fee存储的是积分值）
+                if (!$orderInfo['freight_fee'] || $orderInfo['freight_fee'] <= 0) {
+                    throw new ResourceException('订单未付积分运费');
+                }
+                $refunded_freight_point = $this->getAppliedTotalRefundFreightPoint($data['company_id'], $data['order_id']);
+                $remain_freight_point = $orderInfo['freight_fee'] - $refunded_freight_point;
+                if ($data['freight'] > $remain_freight_point) {
+                    throw new ResourceException('申请退款积分运费不能超出支付积分运费');
+                }
             }
         }
 
@@ -2506,7 +2557,7 @@ class AftersalesService
         return true;
     }
 
-    // 获取订单已经申请的退款运费金额
+    // 获取订单已经申请的退款运费金额（现金运费）
     public function getAppliedTotalRefundFreight($company_id, $order_id)
     {
         $conn = app('registry')->getConnection('default');
@@ -2515,6 +2566,23 @@ class AftersalesService
             ->from('aftersales')
             ->where($qb->expr()->eq('company_id', $company_id))
             ->andWhere($qb->expr()->eq('order_id', $qb->expr()->literal($order_id)))
+            ->andWhere($qb->expr()->eq('freight_type', $qb->expr()->literal('cash'))) // 只查询现金运费
+            ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2])); // 0未处理，1处理中，2已处理，5申请中
+        $sum = $qb->execute()->fetchColumn();
+
+        return $sum ?? 0;
+    }
+
+    // 获取订单已经申请的退款积分运费（根据freight_type查询freight字段）
+    public function getAppliedTotalRefundFreightPoint($company_id, $order_id)
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('sum(freight)')
+            ->from('aftersales')
+            ->where($qb->expr()->eq('company_id', $company_id))
+            ->andWhere($qb->expr()->eq('order_id', $qb->expr()->literal($order_id)))
+            ->andWhere($qb->expr()->eq('freight_type', $qb->expr()->literal('point'))) // 只查询积分运费
             ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2])); // 0未处理，1处理中，2已处理，5申请中
         $sum = $qb->execute()->fetchColumn();
 
@@ -3408,8 +3476,37 @@ class AftersalesService
             $aftersales_data['refund_point'] = $sub_item_point;
 
             // 判断是否是最后一个售后数据了
+            $freight = 0;
+            $freight_point = 0;
             if ($is_refund_freight && $is_refund_freight_flag) {
-                $aftersales_data['freight'] = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $orderInfo['freight_fee'] ? $data['freight'] : $orderInfo['freight_fee'];
+                // 根据运费类型处理运费
+                if ($orderInfo['freight_type'] == 'cash') {
+                    // 现金运费
+                    $max_freight = $orderInfo['freight_fee'];
+                    $refunded_freight = $this->getAppliedTotalRefundFreight($data['company_id'], $data['order_id']);
+                    $remain_freight = $max_freight - $refunded_freight;
+                    $max_freight = min($max_freight, $remain_freight);
+                    $freight = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $max_freight ? $data['freight'] : $max_freight;
+                    $aftersales_data['freight'] = $freight;
+                    $aftersales_data['freight_point'] = 0;
+                } else if ($orderInfo['freight_type'] == 'point') {
+                    // 积分运费
+                    $max_freight_point = $orderInfo['freight_point'];
+                    $refunded_freight_point = $this->getAppliedTotalRefundFreightPoint($data['company_id'], $data['order_id']);
+                    $remain_freight_point = $max_freight_point - $refunded_freight_point;
+                    $max_freight_point = min($max_freight_point, $remain_freight_point);
+                    $freight_point = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $max_freight_point ? $data['freight'] : $max_freight_point;
+                    // 积分运费单独存储，不加到 refund_point 中（在退款时 doRefund() 会处理）
+                    $aftersales_data['freight'] = 0;
+                    $aftersales_data['freight_point'] = $freight_point;
+                }
+                // 设置运费类型
+                $aftersales_data['freight_type'] = $orderInfo['freight_type'];
+            } else {
+                // 未申请运费时，设置默认值
+                $aftersales_data['freight_type'] = $orderInfo['freight_type'] ?? 'cash';
+                $aftersales_data['freight'] = 0;
+                $aftersales_data['freight_point'] = 0;
             }
             // 创建售后主单据
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
@@ -3443,8 +3540,14 @@ class AftersalesService
             ];
             // 判断是否是最后一个售后数据了
             if ($is_refund_freight && $is_refund_freight_flag) {
-                $refundData['freight'] = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $orderInfo['freight_fee'] ? $data['freight'] : $orderInfo['freight_fee'];
+                // 根据freight_type存储现金（分）或积分值，与订单表逻辑一致
+                $refundData['freight'] = $freight;
                 $refundData['return_freight'] = 1;
+                $refundData['freight_type'] = $orderInfo['freight_type'];
+            } else {
+                // 未申请运费时，设置默认值
+                $refundData['freight_type'] = $orderInfo['freight_type'] ?? 'cash';
+                $refundData['freight'] = 0;
             }
             $refund = $aftersalesRefundService->createAftersalesRefund($refundData);
             if ($data['aftersales_type'] == 'ONLY_REFUND' || $data['goods_returned']) {

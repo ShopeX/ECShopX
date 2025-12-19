@@ -554,7 +554,9 @@ class SupplierGoodsUploadService
         }
 
         $itemsCategoryService = new ItemsCategoryService();
-        $lists = $itemsCategoryService->lists(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => 1]);
+        app('log')->debug("getItemMainCategoryId catNamesArr =>:".json_encode($catNamesArr, 256));
+        $lists = $itemsCategoryService->listsByCategoryName(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => 1]);
+        app('log')->debug("getItemMainCategoryId lists =>:".json_encode($lists, 256));
         if ($lists['total_count'] <= 0) {
             throw new BadRequestHttpException('上传管理分类不存在,' . $mainCategory);
         }
@@ -616,7 +618,7 @@ class SupplierGoodsUploadService
 
         $itemsCategoryService = new ItemsCategoryService();
         // 数据结构买办法判断获取的分类ID是否最子级分类，三级分类改造后在优化
-        $lists = $itemsCategoryService->lists(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => $isMain]);
+        $lists = $itemsCategoryService->listsByCategoryName(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => $isMain]);
         if ($lists['total_count'] <= 0) {
             if ($isMain) {
                 throw new BadRequestHttpException('上传管理分类参数有误');
@@ -728,7 +730,7 @@ class SupplierGoodsUploadService
         $itemsCategoryService = new ItemsCategoryService();
         // 数据结构买办法判断获取的分类ID是否最子级分类，三级分类改造后在优化
         $filter = ['company_id' => $companyId, 'distributor_id' => $row['distributor_id'], 'category_name' => $catNamesArr, 'is_main_category' => 0];
-        $lists = $itemsCategoryService->lists($filter);
+        $lists = $itemsCategoryService->listsByCategoryName($filter);
         if ($lists['total_count'] <= 0) {
             throw new BadRequestHttpException('上传商品分类参数有误');
         }
@@ -774,11 +776,17 @@ class SupplierGoodsUploadService
         $brandId = 0;
         if ($brandName) {
             $itemsAttributesService = new ItemsAttributesService();
-            $data = $itemsAttributesService->getInfo(['company_id' => $companyId, 'distributor_id' => $row['distributor_id'], 'attribute_name' => $brandName, 'attribute_type' => 'brand']);
-            if (!$data) {
+            $data = $itemsAttributesService->listsByAttributeName(['company_id' => $companyId, 'distributor_id' => $row['distributor_id'], 'attribute_name' => $brandName, 'attribute_type' => 'brand']);
+            if (!$data || $data['total_count'] == 0 || empty($data['list'])) {
                 throw new BadRequestHttpException($brandName . ' 品牌名称不存在');
             }
-            $brandId = $data['attribute_id'];
+            $brandId = $data['list'][0]['attribute_id'];
+
+            // $data = $itemsAttributesService->getInfo(['company_id' => $companyId, 'distributor_id' => $row['distributor_id'], 'attribute_name' => $brandName, 'attribute_type' => 'brand']);
+            // if (!$data) {
+            //     throw new BadRequestHttpException($brandName . ' 品牌名称不存在');
+            // }
+            // $brandId = $data['attribute_id'];
         }
         return $brandId;
     }
@@ -800,7 +808,7 @@ class SupplierGoodsUploadService
                 $attributeValues[$itemRow[0]] = $itemRow[1];
             }
 
-            $attrList = $itemsAttributesService->lists(['company_id' => $companyId, 'attribute_name' => $attributeNames, 'attribute_type' => 'item_params']);
+            $attrList = $itemsAttributesService->listsByAttributeName(['company_id' => $companyId, 'attribute_name' => $attributeNames, 'attribute_type' => 'item_params']);
             if ($attrList['total_count'] > 0) {
                 foreach ($attrList['list'] as $row) {
                     $attrValue = $itemsAttributesService->getAttrValue(['company_id' => $companyId, 'attribute_value' => $attributeValues[$row['attribute_name']], 'attribute_id' => $row['attribute_id']]);
@@ -832,8 +840,10 @@ class SupplierGoodsUploadService
 
             $itemsAttributesService = new ItemsAttributesService();
             $itemParams = explode('|', $item['item_spec']);
+            app('log')->debug("getItemSpec itemParams =>:".json_encode($itemParams, 256));
             foreach ($itemParams as $row) {
                 $itemRow = explode(':', $row);
+                app('log')->debug("getItemSpec itemRow =>:".json_encode($itemRow, 256));
                 if (empty($itemRow[0])) {
                     throw new BadRequestHttpException('商品规格解析错误');
                 }
@@ -849,14 +859,19 @@ class SupplierGoodsUploadService
                 'company_id' => $companyId, 'attribute_name' => $attributeNames,
                 'attribute_id' => $goodsSpecIds, 'attribute_type' => 'item_spec'
             ];
-            $attrList = $itemsAttributesService->lists($filter, 1, 100, ['is_image' => 'DESC', 'attribute_id' => 'ASC']);
+            app('log')->debug("getItemSpec filter =>:".json_encode($filter, 256));
+            $attrList = $itemsAttributesService->listsByAttributeName($filter, 1, 100, ['is_image' => 'DESC', 'attribute_id' => 'ASC']);
+            app('log')->debug("getItemSpec attrList =>:".json_encode($attrList, 256));
+            app('log')->debug("getItemSpec attributeNames =>:".json_encode($attributeNames, 256));
             if ($attrList['total_count'] == count($attributeNames)) {
                 $attributeids = array_column($attrList['list'], 'attribute_id');
             } else {
                 throw new BadRequestHttpException('商品规格[' . implode(',', $attributeNames) . ']存在无效值');
             }
-
+            
             $attrValuesList = $itemsAttributesService->getAttrValuesListBy(['company_id' => $companyId, 'attribute_value' => $attributeValues, 'attribute_id' => $attributeids]);
+            app('log')->debug("getItemSpec attrValuesList =>:".json_encode($attrValuesList, 256));
+            app('log')->debug("getItemSpec attributeValues =>:".json_encode($attributeValues, 256));
             if ($attrValuesList['total_count'] == count($attributeValues)) {
                 foreach ($attrValuesList['list'] as $row) {
                     $data[$row['attribute_id']] = [

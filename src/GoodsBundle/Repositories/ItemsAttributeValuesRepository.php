@@ -13,6 +13,7 @@ use GoodsBundle\Entities\ItemsAttributeValues;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use GoodsBundle\Services\MultiLang\MultiLangService;
+use CompanysBundle\MultiLang\MultiLangItem;
 
 class ItemsAttributeValuesRepository extends EntityRepository
 {
@@ -242,6 +243,119 @@ class ItemsAttributeValuesRepository extends EntityRepository
         $lang = $this->getLang();
         $res["list"] = (new MultiLangService())->getListAddLang($res["list"],$this->multiLangField,$this->table,$lang,'attribute_value_id',);
         return $res;
+    }
+
+    /**
+     * 根据多语言属性值查找属性值列表
+     * 先通过多语言表查找 attribute_value_id，再查询主表信息
+     *
+     * @param array $filter 查询条件，如果包含 attribute_value，会通过多语言表查找
+     * @param int $page 页码
+     * @param int $pageSize 每页数量
+     * @param array $orderBy 排序
+     * @return array
+     */
+    public function listsByAttributeValue($filter, $page = 1, $pageSize = 100, $orderBy = array())
+    {
+        // 如果 filter 中包含 attribute_value，先通过多语言表查找对应的 attribute_value_id
+        if (isset($filter['attribute_value']) && !empty($filter['attribute_value'])) {
+            $attributeValues = is_array($filter['attribute_value']) ? $filter['attribute_value'] : [$filter['attribute_value']];
+            $attributeValueIds = $this->getAttributeValueIdsByValues($attributeValues, $filter);
+            app('log')->debug("listsByAttributeValue attributeValueIds =>:".json_encode($attributeValueIds, 256));
+            // 如果通过多语言表找到了 attribute_value_id，替换 filter 中的 attribute_value
+            if (!empty($attributeValueIds)) {
+                // 移除 attribute_value，添加 attribute_value_id
+                unset($filter['attribute_value']);
+                // 如果 filter 中已有 attribute_value_id，需要取交集
+                if (isset($filter['attribute_value_id'])) {
+                    $existingIds = is_array($filter['attribute_value_id']) ? $filter['attribute_value_id'] : [$filter['attribute_value_id']];
+                    $attributeValueIds = array_values(array_intersect($existingIds, $attributeValueIds));
+                    app('log')->debug("listsByAttributeValue attributeValueIds2 =>:".json_encode($attributeValueIds, 256));
+                }
+                $filter['attribute_value_id'] = $attributeValueIds;
+            }
+            // 如果多语言表中没找到，保留原 filter，让 lists 方法在主表中查找默认语言的值
+        }
+
+        // 调用原有的 lists 方法
+        return $this->lists($filter, $page, $pageSize, $orderBy);
+    }
+
+    /**
+     * 根据属性值（支持多语言）查找对应的 attribute_value_id
+     *
+     * @param array $attributeValues 属性值数组
+     * @param array $filter 额外的过滤条件（如 company_id, attribute_id 等）
+     * @return array attribute_value_id 数组
+     */
+    private function getAttributeValueIdsByValues(array $attributeValues, array $filter = [])
+    {
+        if (empty($attributeValues)) {
+            return [];
+        }
+
+        $lang = $this->getLang();
+        $multiLangItem = new MultiLangItem($lang);
+
+        // 从多语言表中查找
+        // 如果 filter 中有 company_id，在多语言表查询时就加上，可以提前过滤，提高效率
+        $langFilter = [
+            'table_name' => $this->table,
+            'field' => 'attribute_value',
+            'attribute_value|in' => $attributeValues
+        ];
+        
+        // 多语言表中有 company_id 字段，可以在查询时加上这个条件
+        if (isset($filter['company_id'])) {
+            $langFilter['company_id'] = $filter['company_id'];
+        }
+        
+        app('log')->debug("getAttributeValueIdsByValues langFilter =>:".json_encode($langFilter, 256));
+        $langList = $multiLangItem->getListByFilter($langFilter, -1);
+
+        app('log')->debug("getAttributeValueIdsByValues langList =>:".json_encode($langList, 256));
+        if (empty($langList)) {
+            return [];
+        }
+
+        $attributeValueIds = array_column($langList, 'data_id');
+        $attributeValueIds = array_unique($attributeValueIds);
+
+        // 验证这些 attribute_value_id 是否满足 filter 中的其他条件（如 attribute_id）
+        // company_id 已经在多语言表查询时过滤了，这里只需要验证 attribute_id
+        if (!empty($attributeValueIds)) {
+            $verifyFilter = ['attribute_value_id' => $attributeValueIds];
+
+            // 合并其他过滤条件（attribute_id 不在多语言表中，需要在主表中验证）
+            if (isset($filter['attribute_id'])) {
+                $verifyFilter['attribute_id'] = $filter['attribute_id'];
+            }
+
+            // 如果没有任何额外条件，直接返回
+            if (count($verifyFilter) === 1) {
+                return $attributeValueIds;
+            }
+
+            // 在主表中验证这些 ID 是否满足条件
+            $criteria = Criteria::create();
+            foreach ($verifyFilter as $field => $value) {
+                if (is_array($value)) {
+                    $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+                } else {
+                    $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+                }
+            }
+
+            $entityList = $this->matching($criteria);
+            $verifiedIds = [];
+            foreach ($entityList as $entity) {
+                $verifiedIds[] = $entity->getAttributeValueId();
+            }
+
+            return $verifiedIds;
+        }
+
+        return [];
     }
 
     /**

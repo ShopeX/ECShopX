@@ -72,8 +72,14 @@ class AftersalesRefundService
             'company_id' => $params['company_id'],
         ];
         $refundData = $this->aftersalesRefundRepository->getInfo($filter);
-        //退款金额要增加运费
-        $refundData['refund_fee'] += $refundData['freight'] ?? 0;
+        //退款金额要增加运费（根据运费类型分别处理，与订单表逻辑一致）
+        if (($refundData['freight_type'] ?? 'cash') == 'cash') {
+            // 现金运费（分）加到退款金额中
+            $refundData['refund_fee'] += $refundData['freight'] ?? 0;
+        } else if (($refundData['freight_type'] ?? 'cash') == 'point') {
+            // 积分运费（积分值）加到退款积分中
+            $refundData['refund_point'] += $refundData['freight'] ?? 0;
+        }
         
         $tradeService = new TradeService();
         $tradeInfo = $tradeService->getInfo(['company_id' => $params['company_id'], 'trade_id' => $refundData['trade_id'], 'trade_state' => 'SUCCESS']);
@@ -408,6 +414,7 @@ class AftersalesRefundService
             'refund_point' => $params['refund_point'],
             'return_freight' => $params['return_freight'],
             'freight' => $params['freight'] ?? 0,
+            'freight_type' => $params['freight_type'] ?? 'cash',
             'pay_type' => $params['pay_type'],
             'currency' => $params['currency'],
             'cur_fee_type' => $params['cur_fee_type'],
@@ -442,6 +449,7 @@ class AftersalesRefundService
             'refund_point' => $params['refund_point'],
             'return_freight' => $params['return_freight'],
             'freight' => $params['freight'] ?? 0,
+            'freight_type' => $params['freight_type'] ?? 'cash',
             'pay_type' => $params['pay_type'],
             'currency' => $params['currency'],
             'cur_fee_type' => $params['cur_fee_type'],

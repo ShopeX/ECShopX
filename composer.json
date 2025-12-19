@@ -1,6 +1,6 @@
 {
     "name": "laravel/lumen",
-    "version": "3.21.2",
+    "version": "4.1.2",
     "description": "The Laravel Lumen Framework.",
     "keywords": ["framework", "laravel", "lumen"],
     "license": "MIT",
@@ -86,7 +86,8 @@
         "sort-packages": true,
         "optimize-autoloader": true,
         "allow-plugins": {
-            "easywechat-composer/easywechat-composer": true
+            "easywechat-composer/easywechat-composer": true,
+            "php-http/discovery": false
         }
     },
     "minimum-stability": "dev",
@@ -109,10 +110,19 @@
         "test": "phpunit --colors",
         "psalm": "psalm"
     },
-    "repositories": {
-        "packagist": {
+    "repositories": [
+        {
             "type": "composer",
-            "url": "https://mirrors.aliyun.com/composer/"
+            "url": "https://mirrors.aliyun.com/composer/",
+            "options": {
+                "http": {
+                    "timeout": 30
+                }
+            }
+        },
+        {
+            "type": "composer",
+            "url": "https://repo.packagist.org"
         }
-    }
+    ]
 }

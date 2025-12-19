@@ -168,7 +168,8 @@ class SettingService
     {
         $key = 'ItemStoreSetting:' . $companyId;
         if (isset($inputdata['item_store_status'])) {
-            $data['item_store_status'] = ($inputdata['item_store_status'] == 'false') ? false : true;
+            $data['item_store_status'] = ($inputdata['item_store_status'] ?? false) === true;
+            // $data['item_store_status'] = ($inputdata['item_store_status'] == 'false') ? false : true;
             app('redis')->connection('companys')->set($key, json_encode($data));
         }
         return $data;
@@ -235,7 +236,8 @@ class SettingService
     {
         $key = 'ItemSalesSetting:' . $companyId;
         if (isset($inputdata['item_sales_status'])) {
-            $data['item_sales_status'] = ($inputdata['item_sales_status'] == 'false') ? false : true;
+            // $data['item_sales_status'] = ($inputdata['item_sales_status'] == 'false') ? false : true;
+            $data['item_sales_status'] = ($inputdata['item_sales_status'] ?? false) === true;
             app('redis')->connection('companys')->set($key, json_encode($data));
         }
         return $data;
@@ -378,7 +380,8 @@ class SettingService
     public function saveShareParametersSetting($companyId, $inputdata)
     {
         $key = 'ShareParametersSetting:' . $companyId;
-        $data['distributor_param_status'] = ($inputdata['distributor_param_status'] == 'false') ? false : true;
+        $data['distributor_param_status'] = ($inputdata['distributor_param_status'] ?? false) === true;
+        // $data['distributor_param_status'] = ($inputdata['distributor_param_status'] == 'false') ? false : true;
         app('redis')->connection('companys')->set($key, json_encode($data));
         return $data;
     }

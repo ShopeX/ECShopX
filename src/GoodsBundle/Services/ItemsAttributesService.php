@@ -374,6 +374,11 @@ class ItemsAttributesService
     public function getAttrValuesListBy($filter)
     {
         $itemsAttributesValuesRepository = app('registry')->getManager('default')->getRepository(ItemsAttributeValues::class);
+        // 如果 filter 中包含 attribute_value，使用支持多语言的方法
+        if (isset($filter['attribute_value']) && !empty($filter['attribute_value'])) {
+            app('log')->debug("getAttrValuesListBy filter =>:".json_encode($filter, 256));
+            return $itemsAttributesValuesRepository->listsByAttributeValue($filter, 1, 100);
+        }
         return $itemsAttributesValuesRepository->lists($filter, 1, 100);
     }
 

@@ -13,6 +13,7 @@ use GoodsBundle\Entities\ItemsAttributes;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use GoodsBundle\Services\MultiLang\MultiLangService;
+use CompanysBundle\MultiLang\MultiLangItem;
 
 class ItemsAttributesRepository extends EntityRepository
 {
@@ -362,5 +363,110 @@ class ItemsAttributesRepository extends EntityRepository
         $lists = $service->getListAddLang($lists,$this->multiLangField,$this->table,$this->getLang(),$this->prk);
 
         return $lists;
+    }
+
+    /**
+     * 根据多语言属性名称查找属性列表
+     * 先通过多语言表查找 attribute_id，再查询主表信息
+     *
+     * @param array $filter 查询条件，如果包含 attribute_name，会通过多语言表查找
+     * @param int $page 页码
+     * @param int $pageSize 每页数量
+     * @param array $orderBy 排序
+     * @return array
+     */
+    public function listsByAttributeName($filter, $page = 1, $pageSize = 100, $orderBy = array())
+    {
+        // 如果 filter 中包含 attribute_name，先通过多语言表查找对应的 attribute_id
+        if (isset($filter['attribute_name']) && !empty($filter['attribute_name'])) {
+            $attributeNames = is_array($filter['attribute_name']) ? $filter['attribute_name'] : [$filter['attribute_name']];
+            $attributeIds = $this->getAttributeIdsByNames($attributeNames, $filter);
+
+            // 如果通过多语言表找到了 attribute_id，替换 filter 中的 attribute_name
+            if (!empty($attributeIds)) {
+                // 移除 attribute_name，添加 attribute_id
+                unset($filter['attribute_name']);
+                // 如果 filter 中已有 attribute_id，需要取交集
+                if (isset($filter['attribute_id'])) {
+                    $existingIds = is_array($filter['attribute_id']) ? $filter['attribute_id'] : [$filter['attribute_id']];
+                    $attributeIds = array_values(array_intersect($existingIds, $attributeIds));
+                }
+                $filter['attribute_id'] = $attributeIds;
+            }
+            // 如果多语言表中没找到，保留原 filter，让 lists 方法在主表中查找默认语言的值
+        }
+
+        // 调用原有的 lists 方法
+        return $this->lists($filter, $page, $pageSize, $orderBy);
+    }
+
+    /**
+     * 根据属性名称（支持多语言）查找对应的 attribute_id
+     *
+     * @param array $attributeNames 属性名称数组
+     * @param array $filter 额外的过滤条件（如 company_id, distributor_id, attribute_type 等）
+     * @return array attribute_id 数组
+     */
+    private function getAttributeIdsByNames(array $attributeNames, array $filter = [])
+    {
+        if (empty($attributeNames)) {
+            return [];
+        }
+
+        $lang = $this->getLang();
+        $multiLangItem = new MultiLangItem($lang);
+
+        // 从多语言表中查找（只根据名称查找，其他条件在主表中验证）
+        $langFilter = [
+            'table_name' => $this->table,
+            'field' => 'attribute_name',
+            'attribute_value|in' => $attributeNames
+        ];
+
+        $langList = $multiLangItem->getListByFilter($langFilter, -1);
+
+        if (empty($langList)) {
+            return [];
+        }
+
+        $attributeIds = array_column($langList, 'data_id');
+        $attributeIds = array_unique($attributeIds);
+
+        // 验证这些 attribute_id 是否满足 filter 中的其他条件（如 company_id, distributor_id, attribute_type）
+        if (!empty($attributeIds)) {
+            $verifyFilter = ['attribute_id' => $attributeIds];
+
+            // 合并其他过滤条件
+            foreach (['company_id', 'distributor_id', 'attribute_type'] as $key) {
+                if (isset($filter[$key])) {
+                    $verifyFilter[$key] = $filter[$key];
+                }
+            }
+
+            // 如果没有任何额外条件，直接返回
+            if (count($verifyFilter) === 1) {
+                return $attributeIds;
+            }
+
+            // 在主表中验证这些 ID 是否满足条件
+            $criteria = Criteria::create();
+            foreach ($verifyFilter as $field => $value) {
+                if (is_array($value)) {
+                    $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+                } else {
+                    $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+                }
+            }
+
+            $entityList = $this->matching($criteria);
+            $verifiedIds = [];
+            foreach ($entityList as $entity) {
+                $verifiedIds[] = $entity->getAttributeId();
+            }
+
+            return $verifiedIds;
+        }
+
+        return [];
     }
 }

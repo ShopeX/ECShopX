@@ -809,7 +809,8 @@ class NormalGoodsUploadService
         }
 
         $itemsCategoryService = new ItemsCategoryService();
-        $lists = $itemsCategoryService->lists(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => 1]);
+        // $lists = $itemsCategoryService->lists(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => 1]);
+        $lists = $itemsCategoryService->listsByCategoryName(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => 1]);
         if ($lists['total_count'] <= 0) {
             throw new BadRequestHttpException('上传管理分类不存在,' . $mainCategory);
         }
@@ -871,7 +872,8 @@ class NormalGoodsUploadService
 
         $itemsCategoryService = new ItemsCategoryService();
         // 数据结构买办法判断获取的分类ID是否最子级分类，三级分类改造后在优化
-        $lists = $itemsCategoryService->lists(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => $isMain]);
+        // $lists = $itemsCategoryService->lists(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => $isMain]);
+        $lists = $itemsCategoryService->listsByCategoryName(['company_id' => $companyId, 'category_name' => $catNamesArr, 'is_main_category' => $isMain]);
         if ($lists['total_count'] <= 0) {
             if ($isMain) {
                 throw new BadRequestHttpException('上传管理分类参数有误');
@@ -978,7 +980,8 @@ class NormalGoodsUploadService
         $itemsCategoryService = new ItemsCategoryService();
         // 数据结构买办法判断获取的分类ID是否最子级分类，三级分类改造后在优化
         $filter = ['company_id' => $companyId, 'distributor_id' => $row['distributor_id'], 'category_name' => $catNamesArr, 'is_main_category' => 0];
-        $lists = $itemsCategoryService->lists($filter);
+        // $lists = $itemsCategoryService->lists($filter);
+        $lists = $itemsCategoryService->listsByCategoryName($filter);
         if ($lists['total_count'] <= 0) {
             throw new BadRequestHttpException('上传商品分类参数有误');
         }
@@ -1024,11 +1027,11 @@ class NormalGoodsUploadService
         $brandId = 0;
         if ($brandName) {
             $itemsAttributesService = new ItemsAttributesService();
-            $data = $itemsAttributesService->getInfo(['company_id' => $companyId, 'distributor_id' => $row['distributor_id'], 'attribute_name' => $brandName, 'attribute_type' => 'brand']);
-            if (!$data) {
+            $data = $itemsAttributesService->listsByAttributeName(['company_id' => $companyId, 'distributor_id' => $row['distributor_id'], 'attribute_name' => $brandName, 'attribute_type' => 'brand']);
+            if (!$data || $data['total_count'] == 0 || empty($data['list'])) {
                 throw new BadRequestHttpException($brandName . ' 品牌名称不存在');
             }
-            $brandId = $data['attribute_id'];
+            $brandId = $data['list'][0]['attribute_id'];
         }
         return $brandId;
     }
@@ -1050,7 +1053,8 @@ class NormalGoodsUploadService
                 $attributeValues[$itemRow[0]] = $itemRow[1];
             }
 
-            $attrList = $itemsAttributesService->lists(['company_id' => $companyId, 'attribute_name' => $attributeNames, 'attribute_type' => 'item_params']);
+            // $attrList = $itemsAttributesService->lists(['company_id' => $companyId, 'attribute_name' => $attributeNames, 'attribute_type' => 'item_params']);
+            $attrList = $itemsAttributesService->listsByAttributeName(['company_id' => $companyId, 'attribute_name' => $attributeNames, 'attribute_type' => 'item_params']);
             if ($attrList['total_count'] > 0) {
                 foreach ($attrList['list'] as $row) {
                     $attrValue = $itemsAttributesService->getAttrValue(['company_id' => $companyId, 'attribute_value' => $attributeValues[$row['attribute_name']], 'attribute_id' => $row['attribute_id']]);
@@ -1099,7 +1103,8 @@ class NormalGoodsUploadService
                 'company_id' => $companyId, 'attribute_name' => $attributeNames,
                 'attribute_id' => $goodsSpecIds, 'attribute_type' => 'item_spec'
             ];
-            $attrList = $itemsAttributesService->lists($filter, 1, 100, ['is_image' => 'DESC', 'attribute_id' => 'ASC']);
+            // $attrList = $itemsAttributesService->lists($filter, 1, 100, ['is_image' => 'DESC', 'attribute_id' => 'ASC']);
+            $attrList = $itemsAttributesService->listsByAttributeName($filter, 1, 100, ['is_image' => 'DESC', 'attribute_id' => 'ASC']);
             if ($attrList['total_count'] == count($attributeNames)) {
                 $attributeids = array_column($attrList['list'], 'attribute_id');
             } else {

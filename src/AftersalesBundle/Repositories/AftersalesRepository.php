@@ -384,6 +384,9 @@ class AftersalesRepository extends EntityRepository
         if (isset($data['freight'])) {
             $aftersalesEntity->setFreight($data['freight']);
         }
+        if (isset($data['freight_type'])) {
+            $aftersalesEntity->setFreightType($data['freight_type']);
+        }
         return $aftersalesEntity;
     }
     public function getAftersalesData($aftersalesEntity)
@@ -428,6 +431,7 @@ class AftersalesRepository extends EntityRepository
             'return_distributor_id' => $aftersalesEntity->getReturnDistributorId(),
             'self_delivery_operator_id' => $aftersalesEntity->getSelfDeliveryOperatorId(),
             'freight' => $aftersalesEntity->getFreight(),
+            'freight_type' => $aftersalesEntity->getFreightType(),
         ];
     }
 

@@ -307,6 +307,13 @@ class Aftersales
      */
     private $freight = 0;
 
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="freight_type", type="string", length=10, options={"default":"cash", "comment":"运费类型-用于积分商城 cash:现金 point:积分"})
+     */
+    private $freight_type = 'cash';
+
     public function setFreight($freight)
     {
         $this->freight = $freight;
@@ -317,6 +324,30 @@ class Aftersales
     public function getFreight()
     {
         return $this->freight;
+    }
+
+    /**
+     * Set freightType.
+     *
+     * @param string $freightType
+     *
+     * @return Aftersales
+     */
+    public function setFreightType($freightType)
+    {
+        $this->freight_type = $freightType;
+
+        return $this;
+    }
+
+    /**
+     * Get freightType.
+     *
+     * @return string
+     */
+    public function getFreightType()
+    {
+        return $this->freight_type;
     }
 
     /**

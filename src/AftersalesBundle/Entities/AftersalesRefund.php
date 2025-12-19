@@ -293,10 +293,24 @@ class AftersalesRefund
     /**
      * @var integer
      *
-     * @ORM\Column(name="freight", type="integer",  nullable=true, options={"unsigned":true, "comment":"退款运费","default":0})
+     * @ORM\Column(name="freight", type="integer",  nullable=true, options={"unsigned":true, "comment":"退款运费，根据freight_type存储现金（分）或积分值","default":0})
      */
     private $freight = 0;
 
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="freight_type", type="string", length=10, options={"default":"cash", "comment":"运费类型-用于积分商城 cash:现金 point:积分"})
+     */
+    private $freight_type = 'cash';
+
+    /**
+     * Set freight.
+     *
+     * @param int $freight
+     *
+     * @return AftersalesRefund
+     */
     public function setFreight($freight)
     {
         $this->freight = $freight;
@@ -304,9 +318,38 @@ class AftersalesRefund
         return $this;
     }
 
+    /**
+     * Get freight.
+     *
+     * @return int
+     */
     public function getFreight()
     {
         return $this->freight;
+    }
+
+    /**
+     * Set freightType.
+     *
+     * @param string $freightType
+     *
+     * @return AftersalesRefund
+     */
+    public function setFreightType($freightType)
+    {
+        $this->freight_type = $freightType;
+
+        return $this;
+    }
+
+    /**
+     * Get freightType.
+     *
+     * @return string
+     */
+    public function getFreightType()
+    {
+        return $this->freight_type;
     }
 
     /**
