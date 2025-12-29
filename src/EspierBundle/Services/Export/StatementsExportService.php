@@ -76,7 +76,9 @@ class StatementsExportService implements ExportFileInterface
         }
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->getTitle($filter), $list);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['statement_no'];
+        $result = $exportService->exportCsv($fileName, $this->getTitle($filter), $list, $textFields);
         return $result;
     }
 
@@ -111,7 +113,8 @@ class StatementsExportService implements ExportFileInterface
                 foreach ($title as $k => $v) {
                     switch ($k) {
                         case 'statement_no':
-                            $result[$key][$k] = "\"'".$value[$k]."\"";
+                            // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                            $result[$key][$k] = $value[$k];
                             break;
                         case 'total_fee':
                         case 'freight_fee':
@@ -182,7 +185,8 @@ class StatementsExportService implements ExportFileInterface
                 foreach ($title as $k => $v) {
                     switch ($k) {
                         case 'statement_no':
-                            $result[$key][$k] = "\"'".$value[$k]."\"";
+                            // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                            $result[$key][$k] = $value[$k];
                             break;
                         case 'supplier_name':
                             $result[$key][$k] = $supplierNames[$value['supplier_id']] ?? '-';

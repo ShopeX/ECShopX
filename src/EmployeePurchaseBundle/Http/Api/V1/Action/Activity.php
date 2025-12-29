@@ -665,7 +665,7 @@ class Activity extends Controller
      */
     public function getActivityItemList(Request $request)
     {
-        $params = $request->all('page', 'pageSize', 'activity_id', 'main_cat_id', 'cat_id', 'item_name', 'item_bn');
+        $params = $request->all('page', 'pageSize', 'activity_id', 'main_cat_id', 'category', 'item_name', 'item_bn');
         $rules = [
             'activity_id' => ['required|integer', '活动ID必填'],
             'page' => ['required|integer|min:1','分页参数错误'],
@@ -684,6 +684,7 @@ class Activity extends Controller
         $filter['activity_id'] = $params['activity_id'];
 
         $itemsCategoryService = new ItemsCategoryService();
+        // 管理分类
         if (isset($params['main_cat_id']) && $params['main_cat_id']) {
             if (is_array($params['main_cat_id'])) {
                 $params['main_cat_id'] = array_pop($params['main_cat_id']);
@@ -691,8 +692,9 @@ class Activity extends Controller
             $filter['main_cat_id'] = $itemsCategoryService->getMainCatChildIdsBy($params['main_cat_id'], $companyId);
         }
 
-        if (isset($params['cat_id']) && $params['cat_id']) {
-            $filter['cat_id'] = $itemsCategoryService->getItemsCategoryIds($params['cat_id'], $companyId);
+        // 销售分类
+        if (isset($params['category']) && $params['category']) {
+            $filter['category'] = $itemsCategoryService->getItemsCategoryIds($params['category'], $companyId);
         }
 
         if (isset($params['item_name']) && $params['item_name']) {

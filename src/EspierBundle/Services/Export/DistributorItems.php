@@ -43,7 +43,9 @@ class DistributorItems implements ExportFileInterface
             return [];
         }
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $title, $orderList);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['item_bn', 'barcode'];
+        $result = $exportService->exportCsv($fileName, $title, $orderList, $textFields);
         return $result;
     }
 
@@ -69,11 +71,13 @@ class DistributorItems implements ExportFileInterface
         $orderList = [];
         foreach ($data['list'] as $k => $v) {
             $exportRow['item_name'] = $v['item_name'];
-            $exportRow['item_bn'] = is_numeric($v['item_bn']) ? "\"'".$v['item_bn']."\"" : $v['item_bn'];
+            // 直接赋值，不再判断是否为数字，不再添加引号，由 ExportFileService 统一处理
+            $exportRow['item_bn'] = $v['item_bn'] ?? '';
             $exportRow['store'] = $v['store'];
             $exportRow['is_can_sale'] = !empty($v['is_can_sale']) ? '是' : '否';
             $exportRow['is_total_store'] = !empty($v['is_total_store']) ? '否' : '是';
-            $exportRow['barcode'] = is_numeric($v['barcode']) ? "\"'".$v['barcode']."\"" : $v['barcode'];
+            // 直接赋值，不再判断是否为数字，不再添加引号，由 ExportFileService 统一处理
+            $exportRow['barcode'] = $v['barcode'] ?? '';
             $exportRow['distributor_name'] = $distributorInfo['name'];
             $exportRow['price'] = bcdiv($v['price'], 100, 2);
             $exportRow['market_price'] = bcdiv($v['market_price'], 100, 2);

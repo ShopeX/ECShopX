@@ -93,8 +93,8 @@ class CompanysActivationEgo
 
     public function createDemoCompanyLicense($params)
     {
-        if (!isset($params['eid'],$params['passport_uid'],$params['company_id'],$params['expired_at'])) {
-            app('log')->debug('初始化商城授权信息有误 eid 、passport_uid、company_id、expired_at');
+        if (!isset($params['company_id'],$params['expired_at'])) {
+            app('log')->debug('初始化商城授权信息有误 company_id、expired_at');
             throw new ResourceException('初始化商城授权信息有误');
         }
         $companysRepository  = app('registry')->getManager('default')->getRepository(Companys::class);

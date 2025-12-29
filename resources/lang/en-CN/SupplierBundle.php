@@ -30,6 +30,9 @@ return [
     'order_not_offline_payment' => 'Order is not offline payment method',
     'order_not_pending_payment' => 'Order is not in pending payment status',
     'no_invoice_info' => 'This order has no invoice information',
+    'cannot_delete_unfinished_orders_and_aftersales' => 'Cannot delete: there are unfinished orders and incomplete aftersales',
+    'cannot_delete_unfinished_orders' => 'Cannot delete: there are unfinished orders',
+    'cannot_delete_unfinished_aftersales' => 'Cannot delete: there are incomplete aftersales',
     'error_prefix' => 'Error: ',
 
     // 验证消息

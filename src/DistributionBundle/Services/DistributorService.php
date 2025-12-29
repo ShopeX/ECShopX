@@ -870,6 +870,19 @@ class DistributorService
     }
 
     /**
+     * 得到有效、禁用的店铺信息
+     */
+    public function getValidAndDisabledDistributor(int $companyId)
+    {
+        $filter = [
+            'is_valid' => ['true', 'false'],
+            'company_id' => $companyId
+        ];
+        $fields = 'distributor_id';
+        return $this->entityRepository->getLists($filter, $fields);
+    }
+    
+    /**
      * 追加店铺列表数据（适用于多个店铺id）
      * @param int $companyId 公司id
      * @param array $list 列表信息

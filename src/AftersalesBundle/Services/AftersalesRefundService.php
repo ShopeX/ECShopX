@@ -497,7 +497,7 @@ class AftersalesRefundService
     // 定时退款，售前取消订单调用amorepay,售后直接改状态(售后是线下退款)
     public function schedule_refund()
     {
-        app('log')->info('执行审核成功退款单退款初始化脚本');
+        app('log')->info('schedule_refund::aftersalesRefundService::开始执行审核成功退款单退款初始化脚本');
         $start_time = 1607616000; // 2020-12-11日之后的退款单才处理
         $conn = app('registry')->getConnection('default');
         $criteria = $conn->createQueryBuilder();
@@ -506,7 +506,7 @@ class AftersalesRefundService
                  ->where($criteria->expr()->gte('create_time', $criteria->expr()->literal($start_time)))
                  ->andWhere($criteria->expr()->eq('refund_status', $criteria->expr()->literal('AUDIT_SUCCESS')));
         $refunds = $criteria->execute()->fetchAll();
-        app('log')->info('refunds===>'.var_export($refunds, true));
+        app('log')->info('schedule_refund::aftersalesRefundService::refunds===>'.json_encode($refunds, 256));
         $orderHas = []; // 已存在的订单号
         $orderHasNum = []; // 已存在的订单号数量,用于计算时间
         foreach ($refunds as $v) {

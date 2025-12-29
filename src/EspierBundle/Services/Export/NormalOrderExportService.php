@@ -62,7 +62,9 @@ class NormalOrderExportService implements ExportFileInterface
         }
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $title, $orderList);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['order_id', 'delivery_code', 'item_bn'];
+        $result = $exportService->exportCsv($fileName, $title, $orderList, $textFields);
         return $result;
     }
 
@@ -662,7 +664,7 @@ class NormalOrderExportService implements ExportFileInterface
                 $payType = $newData['pay_type'] ?? '';
                 $purchase_type = $newData['orders_purchase_info']['type'] ?? '';
                 $orderItem = [
-                    'order_id' => "\"'" . $newData['order_id'] . "\"",//
+                    'order_id' => $newData['order_id'],//
                     'name' => $userData[$newData['user_id']]['name'] ?? '',
                     'id' => $newData['id'],//
                     'supplier_name' => $supplierData[$newData['supplier_id']]['supplier_name'] ?? '',
@@ -703,11 +705,11 @@ class NormalOrderExportService implements ExportFileInterface
                     'receiver_address' => $this->clearSpecialChars($newData['receiver_address']),//
                     'delivery_status' => ($newData['delivery_status'] == 'DONE') ? '已发货' : '未发货',
                     'delivery_time' => ($newData['delivery_status'] == 'DONE') ? date('Y-m-d H:i:s', $newData['delivery_time']) : '0',
-                    'delivery_code' => ($newData['delivery_status'] == 'DONE') ? "\"'".$newData['delivery_code']."\"" : '',
+                    'delivery_code' => ($newData['delivery_status'] == 'DONE') ? $newData['delivery_code'] : '',
                     'delivery_corp' => ($newData['delivery_status'] == 'DONE') ? $newData['delivery_corp'] : '',
                     'end_time' => isset($orderListMap[$newData['order_id']]['end_time']) ? date('Y-m-d H:i:s', $orderListMap[$newData['order_id']]['end_time']) : '', // 订单完成时间
                     'pay_type' => $payTypes[$payType] ?? $payType,
-                    'item_bn' => is_numeric($newData['item_bn']) ? "\"'".$newData['item_bn']."\"" : $newData['item_bn'],
+                    'item_bn' => $newData['item_bn'] ?? '',
                     'aftersales_status' => $aftersales_status[$newData['aftersales_status']] ?? '',
                     'refund_time' => isset($refundMap[$newData['order_id']][$newData['item_id']]['refund_success_time']) ? date('Y-m-d H:i:s', $refundMap[$newData['order_id']][$newData['item_id']]['refund_success_time']) : '', // 退款时间
                     'item_spec_desc' => isset($newData['item_spec_desc']) && $newData['item_spec_desc'] ? str_replace(',', '，', $newData['item_spec_desc']) : '',
@@ -1423,7 +1425,7 @@ class NormalOrderExportService implements ExportFileInterface
                 $payType = $newData['pay_type'] ?? '';
                 $orderItem = [
                     // 'original_order_id' => "\"'" . $newData['original_order_id'] . "\"",//
-                    'order_id' => "\"'" . $newData['order_id'] . "\"",//
+                    'order_id' => $newData['order_id'],//
                     // 'trade_no' => $tradeIndex[$newData['order_id']] ?? '-',
                     'supplier_name' => $supplierData[$newData['supplier_id']]['username'] ?? '',
                     'id' => $newData['id'],//
@@ -1459,11 +1461,11 @@ class NormalOrderExportService implements ExportFileInterface
                     // 'house_number' => $newData['house_number'],
                     'delivery_status' => ($newData['delivery_status'] == 'DONE') ? '已发货' : '未发货',
                     'delivery_time' => ($newData['delivery_status'] == 'DONE') ? date('Y-m-d H:i:s', $newData['delivery_time']) : '0',
-                    'delivery_code' => ($newData['delivery_status'] == 'DONE') ? "\"'".$newData['delivery_code']."\"" : '',
+                    'delivery_code' => ($newData['delivery_status'] == 'DONE') ? $newData['delivery_code'] : '',
                     'delivery_corp' => ($newData['delivery_status'] == 'DONE') ? $newData['delivery_corp'] : '',
                     // 'kunnr' => $thirdParams['kunnr'] ?? '',
                     'pay_type' => $payTypes[$payType] ?? $payType,
-                    'item_bn' => is_numeric($newData['item_bn']) ? "\"'".$newData['item_bn']."\"" : $newData['item_bn'],
+                    'item_bn' => $newData['item_bn'] ?? '',
                     'aftersales_status' => $aftersales_status[$newData['aftersales_status']] ?? '',
                     'item_spec_desc' => isset($newData['item_spec_desc']) && $newData['item_spec_desc'] ? str_replace(',', '，', $newData['item_spec_desc']) : '',
                     'remark' => $newData['remark'],
@@ -1574,7 +1576,7 @@ class NormalOrderExportService implements ExportFileInterface
                 }
                 $payType = $newData['pay_type'] ?? '';
                 $orderList[] = [
-                    'order_id' => "\"'" . $newData['order_id'] . "\"",//
+                    'order_id' => $newData['order_id'],//
                     'trade_no' => $tradeIndex[$newData['order_id']] ?? '-',
                     'id' => $newData['id'],//
                     'item_name' => str_replace('#', '', $newData['item_name']),//
@@ -1598,10 +1600,10 @@ class NormalOrderExportService implements ExportFileInterface
                     'receiver_address' => $this->clearSpecialChars($newData['receiver_address']),//
                     'delivery_status' => ($newData['delivery_status'] == 'DONE') ? '已发货' : '未发货',
                     'delivery_time' => ($newData['delivery_status'] == 'DONE') ? date('Y-m-d H:i:s', $newData['delivery_time']) : '0',
-                    'delivery_code' => ($newData['delivery_status'] == 'DONE') ? "\"'" . $newData['delivery_code'] . "\"" : '',
+                    'delivery_code' => ($newData['delivery_status'] == 'DONE') ? $newData['delivery_code'] : '',
                     'delivery_corp' => ($newData['delivery_status'] == 'DONE') ? $newData['delivery_corp'] : '',
                     'pay_type' => $payTypes[$payType] ?? $payType,
-                    'item_bn' => is_numeric($newData['item_bn']) ? "\"'".$newData['item_bn']."\"" : $newData['item_bn'],
+                    'item_bn' => $newData['item_bn'] ?? '',
                     'item_spec_desc' => $newData['item_spec_desc'] ?? '',
                     'remark' => $newData['remark'],
                 ];

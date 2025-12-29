@@ -466,6 +466,11 @@ class Aftersales extends Controller
                 $filter['order_id'] = array_column($orderLists, 'order_id');
             }
         }
+
+        if ($request->input('item_name')) {
+            $filter['item_name'] = $request->input('item_name');
+        }
+
         $result = $aftersalesService->getAftersalesList($filter, $offset, $limit, $orderBy, true);
         if ($result['list']) {
 

@@ -20,6 +20,7 @@ use OrdersBundle\Traits\GetUserIdByMobileTrait;
 use OrdersBundle\Services\ShippingTemplatesService;
 use OrdersBundle\Services\TradeSetting\CancelService;
 use OrdersBundle\Services\TradeSettingService;
+use DistributionBundle\Services\DistributorService;
 
 class NormalOrderService extends AbstractNormalOrder
 {
@@ -295,6 +296,39 @@ class NormalOrderService extends AbstractNormalOrder
             if (!empty($membersDelete)) {
                 $deleteUsers = array_column($membersDelete, 'user_id');
             }
+            
+            // 获取sale_salesman_distributor_id对应的店铺信息
+            $distributorService = new DistributorService();
+            $saleSalesmanDistributorIds = array_filter(array_unique(array_column($result['list'], 'sale_salesman_distributor_id')), function ($distributorId) {
+                return is_numeric($distributorId) && $distributorId >= 0;
+            });
+            // 转换为整数确保类型一致
+            $saleSalesmanDistributorIds = array_map('intval', $saleSalesmanDistributorIds);
+            $saleSalesmanDistributorIds = array_values(array_unique($saleSalesmanDistributorIds));
+            $storeData = [];
+            // 检查是否需要总店信息（0）
+            $needZeroStore = in_array(0, $saleSalesmanDistributorIds, true);
+            // 如果包含0，先从列表中移除0，因为0（总店）需要单独获取
+            $queryDistributorIds = array_filter($saleSalesmanDistributorIds, function($id) {
+                return $id !== 0;
+            });
+            if ($queryDistributorIds) {
+                // 一次性查询所有店铺信息（不包括0，因为0需要单独获取）
+                $storeList = $distributorService->getDistributorOriginalList([
+                    'company_id' => $filter['company_id'],
+                    'distributor_id' => $queryDistributorIds,
+                ], 1, $limit);
+                if (!empty($storeList['list'])) {
+                    $storeData = array_column($storeList['list'], null, 'distributor_id');
+                    // 将键转换为整数，确保类型一致
+                    $storeData = array_combine(array_map('intval', array_keys($storeData)), array_values($storeData));
+                }
+            }
+            // 如果需要总店信息（0），则附加总店信息
+            if ($needZeroStore) {
+                $storeData[0] = $distributorService->getDistributorSelfSimpleInfo($filter['company_id']);
+            }
+            
             $service = new TradeSettingService(new CancelService());
             $setting = $service->getSetting($filter['company_id']);
             foreach ($result['list'] as $k => $v) {
@@ -321,6 +355,10 @@ class NormalOrderService extends AbstractNormalOrder
                 $result['list'][$k]['order_status_des'] = $v['order_status_des'];
                 // 店务app附加数据
                 $result['list'][$k]['app_info'] = $v['app_info'] ?? [];
+
+                // 附加销售员店铺信息（包括0对应的总店信息）
+                $saleSalesmanDistributorId = (int)$v['sale_salesman_distributor_id'];
+                $result['list'][$k]['sale_salesman_distributor_info'] = $storeData[$saleSalesmanDistributorId] ?? [];
 
                 $result['list'][$k]['create_date'] = date('Y-m-d H:i:s', $v['create_time']);
 

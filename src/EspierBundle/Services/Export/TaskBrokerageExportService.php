@@ -27,7 +27,9 @@ class TaskBrokerageExportService implements ExportFileInterface
         $list = $this->getLists($filter, $count['total_count'], $datapassBlock);
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->title, $list);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['item_bn'];
+        $result = $exportService->exportCsv($fileName, $this->title, $list, $textFields);
         return $result;
     }
 
@@ -151,8 +153,9 @@ class TaskBrokerageExportService implements ExportFileInterface
                         $data[$key][$k] = $value[$k] == 'total_num' ? '按总数量' : '按总金额';
                     } elseif ($k == 'wait' || $k == 'finish' || $k == 'close') {
                         $data[$key][$k] = implode("\n", $value[$k]);
-                    } elseif ($k == 'item_bn' && is_numeric($value[$k])) {
-                        $data[$key][$k] = "\"'".$value[$k]."\"";
+                    } elseif ($k == 'item_bn') {
+                        // 直接赋值，不再判断是否为数字，不再添加引号，由 ExportFileService 统一处理
+                        $data[$key][$k] = $value[$k] ?? '';
                     } else {
                         $data[$key][$k] = $value[$k];
                     }

@@ -32,7 +32,9 @@ class HfpayOrderRecordExportService implements ExportFileInterface
         $datalist = $this->getLists($filter, $count);
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->title, $datalist);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['order_id'];
+        $result = $exportService->exportCsv($fileName, $this->title, $datalist, $textFields);
 
         return $result;
     }
@@ -55,7 +57,8 @@ class HfpayOrderRecordExportService implements ExportFileInterface
                 foreach ($data['list'] as $key => $value) {
                     foreach ($title as $k => $v) {
                         if ($k == 'order_id') {
-                            $recordData[$key][$k] = "\"'" . $value[$k] . "\"";
+                            // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                            $recordData[$key][$k] = $value[$k];
                         } elseif ($k == 'profitsharing_status') {
                             $recordData[$key][$k] = $profitsharing_status[$value[$k]] ?? '--';
                         } elseif ($k == "total_fee") {

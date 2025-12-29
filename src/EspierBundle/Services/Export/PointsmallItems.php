@@ -70,7 +70,9 @@ class PointsmallItems implements ExportFileInterface
         $dataList = $this->getLists($filter, $count, $isGetSkuList);
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->title, $dataList);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['item_bn', 'barcode'];
+        $result = $exportService->exportCsv($fileName, $this->title, $dataList, $textFields);
         return $result;
     }
 
@@ -114,8 +116,9 @@ class PointsmallItems implements ExportFileInterface
                         $itemsData[$key][$k] = (isset($value['pics']) && is_array($value['pics'])) ? implode(',', $value['pics']) : '';
                     } elseif ($k == 'videos') {
                         $itemsData[$key][$k] = '';
-                    } elseif (in_array($k, ['item_bn', 'barcode']) && is_numeric($value[$k])) {
-                        $itemsData[$key][$k] = "\"'" . $value[$k]."\"";
+                    } elseif (in_array($k, ['item_bn', 'barcode'])) {
+                        // 直接赋值，不再判断是否为数字，不再添加引号，由 ExportFileService 统一处理
+                        $itemsData[$key][$k] = $value[$k] ?? '';
                     } elseif (isset($value[$k])) {
                         $itemsData[$key][$k] = $value[$k];
                     }

@@ -142,7 +142,9 @@ class Items implements ExportFileInterface
         $fileName = date('YmdHis') . "items";
         $dataList = $this->getLists($filter, $count, $isGetSkuList);
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->title, $dataList);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['item_bn', 'goods_bn', 'barcode'];
+        $result = $exportService->exportCsv($fileName, $this->title, $dataList, $textFields);
         return $result;
     }
 
@@ -225,7 +227,16 @@ class Items implements ExportFileInterface
                             break;
                             
                         case 'intro':
-                            $itemsData[$key][$field] = $this->formatIntroField($value['intro'] ?? '');
+                            $introValue = $value['intro'] ?? '';
+                            // 处理JSON数组格式（slider、imgHotzone等），提取图片URL避免CSV错列
+                            $imageUrls = $this->extractImageUrlsFromJson($introValue);
+                            if (!empty($imageUrls)) {
+                                // 如果是JSON格式的图片数组，用分号连接（避免逗号导致CSV错列）
+                                $itemsData[$key][$field] = implode(';', $imageUrls);
+                            } else {
+                                // 否则按富文本处理
+                                $itemsData[$key][$field] = $this->formatIntroField($introValue);
+                            }
                             break;
                             
                         case 'spec_pics':
@@ -242,11 +253,8 @@ class Items implements ExportFileInterface
                             
                         case 'item_bn':
                         case 'barcode':
-                            if (is_numeric($value[$field])) {
-                                $itemsData[$key][$field] = "\"'".$value[$field]."\"";
-                            } else {
-                                $itemsData[$key][$field] = $value[$field];
-                            }
+                            // 直接赋值，不再判断是否为数字，不再添加引号，由 ExportFileService 统一处理
+                            $itemsData[$key][$field] = $value[$field] ?? '';
                             break;
                         case 'delivery_time':
                             $itemsData[$key][$field] = isset($value['delivery_time']) && $value['delivery_time'] > 0 ? $value['delivery_time'] : '';//.'天'
@@ -353,11 +361,8 @@ class Items implements ExportFileInterface
                         
                     case 'item_bn':
                     case 'barcode':
-                        if (is_numeric($value[$field])) {
-                            $itemsData[$key][$field] = "\"'".$value[$field]."\"";
-                        } else {
-                            $itemsData[$key][$field] = $value[$field];
-                        }
+                        // 直接赋值，不再判断是否为数字，不再添加引号，由 ExportFileService 统一处理
+                        $itemsData[$key][$field] = $value[$field] ?? '';
                         break;
                     case 'delivery_time':
                         $itemsData[$key][$field] = isset($value['delivery_time']) && $value['delivery_time'] > 0 ? $value['delivery_time'] : '';//.'天'
@@ -692,6 +697,85 @@ class Items implements ExportFileInterface
         }
 
         $this->title = $newHeader;
+    }
+
+    /**
+     * 从intro中提取JSON格式的图片URL（支持slider和imgHotzone格式）
+     * 
+     * @param mixed $intro intro字段值（可能是数组、JSON字符串或其他格式）
+     * @return array 图片URL数组，如果不是JSON格式则返回空数组
+     */
+    private function extractImageUrlsFromJson($intro)
+    {
+        if (empty($intro)) {
+            return [];
+        }
+
+        $dataArray = null;
+
+        // 处理数组格式
+        if (is_array($intro)) {
+            $dataArray = $intro;
+        }
+        // 处理JSON字符串格式
+        elseif (is_string($intro) && trim($intro) !== '') {
+            // 尝试解析JSON
+            $decoded = json_decode($intro, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $dataArray = $decoded;
+            } else {
+                // 不是有效的JSON，返回空数组
+                return [];
+            }
+        } else {
+            return [];
+        }
+
+        // 检查是否是JSON数组格式
+        if (!is_array($dataArray) || empty($dataArray)) {
+            return [];
+        }
+
+        $imageUrls = [];
+        $isJsonFormat = false;
+
+        foreach ($dataArray as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            // 处理slider格式：从data数组中提取imgUrl
+            if (isset($item['name']) && $item['name'] === 'slider' && isset($item['data']) && is_array($item['data'])) {
+                $isJsonFormat = true;
+                foreach ($item['data'] as $dataItem) {
+                    if (is_array($dataItem) && isset($dataItem['imgUrl'])) {
+                        $imageUrls[] = $dataItem['imgUrl'];
+                    }
+                }
+            }
+            // 处理imgHotzone格式：从config中提取imgUrl
+            elseif (isset($item['name']) && $item['name'] === 'imgHotzone' && isset($item['config']['imgUrl'])) {
+                $isJsonFormat = true;
+                $imageUrls[] = $item['config']['imgUrl'];
+            }
+            // 兼容其他可能的格式：有config.imgUrl但没有name字段
+            elseif (isset($item['config']['imgUrl'])) {
+                $isJsonFormat = true;
+                $imageUrls[] = $item['config']['imgUrl'];
+            }
+            // 兼容：有data数组且包含imgUrl
+            elseif (isset($item['data']) && is_array($item['data'])) {
+                foreach ($item['data'] as $dataItem) {
+                    if (is_array($dataItem) && isset($dataItem['imgUrl'])) {
+                        $isJsonFormat = true;
+                        $imageUrls[] = $dataItem['imgUrl'];
+                    }
+                }
+            }
+        }
+
+        // 只有确认是JSON格式才返回URL数组
+        return $isJsonFormat ? $imageUrls : [];
     }
 
     /**

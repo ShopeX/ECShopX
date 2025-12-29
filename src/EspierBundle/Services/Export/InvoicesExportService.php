@@ -55,7 +55,9 @@ class InvoicesExportService implements ExportFileInterface
         }
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $title, $orderList);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['order_id'];
+        $result = $exportService->exportCsv($fileName, $title, $orderList, $textFields);
         return $result;
     }
 
@@ -293,7 +295,7 @@ class InvoicesExportService implements ExportFileInterface
 
 
                 $orderItem = [
-                    'order_id' => "\"'" . $newData['order_id'] . "\"",//
+                    'order_id' => $newData['order_id'],//
                     'trade_no' => $tradeList[$newData['order_id']]['trade_no'] ?? '',
                     'name' => $userData[$newData['user_id']]['name'] ?? '',
                     'order_status'=> $newData['order_status_msg'],//
@@ -393,7 +395,7 @@ class InvoicesExportService implements ExportFileInterface
 
                 foreach ($newData['items'] as $item) {
                     $orderList[] = [
-                        'order_id'=> "\"'".$newData['order_id']."\"",
+                        'order_id'=> $newData['order_id'],
                         'trade_no' => $tradeIndex[$newData['order_id']] ?? '-',
                         'item_name' => $item['item_name'],
                         'item_attr' => $item['item_spec_desc'],
@@ -499,7 +501,7 @@ class InvoicesExportService implements ExportFileInterface
                     $newData = array_merge($newData, $invoicearr);
                 }
                 $orderItem = [
-                    'order_id' => "\"'" . $newData['order_id'] . "\"",//
+                    'order_id' => $newData['order_id'],//
                     'trade_no' => $tradeList[$newData['order_id']]['trade_no'] ?? '',
                     'name' => $userData[$newData['user_id']]['name'] ?? '',
                     'order_status' => $newData['order_status_msg'],//

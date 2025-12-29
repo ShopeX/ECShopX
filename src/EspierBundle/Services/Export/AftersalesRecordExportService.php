@@ -45,7 +45,9 @@ class AftersalesRecordExportService implements ExportFileInterface
         $datalist = $this->getLists($filter, $count);
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->title, $datalist);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['order_id', 'aftersales_bn', 'item_bn'];
+        $result = $exportService->exportCsv($fileName, $this->title, $datalist, $textFields);
         return $result;
     }
 
@@ -100,7 +102,8 @@ class AftersalesRecordExportService implements ExportFileInterface
                         if ($k == 'create_time') {
                             $recordData[$key][$k] = date('Y-m-d H:i:s', $value[$k]);
                         } elseif (in_array($k, ['order_id', 'aftersales_bn']) && isset($value[$k])) {
-                            $recordData[$key][$k] = "\"'".$value[$k]."\"";
+                            // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                            $recordData[$key][$k] = $value[$k];
                         } elseif ($k == 'refund_fee') {
                             $recordData[$key][$k] = $value[$k] / 100;
                         } elseif ($k == "aftersales_type") {
@@ -109,8 +112,9 @@ class AftersalesRecordExportService implements ExportFileInterface
                             $recordData[$key][$k] = $aftersales_status[$value[$k]] ?? '--';
                         } elseif ($k == "progress") {
                             $recordData[$key][$k] = $progress[$value[$k]] ?? '--';
-                        } elseif ($k == 'item_bn' && is_numeric($value[$k])) {
-                            $recordData[$key][$k] = "\"'".$value[$k]."\"";
+                        } elseif ($k == 'item_bn') {
+                            // 直接赋值，不再判断是否为数字，不再添加引号，由 ExportFileService 统一处理
+                            $recordData[$key][$k] = $value[$k] ?? '';
                         } else {
                             $recordData[$key][$k] = $value[$k] ?? '';
                         }

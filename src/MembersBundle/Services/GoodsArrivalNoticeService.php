@@ -140,7 +140,7 @@ class GoodsArrivalNoticeService implements SubscribeInterface
                     return [
                         'user_id' => $user_id,
                         'item_id' => $v,
-                        'item_name' => $nameList[$v],
+                        'item_name' => $nameList[$v]??'',
                     ];
                 } else {
                     return [];

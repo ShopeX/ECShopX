@@ -1695,7 +1695,7 @@ class SupplierItemsService
         // 3. 查询未完成的售后单
         $qb2 = $conn->createQueryBuilder();
         $poolItemIdsLiteral2 = $toLiteralArray($poolItemIds, $qb2);
-        $aftersalesStatusLiteral = $toLiteralArray([0, 1, 2], $qb2);
+        $aftersalesStatusLiteral = $toLiteralArray([0, 1], $qb2);
         $qb2->select('COUNT(*)')
             ->from('aftersales_detail', 'ad')
             ->innerJoin('ad', 'aftersales', 'a', 'ad.aftersales_bn = a.aftersales_bn')
@@ -1707,11 +1707,11 @@ class SupplierItemsService
         
         // 4. 根据情况抛出不同的异常提示
         if ($orderCount > 0 && $aftersalesCount > 0) {
-            throw new ResourceException('存在未完结的订单和未完成的售后单，不能删除');
+            throw new ResourceException(trans('SupplierBundle.cannot_delete_unfinished_orders_and_aftersales'));
         } elseif ($orderCount > 0) {
-            throw new ResourceException('存在未完结的订单，不能删除');
+            throw new ResourceException(trans('SupplierBundle.cannot_delete_unfinished_orders'));
         } elseif ($aftersalesCount > 0) {
-            throw new ResourceException('存在未完成的售后单，不能删除');
+            throw new ResourceException(trans('SupplierBundle.cannot_delete_unfinished_aftersales'));
         }
     }
 

@@ -75,6 +75,7 @@ class DistributorWhiteList extends Controller
         if(isset($params['username'])){
             $filter['username'] = $params['username'];
         }
+        $filter['company_id'] = app('auth')->user()->get('company_id');
         $page = $params['page'] ?? 1;
         $pageSize = $params['pageSize'] ?? 20;
         $data = $service->getWhiteList($filter,$page,$pageSize);

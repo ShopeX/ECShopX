@@ -30,6 +30,9 @@ return [
     'order_not_offline_payment' => '订单非线下支付方式',
     'order_not_pending_payment' => '订单不是待支付状态',
     'no_invoice_info' => '此订单无发票信息',
+    'cannot_delete_unfinished_orders_and_aftersales' => '存在未完结的订单和未完成的售后单，不能删除',
+    'cannot_delete_unfinished_orders' => '存在未完结的订单，不能删除',
+    'cannot_delete_unfinished_aftersales' => '存在未完成的售后单，不能删除',
     'error_prefix' => '错误：',
 
     // 验证消息

@@ -9,9 +9,11 @@ namespace AftersalesBundle\Http\FrontApi\V1\Action;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 use AftersalesBundle\Services\ReasonService;
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
 
 class Reason extends Controller
 {
+    use MagicLangTrait;
     /**
      * @SWG\Get(
      *     path="/aftersales/reason/list",
@@ -45,8 +47,9 @@ class Reason extends Controller
         $authInfo = $request->get('auth');
         $companyId = $authInfo['company_id'];
 
+        $lang = $this->getLang();
         $Reason = new ReasonService();
-        $data_list = $Reason->getList($companyId, 0);
+        $data_list = $Reason->getList($companyId, 0, $lang);
 
         return $this->response->array($data_list);
     }

@@ -32,7 +32,9 @@ class TradeExportService implements ExportFileInterface
         $orderList = $this->getLists($filter, $count, $datapassBlock);
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $title, $orderList);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['orderId', 'tradeId', 'transactionId'];
+        $result = $exportService->exportCsv($fileName, $title, $orderList, $textFields);
         return $result;
     }
 
@@ -146,7 +148,8 @@ class TradeExportService implements ExportFileInterface
                 }
                 foreach ($title as $k => $v) {
                     if (in_array($k, ['orderId', 'tradeId', 'transactionId']) && isset($value[$k])) {
-                        $orderList[$key][$k] = "\"'".$value[$k]."\"";
+                        // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                        $orderList[$key][$k] = $value[$k];
                     } elseif (in_array($k, ['totalFee', 'payFee', 'discountFee']) && isset($value[$k])) {
                         $orderList[$key][$k] = $value[$k] / 100;
                     } elseif (in_array($k, ['timeStart', 'timeExpire']) && isset($value[$k]) && $value[$k]) {

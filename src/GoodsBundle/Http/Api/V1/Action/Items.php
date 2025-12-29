@@ -1441,7 +1441,8 @@ class Items extends BaseController
 
         $distributorId = $request->get('distributor_id');
         if ($distributorId == 'all_distributor') {
-            $distributorList = $distributorService->getValidDistributor($params['company_id']);
+            // 获取所有有效、禁用的店铺
+            $distributorList = $distributorService->getValidAndDisabledDistributor($params['company_id']);
             if (!empty($distributorList)) {
                 if ($operator_type != 'merchant') {
                     $params['distributor_id'] = array_column($distributorList, 'distributor_id');

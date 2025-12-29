@@ -65,7 +65,9 @@ class NormalMasterOrderExportService implements ExportFileInterface
         }
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $title, $dataList);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['order_id', 'original_order_id'];
+        $result = $exportService->exportCsv($fileName, $title, $dataList, $textFields);
 
         return $result;
     }
@@ -404,7 +406,8 @@ class NormalMasterOrderExportService implements ExportFileInterface
                     // }
                     switch ($colName) {
                         case 'order_id':
-                            $orderItem[$colName] = "\"'".$newData[$colName]."\"";
+                            // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                            $orderItem[$colName] = $newData[$colName];
                             break;
                         case 'name':
                             $orderItem[$colName]  = $userData[$newData['user_id']]['name'] ?? '';
@@ -789,7 +792,8 @@ class NormalMasterOrderExportService implements ExportFileInterface
                     }
                     switch ($colName) {
                         case 'order_id':
-                            $orderItem[$colName] = "\"'".$newData[$colName]."\"";
+                            // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                            $orderItem[$colName] = $newData[$colName];
                             break;
                         case 'supplier_name':
                             $orderItem[$colName] = $supplierData[$newData['supplier_id']]['supplier_name'] ?? '';
@@ -1191,8 +1195,8 @@ class NormalMasterOrderExportService implements ExportFileInterface
                 }
                 
                 $orderItem = [
-                    'original_order_id'=> $newData['original_order_id'] ? "\"'".$newData['original_order_id']."\"" : '-',//
-                    'order_id'=> "\"'".$newData['order_id']."\"",//
+                    'original_order_id'=> $newData['original_order_id'] ? $newData['original_order_id'] : '-',//
+                    'order_id'=> $newData['order_id'],//
                     'supplier_name' => $supplierData[$newData['supplier_id']]['username'] ?? '',
                     // 'trade_no' => $tradeIndex[$newData['order_id']] ?? '-',
                     'cost_fee' => bcdiv($newData['cost_fee'], 100, 2),
@@ -1406,7 +1410,7 @@ class NormalMasterOrderExportService implements ExportFileInterface
                     $newData['receiver_address'] = data_masking('address', (string) $newData['receiver_address']);
                 }
                 $orderList[] = [
-                    'order_id' => "\"'" . $newData['order_id'] . "\"",
+                    'order_id' => $newData['order_id'],
                     'trade_no' => $tradeIndex[$newData['order_id']] ?? '-',
                     'item_point' => $newData['item_point'] . '积分',
                     'mobile' => $newData['mobile'],//

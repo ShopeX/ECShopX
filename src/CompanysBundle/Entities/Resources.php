@@ -43,14 +43,14 @@ class Resources
     /**
      * @var string
      *
-     * @ORM\Column(name="eid", type="string", options={"comment":"企业id"})
+     * @ORM\Column(name="eid", type="string", nullable=true, options={"comment":"企业id"})
      */
     private $eid;
 
     /**
      * @var string
      *
-     * @ORM\Column(name="passport_uid", type="string")
+     * @ORM\Column(name="passport_uid", nullable=true, type="string")
      */
     private $passport_uid;
 

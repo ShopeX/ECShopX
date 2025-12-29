@@ -10,6 +10,8 @@ use Illuminate\Console\Events\CommandFinished;
 use SuperAdminBundle\Services\ShopMenuService;
 use SuperAdminBundle\Http\SuperApi\V1\Action\Logistics;
 use SuperAdminBundle\Services\LogisticsService;
+use SuperAdminBundle\Entities\ShopMenu;
+use SuperAdminBundle\Entities\ShopMenuRelType;
 
 class UpdateMenuListener
 {
@@ -68,6 +70,12 @@ class UpdateMenuListener
         $merchantJson = file_get_contents(storage_path('static/merchant_menu.json'));
         // 经销商菜单
         $supplierJson = file_get_contents(storage_path('static/supplier_menu.json'));
+        //强烈要求的操作，就是重新导入，就代表什么都会重来一遍
+        $shopMenuRepository = getRepositoryLangue(ShopMenu::class);
+        $shopMenuRelTypeRepository = app('registry')->getManager('default')->getRepository(ShopMenuRelType::class);
+        $shopMenuRepository->deleteBy(['company_id'=>0]);
+        $shopMenuRelTypeRepository->deleteBy(['company_id'=>0]);
+
         try {
             // 平台管理后台采集
             $menus = json_decode($json, true);

@@ -203,7 +203,15 @@ class ExportFileService
         $result['url'] = $filesystem->privateDownloadUrl('export/csv/'.$fileName.'.csv', 86400);
         return $result;
     }
-    public function exportCsv($fileName, $title, $dataList)
+    /**
+     * 导出 CSV 文件
+     * @param string $fileName 文件名
+     * @param array $title 标题数组（关联数组，键为字段名，值为显示名称）
+     * @param array|\Generator $dataList 数据列表
+     * @param array $textFields 需要作为文本处理的数字字段列表（避免 Excel 显示为科学计数法）
+     * @return array 下载信息
+     */
+    public function exportCsv($fileName, $title, $dataList, $textFields = [])
     {
         $fileDir = storage_path('csv');
         if (!is_dir($fileDir)) {
@@ -211,17 +219,43 @@ class ExportFileService
         }
         $file = $fileDir. "/".$fileName.".csv";
         // $fn = $file;
-        // $fh = fopen($fn, 'w');
+        // 使用二进制模式打开，确保可以写入 BOM
+        $fh = fopen($file, 'wb');
+        
+        // 添加 UTF-8 BOM，确保 Excel 能正确识别中文编码
+        // 注意：某些系统可能不需要 BOM，但添加 BOM 可以提高 Excel 兼容性
+        fwrite($fh, "\xEF\xBB\xBF");
+        
         // fputcsv($fh, $title);
-        file_put_contents($file, implode(',', $title).PHP_EOL);
+        // 使用 fputcsv 写入标题行，自动处理 CSV 转义
+        // 显式指定分隔符、引号和转义字符，确保兼容性
+        fputcsv($fh, array_values($title), ',', '"', '\\');
+        // file_put_contents($file, implode(',', $title).PHP_EOL);
 
+        // 获取标题的键顺序，用于确保数据行的顺序一致
+        $titleKeys = array_keys($title);
+        
         foreach ($dataList as $data) {
             foreach ($data as $list) {
                 // fputcsv($fh, $list);
-                file_put_contents($file, implode(',', $list).PHP_EOL, FILE_APPEND);
+                // 按照标题的键顺序构建数据行，使用 fputcsv 自动处理 CSV 转义
+                $row = [];
+                foreach ($titleKeys as $key) {
+                    $value = $list[$key] ?? '';
+                    // 如果是需要作为文本处理的数字字段，添加制表符前缀
+                    // 制表符在 Excel 中不可见，但能让 Excel 识别为文本格式，避免科学计数法
+                    if (!empty($textFields) && in_array($key, $textFields) && is_numeric($value) && $value !== '') {
+                        $row[] = "\t" . $value;
+                    } else {
+                        $row[] = $value;
+                    }
+                }
+                // 显式指定分隔符、引号和转义字符，确保兼容性
+                fputcsv($fh, $row, ',', '"', '\\');
+                // file_put_contents($file, implode(',', $list).PHP_EOL, FILE_APPEND);
             }
         }
-        // fclose($fh);
+        fclose($fh);
         $result = $this->downloadOrderFile($fileName, $file);
         return $result;
     }

@@ -29,6 +29,7 @@ class LogisticTracker
      */
     public function pullFromHqepay($LogisticCode, $ShipperCode, $company_id = '', $receiver_mobile = '')
     {
+        app('log')->info('pullFromHqepay LogisticCode===>'.$LogisticCode.', ShipperCode===>'.$ShipperCode.', company_id===>'.$company_id.', receiver_mobile===>'.$receiver_mobile);
         //快递鸟配置数据
         $service = new KuaidiService(new KdniaoService());
         $data = $service->getKuaidiSetting($company_id);
@@ -68,7 +69,7 @@ class LogisticTracker
             'DataSign' => urlencode($DataSign),
             'DataType' => $DataType,
         );
-
+        app('log')->info('pullFromHqepay post===>'.var_export($post, 1));
         try {
             $client = new Client();
             $resData = $client->post($this->hqepayApiUrl, [
@@ -76,6 +77,7 @@ class LogisticTracker
                 'form_params' => $post
             ])->getBody();
             $responseData = json_decode($resData->getContents(), true);
+            app('log')->info('pullFromHqepay responseData===>'.var_export($responseData, 1));
             if (in_array($ShipperCode, ['JD','SF'])) {
                 app('log')->info('pullFromHqepay responseData===>'.var_export($responseData, 1));
             }
@@ -109,6 +111,8 @@ class LogisticTracker
      *
      * @param string $deliv_com  快递公司编号
      * @param string $deliv_no 物流单号
+     * @param string $company_id 公司ID
+     * @param string $receiver_mobile 收货人手机号
      *
      * @return array
      */
@@ -131,11 +135,14 @@ class LogisticTracker
         }
 
         $customer = $data['app_secret'];
-        if ($deliv_com == 'shunfeng') {
-            $param = json_encode(['com' => $deliv_com,'num' => $deliv_no, 'phone' => $receiver_mobile]);
-        } else {
-            $param = json_encode(['com' => $deliv_com,'num' => $deliv_no]);
-        }
+
+        // 所有快递需要收货人手机号
+        $param = json_encode(['com' => $deliv_com,'num' => $deliv_no, 'phone' => $receiver_mobile]);
+        // if ($deliv_com == 'shunfeng') {
+        //     $param = json_encode(['com' => $deliv_com,'num' => $deliv_no, 'phone' => $receiver_mobile]);
+        // } else {
+        //     $param = json_encode(['com' => $deliv_com,'num' => $deliv_no]);
+        // }
         $key = $data['app_key'];
         $sign = strtoupper(md5($param.$key.$customer));
         $post_data = ['customer' => $customer,'sign' => $sign,'param' => $param];
@@ -169,9 +176,11 @@ class LogisticTracker
      */
     private function __payPullFromHqepay($LogisticCode, $ShipperCode, $company_id = '', $receiver_mobile = '')
     {
-        if (!in_array($ShipperCode, ['JD','SF'])) {
+        app('log')->info('__payPullFromHqepay LogisticCode===>'.$LogisticCode.', ShipperCode===>'.$ShipperCode.', company_id===>'.$company_id.', receiver_mobile===>'.$receiver_mobile);
+        if (!in_array($ShipperCode, ['JD','SF','ZTO'])) {
             return false;
         }
+        app('log')->info('__payPullFromHqepay ShipperCode===>'.$ShipperCode);
         $result = [];
         switch ($ShipperCode) {
             case 'JD':
@@ -180,7 +189,10 @@ class LogisticTracker
             case 'SF':
                 $result = $this->__sfPullFromHqepay($LogisticCode, $ShipperCode, $company_id, $receiver_mobile);
                 break;
-
+            case 'ZTO':
+                app('log')->info('__payPullFromHqepay ZTO===>'.$LogisticCode.', ShipperCode===>'.$ShipperCode.', company_id===>'.$company_id.', receiver_mobile===>'.$receiver_mobile);
+                $result = $this->__ztoPullFromHqepay($LogisticCode, $ShipperCode, $company_id, $receiver_mobile);
+                break;
             default:
                 # code...
                 break;
@@ -225,6 +237,19 @@ class LogisticTracker
             'content' => $content,
         ];
         app('log')->info('__sfPullFromHqepay result===>'.var_export($result, 1));
+        return $result;
+    }
+
+    private function __ztoPullFromHqepay($LogisticCode, $ShipperCode, $company_id = '', $receiver_mobile = '')
+    {
+        $CustomerName = substr($receiver_mobile, -4);
+        $content = "{'OrderCode':'', 'ShipperCode':'{$ShipperCode}', 'LogisticCode':'{$LogisticCode}', 'CustomerName':'{$CustomerName}'}";
+        app('log')->info('__ztoPullFromHqepay content===>'.$content);
+        $result = [
+            'request_type' => $this->requestType, //'8001',
+            'content' => $content,
+        ];
+        app('log')->info('__ztoPullFromHqepay result===>'.var_export($result, 1));
         return $result;
     }
 

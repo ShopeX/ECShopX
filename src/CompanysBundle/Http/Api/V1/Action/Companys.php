@@ -9,27 +9,29 @@ namespace CompanysBundle\Http\Api\V1\Action;
 use App\Http\Controllers\Controller as BaseController;
 use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+// use Illuminate\Http\Response;
 use CompanysBundle\Services\CompanysService;
 use CompanysBundle\Services\SettingService;
 use CompanysBundle\Ego\CompanysActivationEgo;
 use SystemLinkBundle\Services\ThirdSettingService;
+use CompanysBundle\Services\ShopsService;
+use CompanysBundle\Services\Shops\WxShopsService;
+use DistributionBundle\Services\DistributorService;
 
 class Companys extends BaseController
 {
-    /** @var $companysService */
+    /** @var CompanysService */
     private $companysService;
 
-    /** @var $settingService */
+    /** @var SettingService */
     private $settingService;
 
     /**
-     * @param companysService  $companysService
+     * @param CompanysService  $companysService
      */
     public function __construct(CompanysService $companysService)
     {
-        $this->companysService = new $companysService();
-        $this->companysRepository = app('registry')->getManager('default')->getRepository(\CompanysBundle\Entities\Companys::class);
+        $this->companysService = $companysService;
         $this->settingService = new SettingService();
     }
 
@@ -398,11 +400,20 @@ class Companys extends BaseController
     public function getCompanySetting(Request $request)
     {
         $companyId = app('auth')->user()->get('company_id');
-        $result = $this->companysService->getCompanySetting($companyId);
+        // $result = $this->companysService->getCompanySetting($companyId);
+        // 获取自营店信息
+        $shopsService = new ShopsService(new WxShopsService());
+        $result = $shopsService->getWxShopsSetting($companyId);
+        // 获取总店信息
+        $selfDistributorInfo = (new DistributorService())->getDistributorSelf($companyId, true);
+
+        if (!empty($selfDistributorInfo) && $result) {
+            $result["brand_name"] = $selfDistributorInfo["name"] ?? "";
+            $result["logo"] = $selfDistributorInfo["logo"] ?? "";
+        }
 
         $thirdSettingService = new ThirdSettingService();
-        $data = $thirdSettingService->getShopexErpSetting($companyId);
-        $result['is_open_erp'] = $data['is_open'] ?? false;
+        $result['is_open_erp'] = $thirdSettingService->getShopexErpSetting($companyId)['is_open'] ?? false;
 
         return $this->response->array($result);
     }

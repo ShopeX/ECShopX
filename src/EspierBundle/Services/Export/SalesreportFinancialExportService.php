@@ -36,7 +36,9 @@ class SalesreportFinancialExportService implements ExportFileInterface
         $datalist = $this->getLists($filter, $count);
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->title, $datalist);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['order_id'];
+        $result = $exportService->exportCsv($fileName, $this->title, $datalist, $textFields);
         return $result;
     }
 
@@ -53,7 +55,8 @@ class SalesreportFinancialExportService implements ExportFileInterface
                     if (in_array($k, ['create_time','delivery_time'])) {
                         $recordData[$key][$k] = $value[$k] ? date('Y-m-d H:i:s', $value[$k]) : '';
                     } elseif (in_array($k, ['order_id']) && isset($value[$k])) {
-                        $recordData[$key][$k] = "\"'".$value[$k]."\"";
+                        // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                        $recordData[$key][$k] = $value[$k];
                     } elseif (in_array($k, ['item_fee','discount_fee','total_fee'])) {
                         $recordData[$key][$k] = $value[$k] ? bcdiv($value[$k], 100, 2) : 0;
                     } else {

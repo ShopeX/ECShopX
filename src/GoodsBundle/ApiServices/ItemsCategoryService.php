@@ -295,7 +295,7 @@ class ItemsCategoryService
             $ids = $this->getItemIdsByCatId($filter['category_id'], $filter['company_id']);
             $itemsService = new ItemsService();
             if ($ids) {
-                $itemsInfo = $itemsService->getItemsList(['item_id|in' => $ids], 1, 1);
+                $itemsInfo = $itemsService->getItemsList(['company_id' => $filter['company_id'], 'item_id|in' => $ids], 1, 1);
                 if ($itemsInfo['total_count'] > 0) {
                     throw new ResourceException('分类下存在商品');
                 }
@@ -304,7 +304,7 @@ class ItemsCategoryService
             $mainCatIds = $this->getMainCatChildIdsBy($filter['category_id'], $filter['company_id']);
             $mainCatIds[] = $filter['category_id'];
             // 判断是否为主类目
-            $itemTotalCount = $itemsService->count(['item_category' => $mainCatIds]);
+            $itemTotalCount = $itemsService->count(['company_id' => $filter['company_id'], 'item_category' => $mainCatIds]);
             if ($itemTotalCount > 0) {
                 throw new ResourceException('类目下存在商品');
             }

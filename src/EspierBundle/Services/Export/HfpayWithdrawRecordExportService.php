@@ -32,7 +32,9 @@ class HfpayWithdrawRecordExportService implements ExportFileInterface
         $datalist = $this->getLists($filter, $count);
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->title, $datalist);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['order_id', 'bind_card_id'];
+        $result = $exportService->exportCsv($fileName, $this->title, $datalist, $textFields);
 
         app('log')->debug('队列导出: '. var_export($result, 1));
 
@@ -57,7 +59,8 @@ class HfpayWithdrawRecordExportService implements ExportFileInterface
                 foreach ($data['list'] as $key => $value) {
                     foreach ($title as $k => $v) {
                         if ($k == 'order_id' || $k == 'bind_card_id') {
-                            $recordData[$key][$k] = "\"'" . $value[$k] . "\"";
+                            // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                            $recordData[$key][$k] = $value[$k];
                         } elseif ($k == 'cash_status') {
                             if (in_array($value[$k], [0, 1])) {
                                 $recordData[$key][$k] = '提现中';

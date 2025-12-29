@@ -85,6 +85,11 @@ class ShippingTemplate extends Controller
             $filter['distributor_id'] = app('auth')->user()->get('distributor_id');
         }
 
+        //云店--运费模板在总部
+        if ($company['product_model'] == 'standard') {
+            $filter['distributor_id'] = 0;
+        }
+        
         $orderBy = ['create_time' => 'DESC'];
 
         $pageSize = $request->input('pageSize', 50);

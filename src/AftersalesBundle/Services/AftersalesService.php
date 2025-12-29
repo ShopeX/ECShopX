@@ -56,6 +56,8 @@ use WorkWechatBundle\Jobs\sendAfterSaleCancelNoticeJob;
 use WorkWechatBundle\Jobs\sendAfterSaleWaitConfirmNoticeJob;
 use WorkWechatBundle\Jobs\sendAfterSaleWaitDealNoticeJob;
 use CompanysBundle\Services\OperatorsService;
+use GoodsBundle\Services\ItemsService;
+use GoodsBundle\Entities\Items;
 
 class AftersalesService
 {
@@ -1679,10 +1681,78 @@ class AftersalesService
     }
 
     /**
+     * 处理item_name过滤条件，转换为aftersales_bn过滤
+     * 
+     * @param array $filter
+     * @return array
+     */
+    private function processItemNameFilter($filter)
+    {
+        if (empty($filter['item_name']) || empty($filter['company_id'])) {
+            if (isset($filter['item_name'])) {
+                unset($filter['item_name']);
+            }
+            return $filter;
+        }
+
+        $itemName = $filter['item_name'];
+        unset($filter['item_name']);
+
+        // 根据item_name查询商品
+        $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
+        $itemResult = $itemsRepository->list(
+            ['item_name|contains' => $itemName, 'company_id' => $filter['company_id']],
+            [],
+            -1,
+            1,
+            'item_id'
+        );
+        
+        if (empty($itemResult['list'])) {
+            // 如果没有找到商品，设置一个不存在的aftersales_bn，确保查询结果为空
+            $filter['aftersales_bn'] = [-1];
+            return $filter;
+        }
+
+        $itemIds = array_column($itemResult['list'], 'item_id');
+        
+        // 通过item_id从售后详情表查出aftersales_bn
+        $aftersalesDetailResult = $this->aftersalesDetailRepository->getList(
+            ['item_id' => $itemIds, 'company_id' => $filter['company_id']],
+            0,
+            -1
+        );
+        
+        if (empty($aftersalesDetailResult['list'])) {
+            // 如果没有找到售后详情，设置一个不存在的aftersales_bn，确保查询结果为空
+            $filter['aftersales_bn'] = [-1];
+            return $filter;
+        }
+
+        $aftersalesBns = array_unique(array_column($aftersalesDetailResult['list'], 'aftersales_bn'));
+        
+        // 如果filter中已有aftersales_bn，则取交集
+        if (isset($filter['aftersales_bn'])) {
+            $existingBns = is_array($filter['aftersales_bn']) ? $filter['aftersales_bn'] : [$filter['aftersales_bn']];
+            $aftersalesBns = array_intersect($existingBns, $aftersalesBns);
+            if (empty($aftersalesBns)) {
+                $aftersalesBns = [-1];
+            }
+        }
+        
+        $filter['aftersales_bn'] = $aftersalesBns;
+        
+        return $filter;
+    }
+
+    /**
      * 获取售后单列表
      */
     public function getAftersalesList($filter, $offset = 0, $limit = -1, $orderBy = ['create_time' => 'DESC'], $is_app = false)
     {
+        // 处理item_name过滤条件
+        $filter = $this->processItemNameFilter($filter);
+        
         if (isset($filter['is_prescription_order']) || isset($filter['order_class'])) {
             if(isset($filter['is_prescription_order'])){
                 if ($filter['is_prescription_order'] === '0') { // 不含处方药订单
@@ -2468,11 +2538,57 @@ class AftersalesService
         if (isset($data['freight']) && !empty($data['freight']) && $data['freight'] > 0) {
             // 判断是否是最后一次申请（整单都申请售后）
             // 先判断数量是否满足最后一次申请的条件（不考虑运费）
-            $isLastAftersales = true;
+            // 调整：当一次提交多个SKU时，需要基于本次提交后的整体状态来判断，而不是逐个SKU判断
+            $normalOrderService = new NormalOrderService();
+            
+            // 1. 获取订单的所有订单项
+            $orderItemsFilter = [
+                'company_id' => $data['company_id'],
+                'order_id' => $data['order_id'],
+            ];
+            $orderItems = $normalOrderService->normalOrdersItemsRepository->getList($orderItemsFilter, 0, -1);
+            if (empty($orderItems['list'])) {
+                throw new ResourceException('订单商品不存在');
+            }
+            
+            // 2. 构建本次申请的订单项映射（key: 订单项id, value: 本次申请数量）
+            $applyDetailMap = [];
             foreach ($data['detail'] as $v) {
-                $isLastAftersales = $this->isRefundFinishByNum($data['order_id'], $data['company_id'], $v['id'], $v['num']);
-                if (!$isLastAftersales) {
-                    break; // 只要有一个不是最后一次，就退出
+                if (isset($applyDetailMap[$v['id']])) {
+                    $applyDetailMap[$v['id']] += $v['num'];
+                } else {
+                    $applyDetailMap[$v['id']] = $v['num'];
+                }
+            }
+            
+            // 3. 遍历所有订单项，判断每个订单项是否满足条件
+            $isLastAftersales = true;
+            foreach ($orderItems['list'] as $orderItem) {
+                // 跳过礼品订单项（礼品不需要申请售后）
+                if (isset($orderItem['order_item_type']) && $orderItem['order_item_type'] == 'gift') {
+                    continue;
+                }
+                
+                $orderItemId = $orderItem['id'];
+                $orderItemNum = $orderItem['num'];
+                
+                // 获取已申请数量
+                $appliedNum = $this->getAppliedNum($data['company_id'], $data['order_id'], $orderItemId);
+                
+                // 判断是否在本次申请中
+                if (isset($applyDetailMap[$orderItemId])) {
+                    // 如果在本次申请中：已申请数量 + 本次申请数量 >= 订单项数量
+                    $totalAppliedNum = $appliedNum + $applyDetailMap[$orderItemId];
+                    if ($totalAppliedNum < $orderItemNum) {
+                        $isLastAftersales = false;
+                        break;
+                    }
+                } else {
+                    // 如果不在本次申请中：已申请数量 >= 订单项数量
+                    if ($appliedNum < $orderItemNum) {
+                        $isLastAftersales = false;
+                        break;
+                    }
                 }
             }
             

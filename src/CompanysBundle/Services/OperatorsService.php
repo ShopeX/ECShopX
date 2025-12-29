@@ -83,8 +83,8 @@ class OperatorsService
             $company = $this->companysRepository->add($params);
             $this->operatorsRepository->updateOneBy(['operator_id' => $operator['operator_id']], ['company_id' => $company['company_id']]);
             $demoParams = [
-                'eid' => $params['eid'],
-                'passport_uid' => $params['passport_uid'],
+                'eid' => $params['eid'] ?? null,
+                'passport_uid' => $params['passport_uid'] ?? null,
                 'company_id' => $company['company_id'],
                 'expired_at' => $expiredAt,
             ];

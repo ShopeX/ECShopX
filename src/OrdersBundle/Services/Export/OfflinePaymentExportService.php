@@ -63,7 +63,20 @@ class OfflinePaymentExportService
                 $v['order_id'] .= "\t";
                 // $v['pay_sn'] .= "\t";
                 $v['pay_account_no'] .= "\t";
-                $v['voucher_pic'] = implode(',', json_decode($v['voucher_pic'], true));
+                // 修复 voucher_pic 处理：添加空值检查，避免 json_decode 返回 null 时 implode 报错
+                if (!empty($v['voucher_pic'])) {
+                    $voucherPicArray = json_decode($v['voucher_pic'], true);
+                    $v['voucher_pic'] = is_array($voucherPicArray) ? implode(',', $voucherPicArray) : '';
+                } else {
+                    $v['voucher_pic'] = '';
+                }
+                // 给银行账号和银联号添加制表符，避免 Excel 显示为科学计数法
+                if (!empty($v['bank_account_no'])) {
+                    $v['bank_account_no'] .= "\t";
+                }
+                if (!empty($v['china_ums_no'])) {
+                    $v['china_ums_no'] .= "\t";
+                }
                 $v['create_time'] = date('Y-m-d H:i:s', $v['create_time']);
                 if (in_array($v['check_status'], [1, 2])) {
                     $v['update_time'] = date('Y-m-d H:i:s', $v['update_time']);
@@ -75,8 +88,9 @@ class OfflinePaymentExportService
                 elseif ($v['check_status'] == 9) $v['check_status'] = '已取消';
                 else $v['check_status'] = '待审核';
                 
+                // 构建关联数组，键为字段名，值为字段值（ExportFileService 需要关联数组格式）
                 foreach ($this->title as $column => $label) {
-                    $lineData[] = $v[$column] ?? '';
+                    $lineData[$column] = $v[$column] ?? '';
                 }
                 $exportData[] = $lineData;
             }

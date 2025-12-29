@@ -98,6 +98,7 @@ class AftersalesRepository extends EntityRepository
                                      ->setMaxResults($limit);
             }
             $list = $this->matching($criteria);
+            
             foreach ($list as $v) {
                 $order = $this->getAftersalesData($v);
                 $prderList[] = $order;
@@ -218,6 +219,85 @@ class AftersalesRepository extends EntityRepository
                 }
             }
         }
+
+        // 构建QueryBuilder用于获取SQL
+        $qb = $this->createQueryBuilder('a');
+        $filterForSql = $filter ?: [];
+        if ($filterForSql) {
+            if (isset($filterForSql['or']) && $filterForSql['or']) {
+                $orWhere = [];
+                foreach ($filterForSql['or'] as $key => $filterValue) {
+                    $list = explode('|', $key);
+                    if (count($list) > 1) {
+                        list($v, $k) = $list;
+                        if ($k == 'contains') {
+                            $k = 'like';
+                            $filterValue = '%'.$filterValue.'%';
+                        }
+                        $orWhere[] = $qb->expr()->$k('a.'.$v, $qb->expr()->literal($filterValue));
+                    } elseif (is_array($filterValue)) {
+                        array_walk($filterValue, function (&$colVal) use ($qb) {
+                            $colVal = $qb->expr()->literal($colVal);
+                        });
+                        $orWhere[] = $qb->expr()->in('a.'.$key, $filterValue);
+                    } else {
+                        $orWhere[] = $qb->expr()->eq('a.'.$key, $qb->expr()->literal($filterValue));
+                    }
+                }
+                $qb->andWhere($qb->expr()->orX(...$orWhere));
+            }
+
+            $fixedencryptCol = ['mobile'];
+            foreach ($fixedencryptCol as $col) {
+                if (isset($filterForSql[$col])) {
+                    $filterForSql[$col] = fixedencrypt($filterForSql[$col]);
+                }
+            }
+            foreach ($filterForSql as $field => $value) {
+                if ($field == 'need_order' || $field == 'or') {
+                    continue;
+                }
+                if (!is_null($value) && $value != '') {
+                    $list = explode('|', $field);
+                    if (count($list) > 1) {
+                        list($v, $k) = $list;
+                        if ($k == 'contains') {
+                            $k = 'like';
+                            $value = '%'.$value.'%';
+                        }
+                        $qb->andWhere($qb->expr()->$k('a.'.$v, $qb->expr()->literal($value)));
+                        continue;
+                    } elseif (is_array($value)) {
+                        array_walk($value, function (&$colVal) use ($qb) {
+                            $colVal = $qb->expr()->literal($colVal);
+                        });
+                        $qb->andWhere($qb->expr()->in('a.'.$field, $value));
+                    } else {
+                        $qb->andWhere($qb->expr()->eq('a.'.$field, $qb->expr()->literal($value)));
+                    }
+                }
+            }
+        }
+        $query = $qb->getQuery();
+        $sql = $query->getSQL();
+        $params = $query->getParameters();
+        $sqlWithParams = $sql;
+        // 替换命名参数
+        foreach ($params as $key => $value) {
+            $placeholder = ':'.$key;
+            if (strpos($sqlWithParams, $placeholder) !== false) {
+                if (is_string($value)) {
+                    $sqlWithParams = str_replace($placeholder, "'".addslashes($value)."'", $sqlWithParams);
+                } elseif (is_array($value)) {
+                    $sqlWithParams = str_replace($placeholder, "'".implode("','", array_map('addslashes', $value))."'", $sqlWithParams);
+                } elseif (is_null($value)) {
+                    $sqlWithParams = str_replace($placeholder, 'NULL', $sqlWithParams);
+                } else {
+                    $sqlWithParams = str_replace($placeholder, $value, $sqlWithParams);
+                }
+            }
+        }
+        app('log')->info(':'.__CLASS__.':'.__FUNCTION__.':'.__LINE__.':sql:'.$sqlWithParams);
 
         return $criteria;
     }

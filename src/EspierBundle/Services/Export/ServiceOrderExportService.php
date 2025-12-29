@@ -44,7 +44,9 @@ class ServiceOrderExportService implements ExportFileInterface
         $orderList = $this->getLists($filter, $count, $datapassBlock);
 
         $exportService = new ExportFileService();
-        $result = $exportService->exportCsv($fileName, $this->title, $orderList);
+        // 指定需要作为文本处理的数字字段，避免 Excel 显示为科学计数法
+        $textFields = ['order_id'];
+        $result = $exportService->exportCsv($fileName, $this->title, $orderList, $textFields);
         return $result;
     }
 
@@ -72,7 +74,8 @@ class ServiceOrderExportService implements ExportFileInterface
                     foreach ($rights['list'] as $i => $rightlist) {
                         foreach ($title as $k => $v) {
                             if ($k == "order_id" && isset($value[$k])) {
-                                $orderList[$key."-".$i][$k] = "\"'".$value[$k]."\"";
+                                // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                                $orderList[$key."-".$i][$k] = $value[$k];
                             } elseif ($k == "total_fee" && isset($value[$k])) {
                                 $orderList[$key."-".$i][$k] = $value[$k] / 100;
                             } elseif ($k == "order_source" && isset($value[$k])) {
@@ -89,7 +92,8 @@ class ServiceOrderExportService implements ExportFileInterface
                 } else {
                     foreach ($title as $k => $v) {
                         if ($k == "order_id" && isset($value[$k])) {
-                            $orderList[$key][$k] = "\"'".$value[$k]."\"";
+                            // 直接赋值，不再添加引号，由 ExportFileService 统一处理
+                            $orderList[$key][$k] = $value[$k];
                         } elseif ($k == "total_fee" && isset($value[$k])) {
                             $orderList[$key][$k] = $value[$k] / 100;
                         } elseif ($k == "order_source" && isset($value[$k])) {

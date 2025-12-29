@@ -2444,7 +2444,7 @@ class WxappOrder extends Controller
             }
 
             if (isset($order['orderInfo']['delivery_corp_source']) && $order['orderInfo']['delivery_corp_source'] == 'kuaidi100') {
-                $result = $tracker->kuaidi100($order['orderInfo']['delivery_corp'], $order['orderInfo']['delivery_code'], $authInfo['company_id']);
+                $result = $tracker->kuaidi100($order['orderInfo']['delivery_corp'], $order['orderInfo']['delivery_code'], $authInfo['company_id'], $order['orderInfo']['receiver_mobile']);
             } else {
                 //需要根据订单
                 $result = $tracker->pullFromHqepay($order['orderInfo']['delivery_code'], $order['orderInfo']['delivery_corp'], $authInfo['company_id'], $order['orderInfo']['receiver_mobile']);

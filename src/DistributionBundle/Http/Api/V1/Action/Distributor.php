@@ -1523,6 +1523,7 @@ class Distributor extends Controller
             $filter['is_gift'] = ($params['is_gift'] == 'true') ? 1 : 0;
         }
 
+        //销售分类搜索
         $itemsCategoryService = new ItemsCategoryService();
         if (isset($params['category']) && $params['category']) {
             if (is_array($params['category'])) {
@@ -1541,7 +1542,7 @@ class Distributor extends Controller
             }
         }
 
-        //销售分类搜索
+        //销售分类搜索，和category重复
         if (isset($params['cat_id']) && $params['cat_id']) {
             if (is_array($params['cat_id'])) {
                 $cat_id = array_pop($params['cat_id']);
@@ -1559,11 +1560,11 @@ class Distributor extends Controller
                 return false;
             }
 
-            if (isset($params['item_id'])) {
-                $filter['item_id'] = array_intersect((array)$params['item_id'], $itemIds);
-            } else {
-                $filter['item_id'] = $itemIds;
-            }
+            // if (isset($params['item_id'])) {
+            //     $filter['item_id'] = array_intersect((array)$params['item_id'], $itemIds);
+            // } else {
+            //     $filter['item_id'] = $itemIds;
+            // }
         }
         // 管理分类搜索
         if (isset($params['main_cat_id']) && $params['main_cat_id']) {
@@ -1639,11 +1640,11 @@ class Distributor extends Controller
         $itemStoreService = new ItemStoreService();
         $warningStore = $itemStoreService->getWarningStore($companyId, $distributorId);
 
-        $params = $request->all('pageSize', 'page', 'is_sku', 'item_id', 'is_can_sale', 'is_warning', 'store_lt', 'store_gt', 'category', 'is_gift', 'brand_id', 'item_holder', 'supplier_name', 'tag_id', 'approve_status');
+        // $params = $request->all('pageSize', 'page', 'is_sku', 'item_id', 'is_can_sale', 'is_warning', 'store_lt', 'store_gt', 'category', 'is_gift', 'brand_id', 'item_holder', 'supplier_name', 'tag_id', 'approve_status');
 
         $distributorItemsService = new DistributorItemsService();
-        $pageSize = $params['pageSize'] ?: -1;
-        $page = $params['page'] ?: 1;
+        $pageSize = $request->get('pageSize') ?: -1;
+        $page = $request->get('page') ?: 1;
         $data = $distributorItemsService->getDistributorRelItemList($filter, $pageSize, $page, ['item_id' => 'desc'], false);
         $data['warning_store'] = $warningStore;
         $data['filter'] = $filter;

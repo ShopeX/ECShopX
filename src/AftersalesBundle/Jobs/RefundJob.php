@@ -39,18 +39,20 @@ class RefundJob extends Job
     public function handle()
     {
         $params = $this->data;
+        app('log')->info('schedule_refund::refundJob::handle::params::'.json_encode($params, 256));
         $refund_filter = [
             'refund_bn' => $params['refund_bn'],
             'company_id' => $params['company_id']
         ];
         $aftersalesRefundService = new AftersalesRefundService();
         $refund = $aftersalesRefundService->getInfo($refund_filter);
+        app('log')->info('schedule_refund::refundJob::handle::refund_filter===>'.json_encode($refund_filter, 256).'===>refund::'.json_encode($refund, 256));
         if (empty($refund) || $refund['refund_status'] != 'AUDIT_SUCCESS') {
             return false;
         }
         // 线下转账的支付方式，不做处理
         if ($refund['pay_type'] == 'offline_pay') {
-            app('log')->info('refund_filter===>'.var_export($refund_filter, true).'===>pay_type:offline_pay无需处理');
+            app('log')->info('schedule_refund::refundJob::handle::refund_filter===>'.json_encode($refund_filter, 256).'===>pay_type:offline_pay无需处理');
             return true;
         }
 
@@ -109,6 +111,7 @@ class RefundJob extends Job
     //售后单更新到完成状态
     private function __updateAfterSaleFinish($refund = [])
     {
+        app('log')->info('schedule_refund::refundJob::__updateAfterSaleFinish::refund::'.json_encode($refund, 256));
         $aftersales_filter = [
             'aftersales_bn' => $refund['aftersales_bn'],
             'company_id' => $refund['company_id']
@@ -117,10 +120,14 @@ class RefundJob extends Job
             'aftersales_status' => 2,//已处理。已完成
             'progress' => 4,//已处理
         ];
+        app('log')->info('schedule_refund::refundJob::__updateAfterSaleFinish::aftersales_filter::'.json_encode($aftersales_filter, 256).'aftersales_update::'.json_encode($aftersales_update, 256));
         $aftersalesRepository = app('registry')->getManager('default')->getRepository(Aftersales::class);
-        $aftersalesRepository->update($aftersales_filter, $aftersales_update);// 更新售后主表状态
+        $aftersalesResult = $aftersalesRepository->update($aftersales_filter, $aftersales_update);// 更新售后主表状态
+        app('log')->info('schedule_refund::refundJob::__updateAfterSaleFinish::aftersalesResult::'.json_encode($aftersalesResult, 256));
 
         $aftersalesDetailRepository = app('registry')->getManager('default')->getRepository(AftersalesDetail::class);
-        $aftersalesDetailRepository->updateBy($aftersales_filter, $aftersales_update);// 更新售后明细状态
+        $aftersalesDetailResult = $aftersalesDetailRepository->updateBy($aftersales_filter, $aftersales_update);// 更新售后明细状态
+        app('log')->info('schedule_refund::refundJob::__updateAfterSaleFinish::aftersalesDetailResult::'.json_encode($aftersalesDetailResult, 256));
+
     }
 }

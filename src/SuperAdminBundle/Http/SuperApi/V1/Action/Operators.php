@@ -72,8 +72,8 @@ class Operators extends BaseController
         $params['is_disabled'] = (isset($params['is_disabled']) && $params['is_disabled'] == 'true') ? 1 : 0 ;
         $params['third_params'] = (isset($params['third_params']) && is_array($params['third_params'])) ? $params['third_params'] : [] ;
         $operatorData = [
-            'eid' => '',
-            'passport_uid' => '',
+            // 'eid' => '',
+            // 'passport_uid' => '',
             'login_name' => trim($params['login_name']),
             'mobile' => trim($params['mobile']),
             'password' => trim($params['password']),

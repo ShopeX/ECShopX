@@ -19,6 +19,7 @@ use ThemeBundle\Entities\PagesTemplate;
 use ThemeBundle\Entities\PagesTemplateSet;
 use WechatBundle\Entities\WeappSetting;
 use EmployeePurchaseBundle\Services\ActivityItemsService;
+use EmployeePurchaseBundle\Services\ActivitiesService;
 
 class PagesTemplateServices
 {
@@ -867,11 +868,28 @@ class PagesTemplateServices
         // 获取商品税率服务
         $ItemTaxRateService = new ItemTaxRateService($companyId);
 
-        // 获取商品总店的信息
+        // 确定查询使用的 distributor_id（优先使用活动的 distributor_id）
+        $queryDistributorId = $distributorId;  // 默认使用传入的 distributor_id
+        
+        // 如果有 e_activity_id，查询活动信息，获取活动的 distributor_id
+        if (isset($params['e_activity_id']) && $params['e_activity_id'] > 0) {
+            $activitiesService = new ActivitiesService();
+            $activityInfo = $activitiesService->entityRepository->getInfo([
+                'id' => $params['e_activity_id'],
+                'company_id' => $companyId,
+            ]);
+            
+            // 如果活动存在，使用活动的 distributor_id
+            if (!empty($activityInfo) && isset($activityInfo['distributor_id'])) {
+                $queryDistributorId = intval($activityInfo['distributor_id']);
+            }
+        }
+
+        // 使用活动的 distributor_id 查询商品信息
         $result = $itemsService->getItemListData([
             "company_id" => $companyId,
             "item_id" => $itemsId,
-            "distributor_id" => $distributorId,
+            "distributor_id" => $queryDistributorId,  // 使用活动的 distributor_id
         ]);
         // 内购活动价
         if (isset($params['e_activity_id']) && $params['e_activity_id'] > 0) {

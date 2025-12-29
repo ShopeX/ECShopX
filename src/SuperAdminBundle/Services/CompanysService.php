@@ -15,7 +15,7 @@ class CompanysService
     {
         $companysService = new companys();
         $operatorsService = new OperatorsService();
-        $listdata = $companysService->lists($filter, $page, $pageSize, $orderBy);
+        $listdata = $companysService->lists($filter, '*', $page, $pageSize, $orderBy);
         $indexMenuType = ShopMenuService::MENU_TYPE;
         foreach ($listdata['list'] as &$v) {
             $v['is_open_pc_template'] = $v['is_open_pc_template'] == 1 ? '1' : '0';

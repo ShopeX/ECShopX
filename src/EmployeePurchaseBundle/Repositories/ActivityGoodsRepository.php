@@ -352,11 +352,11 @@ class ActivityGoodsRepository extends EntityRepository
             }
         }
 
-        if (isset($filter['cat_id']) && $filter['cat_id']) {
-            if (is_array($filter['cat_id'])) {
-                $qb = $qb->andWhere($qb->expr()->in('c.category_id', $filter['cat_id']));
+        if (isset($filter['category']) && $filter['category']) {
+            if (is_array($filter['category'])) {
+                $qb = $qb->andWhere($qb->expr()->in('c.category_id', $filter['category']));
             } else {
-                $qb = $qb->andWhere($qb->expr()->eq('c.category_id', $filter['cat_id']));
+                $qb = $qb->andWhere($qb->expr()->eq('c.category_id', $filter['category']));
             }
         }
 

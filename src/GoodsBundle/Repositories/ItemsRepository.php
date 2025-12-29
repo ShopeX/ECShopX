@@ -712,9 +712,18 @@ class ItemsRepository extends EntityRepository
     //获取指定条件的所有商品列表，可指定字段
     public function getItemsLists($filter, $cols = 'item_id, default_item_id')
     {
+        // 定义业务逻辑字段列表（非数据库字段）
+        $businessLogicFields = ['source', 'operator_type', 'export_type', 'wxaappid', 'merchant_id'];
+        
+        // 创建过滤后的数组，只包含数据库字段
+        $dbFilter = $filter;
+        foreach ($businessLogicFields as $field) {
+            unset($dbFilter[$field]);
+        }
+        
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder()->select($cols)->from($this->table);
-        $qb = $this->_filter($filter, $qb);
+        $qb = $this->_filter($dbFilter, $qb);
         $lists = $qb->execute()->fetchAll();
         return $lists;
     }

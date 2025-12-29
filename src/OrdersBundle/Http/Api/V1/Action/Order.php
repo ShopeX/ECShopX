@@ -37,6 +37,7 @@ use CompanysBundle\Services\OperatorsService;
 use Dingo\Api\Exception\ResourceException;
 use DistributionBundle\Services\DistributorService;
 use SalespersonBundle\Services\SalespersonService;
+use OrdersBundle\Entities\OrdersDelivery;
 
 class Order extends Controller
 {
@@ -702,7 +703,7 @@ class Order extends Controller
             $promoter_user_id_list_mobile =  array_column($data_mobile['list'],'user_id');
             app('log')->debug("\salesperson:".__FUNCTION__."-".__LINE__.":data_mobile:". json_encode($data_mobile));
 
-	    $promoter_id_merge = array_merge($promoter_user_id_list_name,$promoter_user_id_list_mobile);
+	        $promoter_id_merge = array_merge($promoter_user_id_list_name,$promoter_user_id_list_mobile);
 
             if(!empty($promoter_id_merge) ){
                 if ($orderType) {
@@ -899,19 +900,7 @@ class Order extends Controller
             }
         }
         
-        //sale_salesman_distributor_id
-        $sale_salesman_distributor_ids = array_column($result['list'],'sale_salesman_distributor_id');
-        $sale_salesman_distributor_ids = array_unique($sale_salesman_distributor_ids);
-        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":sale_salesman_distributor_ids:". json_encode( $sale_salesman_distributor_ids));
-        if(!empty($sale_salesman_distributor_ids)){
-            $distributorService = new DistributorService();
-            $distributorList = $distributorService->lists(['company_id' => $companyId, 'distributor_id' => $sale_salesman_distributor_ids] );
-            $distributorList = array_column($distributorList['list'], null, 'distributor_id');
-        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":distributorList:". json_encode( $distributorList));
-        foreach ($result['list'] as $k => $v) {
-            $result['list'][$k]['sale_salesman_distributor_info'] = $distributorList[$v['sale_salesman_distributor_id']] ?? [];
-           }
-        }
+        // sale_salesman_distributor_info 已在 AbstractNormalOrder::getOrderList 中处理，无需重复查询
 
         return $this->response->array($result);
     }
@@ -1788,7 +1777,15 @@ class Order extends Controller
         $tracker = new LogisticTracker();
 
         if ($request->has('delivery_corp_source') && $request->get('delivery_corp_source') == 'kuaidi100') {
-            $result = $tracker->kuaidi100($postdata['delivery_corp'], $postdata['delivery_code'], $company_id);
+            $ordersDeliveryRepository = app('registry')->getManager('default')->getRepository(OrdersDelivery::class);
+            $orders_delivery = $ordersDeliveryRepository->getInfo(['company_id' => $company_id, 'delivery_corp' => $postdata['delivery_corp'], 'delivery_code' => $postdata['delivery_code']]);
+            if ($orders_delivery) {
+                $postdata['receiver_mobile'] = $orders_delivery['receiver_mobile'];
+            }else{
+                $postdata['receiver_mobile'] = '';
+            }
+            $receiver_mobile = $postdata['receiver_mobile'];
+            $result = $tracker->kuaidi100($postdata['delivery_corp'], $postdata['delivery_code'], $company_id, $receiver_mobile);
         } else {
             //需要根据订单
             $result = $tracker->pullFromHqepay($postdata['delivery_code'], $postdata['delivery_corp'], $company_id);
