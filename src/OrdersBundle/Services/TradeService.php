@@ -1,7 +1,18 @@
 <?php
 /**
- * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
- * See LICENSE file for license details.
+ * Copyright 2019-2026 ShopeX
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 namespace OrdersBundle\Services;
@@ -29,6 +40,7 @@ use CompanysBundle\Traits\GetDefaultCur;
 use DistributionBundle\Services\DistributorService;
 use SystemLinkBundle\Events\WdtErp\TradeFinishEvent as WdtErpTradeFinishEvent;
 use SystemLinkBundle\Events\Jushuitan\TradeFinishEvent as JushuitanTradeFinishEvent;
+use CompanysBundle\Entities\Operators;
 
 class TradeService implements InterfacesTrade
 {
@@ -309,8 +321,31 @@ class TradeService implements InterfacesTrade
      */
     public function getTradeList($filter, $orderBy = ['time_start' => 'DESC'], $pageSize = 20, $page = 1)
     {
+        $filterOrderType = $filter['filter_order_type'] ?? false;
+        unset($filter['filter_order_type']);
         $filter = $this->checkMobile($filter);
-        return $this->tradeRepository->getTradeList($filter, $orderBy, $pageSize, $page);
+        $tradeList = $this->tradeRepository->getTradeList($filter, $orderBy, $pageSize, $page);
+        if ($filterOrderType) {
+            //提取所有订单号
+            $orderIds = array_column($tradeList['list'], 'orderId');
+            $orderService = $this->getOrderService($filterOrderType);
+            $orderList = $orderService->lists(['order_id' => $orderIds], null, count($orderIds), 1, false, 'order_id,order_sn');
+            $selfDeliveryOperatorIds = array_column($orderList['list'], 'self_delivery_operator_id', 'order_id');
+            $selfDeliveryOperator = [];
+            if ($selfDeliveryOperatorIds) {
+                $operatorsRepository = app('registry')->getManager('default')->getRepository(Operators::class);
+                $selfDeliveryOperator = $operatorsRepository->lists(['operator_id' => $selfDeliveryOperatorIds]);
+                $selfDeliveryOperator = array_column($selfDeliveryOperator['list'], null, 'operator_id');
+            }
+        }
+        foreach ($tradeList['list'] as &$value) {
+            if (isset($selfDeliveryOperatorIds[$value['orderId']]) && $selfDeliveryOperatorIds[$value['orderId']] > 0) {
+                $value['self_delivery_operator_id'] = $selfDeliveryOperatorIds[$value['orderId']];
+                $value['self_delivery_operator_mobile'] = $selfDeliveryOperator[$value['self_delivery_operator_id']]['mobile'];
+                $value['self_delivery_operator_name'] = $selfDeliveryOperator[$value['self_delivery_operator_id']]['username'];
+            }
+        }
+        return $tradeList;
     }
 
     public function getTradeCount($filter)

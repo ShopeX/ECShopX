@@ -1,7 +1,18 @@
 <?php
 /**
- * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
- * See LICENSE file for license details.
+ * Copyright 2019-2026 ShopeX
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 namespace OpenapiBundle\Services;
@@ -31,6 +42,9 @@ class DeveloperService
         if (!$result) {
             $companyService = new CompanysService();
             $companyInfo = $companyService->getInfo(['company_id' => $companyId]);
+            //2025 12 30 新增passport_uid和eid 生成规则 【it端存在部分数据 无passport_uid和eid】保证appKey和appSecret的唯一性
+            $companyInfo['passport_uid'] = !empty($companyInfo['passport_uid']) ? $companyInfo['passport_uid'] : (time() . $companyInfo['company_id']);
+            $companyInfo['eid'] = !empty($companyInfo['eid']) ? $companyInfo['eid'] : (md5($companyInfo['passport_uid']));
             $appKey = substr(md5((string)$companyInfo['passport_uid']), 8, 16);
             $appSecret = md5($companyInfo['eid'] . config('common.rand_salt'));
             $info = [

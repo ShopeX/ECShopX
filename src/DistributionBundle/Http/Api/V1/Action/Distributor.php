@@ -1,7 +1,18 @@
 <?php
 /**
- * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
- * See LICENSE file for license details.
+ * Copyright 2019-2026 ShopeX
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 namespace DistributionBundle\Http\Api\V1\Action;
@@ -197,11 +208,6 @@ class Distributor extends Controller
             // 'is_delivery' => 'required',
             // 'auto_sync_goods' => 'required',
             #  'regionauth_id' => 'required',
-            'lng' => 'required|max:255',
-            'lat' => 'required|max:255',
-            'regions_id' => 'required',
-            'regions' => 'required',
-            'address' => 'required|max:255',
             'introduce' => 'max:1000',
             'distribution_type' => 'required',
             'merchant_id' => 'required_if:distribution_type,1'
@@ -219,18 +225,26 @@ class Distributor extends Controller
             // 'is_delivery.required' => '是否快递必填',
             // 'auto_sync_goods.required' => '自动上架商品必填',
             #   'regionauth_id.required' => '所属区域必填',
-            'lng.required' => trans('DistributionBundle/Controllers/Distributor.lng_required'),
-            'lng.max' => trans('DistributionBundle/Controllers/Distributor.lng_max'),
-            'lat.required' => trans('DistributionBundle/Controllers/Distributor.lat_required'),
-            'lat.max' => trans('DistributionBundle/Controllers/Distributor.lat_max'),
-            'regions_id.required' => trans('DistributionBundle/Controllers/Distributor.regions_id_required'),
-            'regions.required' => trans('DistributionBundle/Controllers/Distributor.regions_required'),
-            'address.required' => trans('DistributionBundle/Controllers/Distributor.address_required'),
-            'address.max' => trans('DistributionBundle/Controllers/Distributor.address_max'),
             'introduce.max' => trans('DistributionBundle/Controllers/Distributor.introduce_max'),
             'distribution_type.required' => trans('DistributionBundle/Controllers/Distributor.distribution_type_required'),
             'merchant_id.*' => trans('DistributionBundle/Controllers/Distributor.merchant_id_required'),
         ];
+        // 如果不是 distributor_self，lng、lat、regions_id、regions、address 需要必填验证
+        if (empty($params['distributor_self']) || $params['distributor_self'] === 'false') {
+            $rules['lng'] = 'required|max:255';
+            $rules['lat'] = 'required|max:255';
+            $rules['regions_id'] = 'required';
+            $rules['regions'] = 'required';
+            $rules['address'] = 'required|max:255';
+            $msg['lng.required'] = trans('DistributionBundle/Controllers/Distributor.lng_required');
+            $msg['lng.max'] = trans('DistributionBundle/Controllers/Distributor.lng_max');
+            $msg['lat.required'] = trans('DistributionBundle/Controllers/Distributor.lat_required');
+            $msg['lat.max'] = trans('DistributionBundle/Controllers/Distributor.lat_max');
+            $msg['regions_id.required'] = trans('DistributionBundle/Controllers/Distributor.regions_id_required');
+            $msg['regions.required'] = trans('DistributionBundle/Controllers/Distributor.regions_required');
+            $msg['address.required'] = trans('DistributionBundle/Controllers/Distributor.address_required');
+            $msg['address.max'] = trans('DistributionBundle/Controllers/Distributor.address_max');
+        }
         ## 没有开启达达同城配时店铺编号必填; 开启达达同城配时用户填写了店铺编号用用户填写的，没有填写店铺编号使用达达创建的
         if (empty($params['is_dada'])) {
             $params['is_dada'] = 0;
@@ -619,11 +633,6 @@ class Distributor extends Controller
                 // 'is_delivery' => 'required',
                 // 'auto_sync_goods' => 'required',
                 #       'regionauth_id' => 'required',
-                'lng' => 'required|max:255',
-                'lat' => 'required|max:255',
-                'regions_id' => 'required',
-                'regions' => 'required',
-                'address' => 'required|max:255',
                 'introduce' => 'max:1000',
                 'distribution_type' => 'required',
                 'merchant_id' => 'required_if:distribution_type,1'
@@ -641,18 +650,26 @@ class Distributor extends Controller
                 // 'is_delivery.required' => '是否快递必填',
                 // 'auto_sync_goods.required' => '自动上架商品必填',
                 #     'regionauth_id.required' => '所属区域必填',
-                'lng.required' => trans('DistributionBundle/Controllers/Distributor.lng_required_update'),
-                'lng.max' => trans('DistributionBundle/Controllers/Distributor.lng_max_update'),
-                'lat.required' => trans('DistributionBundle/Controllers/Distributor.lat_required_update'),
-                'lat.max' => trans('DistributionBundle/Controllers/Distributor.lat_max_update'),
-                'regions_id.required' => trans('DistributionBundle/Controllers/Distributor.regions_id_required_update'),
-                'regions.required' => trans('DistributionBundle/Controllers/Distributor.regions_required_update'),
-                'address.required' => trans('DistributionBundle/Controllers/Distributor.address_required_update'),
-                'address.max' => trans('DistributionBundle/Controllers/Distributor.address_max_update'),
                 'introduce.max' => trans('DistributionBundle/Controllers/Distributor.introduce_max_update'),
                 'distribution_type.required' => trans('DistributionBundle/Controllers/Distributor.distribution_type_required_update'),
                 'merchant_id.*' => trans('DistributionBundle/Controllers/Distributor.merchant_id_required_update'),
             ];
+            // 如果不是 distributor_self，lng、lat、regions_id、regions、address 需要必填验证
+            if (empty($params['distributor_self']) || $params['distributor_self'] === 'false') {
+                $rules['lng'] = 'required|max:255';
+                $rules['lat'] = 'required|max:255';
+                $rules['regions_id'] = 'required';
+                $rules['regions'] = 'required';
+                $rules['address'] = 'required|max:255';
+                $msg['lng.required'] = trans('DistributionBundle/Controllers/Distributor.lng_required_update');
+                $msg['lng.max'] = trans('DistributionBundle/Controllers/Distributor.lng_max_update');
+                $msg['lat.required'] = trans('DistributionBundle/Controllers/Distributor.lat_required_update');
+                $msg['lat.max'] = trans('DistributionBundle/Controllers/Distributor.lat_max_update');
+                $msg['regions_id.required'] = trans('DistributionBundle/Controllers/Distributor.regions_id_required_update');
+                $msg['regions.required'] = trans('DistributionBundle/Controllers/Distributor.regions_required_update');
+                $msg['address.required'] = trans('DistributionBundle/Controllers/Distributor.address_required_update');
+                $msg['address.max'] = trans('DistributionBundle/Controllers/Distributor.address_max_update');
+            }
             if ($params['offline_aftersales_self'] || $params['offline_aftersales_other']) {
                 $rules['offline_aftersales_address.name'] = 'required|max:255';
                 $rules['offline_aftersales_address.regions'] = 'required';

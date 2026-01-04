@@ -1,7 +1,18 @@
 <?php
 /**
- * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
- * See LICENSE file for license details.
+ * Copyright 2019-2026 ShopeX
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 namespace EspierBundle\Services\Export;
@@ -250,7 +261,8 @@ class NormalMasterOrderExportService implements ExportFileInterface
             'self' => '自营订单',
             'distributor' => '商家订单',
             'supplier' => '供应商订单',
-            'self_supplier' => '自营和供应商订单'
+            'self_supplier' => '自营和供应商订单',
+            'distributor_supplier' => '商家和供应商订单'
         ];
         $communityOrderRelService = new CommunityOrderRelActivityService();
         $communityActivityService = new CommunityActivityService();
@@ -416,7 +428,7 @@ class NormalMasterOrderExportService implements ExportFileInterface
                             $orderItem[$colName] = date('Y-m-d H:i:s', $newData['create_time']);
                             break;
                         case 'order_holder':
-                            $orderItem[$colName] = $orderHolder[$newData['order_holder']];
+                            $orderItem[$colName] = $orderHolder[$newData['order_holder']] ?? '未知订单类型';
                             break;
                         case 'total_fee_total':
                             $orderItem[$colName] = bcdiv($newData['item_fee'] + $newData['freight_fee'], 100, 2);

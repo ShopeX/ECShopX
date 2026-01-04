@@ -1,7 +1,18 @@
 <?php
 /**
- * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
- * See LICENSE file for license details.
+ * Copyright 2019-2026 ShopeX
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 namespace EmployeePurchaseBundle\Http\Api\V1\Action;
@@ -374,7 +385,7 @@ class Activity extends Controller
         $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description',);
         $params['if_relative_join'] = isset($params['if_relative_join']) && ($params['if_relative_join'] === 'true' || $params['if_relative_join'] === '1') ? 1 : 0;
         $params['if_share_limitfee'] = isset($params['if_share_limitfee']) && ($params['if_share_limitfee'] === 'true' || $params['if_share_limitfee'] === '1') ? 1 : 0;
-        $params['is_discount_description_enabled'] = $params['is_discount_description_enabled'] === 'true' ? 1 : 0;
+        $params['is_discount_description_enabled'] = isset($params['is_discount_description_enabled']) && ($params['is_discount_description_enabled'] === 'true' || $params['is_discount_description_enabled'] === '1' || $params['is_discount_description_enabled'] === 1 || $params['is_discount_description_enabled'] === true) ? 1 : 0;
         $rules = [
             'name' => ['required', '请输入活动名称'],
             'title' => ['required', '请输入活动标题'],

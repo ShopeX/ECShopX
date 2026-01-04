@@ -1,7 +1,18 @@
 <?php
 /**
- * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
- * See LICENSE file for license details.
+ * Copyright 2019-2026 ShopeX
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 namespace CompanysBundle\Http\Api\V1\Action;
@@ -353,7 +364,17 @@ class EmployeeController extends BaseController
         // if (!isset($params['distributor_ids'])) {
         //     throw new StoreResourceFailedException('必须添加所属店铺');
         // }
-
+        //distributor_ids 参数格式为：[{"distributor_id":1,"name":"店铺名称"},{"distributor_id":1,"name":"店铺名称"}] 需要根据distributor_id去重 
+        if (isset($params['distributor_ids']) && is_array($params['distributor_ids'])) {
+            $filterDistributorIds = [];
+            foreach ($params['distributor_ids'] as $k => $v) {
+                if (in_array($v['distributor_id'], $filterDistributorIds)) {
+                    unset($params['distributor_ids'][$k]);
+                } else {
+                    $filterDistributorIds[] = $v['distributor_id'];
+                }
+            }
+        }
         // 平台后台账号和商户账号可以添加店铺端账号相关判断
         if (($params['operator_type'] == 'distributor')) {
             if (in_array($operatorType, ['admin', 'staff', 'merchant'])) {

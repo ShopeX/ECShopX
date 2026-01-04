@@ -1,7 +1,18 @@
 <?php
 /**
- * Copyright © ShopeX （http://www.shopex.cn）. All rights reserved.
- * See LICENSE file for license details.
+ * Copyright 2019-2026 ShopeX
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 namespace AftersalesBundle\Services;
@@ -58,6 +69,7 @@ use WorkWechatBundle\Jobs\sendAfterSaleWaitDealNoticeJob;
 use CompanysBundle\Services\OperatorsService;
 use GoodsBundle\Services\ItemsService;
 use GoodsBundle\Entities\Items;
+use CompanysBundle\Entities\Operators;
 
 class AftersalesService
 {
@@ -1775,6 +1787,17 @@ class AftersalesService
         if (!empty($membersDelete)) {
             $deleteUsers = array_column($membersDelete, 'user_id');
         }
+        //获取配送员信息
+        $selfDeliveryOperatorIds = array_filter(array_unique(array_column($res['list'], 'self_delivery_operator_id')), function ($selfDeliveryOperatorId) {
+            return  $selfDeliveryOperatorId > 0;
+        });
+        $selfDeliveryOperator = [];
+        if ($selfDeliveryOperatorIds) {
+            $operatorsRepository = app('registry')->getManager('default')->getRepository(Operators::class);
+            $selfDeliveryOperator = $operatorsRepository->lists(['operator_id' => $selfDeliveryOperatorIds]);
+            $selfDeliveryOperator = array_column($selfDeliveryOperator['list'], null, 'operator_id');
+        }
+
         if ($res['list']) {
             $distributorIdList = array_column($res['list'], 'distributor_id');
             $distributorService = new DistributorService();
@@ -1803,6 +1826,14 @@ class AftersalesService
             }
         
             foreach ($res['list'] as &$v) {
+
+                $v['self_delivery_operator_mobile'] = '';
+                $v['self_delivery_operator_name'] = '';
+                if($v['self_delivery_operator_id'] > 0 && isset($selfDeliveryOperator[$v['self_delivery_operator_id']])){
+                    $v['self_delivery_operator_mobile'] = $selfDeliveryOperator[$v['self_delivery_operator_id']]['mobile'];
+                    $v['self_delivery_operator_name'] = $selfDeliveryOperator[$v['self_delivery_operator_id']]['username'];
+                }
+
                 // 默认退货地址  
                 if (empty($v['aftersales_address'])) {
                     $v['aftersales_address'] = $aftersalesAddressMap[$v['distributor_id']] ?? [];
