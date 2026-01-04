@@ -191,7 +191,7 @@ php -S 127.0.0.1:9058 -t public
 
 ## 许可证
 本项目采用 Apache-2.0 开源许可证。  
-每个包含在本发行版中的 ECShopX 源文件，均依据 Apache 2.0 开源许可证与ShopeX商派附加条款进行授权。
+每个包含在本发行版中的 ECShopX 源文件，均依据 Apache 2.0 开源许可证进行授权。
 
 开源软件许可协议（Apache 2.0） —— 请参阅 LICENSE.txt 文件以获取 Apache 2.0 协议的完整文本。
 
