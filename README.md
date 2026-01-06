@@ -190,7 +190,7 @@ php -S 127.0.0.1:9058 -t public
 ```
 
 ### The initial administrator account credentials for the system are:
-Username: admin
+Username: admin  
 Password: Shopex123
 
 ## License
