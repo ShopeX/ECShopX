@@ -189,6 +189,10 @@ Launch using 'php server'
 php -S 127.0.0.1:9058 -t public
 ```
 
+### 系统初始管理员账号密码
+用户名：admin  
+密码: Shopex123
+
 ## 许可证
 本项目采用 Apache-2.0 开源许可证。  
 每个包含在本发行版中的 ECShopX 源文件，均依据 Apache 2.0 开源许可证进行授权。
