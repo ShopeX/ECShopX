@@ -189,6 +189,10 @@ Launch using 'php server'
 php -S 127.0.0.1:9058 -t public
 ```
 
+### The initial administrator account credentials for the system are:
+Username: admin
+Password: Shopex123
+
 ## License
 This project is licensed under the Apache-2.0 open-source license.  
 Each ECShopX source file included in this distribution is licensed under the Apache License 2.0.
