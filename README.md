@@ -203,7 +203,7 @@ Open Software License (Apache 2.0) – Please see LICENSE.txt for the full text 
 We welcome contributions in all forms! Please read [CONTRIBUTING.md](CONTRIBUTING.md) to learn how to participate.
 
 ## Support
-* Documentation: Please refer to the [official documentation](https://op.shopex.cn/doc_ecshopx_dev/docs/readme.html) first.
+* Documentation: Please refer to the [official documentation](https://doc.shopex.cn/ecshopx/docs/readme.html) first.
 * 🐛 Issue Reporting: Submit via [GitHub Issues].
 
 ## Acknowledgments
