@@ -204,7 +204,7 @@ php -S 127.0.0.1:9058 -t public
 请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解如何参与。
 
 ## 支持
-* 文档：请首先查阅[官方文档](https://op.shopex.cn/doc_ecshopx_dev/docs/readme.html)
+* 文档：请首先查阅[官方文档](https://doc.shopex.cn/ecshopx/docs/readme.html)
 * 🐛 问题反馈：请在 [GitHub Issues] 中提交。
 
 ## 致谢
