@@ -723,11 +723,8 @@ class DiscountCardsRepository extends EntityRepository
             $entity->setSelfConsumeCode($data["self_consume_code"]);
         }
         //当前字段非必填
-        if (isset($data['receive']) && $data['receive']) {
+        if (isset($data['receive'])) {
             $entity->setReceive($data['receive']);
-        } else {
-            // 'true'
-            $entity->setReceive(true);
         }
         if (isset($data["created"]) && $data["created"]) {
             $entity->setCreated($data["created"]);

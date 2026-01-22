@@ -19,6 +19,7 @@ namespace PaymentBundle\Services\Payments;
 
 use OrdersBundle\Interfaces\Trade;
 use PaymentBundle\Interfaces\Payment;
+use PaymentBundle\Traits\PaymentSubjectTrait;
 use WechatBundle\Services\OpenPlatform;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use OrdersBundle\Services\TradeService;
@@ -35,6 +36,7 @@ use AftersalesBundle\Services\AftersalesRefundService;
 class ChinaumsPayService implements Payment
 {
     use GetOrderServiceTrait;
+    use PaymentSubjectTrait;
 
     private $subKey = ''; // 子商户配置key
 
@@ -82,6 +84,13 @@ class ChinaumsPayService implements Payment
         if ($subKey) {
             $this->subKey = $subKey;
         }
+        
+        // 根据店铺收款主体类型决定实际使用的subKey
+        $actualSubKey = $this->getActualSubKey($this->subKey, $companyId);
+        if ($actualSubKey != $this->subKey) {
+            $this->subKey = $actualSubKey;
+        }
+        
         $data = app('redis')->get($this->genReidsId($companyId));
         if ($data) {
             $data = json_decode($data, true);
@@ -120,7 +129,7 @@ class ChinaumsPayService implements Payment
     public function doPay($authorizerAppId, $wxaAppId, array $data)
     {
         // 检查店铺支付数据
-        $paymentSetting = $this->getPaymentSetting($companyId);
+        $paymentSetting = $this->getPaymentSetting($data['company_id']);
         $data['mch_id'] = $paymentSetting['mid'];
         //-----------------银联支付------------------------------
         

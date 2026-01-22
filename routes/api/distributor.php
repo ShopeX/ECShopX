@@ -18,6 +18,7 @@ $api->version('v1', function($api) {
         $api->get('/distributors',                 ['name' => '获取店铺列表','middleware'=>['activated', 'datapass'],  'as' => 'distributor.list',    'uses'=>'Distributor@getDistributorList']);
         $api->get('/distributors/info',            ['name' => '获取指定店铺信息','middleware'=>['activated','datapass'],  'as' => 'distributor.info',    'uses'=>'Distributor@getDistributorInfo']);
         $api->put('/distributor/{distributor_id}', ['name' => '更新店铺','middleware'=>'activated',  'as' => 'distributor.edit',    'uses'=>'Distributor@updateDistributor']);
+        $api->put('/distributor/{distributor_id}/payment-subject', ['name' => '设置店铺收款主体','middleware'=>'activated', 'as' => 'distributor.payment.subject.set', 'uses'=>'Distributor@setPaymentSubject']);
         $api->get('/distributor/count/{distributorId}', ['name' => '获取店铺统计','middleware'=>'activated', 'as' => 'front.wxapp.distributor.count', 'uses'=>'Distributor@getDistributorCount']);
         $api->get('/distributor/wxacode',  ['name' => '获取店铺小程序码','middleware'=>'activated', 'as' => 'distributor.wxacode',           'uses'=>'Distributor@getWxaDistributorCodeStream']);
 

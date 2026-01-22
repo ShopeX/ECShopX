@@ -506,6 +506,13 @@ class Distributor
      */
     private $jst_shop_id = 0;
 
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="payment_subject", type="smallint", options={"comment":"收款主体，0=平台，1=店铺", "default": 0})
+     */
+    private $payment_subject = 0;
+
     public function setIsRefundFreight($isRefundFreight)
     {
         $this->is_refund_freight = $isRefundFreight;
@@ -2052,5 +2059,27 @@ class Distributor
     public function setOpenDivided(int $open_divided)
     {
         $this->open_divided = $open_divided;
+    }
+
+    /**
+     * Set payment_subject
+     *
+     * @param integer $paymentSubject
+     * @return Distributor
+     */
+    public function setPaymentSubject($paymentSubject)
+    {
+        $this->payment_subject = $paymentSubject;
+        return $this;
+    }
+
+    /**
+     * Get payment_subject
+     *
+     * @return integer
+     */
+    public function getPaymentSubject()
+    {
+        return $this->payment_subject;
     }
 }

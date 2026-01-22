@@ -275,6 +275,49 @@ class Payment extends Controller
 
     /**
      * @SWG\Get(
+     *     path="/trade/payment/open-status",
+     *     summary="获取支付配置开关状态",
+     *     tags={"订单"},
+     *     description="获取支付配置开关状态整合信息，统一返回is_open为bool类型",
+     *     operationId="getPaymentOpenStatus",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @SWG\Property(property="wxpay", type="object",
+     *                     @SWG\Property(property="is_open", type="boolean", example=true),
+     *                 ),
+     *                 @SWG\Property(property="alipay", type="object",
+     *                     @SWG\Property(property="is_open", type="boolean", example=false),
+     *                 ),
+     *                 @SWG\Property(property="chinaumspay", type="object",
+     *                     @SWG\Property(property="is_open", type="boolean", example=true),
+     *                 ),
+     *             ),
+     *         ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/PaymentErrorRespones") ) )
+     * )
+     */
+    public function getPaymentOpenStatus(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        $operatorType = app('auth')->user()->get('operator_type');
+        $operatorId = app('auth')->user()->get('operator_id');
+        
+        // 调用Service获取支付开关状态
+        $paymentsService = new PaymentsService();
+        $result = $paymentsService->getPaymentOpenStatusList($companyId, $operatorType, $operatorId);
+        
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Get(
      *     path="/wxapp/trade/payment/list",
      *     summary="获取支付配置信息列表",
      *     tags={"订单"},

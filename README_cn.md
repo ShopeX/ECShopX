@@ -1,4 +1,4 @@
-<p align="center"><img width="600" height="416" alt="logo2" src="https://github.com/user-attachments/assets/abf6c4c7-8cb1-477e-aea4-9e526cd8225a" /></p>
+<p align="center"><img width="600" height="auto" alt="logo" src="logo.png" /></p>
 
 # 
 <p align="center"><a href="README.md">English</a> / 简体中文</p>
@@ -205,7 +205,7 @@ php -S 127.0.0.1:9058 -t public
 
 ## 支持
 * 文档：请首先查阅[官方文档](https://doc.shopex.cn/ecshopx/docs/readme.html)
-* 🐛 问题反馈：请在 [GitHub Issues] 中提交。
+* 🐛 问题反馈：请在 [Issues] 中提交。
 
 ## 致谢
 感谢所有为 ECShopX 做出贡献的开发者、用户以及商派背后的全球品牌客户们！

@@ -1118,6 +1118,14 @@ class Distributor extends Controller
         if (!is_null($distributionType) && $distributionType != '') {
             $filter['distribution_type'] = $request->input('distribution_type');
         }
+        
+        // 收款主体筛选
+        if ($request->input('payment_subject') !== null) {
+            $paymentSubject = $request->input('payment_subject');
+            if (in_array($paymentSubject, [0, 1])) {
+                $filter['payment_subject'] = $paymentSubject;
+            }
+        }
         if ($operatorType == 'merchant' || $operatorType == 'distributor') {
             unset($filter['distribution_type']);
         }
@@ -1240,6 +1248,43 @@ class Distributor extends Controller
         }
 
         return $this->response->array($data);
+    }
+
+    /**
+     * @SWG\Put(
+     *     path="/distributor/{distributor_id}/payment-subject",
+     *     summary="设置店铺收款主体",
+     *     tags={"店铺"},
+     *     description="设置店铺收款主体",
+     *     operationId="setDistributorPaymentSubject",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="distributor_id", in="path", description="店铺ID", required=true, type="integer"),
+     *     @SWG\Parameter( name="payment_subject", in="formData", description="收款主体，0=平台，1=店铺", required=true, type="integer"),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(property="status", type="boolean", example=true),
+     *         ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/ErrorResponse") ) )
+     * )
+     */
+    public function setPaymentSubject(Request $request, $distributor_id)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        $paymentSubject = $request->input('payment_subject');
+        
+        // 参数验证
+        if (!in_array($paymentSubject, [0, 1])) {
+            throw new ResourceException('payment_subject参数错误，只能为0（平台）或1（店铺）');
+        }
+        
+        // 调用Service处理业务逻辑
+        $distributorService = new DistributorService();
+        $distributorService->setPaymentSubject($companyId, $distributor_id, $paymentSubject);
+        
+        return $this->response->array(['status' => true]);
     }
 
     /**

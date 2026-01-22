@@ -412,6 +412,26 @@ class Refund extends Controller
         $filter['company_id'] = app('auth')->user()->get('company_id');
         $merchantId = app('auth')->user()->get('merchant_id');
         $operatorType = app('auth')->user()->get('operator_type');
+        
+        // 处理供应商端权限
+        if ($operatorType == 'supplier') {
+            $filter['supplier_id'] = app('auth')->user()->get('operator_id');
+        }
+        
+        // 处理店铺端权限
+        $distributorListSet = app('auth')->user()->get('distributor_ids');
+        if (!empty($distributorListSet)) {
+            $distributorIdSet = array_column($distributorListSet, 'distributor_id');
+            if (isset($filter['distributor_id']) && $filter['distributor_id']) {
+                if (!in_array($filter['distributor_id'], $distributorIdSet)) {
+                    unset($filter['distributor_id']);
+                }
+            } else {
+                $filter['distributor_id'] = $distributorIdSet;
+            }
+        }
+        
+        // 处理商家端权限
         if ($operatorType == 'merchant') {
             $filter['merchant_id'] = $merchantId;
         }

@@ -116,7 +116,7 @@ class DiscountCard extends BaseController
         if ($distributorId == 'all') {
             unset($filter['distributor_id']);
         }
-        $filter['receive'] = 'true';
+        $filter['receive'] = '1';
         $filter['company_id'] = $authInfo['company_id'];
 
         $discountCardService = new KaquanService(new DiscountCardService());

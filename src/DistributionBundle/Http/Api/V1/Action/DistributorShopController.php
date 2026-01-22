@@ -25,6 +25,7 @@ use DistributionBundle\Services\DistributorTagsService;
 use Dingo\Api\Exception\ResourceException;
 use Dingo\Api\Exception\StoreResourceFailedException;
 use Exception;
+use ThirdPartyBundle\Services\Map\MapService;
 
 class DistributorShopController extends Controller
 {
@@ -765,7 +766,19 @@ class DistributorShopController extends Controller
         if (!$address) {
             throw new ResourceException(trans('DistributionBundle/Controllers/Distributor.address_required'), 400);
         }
-        $area = get_latlng_by_address($address);
+        
+        // 获取公司ID，与UploadDistributor保持一致
+        $companyId = app('auth')->user()->get('company_id');
+        
+        // 使用MapService::make($companyId)获取实例，这样会优先使用数据库配置，与UploadDistributor保持一致
+        $mapService = MapService::make($companyId);
+        
+        // 调用getLatAndLngByPosition方法获取原始响应（与get_latlng_by_address返回格式一致）
+        // 传入空region，完整地址作为address
+        $area = $mapService->getThirdPartyMapService()->getLatAndLngByPosition([
+            "address" => (string)$address
+        ]);
+        
         return $this->response->array($area);
     }
     

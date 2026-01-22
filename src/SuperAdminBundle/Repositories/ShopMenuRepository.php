@@ -32,7 +32,7 @@ class ShopMenuRepository extends EntityRepository
     public $module = 'shop_menu'; // 多语言对应的模块
     public $primaryKey = 'shopmenu_id'; // 主键，对应data_id
     public $langField = [
-        'alias_name','name'
+        'name'
     ]; // 多语言字段
     
     public function getEntity()
@@ -338,6 +338,17 @@ class ShopMenuRepository extends EntityRepository
         $data['is_show'] = isset($data['is_show']) && $data['is_show'] == 'false' ? 0 : 1;
         $data['disabled'] = isset($data['disabled']) && $data['disabled'] == 'true' ? 1 : 0;
 
+        // 记录 is_show 从 true 变为 false 的日志
+        if (isset($data["is_show"])) {
+            $oldValue = $entity->getIsShow();
+            $newValue = $data['is_show'];
+            
+            // 只记录从 true 变为 false 的情况
+            if ($oldValue === true && $newValue == 0) {
+                $this->logIsShowChangeToFalse($entity, $data);
+            }
+        }
+
         if (isset($data["shopmenu_id"])) {
             $entity->setShopmenuId($data["shopmenu_id"]);
         }
@@ -388,6 +399,261 @@ class ShopMenuRepository extends EntityRepository
             $entity->setUpdated($data["updated"]);
         }
         return $entity;
+    }
+
+    /**
+     * 记录 is_show 从 true 变为 false 的日志
+     *
+     * @param $entity
+     * @param $data
+     */
+    private function logIsShowChangeToFalse($entity, $data)
+    {
+        try {
+            $logData = [
+                'timestamp' => date('Y-m-d H:i:s'),
+                'action' => $this->getActionType(),
+                'shopmenu_id' => $entity->getShopmenuId() ?: ($data['shopmenu_id'] ?? null),
+                'company_id' => $entity->getCompanyId() ?: ($data['company_id'] ?? 0),
+                'version' => $entity->getVersion() ?: ($data['version'] ?? 1),
+                'alias_name' => $entity->getAliasName() ?: ($data['alias_name'] ?? null),
+                'name' => $entity->getName() ?: ($data['name'] ?? null),
+                'old_value' => true,
+                'new_value' => false,
+                'source' => $this->getRequestSource(),
+                'source_type' => $this->getSourceType(),
+                'user_id' => $this->getUserId(),
+                'user_name' => $this->getUserName(),
+                'user_email' => $this->getUserEmail(),
+                'request_data' => $this->getRequestData($data),
+                'ip' => $this->getRequestIp(),
+                'user_agent' => $this->getUserAgent(),
+                'trace_id' => $this->getTraceId(),
+                'stack_trace' => $this->getSimpleStackTrace(),
+                'context' => $this->getContext(),
+            ];
+
+            $logFile = storage_path('logs/shopmenu_is_show_hidden.log');
+            $logLine = json_encode($logData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+            file_put_contents($logFile, $logLine, FILE_APPEND | LOCK_EX);
+        } catch (\Exception $e) {
+            // 记录日志失败不影响主流程，静默处理
+        }
+    }
+
+    /**
+     * 获取操作类型
+     */
+    private function getActionType()
+    {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
+        foreach ($trace as $frame) {
+            if (isset($frame['function'])) {
+                if ($frame['function'] == 'create') {
+                    return 'create';
+                }
+                if ($frame['function'] == 'updateOneBy' || $frame['function'] == 'updateBy') {
+                    return 'update';
+                }
+            }
+        }
+        return 'unknown';
+    }
+
+    /**
+     * 获取请求来源
+     */
+    private function getRequestSource()
+    {
+        try {
+            if (php_sapi_name() === 'cli') {
+                return 'cli';
+            }
+            $request = app('request');
+            if ($request) {
+                return $request->method() . ' ' . $request->path();
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return 'unknown';
+    }
+
+    /**
+     * 获取来源类型（手动/自动）
+     */
+    private function getSourceType()
+    {
+        // 检查是否为命令行
+        if (php_sapi_name() === 'cli') {
+            return 'auto';
+        }
+
+        // 检查调用堆栈，判断是否为自动操作
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
+        foreach ($trace as $frame) {
+            // 如果是 UpdateMenuListener 调用，标记为自动
+            if (isset($frame['class']) && strpos($frame['class'], 'UpdateMenuListener') !== false) {
+                return 'auto';
+            }
+        }
+
+        return 'manual';
+    }
+
+    /**
+     * 获取用户ID
+     */
+    private function getUserId()
+    {
+        try {
+            $user = app('auth')->user();
+            if ($user) {
+                return $user->get('user_id') ?? $user->get('id') ?? null;
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    /**
+     * 获取用户名
+     */
+    private function getUserName()
+    {
+        try {
+            $user = app('auth')->user();
+            if ($user) {
+                return $user->get('user_name') ?? $user->get('name') ?? 'system';
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return 'system';
+    }
+
+    /**
+     * 获取用户邮箱
+     */
+    private function getUserEmail()
+    {
+        try {
+            $user = app('auth')->user();
+            if ($user) {
+                return $user->get('email') ?? null;
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    /**
+     * 获取请求数据
+     */
+    private function getRequestData($data)
+    {
+        try {
+            $request = app('request');
+            if ($request) {
+                return $request->all();
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return $data;
+    }
+
+    /**
+     * 获取请求IP
+     */
+    private function getRequestIp()
+    {
+        try {
+            $request = app('request');
+            if ($request) {
+                return $request->ip();
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    /**
+     * 获取用户代理
+     */
+    private function getUserAgent()
+    {
+        try {
+            $request = app('request');
+            if ($request) {
+                return $request->userAgent();
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    /**
+     * 获取追踪ID
+     */
+    private function getTraceId()
+    {
+        try {
+            $request = app('request');
+            if ($request) {
+                return $request->header('X-Trace-Id') ?? uniqid('trace_', true);
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return uniqid('trace_', true);
+    }
+
+    /**
+     * 获取简化的调用堆栈
+     */
+    private function getSimpleStackTrace()
+    {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
+        $stack = [];
+        foreach ($trace as $frame) {
+            if (isset($frame['class']) && isset($frame['function'])) {
+                $class = basename(str_replace('\\', '/', $frame['class']));
+                $stack[] = $class . '::' . $frame['function'] . '()';
+            }
+        }
+        return implode(' -> ', array_slice($stack, 0, 5));
+    }
+
+    /**
+     * 获取上下文信息
+     */
+    private function getContext()
+    {
+        $context = [
+            'is_upload' => false,
+            'is_migration' => false,
+            'json_file' => null,
+        ];
+
+        // 检查调用堆栈
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
+        foreach ($trace as $frame) {
+            if (isset($frame['function'])) {
+                if ($frame['function'] == 'uploadMenus') {
+                    $context['is_upload'] = true;
+                }
+                if (isset($frame['class']) && strpos($frame['class'], 'UpdateMenuListener') !== false) {
+                    $context['is_migration'] = true;
+                }
+            }
+        }
+
+        return $context;
     }
 
     /**

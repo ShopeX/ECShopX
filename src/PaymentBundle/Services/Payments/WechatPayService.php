@@ -19,6 +19,7 @@ namespace PaymentBundle\Services\Payments;
 
 use OrdersBundle\Interfaces\Trade;
 use PaymentBundle\Interfaces\Payment;
+use PaymentBundle\Traits\PaymentSubjectTrait;
 use WechatBundle\Services\OpenPlatform;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use OrdersBundle\Services\TradeService;
@@ -32,6 +33,7 @@ use PopularizeBundle\Services\CashWithdrawalService as PopularizeCashWithdrawalS
 
 class WechatPayService implements Payment
 {
+    use PaymentSubjectTrait;
     public $openid = '';
     private $distributorId = 0; // 店铺ID
     private $getDefault = true; //是否取平台默认配置
@@ -103,13 +105,25 @@ class WechatPayService implements Payment
      */
     public function getPaymentSetting($companyId)
     {
-        $data = app('redis')->get($this->genReidsId($companyId));
-
-        //不存在店铺配置取平台的配置
-        if (!$data && $this->getDefault && $this->distributorId > 0) {
-            $this->distributorId = 0;
-            $data = app('redis')->get($this->genReidsId($companyId));
+        app('log')->debug('payment::getPaymentSettingList::getDefault=>' . $this->getDefault.'distributorId=>' . $this->distributorId);
+        // 根据店铺收款主体类型决定实际使用的distributorId
+        if ($this->getDefault && $this->distributorId > 0) {
+            $actualDistributorId = $this->getActualDistributorId($this->distributorId, $companyId);
+            app('log')->debug('payment::getPaymentSettingList::actualDistributorId=>' . $actualDistributorId);
+            if ($actualDistributorId != $this->distributorId) {
+                $this->distributorId = $actualDistributorId;
+            }
         }
+        
+        
+        $data = app('redis')->get($this->genReidsId($companyId));
+        app('log')->debug('payment::getPaymentSettingList::data=>' . $data);
+        // 增加了支付主体的字段，平台or店铺，无论配置是否为空，如果是店铺，则取店铺配置，如果是平台，则取平台配置
+        //不存在店铺配置取平台的配置
+        // if (!$data && $this->getDefault && $this->distributorId > 0) {
+        //     $this->distributorId = 0;
+        //     $data = app('redis')->get($this->genReidsId($companyId));
+        // }
 
         if ($data) {
             $data = json_decode($data, true);

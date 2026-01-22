@@ -45,6 +45,7 @@ $itemsService = [
     'brand_name_duplicate' => 'Brand name cannot be duplicated',
     'param_value_cannot_be_empty' => 'Parameter value cannot be empty',
     'has_associated_items' => 'There are associated products, please handle the associated products first',
+    'has_associated_pointsmall_items' => 'There are associated pointsmall products, please handle the associated pointsmall products first',
     'value_has_associated_items' => 'Value has associated products, please handle the associated products first',
     'update_data_not_exists' => 'Update data does not exist',
     

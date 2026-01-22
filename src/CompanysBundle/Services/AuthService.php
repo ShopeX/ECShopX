@@ -230,7 +230,7 @@ class AuthService
         }
 
         // 原有逻辑：通过手机号或login_name查询
-        if (preg_match("/^1[3456789]{1}\d{9}$/", $params['username'])) {
+        if (preg_match("/^1[23456789]{1}\d{9}$/", $params['username'])) {
             $filter['mobile'] = $params['username'];
         } else {
             $filter['login_name'] = $params['username'];

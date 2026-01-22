@@ -1,4 +1,4 @@
-<p align="center"><img width="600" height="416" alt="logo2" src="https://github.com/user-attachments/assets/abf6c4c7-8cb1-477e-aea4-9e526cd8225a" /></p>
+<p align="center"><img width="600" height="auto" alt="logo" src="logo.png" /></p>
 
 # 
 <p align="center">English / <a href="README_cn.md">简体中文</a></p>
@@ -204,7 +204,7 @@ We welcome contributions in all forms! Please read [CONTRIBUTING.md](CONTRIBUTIN
 
 ## Support
 * Documentation: Please refer to the [official documentation](https://doc.shopex.cn/ecshopx/docs/readme.html) first.
-* 🐛 Issue Reporting: Submit via [GitHub Issues].
+* 🐛 Issue Reporting: Submit via [Issues].
 
 ## Acknowledgments
 Thank you to all developers and users who have contributed to ECShopX!

@@ -28,7 +28,7 @@ class OperatorsRepository extends EntityRepository
     public $module = 'operators'; // 多语言对应的模块
     public $primaryKey = 'operator_id'; // 主键，对应data_id
     public $langField = [
-        'login_name','username','contact','split_ledger_info'
+        'username','contact','split_ledger_info'
     ]; // 多语言字段
     
     public function getEntity()

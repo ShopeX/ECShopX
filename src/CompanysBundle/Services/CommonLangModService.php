@@ -18,6 +18,7 @@
 namespace CompanysBundle\Services;
 
 use Dingo\Api\Exception\ResourceException;
+use CompanysBundle\MultiLang\MultiLangItem;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
 
 class CommonLangModService
@@ -28,46 +29,32 @@ class CommonLangModService
     private $repository = [];
     // 多语言字段后缀
     private $suffix = '_lang';  
-    public $totalLang = [
-        'zh-CN' => '\CompanysBundle\Entities\CommonLangModCN',
-        'en-CN' => '\CompanysBundle\Entities\CommonLangModEN',
-        'ar-SA' => '\CompanysBundle\Entities\CommonLangModAR',
-    ];
+
+    public $totalLang = [];
 
     public function __construct()
     {
-        $this->setLangMapRepository();
-    }
-
-    private function setLangMapRepository()
-    {
-        if (empty($this->totalLang)) {
-            throw new ResourceException("不存在的多语言totalLang");
+        $config = config('langue');
+        if (empty($config)) {
+            throw new ResourceException("不存在的多语言配置,请去config/langue.php配置");
         }
-        foreach ($this->totalLang as $lang => $className) {
-            $this->repository[$lang] = app('registry')->getManager('default')->getRepository($className);
-        }
-
-        return true;
+        $this->totalLang = $config;
     }
-
+        
     public function getLangMapRepository($langue = 'zh')
     {
-        if (empty($this->repository)) {
-            $this->setLangMapRepository();
-        }
-        $classObj = $this->repository[$langue] ?? null;
-        if (empty($classObj)) {
-            throw new ResourceException("不存在的多语言Repository:{$langue}");
+        $service = new MultiLangItem($langue, 'other');
+        if (empty($service)) {
+            throw new ResourceException("不存在的多语言service:{$langue}");
         }
             
-        return $classObj;
+        return $service;
     }
-
+    
     // 获取多语言字段
     public function getFieldByLangue($company_id, $langue, $field, $data_id, $table, $module)
     {
-        $classObj = $this->getLangMapRepository($langue);
+        $repository = $this->getLangMapRepository($langue);
         $filter = [
             'company_id' => $company_id,
             'table_name' => $table,
@@ -76,31 +63,31 @@ class CommonLangModService
             'data_id' => $data_id,
             'lang' => $langue,
         ];
-        $info = $classObj->getInfo($filter);
+        $info = $repository->getOneByFilter($filter);
 
         return $info['attribute_value'] ?? '';
     }
 
-   public function updateDataIdByLangue($company_id, $langue, $table, $module, $data_id, $new_data_id)
-   {
-        $classObj = $this->getLangMapRepository($langue);
+    public function updateDataIdByLangue($company_id, $langue, $table, $module, $data_id, $new_data_id)
+    {
+        $repository = $this->getLangMapRepository($langue);
         $filter = [
             'company_id' => $company_id,
             'table_name' => $table,
             'module_name' => $module,
             'data_id' => $data_id,
         ];
-        $info = $classObj->getInfo($filter);
+        $info = $repository->getOneByFilter($filter);
         if (empty($info)) {
             return false;
         }
-        $res = $classObj->updateOneBy( $filter,
+        $res = $repository->updateByFilter( $filter,
         [
             'data_id' => $new_data_id
         ]);
 
         return $res ?? false;
-   }
+    }
 
     // 获取参数中的多语言字段
     public function getParamsLang($repository, $data)
@@ -206,16 +193,16 @@ class CommonLangModService
             $lang = $this->getLang();
         }
         foreach ($langBag as $k => $v) {
-            // $field = str_replace($this->suffix, "", $k);
-            // foreach ($v as $lang => $vv){
-                $insertData = $baseInsertData;
-                $insertData['lang'] = $lang;
-                $insertData['attribute_value'] = $v;
-                $insertData['field'] = $k;
-                $insertData['data_id'] = $id;
-                $repository = $this->getLangMapRepository($lang);
-                $repository->create($insertData);
-            // }
+            $insertData = $baseInsertData;
+            $insertData['lang'] = $lang;
+            $insertData['attribute_value'] = $v;
+            $insertData['field'] = $k;
+            $insertData['data_id'] = $id;
+            $insertData['created'] = time();
+            $insertData['updated'] = time();
+            $repository = $this->getLangMapRepository($lang);
+            // $repository->create($insertData);
+            $repository->insert($insertData);
         }
 
         return true;
@@ -235,6 +222,7 @@ class CommonLangModService
             $v = is_array($v) ? json_encode($v) : $v;
             $updateData = [
                 'attribute_value' => $v,
+                'updated' => time(),
             ];
             $filter = [
                 'company_id' => $companyId,
@@ -245,7 +233,8 @@ class CommonLangModService
                 'lang'=> $lang,
             ];
             $repository = $this->getLangMapRepository($lang);
-            $info = $repository->getInfo($filter);
+            // $info = $repository->getInfo($filter);
+            $info = $repository->getOneByFilter($filter);
             
             if (empty($info)) {
                  $baseInsertData = [
@@ -259,9 +248,13 @@ class CommonLangModService
                 $insertData['attribute_value'] = $v;
                 $insertData['field'] = $k;
                 $insertData['data_id'] = $dataId;
-                $repository->create($insertData);
+                $insertData['created'] = time();
+                $insertData['updated'] = time();
+                // $repository->create($insertData);
+                $repository->insert($insertData);
             }else{
-                $repository->updateOneBy($filter,$updateData);
+                // $repository->updateOneBy($filter,$updateData);
+                $repository->updateByFilter($filter,$updateData);
             }
         }
 
@@ -270,31 +263,33 @@ class CommonLangModService
 
     public function deleteLang(int $companyId, string $tableName, int $dataId, string $module)
     {
-        // foreach ($this->totalLang as $lang => $className) {
-            $lang = $this->getLang();
-            $repository = $this->getLangMapRepository($lang);
-            $filter = [
-                'company_id' => $companyId,
-                'table_name'=> $tableName,
-                'module_name' => $module,
-                'data_id'=> $dataId,
-            ];
-            $repository->deleteBy($filter);
-        // }
+        $lang = $this->getLang();
+        $repository = $this->getLangMapRepository($lang);
+        $filter = [
+            'company_id' => $companyId,
+            'table_name'=> $tableName,
+            'module_name' => $module,
+            'data_id'=> $dataId,
+        ];
+        $repository->deleteBy($filter);
         
         return true;
     }
 
     public function filterByLang(string $lang, string $field, string $content, string $tableName)
     {
+        // 处理带操作符的字段名，如 page_name|contains，只取字段名部分
+        $fieldParts = explode('|', $field);
+        $fieldName = $fieldParts[0];
+        
         $filter = [
             'lang'=>$lang,
-            'field'=>$field,
+            'field'=>$fieldName,
             'table_name'=>$tableName,
             'attribute_value|contains'=>$content,
         ];
         $repository = $this->getLangMapRepository($lang);
-        $list = $repository->getLists($filter,'*', -1, -1);
+        $list = $repository->getListByFilter($filter, -1, -1);
         if(empty($list)){
             return  [];
         }
@@ -324,7 +319,7 @@ class CommonLangModService
         if(empty($id)){
             return $body;
         }
-        $totalLang = array_keys($this->totalLang);
+        $totalLang = $this->totalLang;
         $langMap = [];
         $fieldsArr = $this->fieldHandle($fields);
         $fields = $fieldsArr['fields'];
@@ -335,7 +330,10 @@ class CommonLangModService
                 $filter['module_name'] = $module;
             }
             $repository = $this->getLangMapRepository($lang);
-            $content = $repository->getLists($filter, '*', 1, -1);
+            $content = $repository->getListByFilter($filter, -1, -1);
+            if(empty($content)){
+                continue;
+            }
             // 过滤数据字段
             foreach($content as $k => $v){
                 if(isset($fieldsOpts[$v['field']]) && !empty($fieldsOpts[$v['field']])){
@@ -375,7 +373,7 @@ class CommonLangModService
         if(empty($ids)){
             return $dataList;
         }
-        $totalLang = array_keys($this->totalLang);
+        $totalLang = $this->totalLang;
         $langMap = [];
         $fieldsArr = $this->fieldHandle($fields);
         $fields = $fieldsArr['fields'];
@@ -383,7 +381,10 @@ class CommonLangModService
         foreach($totalLang as $lang) {
             $filter = ['table_name' => $tableName, 'field' => $fields, 'lang' => $lang, 'data_id'=>$ids];
             $repository = $this->getLangMapRepository($lang);
-            $listTmp = $repository->getLists($filter, '*', 1, -1);
+            $listTmp = $repository->getListByFilter($filter, -1, -1);
+            if(empty($listTmp)){
+                continue;
+            }
               // 过滤数据字段
             foreach($listTmp as $k => $v){
                 if(isset($fieldsOpts[$v['field']]) && !empty($fieldsOpts[$v['field']])){
@@ -442,16 +443,7 @@ class CommonLangModService
         if (!empty($langBag)) {
             $resultLang = [];
             $langue = $this->getLang();
-            foreach($this->totalLang as $lang => $val) {
-                if ($lang != $langue) {
-                    continue;
-                }
-                // $mergeData = [];
-                // foreach($langBag as $k => $v) {
-                //     $mergeData[$k] = $v[$lang];
-                // }
-                $resultLang[$lang] = array_merge($oldData, $langBag);
-            }
+            $resultLang[$langue] = array_merge($oldData, $langBag);
         }
 
         return !empty($resultLang) ? $resultLang : $oldData;

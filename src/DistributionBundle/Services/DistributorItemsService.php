@@ -217,18 +217,52 @@ class DistributorItemsService
         // 店铺商品如果要上架，必须商品池是上架状态
         if (isset($params['is_can_sale']) && ($params['is_can_sale'] === true || $params['is_can_sale'] === 'true')) {
             $itemsService = new ItemsService();
-            $_filter = [ 
-                'company_id' => $params['company_id'],
-                'approve_status' => 'instock',
-            ];
-            if (isset($filter['item_id'])) {
-                $_filter['item_id'] = $filter['item_id'];
-            }else {
-                $_filter['goods_id'] = $filter['goods_id'];
-            }
-            $itemCount = $itemsService->count($_filter);
-            if ($itemCount) {
-                throw new ResourceException("确认商品总部销售状态");
+            
+            if (isset($filter['goods_id'])) {
+                // 按SPU维度检查：如果goods_id是数组，遍历每个goods_id
+                // 当其中一个goods_id中的所有item_id都是下架状态，则抛出错误
+                $goodsIds = is_array($filter['goods_id']) ? $filter['goods_id'] : [$filter['goods_id']];
+                
+                // 优化：一次性查询所有goods_id下的所有SKU，减少数据库查询次数
+                $_filter = [
+                    'company_id' => $params['company_id'],
+                    'goods_id' => $goodsIds, // 直接传数组，支持批量查询
+                ];
+                $allItems = $itemsService->getItemsList($_filter, 1, -1);
+                
+                // 在内存中按goods_id分组统计
+                $goodsStats = [];
+                foreach ($allItems['list'] as $item) {
+                    $goodsId = $item['goods_id'];
+                    if (!isset($goodsStats[$goodsId])) {
+                        $goodsStats[$goodsId] = ['total' => 0, 'instock' => 0];
+                    }
+                    $goodsStats[$goodsId]['total']++;
+                    if ($item['approve_status'] == 'instock') {
+                        $goodsStats[$goodsId]['instock']++;
+                    }
+                }
+                
+                // 检查每个goods_id：如果全部SKU都是下架状态，抛出错误
+                foreach ($goodsIds as $goodsId) {
+                    if (isset($goodsStats[$goodsId]) && $goodsStats[$goodsId]['total'] > 0) {
+                        // 如果该SPU下的所有SKU都是下架状态，抛出错误
+                        if ($goodsStats[$goodsId]['instock'] == $goodsStats[$goodsId]['total']) {
+                            throw new ResourceException("确认商品总部销售状态");
+                        }
+                    }
+                }
+            } else if (isset($filter['item_id'])) {
+                // 原逻辑：按单个SKU检查
+                $_filter = [ 
+                    'company_id' => $params['company_id'],
+                    'item_id' => $filter['item_id'],
+                    'approve_status' => 'instock',
+                ];
+                $itemCount = $itemsService->count($_filter);
+                if ($itemCount) {
+                    throw new ResourceException("确认商品总部销售状态");
+                }
             }
         }
 

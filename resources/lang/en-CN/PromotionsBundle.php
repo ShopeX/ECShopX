@@ -165,21 +165,21 @@ return [
     'delete_data_not_exist' => 'Delete data does not exist',
     'sms_signature_not_exist' => 'SMS signature does not exist for update',
     'no_promotion_rule_specified' => 'No promotion rule specified',
-    'bargain_activity_not_exist_with_id' => 'Bargain activity with bargain_id={bargain_id} does not exist',
-    'bargain_activity_delete_not_exist_with_id' => 'Bargain activity with bargain_id={bargain_id} does not exist for deletion',
-    'marketing_activity_not_exist_with_id' => 'Marketing activity with marketing_id={marketing_id} does not exist',
-    'seckill_activity_not_exist_with_id' => 'Seckill activity with seckill_id={seckill_id} does not exist',
-    'promotion_group_activity_not_exist_with_id' => 'Group activity with group_id={group_id} does not exist',
-    'package_not_exist_with_id' => 'Package with package_id={package_id} does not exist',
-    'point_activity_not_exist_with_id' => 'Point activity with activity_id={activity_id} does not exist',
-    'user_task_activity_not_exist_with_id' => 'User task activity with activity_id={activity_id} does not exist',
-    'user_signin_rule_not_exist_with_id' => 'User signin rule with activity_id={activity_id} does not exist',
-    'turntable_activity_not_exist_with_id' => 'Turntable activity with activity_id={activity_id} does not exist',
-    'specific_crowd_discount_not_exist_with_id' => 'Specific crowd discount with discount_id={discount_id} does not exist',
-    'user_bargain_activity_not_exist' => 'The bargain activity with bargain_id={bargain_id} you participated in does not exist',
+    'bargain_activity_not_exist_with_id' => 'Bargain activity with bargain_id=:bargain_id does not exist',
+    'bargain_activity_delete_not_exist_with_id' => 'Bargain activity with bargain_id=:bargain_id does not exist for deletion',
+    'marketing_activity_not_exist_with_id' => 'Marketing activity with marketing_id=:marketing_id does not exist',
+    'seckill_activity_not_exist_with_id' => 'Seckill activity with seckill_id=:seckill_id does not exist',
+    'promotion_group_activity_not_exist_with_id' => 'Group activity with group_id=:group_id does not exist',
+    'package_not_exist_with_id' => 'Package with package_id=:package_id does not exist',
+    'point_activity_not_exist_with_id' => 'Point activity with activity_id=:activity_id does not exist',
+    'user_task_activity_not_exist_with_id' => 'User task activity with activity_id=:activity_id does not exist',
+    'user_signin_rule_not_exist_with_id' => 'User signin rule with activity_id=:activity_id does not exist',
+    'turntable_activity_not_exist_with_id' => 'Turntable activity with activity_id=:activity_id does not exist',
+    'specific_crowd_discount_not_exist_with_id' => 'Specific crowd discount with discount_id=:discount_id does not exist',
+    'user_bargain_activity_not_exist' => 'The bargain activity with bargain_id=:bargain_id you participated in does not exist',
     
     // Services error messages
-    'activity_not_exist_with_id' => 'Error, activity with id: {id} does not exist',
+    'activity_not_exist_with_id' => 'Error, activity with id: :id does not exist',
     'activity_not_exist_or_wrong_id' => 'Error, activity does not exist or wrong ID',
     'turntable_activity_not_enabled' => 'Turntable activity is not enabled',
     'not_in_activity_time' => 'Not within activity time',
@@ -189,11 +189,11 @@ return [
     'draw_activity_not_started' => 'Draw activity has not started',
     'insufficient_user_points' => 'Insufficient user points',
     'draw_times_reach_activity_limit' => 'Draw times reach activity limit',
-    'daily_sms_limit_reached' => 'Daily SMS sending limit reached {max_times} times',
+    'daily_sms_limit_reached' => 'Daily SMS sending limit reached :max_times times',
     'register_title_required' => 'Registration title is required',
     'please_select_ad_image' => 'Please select advertisement image',
     'please_select_distributor' => 'Please select distributor',
-    'bargain_activity_not_exist_with_bargain_id' => 'Bargain activity with bargain_id {bargain_id} does not exist!',
+    'bargain_activity_not_exist_with_bargain_id' => 'Bargain activity with bargain_id :bargain_id does not exist!',
     'please_select_specific_gift_date' => 'Please select specific gift date',
     'please_select_date' => 'Please select date',
     'activity_start_time_cannot_greater_than_end_time' => 'Activity start time cannot be greater than end time',
@@ -214,7 +214,7 @@ return [
     'please_select_promotion_area' => 'Please select promotion area',
     'sms_template_format_error' => 'SMS template format error, no variables detected',
     'sms_template_variables_too_many' => 'Too many SMS template variables, maximum 20 variables supported',
-    'sms_template_variable_length_error' => 'SMS template variable length exceeds limit: {variable_name}',
+    'sms_template_variable_length_error' => 'SMS template variable length exceeds limit: :variable_name',
     'promotion_activity_time_conflict' => 'Marketing activity already exists in the selected time range',
     'activity_not_exist_error' => 'Error, activity does not exist',
     'points_task_not_exist_error' => 'Error, points task does not exist',
@@ -308,11 +308,11 @@ return [
     'applicable_platform_required' => 'Applicable platform is required',
     'regular_crossborder_cannot_package' => 'Regular and cross-border products cannot be sold as package',
     'activity_start_time_cannot_greater_than_publish' => 'Activity start time cannot be greater than publish time',
-    'product_stock_required_greater_than_zero' => 'Product {item_title} stock is required and must be greater than 0',
-    'product_price_required_greater_than_zero' => 'Product {item_title} price is required and must be greater than 0',
-    'product_limit_required_greater_than_zero' => 'Product {item_title} limit is required and must be greater than 0',
+    'product_stock_required_greater_than_zero' => 'Product :item_title stock is required and must be greater than 0',
+    'product_price_required_greater_than_zero' => 'Product :item_title price is required and must be greater than 0',
+    'product_limit_required_greater_than_zero' => 'Product :item_title limit is required and must be greater than 0',
     'current_activity_not_editable' => 'Current activity is not editable',
-    'store_has_valid_activity_same_time' => 'Store id={id} has valid activity in the same time period',
+    'store_has_valid_activity_same_time' => 'Store id=:id has valid activity in the same time period',
     'import_file_unrecognizable' => 'Import file is unrecognizable',
     'error_rows_too_many_show_100' => 'Too many error rows, system only shows first 100 rows.',
     'signature_not_set_cannot_send_sms' => 'Signature not set, cannot send SMS',
@@ -325,12 +325,11 @@ return [
     // User related Service files error messages
     'activity_ended_expect_next_participation' => 'Activity has ended, looking forward to your next participation!',
     'activity_not_started_please_wait' => 'Activity has not started yet, please wait!',
-]; 
+    
     // UserSign subdirectory error messages
     'error_already_signed_today' => 'Error, you have already signed in today',
     'error_prize_already_exists' => 'Error, prize for this day already exists',
     'data_not_exist' => 'This data does not exist',
-];
     
     // Common error messages
     'bargain_help_detail_not_found' => 'Bargain help detail not found!',
@@ -343,8 +342,7 @@ return [
     'please_select_main_category' => 'Please select main category',
     'please_select_tags' => 'Please select tags',
     'please_select_brand' => 'Please select brand',
-    'product_inventory_insufficient' => 'Product {item_name} inventory insufficient!',
-];
+    'product_inventory_insufficient' => 'Product :item_name inventory insufficient!',
     
     // Group activity related error messages
     'invalid_product' => 'Invalid product',
@@ -365,7 +363,7 @@ return [
     'end_time_greater_than_start' => 'End time must be greater than start time',
     'product_not_found' => 'Product not found',
     'group_price_cannot_greater_than_sale_price' => 'Group price cannot be greater than product sale price, please check and resubmit!',
-    'group_price_cannot_greater_than_store_price' => 'Group price cannot be greater than store (Store ID: {store_id}) sale price, please check and resubmit!',
+    'group_price_cannot_greater_than_store_price' => 'Group price cannot be greater than store (Store ID: :store_id) sale price, please check and resubmit!',
     
     // Group team related validation
     'company_id_required' => 'Company ID is required',

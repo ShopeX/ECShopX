@@ -45,6 +45,7 @@ $itemsService = [
     'brand_name_duplicate' => '品牌名称不能重复',
     'param_value_cannot_be_empty' => '参数值不能为空',
     'has_associated_items' => '有关联商品，请先处理关联的商品',
+    'has_associated_pointsmall_items' => '有关联积分商城商品，请先处理关联的积分商城商品',
     'value_has_associated_items' => '数值有关联商品，请先处理关联的商品',
     'update_data_not_exists' => '更新的数据不存在',
     

@@ -291,16 +291,21 @@ class RepositoryInterceptor
         $lang = $ns->getLang();
         $prkFilter = $filter[$prk] ?? ''; // 所有过滤字段keys
         foreach ($filter as $key => $value) {
+            $dataIdArr = '';
             // 必须是多语言字段
-            if (in_array($key, $fieldLangue)) {
+            // 可能存在xx|xx 这种数据, 所以要兼容
+            $filterkeys = explode('|', $key);
+            if (in_array($filterkeys[0], $fieldLangue)) {
                 $dataIdArr = $ns->filterByLang($lang, $key, $value, $table);
-            }
-            // 如果存在多语言字段主键，说明可能其他地方使用了主键过滤，我们需要合并掉
-            if (!empty($dataIdArr)) {
-                if (!empty($prkFilter)) {
-                    $filter[$key] = array_merge($filter[$key], $dataIdArr);
-                }else{
-                    $filter[$key] = $dataIdArr;
+                // 如果存在多语言字段主键，说明可能其他地方使用了主键过滤，我们需要合并掉
+                if (!empty($dataIdArr)) {
+                    if (!empty($prkFilter)) {
+                        $filter[$prk] = array_merge((array)$prkFilter, $dataIdArr);
+                    }else{
+                        $filter[$prk] = $dataIdArr;
+                    }
+                    // 移除多语言字段的原始过滤条件，因为已经转换为按主键过滤
+                    unset($filter[$key]);
                 }
             }
         }

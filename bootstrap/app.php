@@ -91,6 +91,7 @@ $app->configure('oms');
 $app->configure('shopexai');
 $app->configure('tbitems');
 $app->configure('paypal');
+$app->configure('langue');
 
 /*
 |--------------------------------------------------------------------------

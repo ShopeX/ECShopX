@@ -321,15 +321,19 @@ class TradeService implements InterfacesTrade
      */
     public function getTradeList($filter, $orderBy = ['time_start' => 'DESC'], $pageSize = 20, $page = 1)
     {
-        $filterOrderType = $filter['filter_order_type'] ?? false;
-        unset($filter['filter_order_type']);
         $filter = $this->checkMobile($filter);
         $tradeList = $this->tradeRepository->getTradeList($filter, $orderBy, $pageSize, $page);
-        if ($filterOrderType) {
+        if ($tradeList['total_count'] > 0) {
             //提取所有订单号
             $orderIds = array_column($tradeList['list'], 'orderId');
-            $orderService = $this->getOrderService($filterOrderType);
-            $orderList = $orderService->lists(['order_id' => $orderIds], null, count($orderIds), 1, false, 'order_id,order_sn');
+            $orderService = $this->getOrderService('normal');
+            $companyId = $filter['company_id'];
+            unset($filter);
+            $filter['company_id'] = $companyId;
+            $filter['order_id'] = $orderIds;
+            $orderList = $orderService->getOrderList($filter, 1,  count($orderIds), [], false);
+            $orderListData = array_column($orderList['list'], null, 'order_id');
+
             $selfDeliveryOperatorIds = array_column($orderList['list'], 'self_delivery_operator_id', 'order_id');
             $selfDeliveryOperator = [];
             if ($selfDeliveryOperatorIds) {
@@ -339,10 +343,15 @@ class TradeService implements InterfacesTrade
             }
         }
         foreach ($tradeList['list'] as &$value) {
-            if (isset($selfDeliveryOperatorIds[$value['orderId']]) && $selfDeliveryOperatorIds[$value['orderId']] > 0) {
-                $value['self_delivery_operator_id'] = $selfDeliveryOperatorIds[$value['orderId']];
-                $value['self_delivery_operator_mobile'] = $selfDeliveryOperator[$value['self_delivery_operator_id']]['mobile'];
-                $value['self_delivery_operator_name'] = $selfDeliveryOperator[$value['self_delivery_operator_id']]['username'];
+            if (isset($orderListData[$value['orderId']])) {
+                $value['receipt_type'] = $orderListData[$value['orderId']]['receipt_type'];
+                $value['order_holder'] = $orderListData[$value['orderId']]['order_holder'];
+                $value['self_delivery_fee'] = $orderListData[$value['orderId']]['self_delivery_fee'] ?? 0;
+                if (isset($selfDeliveryOperatorIds[$value['orderId']]) && $selfDeliveryOperatorIds[$value['orderId']] > 0) {
+                    $value['self_delivery_operator_id'] = $selfDeliveryOperatorIds[$value['orderId']] ?? 0;
+                    $value['self_delivery_operator_mobile'] = $selfDeliveryOperator[$value['self_delivery_operator_id']]['mobile'] ?? '';
+                    $value['self_delivery_operator_name'] = $selfDeliveryOperator[$value['self_delivery_operator_id']]['username'] ?? '';
+                }
             }
         }
         return $tradeList;

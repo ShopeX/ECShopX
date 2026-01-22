@@ -23,6 +23,8 @@ use GoodsBundle\Entities\ItemsAttributeValues;
 use GoodsBundle\Entities\ItemRelAttributes;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Repositories\ItemsAttributeValuesRepository;
+use PointsmallBundle\Entities\PointsmallItemRelAttributes;
+use PointsmallBundle\Entities\PointsmallItems;
 
 class ItemsAttributesService
 {
@@ -147,19 +149,37 @@ class ItemsAttributesService
         $relItemsData = $itemRelAttributesRepository->lists($filter, 1, -1);
         if ($relItemsData['total_count'] > 0) {
             $itemIdList = array_column($relItemsData['list'], 'item_id');
-            if (empty($itemIdList)) {
-                return true;
-            }
-            $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
-            $itemFilter = [
-                'company_id' => $companyId,
-                'item_id' => $itemIdList
-            ];
-            $itemList = $itemsRepository->getItemsLists($itemFilter);
-            if (!empty($itemList)) {
-                throw new ResourceException(trans('GoodsBundle/Controllers/Items.has_associated_items'));
+            if (!empty($itemIdList)) {
+                $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
+                $itemFilter = [
+                    'company_id' => $companyId,
+                    'item_id' => $itemIdList
+                ];
+                $itemList = $itemsRepository->getItemsLists($itemFilter);
+                if (!empty($itemList)) {
+                    throw new ResourceException(trans('GoodsBundle/Controllers/Items.has_associated_items'));
+                }
             }
         }
+
+        // 检查积分商城商品
+        $pointsmallItemRelAttributesRepository = app('registry')->getManager('default')->getRepository(PointsmallItemRelAttributes::class);
+        $pointsmallRelData = $pointsmallItemRelAttributesRepository->lists($filter, 1, -1);
+        if ($pointsmallRelData['total_count'] > 0) {
+            $pointsmallItemIds = array_column($pointsmallRelData['list'], 'item_id');
+            if (!empty($pointsmallItemIds)) {
+                $pointsmallItemsRepository = app('registry')->getManager('default')->getRepository(PointsmallItems::class);
+                $pointsmallItemFilter = [
+                    'company_id' => $companyId,
+                    'item_id' => $pointsmallItemIds
+                ];
+                $pointsmallItemList = $pointsmallItemsRepository->getItemsLists($pointsmallItemFilter);
+                if (!empty($pointsmallItemList)) {
+                    throw new ResourceException(trans('GoodsBundle/Controllers/Items.has_associated_pointsmall_items'));
+                }
+            }
+        }
+
         return true;
     }
 

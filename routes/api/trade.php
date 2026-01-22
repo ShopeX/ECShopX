@@ -119,6 +119,7 @@ $api->version('v1', function($api) {
     $api->group(['namespace' => 'PaymentBundle\Http\Api\V1\Action', 'middleware' => ['api.auth','shoplog'], 'providers' => 'jwt'], function($api) {
         $api->post('/trade/payment/setting', [ 'name'=>'支付配置信息保存','middleware'=>'activated', 'as' => 'trade.payment.setting.set', 'uses'=>'Payment@setPaymentSetting']);
         $api->get('/trade/payment/setting', [ 'name'=>'获取支付配置信息','middleware'=>'activated', 'as' => 'trade.payment.setting.get', 'uses'=>'Payment@getPaymentSetting']);
+        $api->get('/trade/payment/open-status', [ 'name'=>'获取支付配置开关状态','middleware'=>'activated', 'as' => 'trade.payment.open.status.get', 'uses'=>'Payment@getPaymentOpenStatus']);
         $api->get('/trade/payment/list', [ 'name'=>'获取支付配置信息列表','middleware'=>'activated', 'as' => 'trade.payment.setting.list', 'uses'=>'Payment@getPaymentSettingList']);
         $api->get('/trade/payment/hfpayversionstatus', [ 'name'=>'获取汇付天下版本状态','middleware'=>'activated', 'as' => 'trade.payment.hfpay.status', 'uses'=>'Payment@getHfpayVersionStatus']);
         $api->get('/trade/payment/rsakey', [ 'name'=>'生成RSA密钥','middleware'=>'activated', 'as' => 'trade.payment.rsa.gen', 'uses'=>'Payment@genRsaKey']);

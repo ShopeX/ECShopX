@@ -20,11 +20,13 @@ namespace PaymentBundle\Services\Payments;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 use PaymentBundle\Interfaces\Payment;
+use PaymentBundle\Traits\PaymentSubjectTrait;
 
 use OrdersBundle\Events\OrderProcessLogEvent;
 
 class AlipayService implements Payment
 {
+    use PaymentSubjectTrait;
 
     private $distributorId = 0; // 店铺ID
     private $getDefault = true; //是否取平台默认配置
@@ -36,10 +38,51 @@ class AlipayService implements Payment
     }
 
     /**
-     * 设置微信支付配置
+     * 校验私钥（只做验证，不做格式转换）
+     * @param string $privateKey 私钥字符串
+     * @throws BadRequestHttpException 如果私钥内容无效
+     */
+    private function validatePrivateKey($privateKey)
+    {
+        if (empty($privateKey)) {
+            return;
+        }
+
+        $privateKey = trim($privateKey);
+        
+        // 如果是 PEM 格式，提取 Base64 内容用于验证
+        if (strpos($privateKey, '-----BEGIN') !== false) {
+            $cleanKey = preg_replace('/-----BEGIN.*?-----/', '', $privateKey);
+            $cleanKey = preg_replace('/-----END.*?-----/', '', $cleanKey);
+            $cleanKey = preg_replace('/\s+/', '', $cleanKey);
+        } else {
+            // Base64 格式，清理空格和换行
+            $cleanKey = preg_replace('/\s+/', '', $privateKey);
+        }
+        
+        // 按 support.php 的处理方式，拼接首尾字符后验证
+        $pemKey = "-----BEGIN RSA PRIVATE KEY-----\n" .
+                  wordwrap($cleanKey, 64, "\n", true) .
+                  "\n-----END RSA PRIVATE KEY-----";
+        
+        // 验证私钥是否可以正常解析
+        $keyResource = @openssl_pkey_get_private($pemKey);
+        if ($keyResource === false) {
+            throw new BadRequestHttpException('私钥内容无效');
+        }
+        @openssl_free_key($keyResource);
+    }
+
+    /**
+     * 设置支付宝支付配置
      */
     public function setPaymentSetting($companyId, $data)
     {
+        // 校验私钥（只做验证，不做格式转换）
+        if (isset($data['private_key']) && !empty($data['private_key'])) {
+            $this->validatePrivateKey($data['private_key']);
+        }
+
         return app('redis')->set($this->genReidsId($companyId), json_encode($data));
     }
 
@@ -48,13 +91,21 @@ class AlipayService implements Payment
      */
     public function getPaymentSetting($companyId)
     {
-        $data = app('redis')->get($this->genReidsId($companyId));
-
-        //不存在店铺配置取平台的配置
-        if (!$data && $this->getDefault && $this->distributorId > 0) {
-            $this->distributorId = 0;
-            $data = app('redis')->get($this->genReidsId($companyId));
+        // 根据店铺收款主体类型决定实际使用的distributorId
+        if ($this->getDefault && $this->distributorId > 0) {
+            $actualDistributorId = $this->getActualDistributorId($this->distributorId, $companyId);
+            if ($actualDistributorId != $this->distributorId) {
+                $this->distributorId = $actualDistributorId;
+            }
         }
+        
+        $data = app('redis')->get($this->genReidsId($companyId));
+        // 增加了支付主体的字段，平台or店铺，无论配置是否为空，如果是店铺，则取店铺配置，如果是平台，则取平台配置
+        //不存在店铺配置取平台的配置
+        // if (!$data && $this->getDefault && $this->distributorId > 0) {
+        //     $this->distributorId = 0;
+        //     $data = app('redis')->get($this->genReidsId($companyId));
+        // }
 
         $data = json_decode($data, true);
         if ($data) {

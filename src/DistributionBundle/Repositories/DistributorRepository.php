@@ -113,6 +113,7 @@ class DistributorRepository extends EntityRepository
         'jst_shop_id',
         'kuaizhen_store_id',
         'open_divided',//开启店铺隔离
+        'payment_subject', // 收款主体
     ];
 
     public function getLangService()
@@ -176,7 +177,15 @@ class DistributorRepository extends EntityRepository
         }
 
         if (isset($data['auto_sync_goods'])) {
-            $data['auto_sync_goods'] = $data['auto_sync_goods'] == 'true' ? 1 : 0;
+            // 兼容多种输入格式：字符串 'true'/'false'，整数 1/0，布尔值 true/false
+            if (is_string($data['auto_sync_goods'])) {
+                $data['auto_sync_goods'] = ($data['auto_sync_goods'] == 'true' || $data['auto_sync_goods'] === '1') ? 1 : 0;
+            } elseif (is_bool($data['auto_sync_goods'])) {
+                $data['auto_sync_goods'] = $data['auto_sync_goods'] ? 1 : 0;
+            } else {
+                // 整数类型，直接转换为 0 或 1
+                $data['auto_sync_goods'] = (int)$data['auto_sync_goods'] ? 1 : 0;
+            }
         }
 
         $entity = $this->findOneBy($filter);
@@ -213,7 +222,15 @@ class DistributorRepository extends EntityRepository
         }
 
         if (isset($data['auto_sync_goods'])) {
-            $data['auto_sync_goods'] = $data['auto_sync_goods'] == 'true' ? 1 : 0;
+            // 兼容多种输入格式：字符串 'true'/'false'，整数 1/0，布尔值 true/false
+            if (is_string($data['auto_sync_goods'])) {
+                $data['auto_sync_goods'] = ($data['auto_sync_goods'] == 'true' || $data['auto_sync_goods'] === '1') ? 1 : 0;
+            } elseif (is_bool($data['auto_sync_goods'])) {
+                $data['auto_sync_goods'] = $data['auto_sync_goods'] ? 1 : 0;
+            } else {
+                // 整数类型，直接转换为 0 或 1
+                $data['auto_sync_goods'] = (int)$data['auto_sync_goods'] ? 1 : 0;
+            }
         }
 
         $conn = app("registry")->getConnection("default");

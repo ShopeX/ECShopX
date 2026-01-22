@@ -690,6 +690,10 @@ class CompanysActivationEgo
     //验证资源包的有效性
     private function checkValid($companyId)
     {
+        $data['expired_at'] = strtotime('2037-01-01');
+        $data['desc'] = '开源版本';
+        $data['valid'] = 'true';
+        return $data;
         $redisKey = "AuthorizeActivation:". sha1($companyId);
         $datalist = app('redis')->connection('companys')->Hgetall($redisKey);
 

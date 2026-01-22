@@ -135,7 +135,7 @@ class UserDiscountService implements UserDiscountInterface
                     }
                 }
 
-                if ($from == 'template' && $item['receive'] != 'true') {
+                if ($from == 'template' && $item['receive'] != '1' && $item['receive'] != 1) {
                     $checkResult[] = [
                         'card_info' => $item,
                         'message' => trans('KaquanBundle.coupon_not_frontend_receivable'),

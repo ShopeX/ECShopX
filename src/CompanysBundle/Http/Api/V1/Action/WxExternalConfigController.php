@@ -206,9 +206,10 @@ class WxExternalConfigController extends BaseController
      *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/CompanysErrorRespones") ) )
      * )
      */
-    public function updateWxExternalConfig(Request $request)
+    public function updateWxExternalConfig(Request $request, $wx_external_config_id)
     {
-        $params = $request->all('wx_external_config_id', 'app_desc', 'app_name', 'app_id');
+        $params = $request->all('app_desc', 'app_name', 'app_id');
+        $params['wx_external_config_id'] = $wx_external_config_id;
         $rules = [
             'wx_external_config_id' => ['required', '请填写配置ID'],
             'app_name' => ['required', '请填写小程序名称'],
@@ -310,15 +311,15 @@ class WxExternalConfigController extends BaseController
      *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/CompanysErrorRespones") ) )
      * )
      */
-    public function deleteWxExternalConfig(Request $request, $wxExternalConfigId)
+    public function deleteWxExternalConfig(Request $request, $wx_external_config_id)
     {
-        if (intval($wxExternalConfigId) <= 0) {
+        if (intval($wx_external_config_id) <= 0) {
             throw new ResourceException('配置不存在');
         }
 
         $companyId = app('auth')->user()->get('company_id');
 
-        $result = $this->wxExternalConfig->deleteWxExternalConfig($companyId, intval($wxExternalConfigId));
+        $result = $this->wxExternalConfig->deleteWxExternalConfig($companyId, intval($wx_external_config_id));
 
         return $this->response->array(['status' => $result]);
     }

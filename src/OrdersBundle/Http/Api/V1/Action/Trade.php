@@ -157,7 +157,6 @@ class Trade extends Controller
         $page = $request->input('page', 1);
 
         $orderBy = ['time_start' => 'DESC'];
-        $filter['filter_order_type'] = $request->input('order_type');
         $data = $tradeService->getTradeList($filter, $orderBy, $pageSize, $page);
 
         if ($data['list']) {

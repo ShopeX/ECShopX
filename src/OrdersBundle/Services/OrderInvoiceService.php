@@ -1581,16 +1581,11 @@ class OrderInvoiceService
         //查询公司id的申请开票节点
         $settingService = new SettingService();
         foreach ($companyIds as $companyId) {
-            $applyNodeArr[$companyId] = $settingService->getInvoiceSetting($companyId)['apply_node'];
+            $setting = $settingService->getInvoiceSetting($companyId);
+            if ($setting && isset($setting['apply_node'])) {
+                $applyNodeArr[$companyId] = $setting['apply_node'];
+            }
         }
-
-        // 获取设置 - **apply_node**：申请开票节点（1=确认收货，2=过售后期）
-        // $applyNode = app('config')->get('invoice.apply_node');
-        // $settingService = new SettingService();
-        // $companyId = env('SYSTEM_MAIN_COMPANYS_ID',1);
-        // $applyNode = $settingService->getInvoiceSetting($companyId)['apply_node'];
-
-        // app('log')->info('[OrderInvoiceService][invoiceStartSchedule]（1=确认收货，2=过售后期） 申请开票节点: ' . $applyNode);
 
         foreach ($applyNodeArr as $companyId => $applyNode) {
             if ($applyNode == 1) {
@@ -1630,7 +1625,7 @@ class OrderInvoiceService
                     ];
                     
                     // 推送到 invoice 队列
-                    dispatch(new \OrdersBundle\Jobs\InvoiceCreateJob($jobData))->onQueue('invoice');
+                    dispatch(new \OrdersBundle\Jobs\InvoiceCreateJob($jobData))->onQueue('slow');
                     
                     app('log')->info('[OrderInvoiceService][invoiceStartSchedule] 发票申请 ID: ' . $invoice['id'] . ' 已推送到队列');
                     
@@ -1701,7 +1696,7 @@ class OrderInvoiceService
                 ];
                 
                 // 推送到 invoice 队列
-                dispatch(new \OrdersBundle\Jobs\InvoiceRedQueryJob($jobData))->onQueue('invoice');
+                dispatch(new \OrdersBundle\Jobs\InvoiceRedQueryJob($jobData))->onQueue('slow');
                 
                 app('log')->info('[OrderInvoiceService][invoiceRedQuerySchedule] 红冲发票 ID: ' . $invoice['id'] . ' 已推送到队列');
                 
@@ -2089,8 +2084,8 @@ class OrderInvoiceService
                     'order_id' => $invoice['order_id']
                 ];
                 app('log')->info('[OrderInvoiceService][queryInvoiceSchedule] 发票查询任务:jobData:', $jobData);
-                // 推送到 invoice_query 队列
-                dispatch(new \OrdersBundle\Jobs\InvoiceQueryJob($jobData))->onQueue('invoice_query');
+
+                dispatch(new \OrdersBundle\Jobs\InvoiceQueryJob($jobData))->onQueue('slow');
                 
                 app('log')->info('[OrderInvoiceService][queryInvoiceSchedule] 发票查询任务 ID: ' . $invoice['id'] . ' 已推送到队列');
                 

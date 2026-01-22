@@ -121,10 +121,14 @@ trait CheckPromotionsRules
             $params['shop_ids'] = explode(',', $activityData['distributor_id']);
         }
 
+        // 限时秒杀和限时特惠都需要检查满减、满折、满赠等活动
         if ($activityData['seckill_type'] == 'normal') {
             $this->checkMarketing($params);//满减，满折，加价购，满赠，会员优先购
             $this->checkLimit($params);//检查商品限购
             $this->checkPackage($params);//检查组合商品促销
+        } elseif ($activityData['seckill_type'] == 'limited_time_sale') {
+            // 限时特惠也需要检查满减、满折、满赠等活动，但不检查商品限购和组合商品促销
+            $this->checkMarketing($params);//满减，满折，加价购，满赠，会员优先购
         }
 
         $this->checkGroup($params);//检查拼团
@@ -166,7 +170,8 @@ trait CheckPromotionsRules
         // $params['start_time'] = strtotime($params['start_time']);
         // $params['end_time'] = strtotime($params['end_time']);
         $params['shop_ids'] = $params['shop_ids'] ?? [];
-        $params['seckill_type'] = 'normal';//只排除限时秒杀
+        // 满减、满折、满赠等活动需要同时检查限时秒杀和限时特惠
+        $params['seckill_type'] = ['normal', 'limited_time_sale'];
 
         $marketingType = [$params['marketing_type']];//活动都要排除自身
         switch ($params['marketing_type']) {
@@ -179,13 +184,14 @@ trait CheckPromotionsRules
                 break;
 
             case 'member_preference':
-                $params['seckill_type'] = 'normal';//会员优先购 和 限时秒杀 冲突
+                // 会员优先购只和限时秒杀冲突，不和限时特惠冲突
+                $params['seckill_type'] = 'normal';
                 break;
         }
 
         $this->checkMarketing($params, $marketingType);//满减，满折，加价购，
         $this->checkGroup($params);//检查拼团
-        $this->checkSecKill($params);//检查限时秒杀
+        $this->checkSecKill($params);//检查限时秒杀和限时特惠
         $this->checkBargain($params);//检查微信助力砍价
         return true;
     }

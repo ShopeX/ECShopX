@@ -35,9 +35,11 @@ class RefundRecordExportService implements ExportFileInterface
         'refund_type' => '退款类型',
         'refund_channel' => '退款方式',
         'refund_status' => '退款状态',
-        'refund_fee' => '应退金额',
-        'refunded_fee' => '实退金额',
-        'refund_point' => '退款积分',
+        'refund_fee' => '应退商品金额',
+        'refunded_fee' => '实退商品金额',
+        'refund_point' => '退款商品积分',
+        'refund_freight_fee' => '退款运费金额（¥）',
+        'refund_freight_point' => '退款运费（积分）',
         'create_time' => '创建时间',
         'refund_success_time' => '退款成功时间',
     ];
@@ -117,6 +119,20 @@ class RefundRecordExportService implements ExportFileInterface
                             $recordData[$key][$k] = $value[$k];
                         } elseif (in_array($k, ['refund_fee', 'refunded_fee'])) {
                             $recordData[$key][$k] = $value[$k] / 100;
+                        } elseif ($k == 'refund_freight_fee') {
+                            // 退款运费金额（¥），根据freight_type判断，如果是cash需要转换为元，没有的则显示0
+                            if (isset($value['freight_type']) && $value['freight_type'] == 'cash' && isset($value['freight'])) {
+                                $recordData[$key][$k] = $value['freight'] / 100;
+                            } else {
+                                $recordData[$key][$k] = 0;
+                            }
+                        } elseif ($k == 'refund_freight_point') {
+                            // 退款运费（积分），根据freight_type判断，如果是point不用转换，没有的则显示0
+                            if (isset($value['freight_type']) && $value['freight_type'] == 'point' && isset($value['freight'])) {
+                                $recordData[$key][$k] = $value['freight'];
+                            } else {
+                                $recordData[$key][$k] = 0;
+                            }
                         } elseif ($k == "refund_type") {
                             $recordData[$key][$k] = $refund_type[$value[$k]] ?? '--';
                         } elseif ($k == "refund_channel") {

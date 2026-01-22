@@ -386,7 +386,7 @@ class SeckillActivity extends Controller
             'activity_end_time' => ['required', trans('PromotionsBundle.activity_end_time_required')],
             'activity_release_time' => ['required', trans('PromotionsBundle.activity_release_time_required')],
             'company_id' => ['required', trans('PromotionsBundle.company_id_required')],
-            'ad_pic' => ['required', trans('PromotionsBundle.activity_cover_required')],
+            // 'ad_pic' => ['required', trans('PromotionsBundle.activity_cover_required')],
             'items.*.item_id' => ['required', trans('PromotionsBundle.product_id_param_missing')],
             'items.*.item_title' => ['required', trans('PromotionsBundle.product_title_param_missing')],
             'items.*.activity_price' => ['required', trans('PromotionsBundle.product_activity_price_param_missing')],

@@ -220,6 +220,10 @@ class MapService extends BaseService
         return (new RedisCacheService($companyId, "map_default_info", 60))->getByPrevention(function () use ($companyId) {
             $defaultInfo = $this->getRepository()->getInfo(["company_id" => $companyId, "is_default" => self::DEFAULT_YES]);
             if (empty($defaultInfo)) {
+                //app_key、app_secret为空，不插入，避免报错
+                if (empty(config("common.map.amap.app_key", "")) || empty(config("common.map.amap.app_secret", ""))) {
+                    return [];
+                }
                 $defaultInfo = $this->create([
                     "company_id" => $companyId,
                     "type" => self::TYPE_AMAP,

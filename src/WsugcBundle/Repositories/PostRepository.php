@@ -34,7 +34,7 @@ class PostRepository extends EntityRepository
     public $module = 'wsugc_post'; // 多语言对应的模块
     public $primaryKey = 'post_id'; // 主键，对应data_id
     public $langField = [
-        'title','address','topics','content','ai_refuse_reason','manual_refuse_reason'
+        'title','address','content','ai_refuse_reason','manual_refuse_reason'
     ]; // 多语言字段
     
     public function getEntity()

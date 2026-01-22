@@ -163,6 +163,11 @@ class ShopMenuService
             $this->checkParentMenuType($parentTypeList, $menuTypeList);
         }
 
+        // 记录创建时 is_show 为 false 的情况
+        if (isset($data['is_show']) && ($data['is_show'] == 'false' || $data['is_show'] == 0)) {
+            $this->logIsShowChangeToFalseFromCreate($data);
+        }
+
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
@@ -294,6 +299,14 @@ class ShopMenuService
             'shopmenu_id' => $requestData['shopmenu_id']
         ];
 
+        // 记录更新时 is_show 从 true 变为 false 的情况
+        if (isset($requestData['is_show']) && ($requestData['is_show'] == 'false' || $requestData['is_show'] == 0)) {
+            $oldMenu = $this->shopMenuRepository->getInfo(['shopmenu_id' => $requestData['shopmenu_id']]);
+            if ($oldMenu && $oldMenu['is_show'] === true) {
+                $this->logIsShowChangeToFalseFromUpdate($requestData, $oldMenu);
+            }
+        }
+
         unset($requestData['shopmenu_id']);
 
         $conn = app('registry')->getConnection('default');
@@ -383,6 +396,11 @@ class ShopMenuService
                     $insert['is_menu'] = $insert['is_menu'] == 'false' ? 0 : 1;
                     $insert['is_show'] = $insert['is_show'] == 'false' ? 0 : 1;
                     $insert['disabled'] = $insert['disabled'] == 'true' ? 1 : 0;
+
+                    // 记录上传导入时 is_show 为 false 的情况
+                    if ($insert['is_show'] == 0) {
+                        $this->logIsShowChangeToFalseFromUpload($insert, $row, $company_id);
+                    }
 
                     if (!$conn->insert('shop_menu', $insert)) {
                         throw new StoreResourceFailedException('导入失败');
@@ -616,5 +634,342 @@ class ShopMenuService
     public function __call($method, $parameters)
     {
         return $this->shopMenuRepository->$method(...$parameters);
+    }
+
+    /**
+     * 记录创建时 is_show 为 false 的日志
+     *
+     * @param array $data
+     */
+    private function logIsShowChangeToFalseFromCreate($data)
+    {
+        try {
+            $logData = [
+                'timestamp' => date('Y-m-d H:i:s'),
+                'action' => 'create',
+                'shopmenu_id' => $data['shopmenu_id'] ?? null,
+                'company_id' => $data['company_id'] ?? 0,
+                'version' => $data['version'] ?? 1,
+                'alias_name' => $data['alias_name'] ?? null,
+                'name' => $data['name'] ?? null,
+                'old_value' => null,
+                'new_value' => false,
+                'source' => $this->getRequestSource(),
+                'source_type' => $this->getSourceType(),
+                'user_id' => $this->getUserId(),
+                'user_name' => $this->getUserName(),
+                'user_email' => $this->getUserEmail(),
+                'request_data' => $this->getRequestData($data),
+                'ip' => $this->getRequestIp(),
+                'user_agent' => $this->getUserAgent(),
+                'trace_id' => $this->getTraceId(),
+                'stack_trace' => 'ShopMenuService::create()',
+                'context' => [
+                    'is_upload' => false,
+                    'is_migration' => false,
+                    'json_file' => null,
+                ],
+            ];
+
+            $logFile = storage_path('logs/shopmenu_is_show_hidden.log');
+            $logLine = json_encode($logData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+            file_put_contents($logFile, $logLine, FILE_APPEND | LOCK_EX);
+        } catch (\Exception $e) {
+            // 记录日志失败不影响主流程，静默处理
+        }
+    }
+
+    /**
+     * 记录更新时 is_show 从 true 变为 false 的日志
+     *
+     * @param array $requestData
+     * @param array $oldMenu
+     */
+    private function logIsShowChangeToFalseFromUpdate($requestData, $oldMenu)
+    {
+        try {
+            $logData = [
+                'timestamp' => date('Y-m-d H:i:s'),
+                'action' => 'update',
+                'shopmenu_id' => $requestData['shopmenu_id'] ?? null,
+                'company_id' => $oldMenu['company_id'] ?? 0,
+                'version' => $oldMenu['version'] ?? 1,
+                'alias_name' => $oldMenu['alias_name'] ?? null,
+                'name' => $oldMenu['name'] ?? null,
+                'old_value' => true,
+                'new_value' => false,
+                'source' => $this->getRequestSource(),
+                'source_type' => $this->getSourceType(),
+                'user_id' => $this->getUserId(),
+                'user_name' => $this->getUserName(),
+                'user_email' => $this->getUserEmail(),
+                'request_data' => $this->getRequestData($requestData),
+                'ip' => $this->getRequestIp(),
+                'user_agent' => $this->getUserAgent(),
+                'trace_id' => $this->getTraceId(),
+                'stack_trace' => 'ShopMenuService::updateMenus() -> ShopMenuRepository::updateOneBy()',
+                'context' => [
+                    'is_upload' => false,
+                    'is_migration' => false,
+                    'json_file' => null,
+                ],
+            ];
+
+            $logFile = storage_path('logs/shopmenu_is_show_hidden.log');
+            $logLine = json_encode($logData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+            file_put_contents($logFile, $logLine, FILE_APPEND | LOCK_EX);
+        } catch (\Exception $e) {
+            // 记录日志失败不影响主流程，静默处理
+        }
+    }
+
+    /**
+     * 记录上传导入时 is_show 为 false 的日志
+     *
+     * @param array $insert
+     * @param array $row
+     * @param int $company_id
+     */
+    private function logIsShowChangeToFalseFromUpload($insert, $row, $company_id = 0)
+    {
+        try {
+            // 检查是否为自动导入（迁移）
+            $isMigration = $this->isMigrationContext();
+
+            $logData = [
+                'timestamp' => date('Y-m-d H:i:s'),
+                'action' => $isMigration ? 'auto_import' : 'upload',
+                'shopmenu_id' => $insert['shopmenu_id'] ?? null,
+                'company_id' => $company_id,
+                'version' => $insert['version'] ?? 1,
+                'alias_name' => $insert['alias_name'] ?? null,
+                'name' => $insert['name'] ?? null,
+                'old_value' => null, // 上传导入时，旧菜单已被删除，无法获取旧值
+                'new_value' => false,
+                'source' => $this->getRequestSource(),
+                'source_type' => $isMigration ? 'auto' : 'manual',
+                'user_id' => $this->getUserId(),
+                'user_name' => $this->getUserName(),
+                'user_email' => $this->getUserEmail(),
+                'request_data' => $row,
+                'ip' => $this->getRequestIp(),
+                'user_agent' => $this->getUserAgent(),
+                'trace_id' => $this->getTraceId(),
+                'stack_trace' => 'ShopMenuService::uploadMenus() -> $conn->insert()',
+                'context' => [
+                    'is_upload' => true,
+                    'is_migration' => $isMigration,
+                    'json_file' => $this->getJsonFileName(),
+                ],
+            ];
+
+            $logFile = storage_path('logs/shopmenu_is_show_hidden.log');
+            $logLine = json_encode($logData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+            file_put_contents($logFile, $logLine, FILE_APPEND | LOCK_EX);
+        } catch (\Exception $e) {
+            // 记录日志失败不影响主流程，静默处理
+        }
+    }
+
+    /**
+     * 获取请求来源
+     */
+    private function getRequestSource()
+    {
+        try {
+            if (php_sapi_name() === 'cli') {
+                return 'cli';
+            }
+            $request = app('request');
+            if ($request) {
+                return $request->method() . ' ' . $request->path();
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return 'unknown';
+    }
+
+    /**
+     * 获取来源类型（手动/自动）
+     */
+    private function getSourceType()
+    {
+        // 检查是否为命令行
+        if (php_sapi_name() === 'cli') {
+            return 'auto';
+        }
+
+        // 检查调用堆栈，判断是否为自动操作
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
+        foreach ($trace as $frame) {
+            // 如果是 UpdateMenuListener 调用，标记为自动
+            if (isset($frame['class']) && strpos($frame['class'], 'UpdateMenuListener') !== false) {
+                return 'auto';
+            }
+        }
+
+        return 'manual';
+    }
+
+    /**
+     * 检查是否为迁移上下文
+     */
+    private function isMigrationContext()
+    {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 15);
+        foreach ($trace as $frame) {
+            if (isset($frame['class']) && strpos($frame['class'], 'UpdateMenuListener') !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 获取 JSON 文件名
+     */
+    private function getJsonFileName()
+    {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 20);
+        foreach ($trace as $frame) {
+            if (isset($frame['file'])) {
+                // 检查是否在 UpdateMenuListener 中
+                if (strpos($frame['file'], 'UpdateMenuListener') !== false) {
+                    // 尝试从文件路径推断 JSON 文件名
+                    if (strpos($frame['file'], 'platform_menu.json') !== false) {
+                        return 'platform_menu.json';
+                    }
+                    if (strpos($frame['file'], 'it_menu.json') !== false) {
+                        return 'it_menu.json';
+                    }
+                    if (strpos($frame['file'], 'shop_menu.json') !== false) {
+                        return 'shop_menu.json';
+                    }
+                    if (strpos($frame['file'], 'dealer_menu.json') !== false) {
+                        return 'dealer_menu.json';
+                    }
+                    if (strpos($frame['file'], 'merchant_menu.json') !== false) {
+                        return 'merchant_menu.json';
+                    }
+                    if (strpos($frame['file'], 'supplier_menu.json') !== false) {
+                        return 'supplier_menu.json';
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 获取用户ID
+     */
+    private function getUserId()
+    {
+        try {
+            $user = app('auth')->user();
+            if ($user) {
+                return $user->get('user_id') ?? $user->get('id') ?? null;
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    /**
+     * 获取用户名
+     */
+    private function getUserName()
+    {
+        try {
+            $user = app('auth')->user();
+            if ($user) {
+                return $user->get('user_name') ?? $user->get('name') ?? 'system';
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return 'system';
+    }
+
+    /**
+     * 获取用户邮箱
+     */
+    private function getUserEmail()
+    {
+        try {
+            $user = app('auth')->user();
+            if ($user) {
+                return $user->get('email') ?? null;
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    /**
+     * 获取请求数据
+     */
+    private function getRequestData($data)
+    {
+        try {
+            $request = app('request');
+            if ($request) {
+                return $request->all();
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return $data;
+    }
+
+    /**
+     * 获取请求IP
+     */
+    private function getRequestIp()
+    {
+        try {
+            $request = app('request');
+            if ($request) {
+                return $request->ip();
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    /**
+     * 获取用户代理
+     */
+    private function getUserAgent()
+    {
+        try {
+            $request = app('request');
+            if ($request) {
+                return $request->userAgent();
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    /**
+     * 获取追踪ID
+     */
+    private function getTraceId()
+    {
+        try {
+            $request = app('request');
+            if ($request) {
+                return $request->header('X-Trace-Id') ?? uniqid('trace_', true);
+            }
+        } catch (\Exception $e) {
+            // 忽略错误
+        }
+        return uniqid('trace_', true);
     }
 }

@@ -170,10 +170,10 @@ class PostService
                 if($v['topics']){
                     $topicService=new TopicService();
                     if(!$fromAdmin){
-                        $filterTopics=['topic_id'=>$v['topics'],'status'=>1];
+                        $filterTopics=['topic_id'=>$v['topics'],'status'=>1,'company_id'=>$v['company_id']];
                     }
                     else{
-                        $filterTopics=['topic_id'=>$v['topics']];
+                        $filterTopics=['topic_id'=>$v['topics'],'company_id'=>$v['company_id']];
                     }
                     $itemList=$topicService->getTopicList($filterTopics,'topic_id,topic_name,status,created');
                     $v['topics']=$itemList['list']??[];

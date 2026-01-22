@@ -7,14 +7,14 @@ return [
     
     // 报名活动相关
     'activity_not_exist' => '活动不存在',
-    'parameter_error' => '参数错误：{status}',
+    'parameter_error' => '参数错误：:status',
     'only_members_can_register' => '只有会员才可以参与报名',
     'please_specify_registration_activity' => '请指定报名活动',
     'activity_too_popular_try_later' => '活动太火爆了，请稍后再试',
     'activity_too_popular_try_later_short' => '活动太火爆，请稍后再试',
     'registration_data_cannot_empty' => '报名数据不能为空',
-    'field_required' => '{field_title}必填',
-    'field_required_with_card' => '{card_title}下的{field_title}必填',
+    'field_required' => ':field_title必填',
+    'field_required_with_card' => ':card_title下的:field_title必填',
     'please_enter_correct_mobile' => '请填写正确的手机号',
     'activity_registration_not_allow_modify' => '活动报名不允许修改',
     'please_fill_registration_form' => '请填写报名表单',
@@ -90,9 +90,9 @@ return [
     
     // 其他服务错误消息
     'data_error' => '数据有误',
-    'field_required_simple' => '{field_title}必填',
-    'field_must_be_number' => '{field_title}必须是数字',
-    'activity_group_code_error' => '活动分组编码错误：{group_no}',
+    'field_required_simple' => ':field_title必填',
+    'field_must_be_number' => ':field_title必须是数字',
+    'activity_group_code_error' => '活动分组编码错误：:group_no',
     
     // checkActivityValid方法错误消息
     'activity_not_exist_err' => '活动不存在',

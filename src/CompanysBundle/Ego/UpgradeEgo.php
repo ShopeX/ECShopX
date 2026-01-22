@@ -709,6 +709,7 @@ class UpgradeEgo
      */
     public function getSwooleLicense()
     {
+        return ['Product_type'=>'ECSHOPX_OPENSOURCE'];
         // return ['Product_type'=>'ECSHOPX2_FREE'];
         if (!function_exists('swoole_get_license')) {
             throw new \Exception('请确认swoole_loader扩展已正确安装！');

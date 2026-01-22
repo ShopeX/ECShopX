@@ -261,10 +261,20 @@ class UploadFileService
             $demoDataList = $this->uploadFile->getDemoData();
         }
 
+        // 确定需要设置为文本格式的列
+        $textColumns = [];
+        if (method_exists($this->uploadFile, 'getTextColumns')) {
+            $textColumns = $this->uploadFile->getTextColumns();
+        } elseif ($fileType === 'distributor_info') {
+            // 对于分销商信息模板，设置"经营开始时间"和"经营结束时间"为文本格式
+            $textColumns = ['经营开始时间', '经营结束时间'];
+        }
+
         $data = [
             [
                 'sheetname' => $fileName,
                 'list' => array_merge($dataList, $demoDataList),
+                'textColumns' => $textColumns,
             ]
         ];
         if ($title['headerInfo']) {

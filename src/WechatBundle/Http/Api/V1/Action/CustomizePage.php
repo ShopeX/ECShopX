@@ -82,13 +82,17 @@ class CustomizePage extends Controller
         $params['is_open'] = (isset($params['is_open']) && (($params['is_open'] === "false" || $params['is_open'] === false || $params['is_open'] === 0 || $params['is_open'] === '0'))) ? false : true;
         $companyId = app('auth')->user()->get('company_id');
         $params['company_id'] = $companyId;
-        if ($params['is_open'] == 1 || $params['is_open'] == true || $params['is_open'] == '1' || $params['is_open'] == 'true') {
+        // 只有当page_type为"my"且is_open为1时，才校验"只能开启一个"的规则
+        if (($params['is_open'] == 1 || $params['is_open'] == true || $params['is_open'] == '1' || $params['is_open'] == 'true') 
+            && isset($params['page_type']) && $params['page_type'] === 'my') {
             $cfilter['is_open'] = 1;
             $cfilter['company_id'] = $companyId;
-            $cfilter['page_type'] = $params['page_type'];
-            $cfilter['template_name'] = $params['template_name'];
+            $cfilter['page_type'] = 'my';
+            // 限制相同的template_name，与列表接口保持一致
+            if (isset($params['template_name']) && $params['template_name'] !== '') {
+                $cfilter['template_name'] = $params['template_name'];
+            }
             $count = $this->CustomizePageService->count($cfilter);
-            app('log')->info(__FUNCTION__.':'.__LINE__.':count:'.json_encode($count));
             if ($count > 0) {
                 return $this->response->array(['status' => false, 'message' => "已经有启用的模版", 'status_code' => 422]);
             }
@@ -144,16 +148,39 @@ class CustomizePage extends Controller
         $filter['id'] = $id;
         $filter['company_id'] = $companyId;
 
-        if ($params['is_open'] == 1 || $params['is_open'] == true || $params['is_open'] == '1' || $params['is_open'] == 'true') {
-            $page_type = $request->input('page_type', 'my');
-            $cfilter['is_open'] = 1;
-            $cfilter['id'] = ['!=', $id];
-            $cfilter['company_id'] = $companyId;
-            $cfilter['page_type'] = $page_type;
-            $cfilter['template_name'] = $params['template_name'];
-            $count = $this->CustomizePageService->count($cfilter);
-            if ($count > 0) {
-                return $this->response->array(['status' => false, 'message' => "已经有启用的模版", 'status_code' => 422]);
+        // 只有当page_type为"my"且is_open为1时，才校验"只能开启一个"的规则
+        if (($params['is_open'] == 1 || $params['is_open'] == true || $params['is_open'] == '1' || $params['is_open'] == 'true')) {
+            // 先获取当前记录的完整信息
+            $currentPage = $this->CustomizePageService->getInfoById($id);
+            if (!$currentPage) {
+                throw new ResourceException("自定义页面不存在");
+            }
+            // 获取page_type（优先从请求中获取，否则从数据库读取）
+            $page_type = $request->input('page_type');
+            if (empty($page_type)) {
+                $page_type = $currentPage['page_type'] ?? null;
+            }
+            // 只有当page_type为"my"时，才进行校验
+            if ($page_type === 'my') {
+                // 如果当前记录本身就是开启的，允许保持开启状态
+                $currentIsOpen = isset($currentPage['is_open']) && ($currentPage['is_open'] == 1 || $currentPage['is_open'] == true || $currentPage['is_open'] == '1');
+                if (!$currentIsOpen) {
+                    // 当前记录是关闭的，要开启它时，检查是否有其他开启的记录（限制相同的template_name）
+                    $cfilter['is_open'] = 1;
+                    $cfilter['id'] = ['!=', $id];
+                    $cfilter['company_id'] = $companyId;
+                    $cfilter['page_type'] = 'my';
+                    // 限制相同的template_name，与列表接口保持一致
+                    if (isset($params['template_name']) && $params['template_name'] !== '') {
+                        $cfilter['template_name'] = $params['template_name'];
+                    } elseif (isset($currentPage['template_name']) && $currentPage['template_name'] !== '') {
+                        $cfilter['template_name'] = $currentPage['template_name'];
+                    }
+                    $count = $this->CustomizePageService->count($cfilter);
+                    if ($count > 0) {
+                        return $this->response->array(['status' => false, 'message' => "已经有启用的模版", 'status_code' => 422]);
+                    }
+                }
             }
         }
 
@@ -196,6 +223,20 @@ class CustomizePage extends Controller
      *         required=false,
      *         type="string"
      *     ),
+     *     @SWG\Parameter(
+     *         name="is_open",
+     *         in="query",
+     *         description="是否开启 1:开启 0:关闭",
+     *         required=false,
+     *         type="integer"
+     *     ),
+     *     @SWG\Parameter(
+     *         name="page_name",
+     *         in="query",
+     *         description="页面名称（支持模糊查询）",
+     *         required=false,
+     *         type="string"
+     *     ),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *                  @SWG\Property( property="total_count", type="string", example="20"),
@@ -219,7 +260,7 @@ class CustomizePage extends Controller
      */
     public function getCustomizepageList(Request $request)
     {
-        $params = $request->all('template_name', 'page', 'pageSize', 'page_type');
+        $params = $request->all('template_name', 'page', 'pageSize', 'page_type', 'is_open', 'page_name');
         $page = $params['page'] ? intval($params['page']) : 1;
         $pageSize = $params['pageSize'] ? intval($params['pageSize']) : $this->limit;
 
@@ -227,8 +268,16 @@ class CustomizePage extends Controller
         $filter['company_id'] = $companyId;
         $filter['template_name'] = $params['template_name'];
         $params['page_type'] = $params['page_type'] ? $params['page_type'] : 'normal';
+        // is_open 参数：不传时查全部，传了再使用传入的值查询
+        if (isset($params['is_open']) && $params['is_open'] !== '' && $params['is_open'] !== null) {
+            $filter['is_open'] = intval($params['is_open']);
+        }
         if ($params['page_type']) {
             $filter['page_type'] = $params['page_type'];
+        }
+        // page_name 参数：支持模糊查询
+        if (isset($params['page_name']) && $params['page_name'] !== '' && $params['page_name'] !== null) {
+            $filter['page_name|contains'] = $params['page_name'];
         }
         $orderBy = ['id' => 'DESC'];
         $result = $this->CustomizePageService->lists($filter, "*", $page, $pageSize, $orderBy);

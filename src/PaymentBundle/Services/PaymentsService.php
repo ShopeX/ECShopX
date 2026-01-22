@@ -701,4 +701,68 @@ class PaymentsService
 
         return $result;
     }
+
+    /**
+     * 获取支付配置开关状态列表
+     * 
+     * @param int $companyId 公司ID
+     * @param int $distributorId 店铺ID，0表示平台
+     * @param string $operatorType 操作员类型
+     * @param int $operatorId 操作员ID
+     * @return array 返回各支付方式的开关状态
+     */
+    public function getPaymentOpenStatusList($companyId)
+    {
+        $result = [];
+        
+        // 微信支付配置
+        // 使用 getDefault = true，会根据 payment_subject 自动调整到正确的配置
+        $wxpayService = new WechatPayService(0, true);
+        $wxpayServiceWrapper = new PaymentsService($wxpayService);
+        $wxpayConfig = $wxpayServiceWrapper->getPaymentSetting($companyId);
+        $result['wxpay'] = [
+            'is_open' => $this->normalizeIsOpen($wxpayConfig['is_open'] ?? false),
+        ];
+        
+        // 支付宝配置
+        // 使用 getDefault = true，会根据 payment_subject 自动调整到正确的配置
+        $alipayService = new AlipayService(0, true);
+        $alipayServiceWrapper = new PaymentsService($alipayService);
+        $alipayConfig = $alipayServiceWrapper->getPaymentSetting($companyId);
+        $result['alipay'] = [
+            'is_open' => $this->normalizeIsOpen($alipayConfig['is_open'] ?? false),
+        ];
+        
+        $chinaumsService = new ChinaumsPayService();
+        $chinaumsServiceWrapper = new PaymentsService($chinaumsService);
+        $chinaumsConfig = $chinaumsServiceWrapper->getPaymentSetting($companyId);
+        $result['chinaumspay'] = [
+            'is_open' => $this->normalizeIsOpen($chinaumsConfig['is_open'] ?? false),
+        ];
+        
+        return $result;
+    }
+
+    /**
+     * 统一is_open字段格式为bool类型
+     * 
+     * @param mixed $value
+     * @return bool
+     */
+    private function normalizeIsOpen($value)
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        
+        if (is_string($value)) {
+            return in_array(strtolower($value), ['true', '1', 'yes', 'on']);
+        }
+        
+        if (is_numeric($value)) {
+            return (bool)$value;
+        }
+        
+        return false;
+    }
 }

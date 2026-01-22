@@ -279,6 +279,7 @@ class Companys extends BaseController
         $result['redis_version'] = app('redis')->getProfile()->getVersion();
         // 检查license有效期
         $result['license']['show_expier_tip'] = 0;
+        /**
         if (extension_loaded('swoole_loader')) {
             $license = swoole_get_license();
             $license = reset($license);
@@ -290,7 +291,7 @@ class Companys extends BaseController
                 }
             }
         }
-
+        **/
         return $this->response->array($result);
     }
 

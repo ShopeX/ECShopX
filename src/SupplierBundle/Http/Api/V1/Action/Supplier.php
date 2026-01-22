@@ -98,7 +98,7 @@ class Supplier extends Controller
         $supplier_name = trim($request->input('supplier_name', ''));
         $mobile = trim($request->input('mobile', ''));
         $page = intval($request->input('page', 1));
-        $pageSize = intval($request->input('page_size', 20));
+        $pageSize = intval($request->input('pageSize', 20));
 
         $filter = [];
         $filter['company_id'] = $company_id;

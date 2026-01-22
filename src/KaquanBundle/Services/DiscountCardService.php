@@ -531,7 +531,8 @@ class DiscountCardService implements KaquanInterface
             $detail['use_scenes'] = "QUICK";
         }
 
-        $detail['receive'] = ($detail['receive'] == 'true') ? true : false;
+        // receive 字段在数据库中存储为整数 0 或 1，转换为布尔值返回
+        $detail['receive'] = ($detail['receive'] == '1' || $detail['receive'] == 1) ? true : false;
         $detail['tag_ids'] = $detail['rel_tag_ids'] = array_filter(explode(',', $detail['tag_ids']));
 
         //获取商品标签
@@ -1441,6 +1442,11 @@ class DiscountCardService implements KaquanInterface
             $dataInfo['use_bound'] = self::FOR_BRAND_ITEMS;
             $dataInfo['tag_ids'] = '';
             $dataInfo['create_queue'] = true;
+        }
+
+        // 处理 receive 字段，统一转换为整数 0 或 1
+        if (isset($dataInfo['receive'])) {
+            $dataInfo['receive'] = $dataInfo['receive'] == true ? 1 : 0;
         }
     }
 

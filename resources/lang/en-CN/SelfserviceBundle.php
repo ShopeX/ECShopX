@@ -7,14 +7,14 @@ return [
     
     // Registration activity related
     'activity_not_exist' => 'Activity does not exist',
-    'parameter_error' => 'Parameter error: {status}',
+    'parameter_error' => 'Parameter error: :status',
     'only_members_can_register' => 'Only members can participate in registration',
     'please_specify_registration_activity' => 'Please specify registration activity',
     'activity_too_popular_try_later' => 'Activity is too popular, please try again later',
     'activity_too_popular_try_later_short' => 'Activity is too popular, please try again later',
     'registration_data_cannot_empty' => 'Registration data cannot be empty',
-    'field_required' => '{field_title} is required',
-    'field_required_with_card' => '{field_title} under {card_title} is required',
+    'field_required' => ':field_title is required',
+    'field_required_with_card' => ':field_title under :card_title is required',
     'please_enter_correct_mobile' => 'Please enter a valid mobile number',
     'activity_registration_not_allow_modify' => 'Activity registration cannot be modified',
     'please_fill_registration_form' => 'Please fill in the registration form',
@@ -90,9 +90,9 @@ return [
     
     // Other service error messages
     'data_error' => 'Data error',
-    'field_required_simple' => '{field_title} is required',
-    'field_must_be_number' => '{field_title} must be a number',
-    'activity_group_code_error' => 'Activity group code error: {group_no}',
+    'field_required_simple' => ':field_title is required',
+    'field_must_be_number' => ':field_title must be a number',
+    'activity_group_code_error' => 'Activity group code error: :group_no',
     
     // checkActivityValid method error messages
     'activity_not_exist_err' => 'Activity does not exist',

@@ -232,8 +232,119 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
             $type = is_int($val) ? \PDO::PARAM_INT : \PDO::PARAM_STR;
             $stmt->bindValue($key, $val, $type);
         }
-        return $stmt->executeQuery()->fetchAllAssociative();
+        $result = $stmt->executeQuery()->fetchAllAssociative();
+        return  $result ? $result : [];
     }
 
+    public function getOneByFilter(array $filter = []): array
+    {
+        $table = $this->table;
+        $whereData = $this->_filter($filter);
+        $whereClauses = $whereData['whereClauses'];
+        $params = $whereData['params'];
+        // 构造 SQL
+        $sql = "SELECT * FROM {$table}";
+        if (!empty($whereClauses)) {
+            $sql .= ' WHERE ' . implode(' AND ', $whereClauses);
+        }
+
+        $conn = app("registry")->getConnection("default");
+        $stmt = $conn->prepare($sql);
+        foreach ($params as $key => $val) {
+            $type = is_int($val) ? \PDO::PARAM_INT : \PDO::PARAM_STR;
+            $stmt->bindValue($key, $val, $type);
+        }
+        $result = $stmt->executeQuery()->fetchAssociative();
+        return  $result ? $result : [];
+    }
+
+    public function deleteBy(array $filter)
+    {
+        $table = $this->table;
+        $whereData = $this->_filter($filter);
+        $whereClauses = $whereData['whereClauses'];
+        $params = $whereData['params'];
+        // 构造sql
+        $sql = "DELETE FROM {$table}";
+        if (!empty($whereClauses)) {
+            $sql .= ' WHERE ' . implode(' AND ', $whereClauses);
+        }
+        $conn = app("registry")->getConnection("default");
+        $stmt = $conn->prepare($sql);
+        foreach ($params as $key => $val) {
+            $type = is_int($val) ? \PDO::PARAM_INT : \PDO::PARAM_STR;
+            $stmt->bindValue($key, $val, $type);
+        }
+
+        return $stmt->executeQuery()->fetchAssociative();    
+    }
+    
+    private function _filter($filter)
+    {
+        $whereClauses = [];
+        $params = [];
+        // 构造 WHERE 语句（与前面 findByFilter 相同逻辑）
+        foreach ($filter as $rawKey => $value) {
+            if(is_array($value)){
+                if (strpos($rawKey, '|') === false) {
+                    $rawKey .= '|in';
+                }
+            }
+            [$field, $operator] = explode('|', $rawKey) + [null, 'eq'];
+            $paramKey = 'param_' . uniqid($field . '_', false);
+
+            switch ($operator) {
+                case 'eq':
+                case '':
+                    $whereClauses[] = "`$field` = :$paramKey";
+                    $params[$paramKey] = $value;
+                    break;
+                case 'lt':
+                    $whereClauses[] = "`$field` < :$paramKey";
+                    $params[$paramKey] = $value;
+                    break;
+                case 'lte':
+                    $whereClauses[] = "`$field` <= :$paramKey";
+                    $params[$paramKey] = $value;
+                    break;
+                case 'gt':
+                    $whereClauses[] = "`$field` > :$paramKey";
+                    $params[$paramKey] = $value;
+                    break;
+                case 'gte':
+                    $whereClauses[] = "`$field` >= :$paramKey";
+                    $params[$paramKey] = $value;
+                    break;
+                case 'neq':
+                    $whereClauses[] = "`$field` != :$paramKey";
+                    $params[$paramKey] = $value;
+                    break;
+                case 'contains':
+                    $whereClauses[] = "`$field` LIKE :$paramKey";
+                    $params[$paramKey] = '%' . $value . '%';
+                    break;
+                case 'in':
+                    if (!is_array($value) || empty($value)) {
+                        break;
+                    }
+                    $inParams = [];
+                    foreach ($value as $i => $v) {
+                        $inKey = "{$paramKey}_{$i}";
+                        $inParams[] = ":$inKey";
+                        $params[$inKey] = $v;
+                    }
+                    $whereClauses[] = "`$field` IN (" . implode(', ', $inParams) . ")";
+                    break;
+                case 'null':
+                    $whereClauses[] = "`$field` IS NULL";
+                    break;
+                case 'notnull':
+                    $whereClauses[] = "`$field` IS NOT NULL";
+                    break;
+            }
+        }
+
+        return ['whereClauses' => $whereClauses, 'params' => $params];
+    }
 
 }

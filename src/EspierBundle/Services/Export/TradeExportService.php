@@ -99,7 +99,14 @@ class TradeExportService implements ExportFileInterface
             'deposit' => '预存款',
             'wxpay' => '微信',
             'pos' => 'POS刷卡',
-            'localPay' => '零元订单'
+            'localPay' => '零元订单',
+            'offline_pay' => '线下转账',
+            'point' => '积分支付',
+            'wxpaypos' => '微信扫码支付',
+            'wxpayh5' => '微信H5支付',
+            'wxpaypc' => '微信PC支付',
+            'alipay' => '支付宝支付',
+            'alipayh5' => '支付宝H5支付',
         ];
         $tradeService = new TradeService();
         $memberService = new MemberService();
@@ -170,7 +177,12 @@ class TradeExportService implements ExportFileInterface
                     } elseif ($k == "tradeState" && isset($value[$k])) {
                         $orderList[$key][$k] = $tradeState[$value[$k]] ?? '--';
                     } elseif ($k == "payType" && isset($value[$k])) {
-                        $orderList[$key][$k] = $payType[$value[$k]] ?? '--';
+                        // 特殊处理：当 payType='localPay' 且 payChannel='offline_pay' 时，显示为"线下转账"
+                        if ($value[$k] == 'localPay' && isset($value['payChannel']) && $value['payChannel'] == 'offline_pay') {
+                            $orderList[$key][$k] = '线下转账';
+                        } else {
+                            $orderList[$key][$k] = $payType[$value[$k]] ?? '--';
+                        }
                     } elseif ($k == "store_name") {
                         $orderList[$key][$k] = $storeData[$value['distributorId']]['name'] ?? '--';
                     } elseif ($k == "shop_name") {

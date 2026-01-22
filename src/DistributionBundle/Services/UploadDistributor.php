@@ -62,8 +62,8 @@ class UploadDistributor
         '店铺详细地址门牌号' => ['size' => 255, 'remarks' => '店铺详细地址门牌号', 'is_need' => false],
         '经营开始时间' => ['size' => 255, 'remarks' => '经营开始时间，以0点开始，半个小时一分隔,excel文本类型', 'is_need' => false],
         '经营结束时间' => ['size' => 255, 'remarks' => '经营结束时间，以0点开始，半个小时一分隔，结束营业时间需小于开始时间,excel文本类型', 'is_need' => false],
-        '开启快递配送' => ['size' => 255, 'remarks' => '开启快递配送，1是0否', 'is_need' => true],
-        '自动同步商品' => ['size' => 255, 'remarks' => '自动同步商品，1是0否', 'is_need' => true],
+        '开启快递配送' => ['size' => 255, 'remarks' => '开启快递配送，是或否', 'is_need' => true],
+        '自动同步商品' => ['size' => 255, 'remarks' => '自动同步商品，是或否', 'is_need' => true],
         '店铺LOGO' => ['size' => 255, 'remarks' => '店铺LOGO', 'is_need' => false],
         '店铺背景' => ['size' => 255, 'remarks' => '店铺背景', 'is_need' => false],
         '旺店通ERP店铺号' => ['size' => 255, 'remarks' => '旺店通ERP店铺号', 'is_need' => false],
@@ -207,7 +207,19 @@ class UploadDistributor
 
         ];
         if (!empty($data['hour1']) && !empty($data['hour2'])) {
-            $insertData['hour'] = $data['hour1'] . '-' . $data['hour2'];
+            // 验证时间格式，必须是 HH:MM 格式（如 02:00）
+            $hour1 = trim($data['hour1']);
+            $hour2 = trim($data['hour2']);
+            
+            // 验证格式：必须是 HH:MM，且只能有一个冒号
+            if (!preg_match('/^([0-1][0-9]|2[0-3]):([0-5][0-9])$/', $hour1)) {
+                throw new ResourceException('错误，经营开始时间格式错误');
+            }
+            if (!preg_match('/^([0-1][0-9]|2[0-3]):([0-5][0-9])$/', $hour2)) {
+                throw new ResourceException('错误，经营结束时间格式错误');
+            }
+            
+            $insertData['hour'] = $hour1 . '-' . $hour2;
         }
 
         if ($data['is_delivery'] === '是') {
@@ -235,7 +247,26 @@ class UploadDistributor
             $insertData['jst_shop_id'] = $data['jst_shop_id'];
         }
 
-        $mapData = MapService::make($companyId)->getLatAndLng($fir.$sec.$thi, $data['addr2']);
+        // 拼接完整地址，与getAreaByAddress API保持一致
+        // 如果城市和省相同（如直辖市），只保留一个
+        if ($fir === $sec) {
+            $fullAddress = $sec . $thi . ($data['addr2'] ?? '');
+        } else {
+            $fullAddress = $fir . $sec . $thi . ($data['addr2'] ?? '');
+        }
+        
+        // region参数只传城市名（去除"市"、"省"等后缀），用于限制搜索范围
+        // 腾讯地图API要求region只传城市名，如"上海"，不能传"上海市"或"上海市上海市徐汇区"
+        // 如果城市和省相同，使用省名；否则使用城市名
+        $regionName = ($fir === $sec) ? $fir : $sec;
+        $cityName = str_replace(['市', '省', '自治区', '特别行政区'], '', $regionName);
+        
+        // 使用完整地址获取经纬度，region参数传入城市名用于限制搜索范围
+        $mapData = MapService::make($companyId)->getLatAndLng($cityName, $fullAddress);
+        app('log')->info('uploadDistributor::region::'.$cityName.'::fullAddress::'.$fullAddress.'::mapData:'.json_encode([
+            'lat' => $mapData->getLat(),
+            'lng' => $mapData->getLng()
+        ]));
         $insertData["lat"] = $mapData->getLat(); // 经度
         $insertData["lng"] = $mapData->getLng(); // 纬度
         $distributorData = $distributorRepository->getInfo(['shop_code' => $data['shop_code']]);

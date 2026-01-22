@@ -283,11 +283,11 @@ class DiscountNewGiftCardService implements KaquanInterface
             throw new ResourceException(trans('KaquanBundle.lock_time_cannot_exceed_usage_time'));
         }
 
-        // wtf
+        // 处理 receive 字段，统一转换为整数 0 或 1
         if (isset($params['receive'])) {
-            $params['receive'] = ($params['receive'] == 'true') ? 'true' : 'false';
+            $params['receive'] = $params['receive'] == true ? 1 : 0;
         } elseif ($is_create) {
-            $params['receive'] = 'false';
+            $params['receive'] = 0;
         }
 
         // 照着以前的逻辑转义这些参数
