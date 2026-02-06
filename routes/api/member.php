@@ -45,6 +45,7 @@ $api->version('v1', function($api) {
         $api->put('/member/salesman',   ['name'=>'设置会员的导购员','middleware'=>'activated',  'as' => 'member.upate.salesman', 'uses' =>'Members@setMemberSalesman']);
         $api->put('/member/grade',   ['name'=>'更新会员等级','middleware'=>'activated',  'as' => 'member.upate.grade_id', 'uses' =>'Members@updateGradeById']);
         $api->patch('/member/grade',   ['name'=>'批量更新会员等级','middleware'=>'activated',  'as' => 'member.upate.grade_ids', 'uses' =>'Members@updateGrade']);
+        $api->put('/member/regDistributor',   ['name'=>'批量更新会员注册分销商','middleware'=>'activated',  'as' => 'member.update.reg_distributor', 'uses' =>'Members@reChangeRegDistributor']);
         $api->get('/operate/loglist',   ['name'=>'获取会员操作日志','middleware'=>'activated',  'as' => 'member.operate.logs', 'uses' =>'Members@gerMemberOperateLogList']);
 
 
@@ -88,6 +89,21 @@ $api->version('v1', function($api) {
         //信任登录列表
         $api->post('/members/trustlogin/list',['name'=>'获取信任登录列表','middleware'=>'activated', 'as' => 'member.trustlogin.list', 'uses' =>'TrustLogin@getTrustLoginList']);
         $api->put('/members/trustlogin/setting',['name'=>'保存信任登录状态','middleware'=>'activated', 'as' => 'member.trustlogin.setting', 'uses' =>'TrustLogin@saveStatusSetting']);
+
+
+        //标签组相关路由
+        $api->post('/member/tag-group', ['name' => '新增标签组', 'middleware' => 'activated', 'as' => 'member.taggroup.add', 'uses' => 'MemberTags@createTagGroup']);
+        $api->delete('/member/tag-group/{group_id}', ['name' => '删除标签组', 'middleware' => 'activated', 'as' => 'member.taggroup.delete', 'uses' => 'MemberTags@deleteTagGroup']);
+        $api->get('/member/tag-group', ['name' => '标签组列表', 'middleware' => 'activated', 'as' => 'member.taggroup.list', 'uses' => 'MemberTags@getTagGroupList']);
+        $api->put('/member/tag-group/{group_id}', ['name' => '编辑标签组', 'middleware' => 'activated', 'as' => 'member.taggroup.update', 'uses' => 'MemberTags@updateTagGroup']);
+
+        //人群圈选路由
+        $api->get('/member/segment-rule/structure', ['name'=>'获取规则结构配置','middleware'=>'activated', 'as' => 'member.segment.rule.structure', 'uses' =>'MemberTagAction@getRuleStructure']);
+        $api->post('/member/segment-rule/preview', ['name'=>'预览人群规则（查询匹配的用户ID）','middleware'=>'activated', 'as' => 'member.segment.rule.preview', 'uses' =>'MemberTagAction@previewSegmentRule']);
+        $api->get('/member/segment-rule', ['name'=>'获取人群规则列表','middleware'=>'activated', 'as' => 'member.segment.rule.list', 'uses' =>'MemberTagAction@getSegmentRuleList']);
+        $api->post('/member/segment-rule', ['name'=>'创建人群规则','middleware'=>'activated', 'as' => 'member.segment.rule.create', 'uses' =>'MemberTagAction@createSegmentRule']);
+        $api->get('/member/segment-rule/{rule_id}', ['name'=>'查看人群规则详情','middleware'=>'activated', 'as' => 'member.segment.rule.get', 'uses' =>'MemberTagAction@getSegmentRule']);
+        $api->put('/member/segment-rule/{rule_id}', ['name'=>'编辑人群规则','middleware'=>'activated', 'as' => 'member.segment.rule.update', 'uses' =>'MemberTagAction@updateSegmentRule']);
 
     });
 });

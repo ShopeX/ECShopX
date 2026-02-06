@@ -50,6 +50,13 @@ class PagesTemplateSet
     private $company_id;
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="regionauth_id", type="bigint", nullable=true, options={"comment":"区域id", "default":0})
+     */
+    private $regionauth_id = 0;
+
+    /**
      * @var string
      *
      * @ORM\Column(name="index_type", nullable=true, type="integer", options={"comment":"首页类型 1总部首页 2店铺首页", "default":1})
@@ -137,6 +144,30 @@ class PagesTemplateSet
     public function getCompanyId()
     {
         return $this->company_id;
+    }
+
+    /**
+     * Set regionauthId.
+     *
+     * @param int|null $regionauthId
+     *
+     * @return PagesTemplateSet
+     */
+    public function setRegionauthId($regionauthId = null)
+    {
+        $this->regionauth_id = $regionauthId;
+
+        return $this;
+    }
+
+    /**
+     * Get regionauthId.
+     *
+     * @return int|null
+     */
+    public function getRegionauthId()
+    {
+        return $this->regionauth_id;
     }
 
     /**

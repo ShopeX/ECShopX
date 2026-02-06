@@ -300,6 +300,20 @@ class ItemsCategory extends BaseController
      *         required=true,
      *         type="integer"
      *     ),
+     *     @SWG\Parameter(
+     *         name="item_id",
+     *         in="query",
+     *         description="商品ID",
+     *         required=false,
+     *         type="integer"
+     *     ),
+     *     @SWG\Parameter(
+     *         name="is_point",
+     *         in="query",
+     *         description="是否积分商品，1=积分商品，0=普通商品",
+     *         required=false,
+     *         type="integer"
+     *     ),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -327,10 +341,11 @@ class ItemsCategory extends BaseController
      *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/ServiceErrorRespones") ) )
      * )
      */
-    public function getCategoryInfo(request $request, $company_id, $category_id)
+    public function getCategoryInfo($company_id, $category_id)
     {
         $filter['category_id'] = $category_id;
         $filter['company_id'] = $company_id;
+        
         $validator = app('validator')->make($filter, [
             'category_id' => 'required|integer|min:1',
             'company_id' => 'required|integer|min:1',
@@ -338,6 +353,7 @@ class ItemsCategory extends BaseController
         if ($validator->fails()) {
             throw new ResourceException('删除分类出错.', $validator->errors());
         }
+        
         $itemsCategoryService = new ItemsCategoryService();
         $result = $itemsCategoryService->getCategoryInfo($filter);
         return $this->response->array($result);
@@ -417,6 +433,9 @@ class ItemsCategory extends BaseController
             if ($exist && $exist['category_id'] != $info['category_id']) {
                 throw new ResourceException('分类名称不能重复');
             }
+        }
+        if (empty($data['customize_page_id'])) {
+            $data['customize_page_id'] = 0;
         }
 
         $result = $itemsCategoryService->updateOneBy(['category_id' => $category_id, 'company_id' => $company_id], $data);

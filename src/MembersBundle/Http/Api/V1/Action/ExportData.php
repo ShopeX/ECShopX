@@ -23,6 +23,7 @@ use Dingo\Api\Exception\ResourceException;
 
 use App\Http\Controllers\Controller as Controller;
 use MembersBundle\Services\MemberService;
+use MembersBundle\Services\MemberTagsService;
 use MembersBundle\Traits\MemberSearchFilter;
 use EspierBundle\Traits\GetExportServiceTraits;
 use EspierBundle\Jobs\ExportFileJob;
@@ -151,6 +152,53 @@ class ExportData extends Controller
                 $params['couponsids'] = $request->get('couponsids');
                 $params['source_from'] = '商城后台发放';
                 $params['trigger_time'] = time();
+
+                // 如果传了 tag_ids，根据标签筛选会员
+                $tagIds = $request->get('tag_ids');
+                if (!empty($tagIds)) {
+                    // 将 tag_ids 转换为数组
+                    if (!is_array($tagIds)) {
+                        $tagIds = explode(',', $tagIds);
+                    }
+                    $tagIds = array_filter(array_map('intval', $tagIds));
+                    
+                    if (!empty($tagIds)) {
+                        app('log')->info('[ExportData][give_coupon] 根据标签筛选会员', [
+                            'company_id' => $companyId,
+                            'tag_ids' => $tagIds,
+                        ]);
+                        
+                        // 根据标签获取会员ID列表（取并集：拥有任意一个标签的会员）
+                        $conn = app('registry')->getConnection('default');
+                        $qb = $conn->createQueryBuilder();
+                        $qb->select('DISTINCT user_id')
+                            ->from('members_rel_tags')
+                            ->where($qb->expr()->eq('company_id', $qb->expr()->literal($companyId)))
+                            ->andWhere($qb->expr()->in('tag_id', $tagIds));
+                        
+                        $result = $qb->execute()->fetchAll();
+                        $tagUserIds = array_column($result, 'user_id');
+                        
+                        app('log')->info('[ExportData][give_coupon] 根据标签获取到的会员数量', [
+                            'company_id' => $companyId,
+                            'tag_ids' => $tagIds,
+                            'member_count' => count($tagUserIds),
+                        ]);
+                        
+                        // 如果原来 filter 中已经有 user_id，取交集；否则直接使用标签筛选的会员ID
+                        if (!empty($filter['user_id'])) {
+                            $existingUserIds = is_array($filter['user_id']) ? $filter['user_id'] : [$filter['user_id']];
+                            $filter['user_id'] = array_intersect($existingUserIds, $tagUserIds);
+                        } else {
+                            $filter['user_id'] = $tagUserIds;
+                        }
+                        
+                        // 如果没有匹配的会员，直接返回
+                        if (empty($filter['user_id'])) {
+                            return $this->response->array(['status' => true, 'msg' => '根据标签未找到符合条件的会员']);
+                        }
+                    }
+                }
 
                 app('log')->debug(":user-number:couponsids: " . json_encode($params['couponsids']));
                 $discountCardService = new DiscountCardService();

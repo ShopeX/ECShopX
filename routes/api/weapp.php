@@ -48,13 +48,14 @@ $api->version('v1', function($api) {
         $api->post('/wxa/stats/retaininfo', [ 'name'=>'小程序访问留存','middleware'=>'activated',  'as' => 'wechat.wxa.stats.retaininfo',  'uses'=>'WxappStats@getRetaininfo']);
         $api->post('/wxa/stats/userportrait', [ 'name'=>'小程序用户画像', 'middleware'=>'activated',  'as' => 'wechat.wxa.stats.userportrait',  'uses'=>'WxappStats@getUserPortrait']);
 
-        $api->post('/wxa/customizepage', [ 'name'=>'增加小程序自定义页面','middleware'=>'activated', 'as' => 'wechat.wxa.customizepage.add',  'uses'=>'CustomizePage@createCustomizePage']);
-        $api->put('/wxa/customizepage/{id}', [ 'name'=>'更新小程序自定义页面', 'middleware'=>'activated',  'as' => 'wechat.wxa.customizepage.update',  'uses'=>'CustomizePage@updateCustomizePage']);
-        $api->delete('/wxa/customizepage/{id}', [ 'name'=>'删除小程序自定义页面', 'middleware'=>'activated',  'as' => 'wechat.wxa.customizepage.delete',  'uses'=>'CustomizePage@deleteCustomizePage']);
-        $api->get('/wxa/customizepage/list', ['name'=>'小程序自定义页面列表','middleware'=>'activated','as' => 'wechat.wxa.customizepage.list', 'uses'=>'CustomizePage@getCustomizepageList']);
+        $api->post('/wxa/customizepage', [ 'name'=>'增加小程序自定义页面', 'as' => 'wechat.wxa.customizepage.add',  'uses'=>'CustomizePage@createCustomizePage']);
+        $api->put('/wxa/customizepage/{id}', [ 'name'=>'更新小程序自定义页面', 'as' => 'wechat.wxa.customizepage.update',  'uses'=>'CustomizePage@updateCustomizePage']);
+        $api->delete('/wxa/customizepage/{id}', [ 'name'=>'删除小程序自定义页面', 'as' => 'wechat.wxa.customizepage.delete',  'uses'=>'CustomizePage@deleteCustomizePage']);
+        $api->get('/wxa/customizepage/list', ['name'=>'小程序自定义页面列表', 'as' => 'wechat.wxa.customizepage.list', 'uses'=>'CustomizePage@getCustomizepageList']);
         $api->get('/wxa/customizepage/{id}', ['name'=>'获取小程序自定义页面详情','middleware'=>'activated','as' => 'wechat.wxa.customizepage.info', 'uses'=>'CustomizePage@getCustomizePageInfo']);
-        $api->get('/wxa/salesperson/customizepage', [ 'name'=>'获取导购货架首页','middleware'=>'activated', 'as' => 'wechat.wxa.salesperson.customizepage.get',  'uses'=>'CustomizePage@getSalespersonCustomizePage']);
-
+        $api->get('/wxa/salesperson/customizepage', [ 'name'=>'获取导购货架首页', 'as' => 'wechat.wxa.salesperson.customizepage.get',  'uses'=>'CustomizePage@getSalespersonCustomizePage']);
+        $api->put('/wxa/customizepage/{id}/bindcategory', [ 'name'=>'自定也页面绑定分类ID', 'as' => 'wechat.wxa.customizepage.category.bind',  'uses'=>'CustomizePage@bindCategoryId']);
+        $api->post('/wxa/customizepage/copy/{id}', [ 'name'=>'复制自定义页面', 'as' => 'wechat.wxa.customizepage.category.copy',  'uses'=>'CustomizePage@copy']);
 
         $api->put('/wxa/config/{wxaAppId}', ['name' => '小程序配置', 'middleware' => 'activated', 'as' => 'wechat.wxa.config', 'uses' => 'Wxa@saveConfig']);
         $api->put('/wxappTemplate/wxapp', ['name' => '微信模板编辑', 'middleware' => 'activated', 'as' => 'wechat.wxappTemplate.wxapp', 'uses' => 'wxappTemplate@updateWxappTemplate']);

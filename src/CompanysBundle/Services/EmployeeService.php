@@ -139,16 +139,39 @@ class EmployeeService
         if (isset($params['password']) && $params['password']) {
             $operatorParams['password'] = $params['password'];
         }
-        // $operatorParams['login_name'] = $params['login_name'];
-        $operatorParams['mobile'] = $params['mobile'];
-        $operatorParams['username'] = $params['username'];
+        // 数据未脱敏处理
+        $operatorsService = new OperatorsService();
+        $oldOperatorInfo = $operatorsService->getInfo([
+            'operator_id' => $filter['operator_id'],
+        ]);
+        // 处理 mobile 字段
+        if (strpos($params['mobile'], '*') !== false) {
+            // 如果存在*，使用oldOperatorInfo数据
+            $operatorParams['mobile'] = $oldOperatorInfo['mobile'];
+        } elseif ($params['mobile'] != $oldOperatorInfo['mobile']) {
+            // 如果不存在*并且数据不等于oldOperatorInfo数据，存新数据
+            $operatorParams['mobile'] = $params['mobile'];
+        } else {
+            // 如果不存在*且数据等于oldOperatorInfo数据，保持原值
+            $operatorParams['mobile'] = $oldOperatorInfo['mobile'];
+        }
+        // 处理 username 字段
+        if (strpos($params['username'], '*') !== false) {
+            // 如果存在*，使用oldOperatorInfo数据
+            $operatorParams['username'] = $oldOperatorInfo['username'];
+        } elseif ($params['username'] != $oldOperatorInfo['username']) {
+            // 如果不存在*并且数据不等于oldOperatorInfo数据，存新数据
+            $operatorParams['username'] = $params['username'];
+        } else {
+            // 如果不存在*且数据等于oldOperatorInfo数据，保持原值
+            $operatorParams['username'] = $oldOperatorInfo['username'];
+        }
         $operatorParams['head_portrait'] = $params['head_portrait'];
         $operatorParams['regionauth_id'] = $params['regionauth_id'] ?? 0;
         if (isset($params['distributor_ids'])) {
             $operatorParams['distributor_ids'] = $params['distributor_ids'] ?: [];
         }
         $operatorParams['shop_ids'] = $params['shop_ids'] ?: [];
-        $operatorsService = new OperatorsService();
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {

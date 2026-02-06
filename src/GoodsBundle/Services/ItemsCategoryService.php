@@ -17,10 +17,14 @@
 
 namespace GoodsBundle\Services;
 
+use GoodsBundle\Entities\Items;
+use EspierBundle\Services\BusService;
 use GoodsBundle\Entities\ItemsCategory;
 use Dingo\Api\Exception\ResourceException;
-use EspierBundle\Services\BusService;
+use GoodsBundle\Entities\ItemRelAttributes;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
+use PointsmallBundle\Entities\PointsmallItemRelAttributes;
+use PointsmallBundle\Entities\PointsmallItems;
 
 class ItemsCategoryService
 {
@@ -261,7 +265,7 @@ class ItemsCategoryService
     /**
      * 获取单个分类信息
      */
-    public function getCategoryInfo($filter)
+    public function getCategoryInfo($filter, $otherParams = [])
     {
         $itemInfo = $this->itemsCategoryRepository->getInfo($filter);
         if (!$itemInfo) {
@@ -274,12 +278,49 @@ class ItemsCategoryService
 
         $itemsAttributesService = new ItemsAttributesService();
         $attrList = $itemsAttributesService->getAttrList(['attribute_id' => $attributeIds], 1, 100, ['attribute_sort' => 'asc']);
+        
+        // 如果提供了item_id，获取商品的自定义属性值
+        $customAttributeValues = [];
+        if (isset($otherParams['item_id']) && $otherParams['item_id']) {
+            $isPoint = isset($otherParams['is_point']) ? $otherParams['is_point'] : 0;
+            $customAttributeValues = $this->getItemCustomAttributeValues($otherParams['item_id'], $filter['company_id'], $isPoint, $attributeIds);
+        }
+
         $itemInfo['goods_params'] = [];
         $itemInfo['goods_spec'] = [];
         foreach ($attrList['list'] as $row) {
             if ($row['attribute_type'] == 'item_params') {
+                // 处理商品参数的自定义属性值
+                // 如果有attribute_values列表，需要在对应的属性值上显示自定义值
+                if (isset($row['attribute_values']['list']) && is_array($row['attribute_values']['list'])) {
+                    foreach ($row['attribute_values']['list'] as &$attrValue) {
+                        // 先检查是否有针对该attribute_value_id的自定义值
+                        $key = $row['attribute_id'] . '_' . $attrValue['attribute_value_id'];
+                        if (isset($customAttributeValues[$key])) {
+                            $attrValue['custom_attribute_value'] = $customAttributeValues[$key];
+                            $attrValue['attribute_value'] = $customAttributeValues[$key];
+                        }
+                    }
+                    unset($attrValue);
+                }
+                // 如果attribute_id级别有自定义值，也添加到属性中
+                if (isset($customAttributeValues[$row['attribute_id']])) {
+                    $row['custom_attribute_value'] = $customAttributeValues[$row['attribute_id']];
+                    $row['attribute_value'] = $customAttributeValues[$row['attribute_id']];
+                }
                 $itemInfo['goods_params'][] = $row;
             } else {
+                // 处理规格属性，如果有自定义属性值，合并到属性值列表中
+                if (isset($row['attribute_values']['list']) && is_array($row['attribute_values']['list'])) {
+                    foreach ($row['attribute_values']['list'] as &$attrValue) {
+                        $key = $row['attribute_id'] . '_' . $attrValue['attribute_value_id'];
+                        if (isset($customAttributeValues[$key])) {
+                            $attrValue['custom_attribute_value'] = $customAttributeValues[$key];
+                            $attrValue['attribute_value'] = $customAttributeValues[$key];
+                        }
+                    }
+                    unset($attrValue);
+                }
                 $itemInfo['goods_spec'][] = $row;
             }
         }
@@ -289,6 +330,66 @@ class ItemsCategoryService
         });
 
         return $itemInfo;
+    }
+
+    /**
+     * 获取商品的自定义属性值
+     * @param int $itemId 商品ID
+     * @param int $companyId 公司ID
+     * @param int $isPoint 是否积分商品，1=积分商品，0=普通商品
+     * @param array $attributeIds 属性ID列表
+     * @return array 自定义属性值数组，key为attribute_id或attribute_id_attribute_value_id
+     */
+    private function getItemCustomAttributeValues($itemId, $companyId, $isPoint, $attributeIds)
+    {
+        $customValues = [];
+        
+        // 传入的是多规格默认的default_item_id
+        // 获取所有多规格的item_id
+        if ($isPoint == 1) {
+            // 积分商品，使用PointsmallItemRelAttributes表
+            $itemRelAttributesRepository = app('registry')->getManager('default')->getRepository(PointsmallItemRelAttributes::class);
+            $itemsRepository = app('registry')->getManager('default')->getRepository(PointsmallItems::class);
+        } else {
+            // 普通商品，使用ItemRelAttributes表
+            $itemRelAttributesRepository = app('registry')->getManager('default')->getRepository(ItemRelAttributes::class);
+            $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
+        }
+        $items = $itemsRepository->list([
+            'default_item_id' => $itemId,
+            'company_id' => $companyId,
+        ],[], 100, 1);
+        $itemIds = array_column($items['list'], 'item_id');
+        
+        $relAttributes = $itemRelAttributesRepository->lists([
+            'item_id' => $itemIds,
+            'company_id' => $companyId,
+            'attribute_id' => $attributeIds
+        ], 1, 100);
+        
+        if ($relAttributes['total_count'] > 0) {
+            foreach ($relAttributes['list'] as $relAttr) {
+                if (!empty($relAttr['custom_attribute_value'])) {
+                    if ($relAttr['attribute_type'] == 'item_params') {
+                        // 商品参数类型
+                        if ($relAttr['attribute_value_id']) {
+                            // 如果有attribute_value_id，key为attribute_id_attribute_value_id
+                            $key = $relAttr['attribute_id'] . '_' . $relAttr['attribute_value_id'];
+                            $customValues[$key] = $relAttr['custom_attribute_value'];
+                        } else {
+                            // 如果没有attribute_value_id，key为attribute_id
+                            $customValues[$relAttr['attribute_id']] = $relAttr['custom_attribute_value'];
+                        }
+                    } else if ($relAttr['attribute_type'] == 'item_spec' && $relAttr['attribute_value_id']) {
+                        // 规格类型，key为attribute_id_attribute_value_id
+                        $key = $relAttr['attribute_id'] . '_' . $relAttr['attribute_value_id'];
+                        $customValues[$key] = $relAttr['custom_attribute_value'];
+                    }
+                }
+            }
+        }
+        
+        return $customValues;
     }
 
     public function getItemsCategoryIds($categoryId, $companyId)

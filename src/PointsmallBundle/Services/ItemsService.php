@@ -17,24 +17,25 @@
 
 namespace PointsmallBundle\Services;
 
+use GoodsBundle\Entities\ItemsMedicine;
+use WechatBundle\Services\OpenPlatform;
+use WechatBundle\Services\WeappService;
+use OrdersBundle\Services\RightsService;
+use Dingo\Api\Exception\ResourceException;
+use CompanysBundle\Services\ArticleService;
 use CompanysBundle\Services\SettingService;
 use CrossBorderBundle\Entities\OriginCountry;
-use GoodsBundle\Entities\ItemsMedicine;
 use GoodsBundle\Jobs\MedicineItemsSubmitAudit;
-use GoodsBundle\Repositories\ItemsMedicineRepository;
+use GoodsBundle\Services\ItemsCategoryService;
 use GoodsBundle\Services\ItemsMedicineService;
 use PointsmallBundle\Entities\PointsmallItems;
-use PointsmallBundle\Entities\PointsmallItemRelAttributes;
-use Dingo\Api\Exception\ResourceException;
-use WechatBundle\Services\OpenPlatform;
-use OrdersBundle\Services\RightsService;
-use OrdersBundle\Services\Rights\TimesCardService;
-use CompanysBundle\Services\ArticleService;
-use WechatBundle\Services\Material as MaterialService;
-use WechatBundle\Services\WeappService;
-use OrdersBundle\Services\ShippingTemplatesService;
-use GoodsBundle\Services\ItemsCategoryService;
 use GoodsBundle\Services\ItemsAttributesService;
+use OrdersBundle\Services\Rights\TimesCardService;
+use OrdersBundle\Services\ShippingTemplatesService;
+use GoodsBundle\Services\MultiLang\MultiLangService;
+use GoodsBundle\Repositories\ItemsMedicineRepository;
+use WechatBundle\Services\Material as MaterialService;
+use PointsmallBundle\Entities\PointsmallItemRelAttributes;
 
 // use PointsmallBundle\Services\ItemTaxRateService;
 
@@ -307,7 +308,6 @@ class ItemsService
         if (isset($params['item_id']) && $params['item_id'] && !$isForceCreate) {
             $itemsResult = $this->itemsRepository->update($params['item_id'], $data);
         } else {
-            
             $itemsResult = $this->itemsRepository->create($data);
         }
         if ($data['store'] && $data['store'] > 0) {
@@ -331,7 +331,18 @@ class ItemsService
                     'custom_attribute_value' => $row['spec_custom_value_name'] ?? null,
                 ];
                 $sort++;
-                $this->itemRelAttributesRepository->create($paramsData);
+                // 如果商品关联规格存在更新，不存在新增
+                $itemRelParamsData = [
+                    'company_id' => $data['company_id'],
+                    'item_id' => $itemsResult['item_id'],
+                    'attribute_id' => $row['spec_id'],
+                ];
+                $itemRelParamsInfo = $this->itemRelAttributesRepository->getInfo($itemRelParamsData);
+                if (!empty($itemRelParamsInfo)) {
+                    $this->itemRelAttributesRepository->updateOneBy($itemRelParamsData, $paramsData);
+                }else {
+                    $this->itemRelAttributesRepository->create($paramsData);
+                }
             }
         }
 

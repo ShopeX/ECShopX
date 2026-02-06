@@ -223,6 +223,10 @@ class PagesTemplateRepository extends EntityRepository
             $entity->setCompanyId($data['company_id']);
         }
 
+        if (isset($data['regionauth_id']) && $data['regionauth_id']) {
+            $entity->setRegionauthId($data['regionauth_id']);
+        }
+
         if (isset($data['distributor_id'])) {
             $entity->setDistributorId($data['distributor_id']);
         }
@@ -287,6 +291,7 @@ class PagesTemplateRepository extends EntityRepository
         return [
             'pages_template_id' => $entity->getPagesTemplateId(),
             'company_id' => $entity->getCompanyId(),
+            'regionauth_id' => $entity->getRegionauthId(),
             'distributor_id' => $entity->getDistributorId(),
             'template_name' => $entity->getTemplateName(),
             'template_title' => $entity->getTemplateTitle(),

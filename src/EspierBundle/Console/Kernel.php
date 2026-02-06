@@ -84,6 +84,7 @@ use SuperAdminBundle\Console\UploadMenuCommand;
 use SuperAdminBundle\Console\UploadDealerMenuCommand;
 use CompanysBundle\Ego\ExtendDemoLisensCommand;
 use CompanysBundle\Console\CreateAdminOperatorCommand;
+use CompanysBundle\Console\InitAdminPasswordCommand;
 use PointBundle\Services\PointMemberService;
 use OrdersBundle\Services\Rights\TimesCardService;
 use PromotionsBundle\Services\SpecificCrowdDiscountService;
@@ -118,6 +119,7 @@ use SystemLinkBundle\Console\WdtErp\SyncInventoryCommand as WdtErpSyncInventoryC
 use SystemLinkBundle\Console\WdtErp\SyncLogisticsCommand as WdtErpSyncLogisticsCommand;
 use SystemLinkBundle\Console\WdtErp\SyncAfterSaleCommand as WdtErpSyncAfterSaleCommand;
 use EspierBundle\Commands\KafkaConsumerCommand;
+use KujialeBundle\Commands\UpdateDesignerWorksCommand;
 use TbItemsBundle\Commands\SyncTbitemsCommand;
 class Kernel extends ConsoleKernel
 {
@@ -148,6 +150,7 @@ class Kernel extends ConsoleKernel
         UpdateAccountPasswordCommand::class,
         ExtendDemoLisensCommand::class,
         CreateAdminOperatorCommand::class,
+        InitAdminPasswordCommand::class,
         CreateSystemTagCommand::class,
         TransferEncryptAdapayCommand::class,
         TransferEncryptDistributionCommand::class,
@@ -184,6 +187,7 @@ class Kernel extends ConsoleKernel
         KafkaConsumerCommand::class,
         SyncTbitemsCommand::class,
         InitMultiLangCommand::class,
+        UpdateDesignerWorksCommand::class
     ];
 
     /**

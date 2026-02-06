@@ -47,6 +47,7 @@ $api->version('v1', function ($api) {
         // 获取店铺列表-已支持h5
         $api->get('/wxapp/distributor/list', ['as' => 'front.wxapp.distributor.list',  'uses'=>'Distributor@getDistributorList']);
         $api->get('/wxapp/distributor/alllist', ['as' => 'front.wxapp.distributor.alllist',  'uses'=>'Distributor@getAllDistributorList']);
+        $api->get('/wxapp/distributor/get_all_distributor', ['as' => 'front.wxapp.distributor.get_all_distributor',  'uses'=>'Distributor@getAllDistributor']);
         // 获取总部自提点店铺的详细信息
         $api->get('/wxapp/distributor/self', ['as' => 'front.wxapp.distributor.self',  'uses'=>'Distributor@getDistributionSelfDetail']);
         // 获取默认的店铺详细信息
@@ -84,6 +85,11 @@ $api->version('v1', function ($api) {
         $api->get('/wxapp/distributor/config/inRule', ['name' => '获取店铺进店规则', 'as' => 'front.wxapp.distributor.config.inRule', 'uses' => 'Distributor@getInRule']);
           // 店铺进店规则验证
         $api->post('/wxapp/distributor/config/inRule/check', ['name' => '验证店铺进店规则', 'as' => 'front.wxapp.distributor.config.inRule.check', 'uses' => 'Distributor@checkInRule']);
+        
+        // 根据地址获取地区信息
+        $api->get('/wxapp/distributor/getAreaByAddress', ['name' => '根据地址获取地区信息', 'as' => 'front.wxapp.distributor.getAreaByAddress', 'uses' => 'Distributor@getAreaByAddress']);
+        // 根据地址获取地区信息
+        $api->get('/wxapp/distributor/getAreaByJwd', ['name' => '根据地址获取地区信息-逆解析', 'as' => 'front.wxapp.distributor.getAreaByJwd', 'uses' => 'Distributor@getAreaByJwd']);
         
     });
 

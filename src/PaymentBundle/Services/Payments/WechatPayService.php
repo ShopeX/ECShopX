@@ -58,7 +58,7 @@ class WechatPayService implements Payment
         }
         if ($cert = $data['cert']) {
             if ($cert->getClientOriginalName() != 'apiclient_cert.pem') {
-                throw new BadRequestHttpException('请上传apiclient_cert.pem');
+                throw new BadRequestHttpException(trans('payment.cert_file_name_error'));
             }
             //$this->getFileSystem()->putFileAs('wechatPayment/' . $data['merchant_id'], $cert, 'apiclient_cert.pem');
             $data['cert'] = file_get_contents($cert);
@@ -68,14 +68,31 @@ class WechatPayService implements Payment
 
         if ($certKey = $data['cert_key']) {
             if ($certKey->getClientOriginalName() != 'apiclient_key.pem') {
-                throw new BadRequestHttpException('请上传apiclient_key.pem');
+                throw new BadRequestHttpException(trans('payment.cert_key_file_name_error'));
             }
             //$this->getFileSystem()->putFileAs('wechatPayment/' . $data['merchant_id'], $certKey, 'apiclient_key.pem');
             $data['cert_key'] = file_get_contents($certKey);
         } else {
             $data['cert_key'] = $redisData['cert_key'] ?? null;
         }
-
+        
+        // 验证必填字段
+        if (empty($data['app_id'])) {
+            throw new BadRequestHttpException(trans('payment.app_id_required'));
+        }
+        if (empty($data['merchant_id'])) {
+            throw new BadRequestHttpException(trans('payment.merchant_id_required'));
+        }
+        if (empty($data['key'])) {
+            throw new BadRequestHttpException(trans('payment.key_required'));
+        }
+        if (empty($data['cert'])) {
+            throw new BadRequestHttpException(trans('payment.cert_required'));
+        }
+        if (empty($data['cert_key'])) {
+            throw new BadRequestHttpException(trans('payment.cert_key_required'));
+        }
+        
         if (isset($data['app_id']) && $data['app_id']) {
             app('redis')->set('wechatPayment:companyId:' . $data['app_id'], $companyId);
         }
@@ -86,7 +103,7 @@ class WechatPayService implements Payment
 
         if (isset($data['is_servicer']) && $data['is_servicer'] == 'true') {
             if (!$data['servicer_merchant_id'] || !$data['servicer_app_id']) {
-                throw new BadRequestHttpException('开启特约商户服务商APPID和服务商商户号必填！');
+                throw new BadRequestHttpException(trans('payment.servicer_info_required'));
             }
 
             app('redis')->set('wechatServicerPayment:companyId:' . $data['servicer_app_id'], $companyId);
@@ -157,8 +174,13 @@ class WechatPayService implements Payment
                     app('redis')->set($this->genReidsId($companyId), json_encode($data));
                 }
             }
-            $data['cert_name'] = 'apiclient_cert.pem';
-            $data['cert_url'] = app('filesystem')->path($certFile);
+            if(isset($data['cert']) && $data['cert']) {
+                $data['cert_name'] = 'apiclient_cert.pem';
+                $data['cert_url'] = app('filesystem')->path($certFile);
+            } else {
+                $data['cert_name'] = '';
+                $data['cert_url'] = '';
+            }
 
             //商户证书秘钥
             $certKeyFile = 'wechatPayment/' . $data['merchant_id'] . '/apiclient_key.pem';
@@ -188,8 +210,13 @@ class WechatPayService implements Payment
                     app('redis')->set($this->genReidsId($companyId), json_encode($data));
                 }
             }
-            $data['cert_key_name'] = 'apiclient_key.pem';
-            $data['cert_key_url'] = app('filesystem')->path($certKeyFile);
+            if(isset($data['cert_key']) && $data['cert_key']) {
+                $data['cert_key_name'] = 'apiclient_key.pem';
+                $data['cert_key_url'] = app('filesystem')->path($certKeyFile);
+            } else {
+                $data['cert_key_name'] = '';
+                $data['cert_key_url'] = '';
+            }
             $data['app_app_id'] = $data['app_app_id'] ?? '';
             $data['is_servicer'] = $data['is_servicer'] ?? 'false';
             return $data;

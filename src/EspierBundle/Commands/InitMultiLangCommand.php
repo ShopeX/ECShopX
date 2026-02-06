@@ -58,17 +58,20 @@ class InitMultiLangCommand extends Command
         $moduleArr = ['item','other'];
         foreach($moduleArr as $module){
             (new \CompanysBundle\MultiLang\MultiLangItem($lang,$module))->createTable();
-
-            $this->writeLangueConfig($lang);
         }
+        // 只写入一次配置，避免重复
+        $this->writeLangueConfig($lang);
         // (new \CompanysBundle\MultiLang\MultiLangItem('zh-CN','other'))->createTable();dd(11);
     }
 
     // 写入config/langue.php
     private function writeLangueConfig($lang){
         $config = config('langue');
-        $config[] = $lang;
-        file_put_contents(config_path('langue.php'),'<?php return '.var_export($config,true).';');
+        // 如果语言已存在，则不重复添加
+        if (!in_array($lang, $config)) {
+            $config[] = $lang;
+            file_put_contents(config_path('langue.php'),'<?php return '.var_export($config,true).';');
+        }
     }
 
 }

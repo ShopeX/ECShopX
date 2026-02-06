@@ -35,11 +35,11 @@ class PagesTemplateSetServices
     public function saveData($params)
     {
         //判断数据是否存着
-        $info = $this->pagesTemplateSetRepository->getInfo(['company_id' => $params['company_id'], 'pages_template_id' => ($params['pages_template_id'] ?? 0)]);
+        $info = $this->pagesTemplateSetRepository->getInfo(['company_id' => $params['company_id'], 'regionauth_id' => ($params['regionauth_id'] ?? 0), 'pages_template_id' => ($params['pages_template_id'] ?? 0)]);
         if (empty($info)) {
             $result = $this->pagesTemplateSetRepository->create($params);
         } else {
-            $result = $this->pagesTemplateSetRepository->updateOneBy(['company_id' => $params['company_id'], 'pages_template_id' => ($params['pages_template_id'] ?? 0)], $params);
+            $result = $this->pagesTemplateSetRepository->updateOneBy(['company_id' => $params['company_id'], 'regionauth_id' => ($params['regionauth_id'] ?? 0), 'pages_template_id' => ($params['pages_template_id'] ?? 0)], $params);
         }
 
         return $result;
@@ -51,7 +51,7 @@ class PagesTemplateSetServices
     public function getInfo($params)
     {
         //判断数据是否存着
-        $info = $this->pagesTemplateSetRepository->getInfo(['company_id' => $params['company_id'], 'pages_template_id' => ($params['pages_template_id'] ?? 0)]);
+        $info = $this->pagesTemplateSetRepository->getInfo(['company_id' => $params['company_id'], 'regionauth_id' => ($params['regionauth_id'] ?? 0), 'pages_template_id' => ($params['pages_template_id'] ?? 0)]);
 
         return $info;
     }

@@ -89,6 +89,7 @@ class PagesTemplateSet extends Controller
         $params['tab_bar'] = $request->input('tab_bar');
         $params['company_id'] = $company_id;
         $params['pages_template_id'] = $request->input('pages_template_id', 0);
+        $params['regionauth_id'] = $request->input('regionauth_id', 0);
 
         $pages = new PagesTemplateSetServices();
         $result = $pages->saveData($params);
@@ -140,6 +141,7 @@ class PagesTemplateSet extends Controller
         $company_id = app('auth')->user()->get('company_id');
         $params['company_id'] = $company_id;
         $params['pages_template_id'] = $request->input('pages_template_id', 0);
+        $params['regionauth_id'] = $request->input('regionauth_id', 0);
 
         $pages = new PagesTemplateSetServices();
         $result = $pages->getInfo($params);

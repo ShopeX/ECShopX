@@ -229,6 +229,48 @@ class Members
     private $third_data;
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="reg_distributor", type="integer", nullable=true, options={"comment":"注册时的分销商ID", "default": 0})
+     */
+    private $reg_distributor = 0;
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="reg_salesperson", type="string", length=100, nullable=true, options={"comment":"注册时的导购ID"})
+     */
+    private $reg_salesperson;
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="op_distributor", type="integer", nullable=true, options={"comment":"作为分配的店铺ID", "default": 0})
+     */
+    private $op_distributor = 0;
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="fp_salesperson", type="string", length=100, nullable=true, options={"comment":"分配的导购员工编号(employee_number/work_userid)"})
+     */
+    private $fp_salesperson;
+
+    /**
+     * @var boolean
+     *
+     * @ORM\Column(name="has_fp", type="boolean", options={"comment":"是否有分配导购", "default": 0})
+     */
+    private $has_fp = 0;
+
+    /**
+     * @var boolean
+     *
+     * @ORM\Column(name="is_become_friend", type="boolean", options={"comment":"是否已加为好友。0:否；1:是", "default": 0})
+     */
+    private $is_become_friend = 0;
+
+    /**
      * Get userId
      *
      * @return integer
@@ -816,6 +858,78 @@ class Members
     }
 
     /**
+     * Set regDistributor.
+     *
+     * @param integer $regDistributor
+     *
+     * @return Members
+     */
+    public function setRegDistributor($regDistributor = 0)
+    {
+        $this->reg_distributor = (int)$regDistributor;
+
+        return $this;
+    }
+
+    /**
+     * Get regDistributor.
+     *
+     * @return integer
+     */
+    public function getRegDistributor()
+    {
+        return $this->reg_distributor;
+    }
+
+    /**
+     * Set regSalesperson.
+     *
+     * @param string|null $regSalesperson
+     *
+     * @return Members
+     */
+    public function setRegSalesperson($regSalesperson = null)
+    {
+        $this->reg_salesperson = $regSalesperson;
+
+        return $this;
+    }
+
+    /**
+     * Get regSalesperson.
+     *
+     * @return string|null
+     */
+    public function getRegSalesperson()
+    {
+        return $this->reg_salesperson;
+    }
+
+    /**
+     * Set opDistributor.
+     *
+     * @param integer $opDistributor
+     *
+     * @return Members
+     */
+    public function setOpDistributor($opDistributor = 0)
+    {
+        $this->op_distributor = (int)$opDistributor;
+
+        return $this;
+    }
+
+    /**
+     * Get opDistributor.
+     *
+     * @return integer
+     */
+    public function getOpDistributor()
+    {
+        return $this->op_distributor;
+    }
+
+    /**
      * Set regionMobile.
      *
      * @param string $regionMobile
@@ -861,5 +975,77 @@ class Members
     public function getMobileCountryCode()
     {
         return $this->mobile_country_code;
+    }
+
+    /**
+     * Set fpSalesperson.
+     *
+     * @param string|null $fpSalesperson
+     *
+     * @return Members
+     */
+    public function setFpSalesperson($fpSalesperson = null)
+    {
+        $this->fp_salesperson = $fpSalesperson;
+
+        return $this;
+    }
+
+    /**
+     * Get fpSalesperson.
+     *
+     * @return string|null
+     */
+    public function getFpSalesperson()
+    {
+        return $this->fp_salesperson;
+    }
+
+    /**
+     * Set hasFp.
+     *
+     * @param boolean $hasFp
+     *
+     * @return Members
+     */
+    public function setHasFp($hasFp = 0)
+    {
+        $this->has_fp = (bool)$hasFp;
+
+        return $this;
+    }
+
+    /**
+     * Get hasFp.
+     *
+     * @return boolean
+     */
+    public function getHasFp()
+    {
+        return $this->has_fp;
+    }
+
+    /**
+     * Set isBecomeFriend.
+     *
+     * @param boolean $isBecomeFriend
+     *
+     * @return Members
+     */
+    public function setIsBecomeFriend($isBecomeFriend = 0)
+    {
+        $this->is_become_friend = (bool)$isBecomeFriend;
+
+        return $this;
+    }
+
+    /**
+     * Get isBecomeFriend.
+     *
+     * @return boolean
+     */
+    public function getIsBecomeFriend()
+    {
+        return $this->is_become_friend;
     }
 }

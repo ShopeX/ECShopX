@@ -115,7 +115,7 @@ class Items extends BaseController
         $userId = $request->get('user_id', 0);
         if ($result['list']) {
             // 计算会员价
-            $result = $itemsService->getItemsListMemberPrice($result, $userId, $params['company_id']);
+            $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], $userId, $params['company_id']);
         }
         $result = $itemsService->getItemsListActityTag($result, $params['company_id']);
         $result['cur'] = $this->getCur($params['company_id']);
@@ -230,7 +230,7 @@ class Items extends BaseController
         //营销标签
         $itemsService = new ItemsService();
         $itemList['list'][0] = $result;
-        $itemList = $itemsService->getItemsListActityTag($itemList, $authInfo['company_id']);
+        $itemList['list'] = $itemsService->getItemsListActityTag($itemList['list'], $authInfo['company_id']);
         $result = $itemList['list'][0];
 
         if ($result['promotion_activity'] ?? 0) {
@@ -335,7 +335,7 @@ class Items extends BaseController
             }
             $result = $itemsService->getItemListData($params, $page, $pageSize, $orderBy, false);
         }
-        $result = $itemsService->getItemsListActityTag($result, $authInfo['company_id']);
+        $result['list'] = $itemsService->getItemsListActityTag($result['list'], $authInfo['company_id']);
         return $this->response->array($result);
     }
 }

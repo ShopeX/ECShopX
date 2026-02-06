@@ -112,4 +112,16 @@ class RegionauthService
             return false;
         }
     }
+
+    /**
+     * Dynamically call the shopsservice instance.
+     *
+     * @param  string  $method
+     * @param  array   $parameters
+     * @return mixed
+     */
+    public function __call($method, $parameters)
+    {
+        return $this->entityRepository->$method(...$parameters);
+    }
 }

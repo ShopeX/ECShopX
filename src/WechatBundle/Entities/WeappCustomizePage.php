@@ -53,6 +53,13 @@ class WeappCustomizePage
     /**
      * @var string
      *
+     * @ORM\Column(name="regionauth_id", type="bigint", options={"comment":"区域id", "default":0})
+     */
+    private $regionauth_id = 0;
+
+    /**
+     * @var string
+     *
      * @ORM\Column(name="page_name", type="string", options={"comment":"页面名称"})
      */
     private $page_name;
@@ -95,9 +102,10 @@ class WeappCustomizePage
     /**
      * @var string
      *
-     * @ORM\Column(name="page_type", type="string", options={"default":"normal", "comment":"页面类型 salesperson:导购首页"})
+     * @ORM\Column(name="page_type", type="string", options={"default":"normal", "comment":"页面类型 normal:普通页面 salesperson:导购首页 category:分类页 my:我的"})
      */
     private $page_type = 'normal';
+
     /**
      * Get id
      *
@@ -154,6 +162,30 @@ class WeappCustomizePage
     public function getCompanyId()
     {
         return $this->company_id;
+    }
+
+    /**
+     * Set regionauthId
+     *
+     * @param integer $regionauthId
+     *
+     * @return WeappCustomizePage
+     */
+    public function setRegionauthId($regionauthId)
+    {
+        $this->regionauth_id = $regionauthId;
+
+        return $this;
+    }
+
+    /**
+     * Get regionauthId
+     *
+     * @return integer
+     */
+    public function getRegionauthId()
+    {
+        return $this->regionauth_id;
     }
 
     /**

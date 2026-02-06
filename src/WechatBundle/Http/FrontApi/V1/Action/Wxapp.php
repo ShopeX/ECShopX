@@ -40,6 +40,7 @@ use PopularizeBundle\Services\SettingService;
 use PromotionsBundle\Services\DistributorPromotionService;
 use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
 use ThemeBundle\Services\PagesTemplateSetServices;
+use ThemeBundle\Services\PagesTemplateServices;
 use WechatBundle\Services\OauthService;
 use WechatBundle\Services\OpenPlatform;
 use WechatBundle\Services\Wxapp\CustomizePageService;
@@ -209,6 +210,7 @@ class Wxapp extends Controller
         $pageName = $request->input('page_name', 'index');
         $version = $request->input('version', 'v1.0.0');
         $distributorId = $request->input('distributor_id', 0);
+        $regionauthId = $request->input('regionauth_id', 0);
         $custom = false;
         if (strpos($pageName, 'custom_') !== false) {
             $customizePageService = new CustomizePageService();
@@ -217,11 +219,11 @@ class Wxapp extends Controller
                 $custom_id = $customizePageService->getSalespersonCustomId($authInfo['company_id'], $templateName);
             }
             if ('my' == $custom_id) {
-                $custom_id = $customizePageService->getMyCustomId($authInfo['company_id']);
-            }            
+                $custom_id = $customizePageService->getMyCustomId($authInfo['company_id'], $regionauthId);
+            }
             $custom_id = intval($custom_id);
             if (!$custom_id) {
-                throw new StoreResourceFailedException('小程序模板不存在');
+                return $this->response->array(['list' => [], 'config' => []]);
             }
             $pageName = 'custom_'.$custom_id;
             $custom = true;
@@ -503,40 +505,23 @@ class Wxapp extends Controller
     public function getUserOpentIdAndUnionid(Request $request)
     {
         if ($authInfo = $request->get('auth')) {
-            $companyId = $authInfo['company_id'];
-
-            $WoaAppid = $this->openPlatform->getWoaAppidByCompanyId($companyId);
-            $app = $this->openPlatform->getAuthorizerApplication($WoaAppid);
-
-            $user = $app->oauth->user();
-            $open_id = $user->getId();
-            if (!$open_id) {
-                return $this->response->array(['openid' => '', 'unionid' => '']);
-            }
+            $open_id = $authInfo['open_id'];
+            $unionid = $authInfo['unionid'];
         } else {
-            $inputData = $request->input();
-            if (empty($inputData['appid'])) {
-                throw new StoreResourceFailedException('缺少参数，登录失败！');
+            $params = $request->all('appid', 'code');
+            if (!$params['appid']) {
+                throw new ResourceException('缺少appid');
             }
-            $app = $this->openPlatform->getAuthorizerApplication($inputData['appid']);
-            $WoaAppid = $inputData['appid'];
-            $wxParams = [
-                'code' => $inputData['code'],
-                'appid' => $inputData['appid'],
-            ];
-            $res = $app->auth->session($inputData['code']); //调用微信获取sessionkey接口，返回session_key,openid,unionid
-            if (!isset($res['openid'])) {
-                return $this->response->array(['openid' => '', 'unionid' => '']);
+            if (!$params['code']) {
+                throw new ResourceException('缺少code');
             }
-            $open_id = $res['openid'];
+            $app = $this->openPlatform->getAuthorizerApplication($params['appid']);
+            $res = $app->auth->session($params['code']); //调用微信获取sessionkey接口，返回session_key,openid,unionid
+            $open_id = $res['openid'] ?? '';
+            $unionid = $res['unionid'] ?? '';
         }
         $result['openid'] = $open_id;
-        $result['unionid'] = '';
-        $wechatUserService = new WechatUserService();
-        $wechatUserInfo = $wechatUserService->getSimpleUser(['open_id' => $open_id, 'authorizer_appid' => $WoaAppid]);
-        if ($wechatUserInfo['unionid'] ?? '') {
-            $result['unionid'] = $wechatUserInfo['unionid'];
-        }
+        $result['unionid'] = $unionid;
         return $this->response->array($result);
     }
 
@@ -794,9 +779,14 @@ class Wxapp extends Controller
             ],
         ];
 
+        $filter['company_id'] = $authInfo['company_id'];
+        if ($request->input('regionauth_id')) {
+            $filter['regionauth_id'] = $request->input('regionauth_id');
+        }
+
         // 获取小程序配置、小程序导航配置
         $pages_template_set_services = new PagesTemplateSetServices();
-        $pagestemplateSet = $pages_template_set_services->getInfo(['company_id' => $authInfo['company_id']]);
+        $pagestemplateSet = $pages_template_set_services->getInfo($filter);
         $return = array_merge($return, $pagestemplateSet);
 
         // 获取商城名称显示在小程序顶部

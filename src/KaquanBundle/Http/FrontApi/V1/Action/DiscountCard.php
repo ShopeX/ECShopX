@@ -59,6 +59,9 @@ class DiscountCard extends BaseController
      *     @SWG\Parameter(
      *         name="card_id", in="query", description="卡券id", required=false, type="integer",
      *     ),
+     *     @SWG\Parameter(
+     *         name="userWorkId", in="query", description="导购员工编号(work_userid)", required=false, type="string",
+     *     ),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -93,6 +96,8 @@ class DiscountCard extends BaseController
         $offset = ($page - 1) * $count;
         $filter = [];
 
+        $userWorkId = $request->input('work_userid', '');
+
         // if ($request->input('use_platform')) {
         //     $filter['use_platform'] = $request->input('use_platform');
         // }
@@ -117,6 +122,12 @@ class DiscountCard extends BaseController
             unset($filter['distributor_id']);
         }
         $filter['receive'] = '1';
+
+        if(!empty($userWorkId)){
+            $filter['coupon_type'] = 'guide';
+        }else{
+            $filter['coupon_type'] = 'mall';
+        }
         $filter['company_id'] = $authInfo['company_id'];
 
         $discountCardService = new KaquanService(new DiscountCardService());
@@ -134,7 +145,7 @@ class DiscountCard extends BaseController
 
         if ($request->input('card_id')) {
             $cardId = $request->input('card_id');
-            $filter['card_id'] = (int)$cardId;
+            $filter['card_id'] = explode(',', $cardId);
             unset($filter['receive']); // 如果指定ID，则不判断是否只能前台直接领取
         }
 
@@ -142,12 +153,22 @@ class DiscountCard extends BaseController
 
         //获取用户领取的优惠券
         $userDiscountService = new UserDiscountService();
+        foreach ($result['list'] as $k => $v) {
+            $result['list'][$k]['button_status'] = [
+                'label' => 'get', //get/exchange/buy/get_invalid
+                'text' => '领取', //领取/兑换/购买/已领取
+            ];
+        }
 
         if (isset($authInfo['user_id'])) {
             foreach ($result['list'] as &$value) {
                 $value['user_get_num'] = $userDiscountService->getUserGetNum($authInfo['user_id'], $value['card_id'], $value['company_id']);
-                if ($value['get_limit'] <= $value['user_get_num']) {
+                if ($value['get_limit'] && $value['get_limit'] <= $value['user_get_num']) {
                     $value['ifget'] = 1;
+                    $value['button_status'] = [
+                        'label' => 'get_invalid', //get/exchange/buy/get_invalid
+                        'text' => '已领取', //领取/兑换/购买/已领取
+                    ];
                 }
                 if ($value['end_date'] && $value['end_date'] <= time()) {
                     $value['gameOver'] = 1;
@@ -169,6 +190,35 @@ class DiscountCard extends BaseController
 
         // 追加优惠券的店铺信息
         (new DistributorService())->appendDistributorInfo((int)$authInfo['company_id'], $result["list"]);
+
+        // 如果存在 userWorkId，查询当前导购在每个券下的领券数量
+        if (!empty($userWorkId) && !empty($result['list'])) {
+            $cardIds = array_column($result['list'], 'card_id');
+            if (!empty($cardIds)) {
+                $userDiscountRepository = app('registry')->getManager('default')->getRepository(\KaquanBundle\Entities\UserDiscount::class);
+                $salespersonCountFilter = [
+                    'company_id' => $authInfo['company_id'],
+                    'card_id' => $cardIds,
+                    'salesperson_code' => $userWorkId,
+                ];
+                $salespersonCounts = $userDiscountRepository->getTotalNumGroupBy(
+                    $salespersonCountFilter,
+                    'count(*) as total_num, card_id',
+                    'card_id'
+                );
+
+                // 将查询结果转换为以 card_id 为键的数组
+                $salespersonCountMap = [];
+                foreach ($salespersonCounts as $item) {
+                    $salespersonCountMap[$item['card_id']] = intval($item['total_num']);
+                }
+
+                // 为每个券添加导购领券数量
+                foreach ($result['list'] as &$card) {
+                    $card['salesperson_get_num'] = $salespersonCountMap[$card['card_id']] ?? 0;
+                }
+            }
+        }
 
         return $this->response->array($result);
     }

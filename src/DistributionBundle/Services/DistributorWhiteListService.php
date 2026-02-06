@@ -179,7 +179,7 @@ class DistributorWhiteListService
             return [];
         }
         $distributor_id =  array_column($list,null,'distributor_id');
-        $distributorList = $this->distributorRepository->getLists(['distributor_id' => array_keys($distributor_id)], '*', 1, -1);
+        $distributorList = $this->distributorRepository->getLists(['distributor_id' => array_keys($distributor_id), 'is_valid' => 'true'], '*', 1, -1);
          if(empty($distributorList)){
             return [];
         }

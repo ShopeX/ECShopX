@@ -276,7 +276,7 @@ class NormalGoodsUploadService
         $row['goods_id'] = false;
         $row['item_id'] = false;
         if ($row['item_bn']) {
-            $filter = ['item_bn' => $row['item_bn'], 'company_id' => $companyId];
+            $filter = ['item_bn' => trim($row['item_bn']), 'company_id' => $companyId];
             $itemsService = new ItemsService();
             $oldItemInfo = $itemsService->getItem($filter);
             if ($oldItemInfo) {

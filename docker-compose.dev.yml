@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  ecshopx-dev:
+    build:
+      context: .
+      dockerfile: docker-dev/Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: ecshopx-dev
+    container_name: ecshopx-dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"  # Nginx (容器8080端口映射到主机8080端口)
+      - "8081:8081"  # Nginx H5前端服务 (容器8081端口映射到主机8081端口)
+      - "8082:8082"  # Nginx PC前端代理 (容器8082端口映射到主机8082端口)
+    volumes:
+      # 分别挂载四个项目目录
+      - .:/data/httpd/ECShopX
+      - ../ECShopX_admin-frontend:/data/httpd/ECShopX_admin-frontend
+      - ../ECShopX_mobile-frontend:/data/httpd/ECShopX_mobile-frontend
+      - ../ECShopX_desktop-frontend:/data/httpd/ECShopX_desktop-frontend
+      # 数据持久化
+      - mysql_data:/var/lib/mysql
+      - redis_data:/var/lib/redis
+    environment:
+      # PHP-FPM 配置
+      - FPM_LISTEN=127.0.0.1:9000
+      - FPM_PM=dynamic
+      - FPM_PM_MAX_CHILDREN=40
+      - FPM_PM_MIN_SPARE_SERVERS=5
+      - FPM_PM_MAX_SPARE_SERVERS=10
+      - FPM_PHP_ADMIN_VALUE_MEMORY_LIMIT=128M
+      # MySQL 配置
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=ecshopx
+      - MYSQL_USER=ecshopx
+      - MYSQL_PASSWORD=ecshopx
+      # Redis 配置
+      - REDIS_PASSWORD=redispassword
+      # 应用配置（会写入 .env）
+      - DB_HOST=127.0.0.1
+      - DB_PORT=3306
+      - DB_DATABASE=ecshopx
+      - DB_USERNAME=ecshopx
+      - DB_PASSWORD=ecshopx
+      - REDIS_HOST=127.0.0.1
+      - REDIS_PORT=6379
+      - REDIS_DATABASE=0
+      # 时区
+      - TZ=Asia/Shanghai
+    networks:
+      - ecshopx-dev-network
+
+volumes:
+  mysql_data:
+    name: ecshopx-dev-mysql
+  redis_data:
+    name: ecshopx-dev-redis
+
+networks:
+  ecshopx-dev-network:
+    name: ecshopx-dev-net
+    driver: bridge

@@ -408,9 +408,45 @@ class Distributor extends BaseController
 //                $result['distributor_id'] = 0;
                 $result['is_valid'] = 'true';
             } else {//默认店铺
-                $filter['distributor_id'] = 0;
-                $result = $distributorService->getInfo($filter);
+                $result = $distributorService->getInfoSimple([
+                    'company_id' => $authInfo['company_id'],
+                    'is_default' => 1,
+                    'is_valid' => 'true',
+                ]);
+                // $filter['distributor_id'] = 0;
+                // $result = $distributorService->getInfo($filter);
             }
+        }
+        if(empty($result['is_valid'])){
+            //            $result = [
+            //                'distributor_id' => 0,
+            //                'is_delivery' => true,
+            //                'is_ziti' => false,
+            //            ];
+                               //这里应该取默认
+                        $result = $distributorService->getInfoSimple([
+                            'company_id' => $authInfo['company_id'],
+                            'is_default' => 1,
+                            'is_valid' => 'true',
+                        ]);
+                        if (!$result) {
+                            $result = [
+                                'distributor_id' => 0,
+                                'is_delivery' => true,
+                                'is_ziti' => false,
+                            ];
+                        }
+                        return $this->response->array($result);
+        }
+            
+
+        if(empty($result['is_valid'])){
+            $result = [
+                'distributor_id' => 0,
+                'is_delivery' => true,
+                'is_ziti' => false,
+            ];
+            return $this->response->array($result);
         }
 
         if ($result && $result['is_valid'] == 'true') {
@@ -449,11 +485,19 @@ class Distributor extends BaseController
        
             return $this->response->array($result);
         } else {
-            $result = [
-                'distributor_id' => 0,
-                'is_delivery' => true,
-                'is_ziti' => false,
-            ];
+            //这里应该取默认店铺，
+            $result = $distributorService->getInfoSimple([
+                'company_id' => $authInfo['company_id'],
+                'is_default' => 1,
+                'is_valid' => 'true',
+            ]);
+            if (!$result) {
+                $result = [
+                    'distributor_id' => 0,
+                    'is_delivery' => true,
+                    'is_ziti' => false,
+                ];
+            }
             return $this->response->array($result);
         }
     }
@@ -1061,6 +1105,83 @@ class Distributor extends BaseController
 
             $distributorService->appendItemsByFilter((int)$companyId, $result['list'],['item_id'=>$itemIds]);
         }
+        return $this->response->array($result);
+    }
+
+    /**
+     * 获取所有的店铺
+     * path = '/api/h5app/wxapp/distributor/get_all_distributor'
+     */
+    public function getAllDistributor(Request $request)
+    {
+        // 获取参数
+        $authInfo = $request->get('auth');
+        $params = $request->all('regionauth_id', 'category_id', 'first_letter', 'distributor_id');
+        $companyId = (int)$authInfo['company_id']; // 企业id
+        $page = $request->input('page', 1);// 当前页
+        $pageSize = $request->input('pageSize', 10); // 每页的数量
+        $regionauth_id = $request->input('regionauth_id', 0); // 小镇ID
+
+        // 定义返回响应的结构体
+        $result = [
+            "total_count" => 0,
+            "list" => [],
+            "tagList" => [],
+        ];
+
+        // 搜索条件
+        $filter = [
+            'company_id' => $companyId,
+            'distributor_self' => 0,//默认拿不是总店的店铺
+            'is_valid' => 'true',//必须是显示状态的店铺
+        ];
+        foreach ($params as $k => $v) {
+            if (!$v) continue;
+            switch ($k) {
+                case 'distributor_id':
+                case 'category_id':
+                case 'regionauth_id':
+                    $filter[$k] = intval($v);
+                    break;
+
+                case 'first_letter':
+                    $filter[$k] = trim($v);
+                    break;
+            }
+        }
+
+        // 排序方式
+        $sortType = $request->input("sort_type", 0);
+        switch ($sortType) {
+            case 5:
+                $orderBy = [
+                    "first_letter" => "ASC",//字母A-Z排序
+                    "distributor_id" => "DESC"//按店铺添加时间，新店铺靠前
+                ];
+                break;
+            default: // 根据添加时间倒序
+                $orderBy = [
+                    "created" => "DESC",
+                    "distributor_id" => "DESC"
+                ];
+                break;
+        }
+
+        $cols = 'distributor_id, name, logo, first_letter';
+        $distributorService = new DistributorService();
+        $rsDistributor = $distributorService->entityRepository->getLists($filter, $cols, $page, $pageSize, $orderBy);
+        $result['filter'] = $filter;
+        if ($rsDistributor) {
+            foreach ($rsDistributor as $k => $v) {
+                $result["list"][] = [
+                    'distributor_id' => $v['distributor_id'],
+                    'name' => $v['name'],
+                    'logo' => $v['logo'],
+                    'first_letter' => $v['first_letter'],
+                ];
+            }
+        }
+
         return $this->response->array($result);
     }
 
@@ -2111,7 +2232,116 @@ class Distributor extends BaseController
         ];
         $pickupLocationService = new PickupLocationService();
         $result = $pickupLocationService->getNearlists($pFilter, $postData['lng'], $postData['lat'], '*', 1, 100);
+        
+        // 在列表前面添加店铺地址
+        if (!empty($distributorIds) && is_array($distributorIds)) {
+            // 取第一个店铺ID（通常只有一个）
+            $distributorId = $distributorIds[0];
+            $distributorFilter = [
+                'company_id' => $authInfo['company_id'],
+                'distributor_id' => $distributorId,
+            ];
+            $distributor = $distributorService->getInfoSimple($distributorFilter);
+            
+            if ($distributor && !empty($distributor['address'])) {
+                // 转换店铺营业时间格式（调用 Service 的方法）
+                $hours = $pickupLocationService->formatDistributorHour($distributor['hour'] ?? '');
+                // 从营业时间中提取工作日（字符串格式）
+                $workdaysStr = $pickupLocationService->extractWorkdaysFromHours($hours);
+                // 转换为数组格式，与 getNearlists 返回的格式保持一致
+                $workdays = explode(',', trim($workdaysStr, ','));
+                
+                // 计算距离（如果有经纬度）
+                $distance = null;
+                if ($postData['lng'] && $postData['lat'] && $distributor['lng'] && $distributor['lat']) {
+                    $distance = $this->calculateDistance(
+                        $postData['lat'],
+                        $postData['lng'],
+                        $distributor['lat'],
+                        $distributor['lng']
+                    );
+                }
+                
+                // 构造店铺地址项（使用负数ID标识）
+                $storeAddressItem = [
+                    'id' => (string)(-$distributorId), // 使用负数ID标识店铺地址，转为字符串与自提点格式一致
+                    'company_id' => (string)($distributor['company_id'] ?? ''),
+                    'distributor_id' => (string)($distributor['distributor_id'] ?? ''),
+                    'rel_distributor_id' => (string)($distributor['distributor_id'] ?? ''),
+                    'name' => $distributor['name'] ?? '',
+                    'lng' => $distributor['lng'] ?? '',
+                    'lat' => $distributor['lat'] ?? '',
+                    'province' => $distributor['province'] ?? '',
+                    'city' => $distributor['city'] ?? '',
+                    'area' => $distributor['area'] ?? '',
+                    'address' => $distributor['address'] ?? '',
+                    'contract_phone' => $distributor['mobile'] ?? '',
+                    'hours' => $hours,
+                    'workdays' => $workdays, // 数组格式
+                    'wait_pickup_days' => '0', // 转为字符串与自提点格式一致
+                    'latest_pickup_time' => null, // 保持 null，与自提点可能为 null 的情况一致
+                    'created' => (string)time(), // 转为字符串与自提点格式一致
+                    'updated' => (string)time(), // 转为字符串与自提点格式一致
+                    'is_store_address' => true, // 标识字段
+                ];
+                
+                // 如果有距离，添加到数组中
+                if ($distance !== null) {
+                    $storeAddressItem['distance'] = $distance;
+                }
+                
+                // 插入到列表前面
+                if (!isset($result['list'])) {
+                    $result['list'] = [];
+                }
+                array_unshift($result['list'], $storeAddressItem);
+                
+                // 更新总数
+                $result['total_count'] = ($result['total_count'] ?? 0) + 1;
+                
+                // 如果有距离，需要重新排序（按距离）
+                if ($distance !== null && !empty($result['list'])) {
+                    usort($result['list'], function($a, $b) {
+                        $distanceA = $a['distance'] ?? PHP_INT_MAX;
+                        $distanceB = $b['distance'] ?? PHP_INT_MAX;
+                        return $distanceA <=> $distanceB;
+                    });
+                }
+            }
+        }
+        
         return $this->response->array($result);
+    }
+    
+    /**
+     * 计算两点之间的距离（公里）
+     * @param float $lat1 纬度1
+     * @param float $lng1 经度1
+     * @param float $lat2 纬度2
+     * @param float $lng2 经度2
+     * @return float 距离（公里）
+     */
+    private function calculateDistance($lat1, $lng1, $lat2, $lng2)
+    {
+        $lat1 = floatval($lat1);
+        $lng1 = floatval($lng1);
+        $lat2 = floatval($lat2);
+        $lng2 = floatval($lng2);
+        
+        // 使用Haversine公式计算距离
+        $earthRadius = 6371; // 地球半径（公里）
+        
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+             sin($dLng / 2) * sin($dLng / 2);
+        
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+        $distance = $earthRadius * $c;
+        
+        return round($distance, 2);
     }
 
     /**
@@ -2317,49 +2547,86 @@ class Distributor extends BaseController
                     throw new ResourceException('请先登录');
                 }
                 // 如果用户有专属导购,进行验证店铺或者导购是否有效
-                $filter = [
-                    'company_id' => $companyId,
-                    'user_id' => $userId,
-                    'is_bind' => 1,
+                // 按照会员列表获取会员归属店铺，按照会员列表查询逻辑，走batchGetBindSalesperson
+                $memberService = new MemberService();
+                $memberList = [
+                    [
+                        'user_id' => $userId,
+                    ]
                 ];
-                $result = $workWechatRepositories->getInfo($filter);
-                if (!empty($result)) {
+                // 批量查询会员的绑定导购和绑定门店
+                $memberService->batchGetBindSalesperson($companyId, $memberList);
+                app('log')->info('david-batchGetBindSalesperson:'.json_encode($memberList));
+                
+                $memberInfo = $memberList[0] ?? [];
+                $salespersonInfo = $memberInfo['salesperson_info'] ?? [];
+                $storeInfo = $memberInfo['store_info'] ?? [];
+                
+                // 检查是否有绑定导购信息
+                $salespersonId = $salespersonInfo['salesperson_id'] ?? null;
+                
+                if ($salespersonId) {
+                    // 有绑定导购，进行验证
+                    // 验证导购是否有效
                     $filter = [
                         'company_id' => $companyId,
-                        'salesperson_id' => $result['salesperson_id'],
+                        'salesperson_id' => $salespersonId,
                         'salesperson_type' => 'shopping_guide',
                         // 'is_valid' => 'true',
                     ];
-                    $salespersonInfo = $salespersonService->getSalespersonDetail($filter);
-                    if (empty($salespersonInfo)) {
+                    $salespersonDetail = $salespersonService->getSalespersonDetail($filter);
+                    if (empty($salespersonDetail)) {
                         throw new ResourceException('导购员不存在');
                     }
-                    if (isset($salespersonInfo['is_valid']) && ($salespersonInfo['is_valid'] != 'true' || $salespersonInfo['is_valid'] != true)) {
+                    if (isset($salespersonDetail['is_valid']) && ($salespersonDetail['is_valid'] != 'true' && $salespersonDetail['is_valid'] != true)) {
                         throw new ResourceException('导购员失效');
                     }
+                    
                     // 验证店铺是否有效
-                    $filterDistributor = [
-                        'company_id' => $companyId,
-                        'distributor_id' => $salespersonInfo['distributor_id'],
-                        // 'is_valid' => 'true',
-                    ];
-                    $info = $distributorService->getInfoSimple($filterDistributor);
-                    if (empty($info)) {
+                    $storeBn = $storeInfo['store_bn'] ?? '';
+                    $distributorInfo = null;
+                    
+                    if (!empty($storeBn)) {
+                        // 优先根据门店编号（shop_code）查询店铺
+                        $filterDistributor = [
+                            'company_id' => $companyId,
+                            'shop_code' => $storeBn,
+                            // 'is_valid' => 'true',
+                        ];
+                        $distributorInfo = $distributorService->getInfoSimple($filterDistributor);
+                    }
+                    
+                    // 如果通过门店编号没找到，使用导购的店铺ID
+                    if (empty($distributorInfo)) {
+                        $distributorId = $salespersonDetail['distributor_id'] ?? null;
+                        if ($distributorId) {
+                            $filterDistributor = [
+                                'company_id' => $companyId,
+                                'distributor_id' => $distributorId,
+                                // 'is_valid' => 'true',
+                            ];
+                            $distributorInfo = $distributorService->getInfoSimple($filterDistributor);
+                        }
+                    }
+                    
+                    if (empty($distributorInfo)) {
                         throw new ResourceException('店铺不存在');
                     }
-                    if (isset($info['is_valid']) && ($info['is_valid'] != 'true' || $info['is_valid'] != true)) {
+                    
+                    if (isset($distributorInfo['is_valid']) && ($distributorInfo['is_valid'] != 'true' && $distributorInfo['is_valid'] != true)) {
                         throw new ResourceException('店铺失效');
                     }
+                    
                     $result = [
                         'status' => true,
                         'msg' => '成功',
                         'data' => [
-                            'distributor_id' => $salespersonInfo['distributor_id'],
-                            'distributor_ids' => $salespersonInfo['distributor_ids'],
-                            'salesperson_id' => $salespersonInfo['salesperson_id'],
+                            'distributor_id' => $distributorInfo['distributor_id'],
+                            'distributor_ids' => $salespersonDetail['distributor_ids'] ?? [],
+                            'salesperson_id' => $salespersonDetail['salesperson_id'],
                         ]
                     ];
-                }else {
+                } else {
                     $result = ['status' => false, 'msg' => '用户没有专属导购', 'data' => []];
                 }
             }   
@@ -2381,6 +2648,89 @@ class Distributor extends BaseController
         $data = $distributorWhiteListService->getUserWhiteListDistributorList($userId, $companyId);
 
         return $this->response->array($data);
+    }
+
+
+    /**
+     * @SWG\Get(
+     *     path="/distributor/getAreaByjwd",
+     *     summary="根据地址获取地区信息",
+     *     tags={"店铺"},
+     *     description="根据地址获取地区信息",
+     *     operationId="getAreaByAddress",
+     *     @SWG\Parameter(
+     *         name="address",
+     *         in="query",
+     *         description="地址",
+     *         required=true,
+     *         type="string",
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @SWG\Items(
+     *                     type="object",
+     *                 )
+     *             ),
+     *          ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/DistributionErrorRespones") ) )
+     * )    
+     */
+    public function getAreaByJwd(Request $request)
+    {
+        $lat = $request->input('lat');
+        $lng = $request->input('lng');
+        if (!$lat || !$lng) {
+            throw new ResourceException(trans('DistributionBundle/Controllers/Distributor.address_required'), 400);
+        }
+        $area = get_area_by_lat_lng($lat, $lng);
+        return $this->response->array($area);
+    }
+
+
+    /**
+     * @SWG\Get(
+     *     path="/distributor/getAreaByAddress",
+     *     summary="根据地址获取地区信息",
+     *     tags={"店铺"},
+     *     description="根据地址获取地区信息",
+     *     operationId="getAreaByAddress",
+     *     @SWG\Parameter(
+     *         name="address",
+     *         in="query",
+     *         description="地址",
+     *         required=true,
+     *         type="string",
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @SWG\Items(
+     *                     type="object",
+     *                 )
+     *             ),
+     *          ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/DistributionErrorRespones") ) )
+     * )    
+     */
+    public function getAreaByAddress(Request $request)
+    {
+        $address = $request->input('address');
+        if (!$address) {
+            throw new ResourceException(trans('DistributionBundle/Controllers/Distributor.address_required'), 400);
+        }
+        $area = get_latlng_by_address($address);
+        return $this->response->array($area);
     }
 
 }

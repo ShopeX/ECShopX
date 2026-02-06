@@ -29,7 +29,7 @@ if (!function_exists('config_path')) {
      */
     function config_path($path = '')
     {
-        return true;
+        return app()->basePath('config/' . $path);
     }
 }
 

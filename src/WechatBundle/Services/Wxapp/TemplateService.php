@@ -316,9 +316,9 @@ class TemplateService
                         $itemfilter['company_id'] = $companyId;
                         $itemfilter['item_id'] = $itemIds;
                         $result = $itemsService->getItemsList($itemfilter);
-                        $result = $itemsService->getItemsListMemberPrice($result, $userId, $companyId);
+                        $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], $userId, $companyId);
                         //营销标签
-                        $result = $itemsService->getItemsListActityTag($result, $companyId);
+                        $result['list'] = $itemsService->getItemsListActityTag($result['list'], $companyId);
                         //获取品牌名和logo
                         $result['list'] = $itemsService->getItemsListBrandData($result['list'], $companyId);
                         $itemdatalist = array_column($result['list'], null, 'item_id');
@@ -361,9 +361,9 @@ class TemplateService
                             $itemfilter['company_id'] = $companyId;
                             $itemfilter['item_id'] = $itemIds;
                             $result = $itemsService->getItemsList($itemfilter);
-                            $result = $itemsService->getItemsListMemberPrice($result, $userId, $companyId);
+                            $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], $userId, $companyId);
                             //营销标签
-                            $result = $itemsService->getItemsListActityTag($result, $companyId);
+                            $result['list'] = $itemsService->getItemsListActityTag($result['list'], $companyId);
                             //获取品牌名和logo
                             $result['list'] = $itemsService->getItemsListBrandData($result['list'], $companyId);
                             $itemdatalist = array_column($result['list'], null, 'item_id');

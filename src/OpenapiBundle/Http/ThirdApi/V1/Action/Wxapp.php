@@ -63,7 +63,7 @@ class Wxapp extends Controller
         }
         app('log')->debug('daogouapi - wxapp/wxcode - scene : '.print_r($params['scene'], true));
         $rules = [
-            'path_type' => ['required|in:index,goods_list,goods_detail,recommend_list,recommend_detail','参数错误'],
+            'path_type' => ['required|in:index,goods_list,goods_detail,recommend_list,recommend_detail,share_land','参数错误'],
             'scene' => ['required', '参数错误'],
             'scene.id' => ['required_if:path_type,goods_detail,recommend_detail|integer|min:1','参数错误'],
         ];

@@ -4175,12 +4175,46 @@ class AbstractNormalOrder implements OrderInterface
     }
 
     public function saveOrderRelZiti($params) {
-        $filter = [
-            'company_id' => $params['company_id'],
-            'id' => $params['pickup_location'],
-        ];
-        $pickupLocationService = new PickupLocationService();
-        $pickupLocation = $pickupLocationService->getInfo($filter);
+        $pickupLocation = null;
+        
+        // 判断是否是店铺地址（负数ID）
+        if ($params['pickup_location'] < 0) {
+            // 从店铺表获取信息
+            $distributorId = abs($params['pickup_location']);
+            $distributorService = new DistributorService();
+            $distributor = $distributorService->getInfoSimple([
+                'company_id' => $params['company_id'],
+                'distributor_id' => $distributorId
+            ]);
+            
+            if (!$distributor) {
+                throw new ResourceException('店铺不存在');
+            }
+            
+            // 构造自提点格式的数据
+            $pickupLocation = [
+                'name' => $distributor['name'],
+                'lng' => $distributor['lng'],
+                'lat' => $distributor['lat'],
+                'province' => $distributor['province'] ?? '',
+                'city' => $distributor['city'] ?? '',
+                'area' => $distributor['area'] ?? '',
+                'address' => $distributor['address'] ?? '',
+                'contract_phone' => $distributor['mobile'] ?? '', // 使用 mobile 字段
+            ];
+        } else {
+            // 原有逻辑：从自提点表获取
+            $filter = [
+                'company_id' => $params['company_id'],
+                'id' => $params['pickup_location'],
+            ];
+            $pickupLocationService = new PickupLocationService();
+            $pickupLocation = $pickupLocationService->getInfo($filter);
+        }
+        
+        if (!$pickupLocation) {
+            throw new ResourceException('自提点不存在');
+        }
 
         $data = [
             'company_id' => $params['company_id'],

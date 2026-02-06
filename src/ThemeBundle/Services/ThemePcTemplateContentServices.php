@@ -254,9 +254,9 @@ class ThemePcTemplateContentServices
         $itemsService = new ItemsService();
         $list = $itemsService->getItemsList($itemfilter);
 
-        $list = $itemsService->getItemsListMemberPrice($list, $userId, $companyId);
+        $list['list'] = $itemsService->getItemsListMemberPrice($list['list'], $userId, $companyId);
         //营销标签-PC端暂时没有团购、秒杀等活动
-        $list = $itemsService->getItemsListActityTag($list, $companyId);
+        $list['list'] = $itemsService->getItemsListActityTag($list['list'], $companyId);
         //计算税费、税率-PC端暂时没有跨境商品
         /*$ItemTaxRateService = new ItemTaxRateService($companyId);
         foreach ($list['list'] as $key => $value) {

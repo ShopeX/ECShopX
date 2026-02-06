@@ -98,7 +98,7 @@ class MultiLangOutsideItemService
         foreach ($langBag as $k => $v) {
             $field = str_replace("_lang", "", $k);
             foreach ($v as $lang => $vv) {
-                $service = new MultiLangItem($lang);
+                $service = new MultiLangItem($lang,'MultiLangItem');
                 $insertData = $baseInsertData;
                 $insertData['lang'] = $lang;
                 $insertData['attribute_value'] = $vv;
@@ -123,7 +123,11 @@ class MultiLangOutsideItemService
     public function getOneLangData(array $body, array $field, string $tableName, string $lang, int $id = 0, string $module = '')
     {
         $fieldStruct = $field;
-        $filter = ['table_name' => $tableName, 'field' => $fieldStruct, 'lang' => $lang];
+        $filter = [
+            'table_name' => $tableName,
+            'field' => $fieldStruct,
+            // 'lang' => $lang
+        ];
         if (!empty($id)) {
             $filter['data_id'] = $id;
         }
@@ -131,9 +135,9 @@ class MultiLangOutsideItemService
             $filter['module_name'] = $module;
         }
 
-        $content = (new MultiLangItem($lang))->getListByFilter($filter, -1);
+        $content = (new MultiLangItem($lang, 'outside_item'))->getListByFilter($filter, -1);
         if (empty($content)) {
-            return [];
+            return $body;
         }
         $structContent = [];
         foreach ($content as $v) {
@@ -163,7 +167,11 @@ class MultiLangOutsideItemService
         if (empty($ids)) {
             return $dataList;
         }
-        $filter = ['table_name' => $tableName, 'field' => $field,  'data_id' => $ids];
+        $filter = [
+            'table_name' => $tableName, 
+            'field' => $field,  
+            'data_id' => $ids
+        ];
         $service = new MultiLangItem($lang,$tableName);
         $listTmp = $service->getListByFilter($filter, -1);
         if (empty($listTmp)) {
@@ -204,6 +212,7 @@ class MultiLangOutsideItemService
                 $dataField[$field] = $langBag[$field];
             }
         }
+        
         if(empty($dataField)){
             return;
         }
@@ -218,7 +227,7 @@ class MultiLangOutsideItemService
                 'table_name' => $tableName,
                 'field' => $k,
                 'data_id' => $dataId,
-                'lang' => '',
+                // 'lang' => '',
             ];
             $service->updateOrInsert($filter, $updateData);
         }

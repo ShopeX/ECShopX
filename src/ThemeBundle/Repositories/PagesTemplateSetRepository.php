@@ -100,6 +100,10 @@ class PagesTemplateSetRepository extends EntityRepository
             $entity->setCompanyId($data['company_id']);
         }
 
+        if (isset($data['regionauth_id']) && $data['regionauth_id']) {
+            $entity->setRegionauthId($data['regionauth_id']);
+        }
+
         if (isset($data['index_type']) && !empty($data['index_type'])) {
             $entity->setIndexType($data['index_type']);
         }
@@ -145,6 +149,7 @@ class PagesTemplateSetRepository extends EntityRepository
         return [
             'id' => $entity->getId(),
             'company_id' => $entity->getCompanyId(),
+            'regionauth_id' => $entity->getRegionauthId(),
             'index_type' => $entity->getIndexType(),
             'pages_template_id' => $entity->getPagesTemplateId(),
             'is_enforce_sync' => $entity->getIsEnforceSync(),

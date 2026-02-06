@@ -20,7 +20,10 @@ namespace ThemeBundle\Services;
 use CompanysBundle\Services\CommonLangModService;
 use Dingo\Api\Exception\ResourceException;
 use DistributionBundle\Entities\Distributor;
+use DistributionBundle\Services\DistributorService;
 use DistributionBundle\Services\DistributorTagsService;
+use GoodsBundle\Services\ItemsGroupRelItemService;
+use GoodsBundle\Services\ItemsGroupService;
 use GoodsBundle\Services\ItemsService;
 use GoodsBundle\Services\ItemsTagsService;
 use GoodsBundle\Services\ItemTaxRateService;
@@ -31,6 +34,7 @@ use ThemeBundle\Entities\PagesTemplateSet;
 use WechatBundle\Entities\WeappSetting;
 use EmployeePurchaseBundle\Services\ActivityItemsService;
 use EmployeePurchaseBundle\Services\ActivitiesService;
+use MembersBundle\Services\MemberTagsService;
 
 class PagesTemplateServices
 {
@@ -108,6 +112,7 @@ class PagesTemplateServices
         $template_params = [
             'template_title' => $params['template_title'],
             'template_pic' => $params['template_pic'],
+            'regionauth_id' => $params['regionauth_id'],
         ];
         $this->pagesTemplateRepository->updateOneBy($template_filter, $template_params);
     }
@@ -328,6 +333,11 @@ class PagesTemplateServices
         }
 
         $result = $this->pagesTemplateRepository->delete($filter);
+        
+        //删除关联的商品分组数据
+        $group_key = 'widget-' . $params['pages_template_id'];
+        $itemsGroupService = new ItemsGroupService();
+        $itemsGroupService->delGroupData($group_key);
 
         return $result;
     }
@@ -341,6 +351,12 @@ class PagesTemplateServices
             'company_id' => $params['company_id'],
             'distributor_id' => $params['distributor_id']
         ];
+        if (isset($params['regionauth_id'])) {
+            $filter['regionauth_id'] = $params['regionauth_id'];
+        }
+        if (isset($params['weapp_pages'])) {
+            $filter['weapp_pages'] = $params['weapp_pages'];
+        }
 
         $page_size = $params['page_size'];
         $page = $params['page_no'];
@@ -373,6 +389,7 @@ class PagesTemplateServices
         try {
             $creatr_params = [
                 'company_id' => $result['company_id'],
+                'regionauth_id' => $result['regionauth_id'],
                 'distributor_id' => $result['distributor_id'],
                 'template_name' => $result['template_name'],
                 'template_title' => $result['template_title'] . '-' . '复制',
@@ -425,6 +442,7 @@ class PagesTemplateServices
     public function modifyStatus($params)
     {
         $company_id = $params['company_id'];
+        // $regionauth_id = $params['regionauth_id'];
         $pages_template_id = $params['pages_template_id'];
         $status = $params['status'];//模板启用状态 1启用 2未启用
         $timer_status = $params['timer_status'];//定时启用状态 1启用 2未启用
@@ -432,6 +450,7 @@ class PagesTemplateServices
 
         $filter = [
             'company_id' => $company_id,
+            // 'regionauth_id' => $regionauth_id,
             'pages_template_id' => $pages_template_id
         ];
         $info = $this->pagesTemplateRepository->getInfo($filter);
@@ -444,12 +463,14 @@ class PagesTemplateServices
         if ($status == 2) {
             $filter_count = [
                 'company_id' => $company_id,
+                'regionauth_id' => $info['regionauth_id'],
                 'distributor_id' => $distributor_id,
+                'weapp_pages' => $info['weapp_pages'],
                 'status' => 1,
             ];
 
             $count = $this->pagesTemplateRepository->count($filter_count);
-            if ($count <= 1) {
+            if ($count <= 1 && $distributor_id == 0) {
                 throw new ResourceException("至少开启一套模版");
             }
         }
@@ -463,7 +484,9 @@ class PagesTemplateServices
 
             $filter_count = [
                 'company_id' => $company_id,
+                'regionauth_id' => $info['regionauth_id'],
                 'distributor_id' => $distributor_id,
+                'weapp_pages' => $info['weapp_pages'],
                 'timer_status' => 1
             ];
             $count = $this->pagesTemplateRepository->count($filter_count);
@@ -479,7 +502,9 @@ class PagesTemplateServices
                 //模板状态为启用中的修改未 未开启状态
                 $_filter = [
                     'company_id' => $company_id,
+                    'regionauth_id' => $info['regionauth_id'],
                     'distributor_id' => $distributor_id,
+                    'weapp_pages' => $info['weapp_pages'],
                     'status' => 1,
                 ];
 
@@ -530,14 +555,15 @@ class PagesTemplateServices
 
         $template_title = $info['template_title'];
         $template_pic = $info['template_pic'];
-        $weapp_pages = $info['weapp_pages'];
+        $weapp_pages = 'distributor_index';//$info['weapp_pages'];
         $element_edit_status = $info['element_edit_status'];
         $pages_template_id = $info['pages_template_id'];
         $template_name = $info['template_name'];
 
         //获取模板设置信息
         $_filter = [
-            'company_id' => $company_id
+            'company_id' => $company_id,
+            'regionauth_id' => $info['regionauth_id'],
         ];
         $pages_template_set_info = $this->pagesTemplateSetRepository->getInfo($_filter);
         if (!empty($pages_template_set_info)) {
@@ -616,7 +642,9 @@ class PagesTemplateServices
                 //模板状态为启用中的修改未 未开启状态
                 $_filter = [
                     'company_id' => $company_id,
+                    'regionauth_id' => $val['regionauth_id'],
                     'distributor_id' => $distributor_id,
+                    'weapp_pages' => $val['weapp_pages'],
                     'status' => 1,
                 ];
 
@@ -633,7 +661,7 @@ class PagesTemplateServices
                 $params = [
                     'status' => 1,
                     'timer_status' => 2,
-                    'timer_time' => '',
+                    // 'timer_time' => '',
                     'template_status_modify_time' => time()
                 ];
                 $this->pagesTemplateRepository->updateOneBy($filter, $params);
@@ -687,6 +715,7 @@ class PagesTemplateServices
         $company_id = $params['company_id'];
         $user_id = $params['user_id'];
         $distributor_id = $params['distributor_id'];
+        $regionauth_id = $params['regionauth_id'];
         $weapp_pages = $params['weapp_pages'];
         $template_name = $params['template_name'];
         $version = $params['version'];
@@ -711,6 +740,7 @@ class PagesTemplateServices
             if ($pages_template_set_info['index_type'] == 1) {
                 $filter = [
                     'company_id' => $params['company_id'],
+                    'regionauth_id' => $regionauth_id,
                     'distributor_id' => 0,
                     'status' => 1,
                     'weapp_pages' => $weapp_pages
@@ -730,11 +760,12 @@ class PagesTemplateServices
             if ($pages_template_id) {
                 throw new ResourceException('模版ID错误');
             } else {
-                if ($filter['distributor_id'] == 0) {
-                    throw new ResourceException('总部未设置启用模板');
-                } else {
-                    throw new ResourceException('当前门店未设置启用模板');
-                }
+                return $data;
+                // if ($filter['distributor_id'] == 0) {
+                //     throw new ResourceException('总部未设置启用模板');
+                // } else {
+                //     throw new ResourceException('当前门店未设置启用模板');
+                // }
             }
         }
 
@@ -760,6 +791,10 @@ class PagesTemplateServices
         ];
 
         $list = $this->templateContentByPage($params);
+
+        // 按会员标签过滤组件
+        $list = $this->filterTemplateContentByMemberTags($company_id, $user_id, $list);
+
         // 处理模板参数
         $this->templateHandler((int)$company_id, $list);
         $data['list'] = $list;
@@ -797,9 +832,19 @@ class PagesTemplateServices
         ];
         $result = $this->pagesTemplateRepository->getInfo($filter);
         if (empty($result)) {
-            $data['config'] = '';
-            $data['list'] = '';
-            return $data;
+            $filter = [
+                'company_id' => $params['company_id'],
+                'regionauth_id' => $params['regionauth_id'],
+                'distributor_id' => 0,
+                'status' => 1,
+                'weapp_pages' => $weapp_pages
+            ];
+            $result = $this->pagesTemplateRepository->getInfo($filter);
+            if (empty($result)) {
+                $data['config'] = '';
+                $data['list'] = '';
+                return $data;
+            }
         }
 
         // 模版关联的导航设置
@@ -818,6 +863,10 @@ class PagesTemplateServices
         ];
 
         $list = $this->templateContent($params);
+
+        // 按会员标签过滤组件
+        $list = $this->filterTemplateContentByMemberTags($company_id, $user_id, $list);
+
         $data['list'] = $list;
         $config = [];
         foreach ($list as $row) {
@@ -870,7 +919,7 @@ class PagesTemplateServices
                     $params['config']['lastSeconds'] = $seckilldata['activity']['last_seconds'] ?? null;
                 }
 
-                $seckilldata = $itemsService->getItemsListMemberPrice($seckilldata, $userId, $companyId);
+                $seckilldata['list'] = $itemsService->getItemsListMemberPrice($seckilldata['list'], $userId, $companyId);
 
                 return (array)array_column($seckilldata['list'], null, 'item_id');
             }
@@ -907,9 +956,9 @@ class PagesTemplateServices
             $activityItemsService = new ActivityItemsService();
             $result = $activityItemsService->getItemsListActityPrice($result, $params['e_activity_id'], $companyId);
         }
-        $result = $itemsService->getItemsListMemberPrice($result, $userId, $companyId);
+        $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], $userId, $companyId);
         //营销标签
-        $result = $itemsService->getItemsListActityTag($result, $companyId);
+        $result['list'] = $itemsService->getItemsListActityTag($result['list'], $companyId);
         foreach ($result['list'] as $key => $value) {
             // 判断是否跨境，如果是，获取税费税率
             if ($value['type'] == '1') {
@@ -1309,6 +1358,94 @@ class PagesTemplateServices
                     }
                     $params['list'] = array_values($params['list']);
                     break;
+
+                case 'contentpart':
+                    if (empty($params["data"]['data']) or !is_array($params["data"]['data'])) {
+                        break;
+                    }
+                    $distributor_ids = [];
+                    $distributorService = new DistributorService();
+                    //解析挂件里最新的店铺信息
+                    foreach ($params["data"]['data'] as $nav_k => $nav_v) {
+                        if (empty($nav_v['children']) or !is_array($nav_v['children'])) {
+                            continue;
+                        }
+                        foreach ($nav_v['children'] as $child_k => $child_v) {
+                            if (empty($child_v['name']) or $child_v['name'] != 'shop'
+                                or empty($child_v['data']) or !is_array($child_v['data'])) {
+                                continue;
+                            }
+                            $distributor_ids = array_merge($distributor_ids, array_column($child_v['data'], 'distributor_id'));
+                        }
+                    }
+                    $distributor_ids = array_filter(array_unique($distributor_ids));
+                    if (!$distributor_ids) {
+                        break;
+                    }
+                    $distributor_list = $distributorService->entityRepository->getLists(['distributor_id' => $distributor_ids], 'distributor_id, name, logo, first_letter, tag_name, tag_start_time, tag_end_time');
+                    if (!$distributor_list) {
+                        break;
+                    }
+                    $distributor_map = array_column($distributor_list, null, 'distributor_id');
+
+                    foreach ($params["data"]['data'] as $nav_k => $nav_v) {
+                        if (empty($nav_v['children']) or !is_array($nav_v['children'])) {
+                            continue;
+                        }
+                        foreach ($nav_v['children'] as $child_k => $child_v) {
+                            if (empty($child_v['name']) or $child_v['name'] != 'shop'
+                                or empty($child_v['data']) or !is_array($child_v['data'])) {
+                                continue;
+                            }
+                            foreach ($child_v['data'] as $child_data_k => $child_data_v) {
+                                $distributor_info = $distributor_map[$child_data_v['distributor_id']] ?? [];
+                                if (!$distributor_info) {
+                                    continue;
+                                }
+                                //店铺标签不在有效期内
+                                if (intval($distributor_info['tag_start_time']) > time() or intval($distributor_info['tag_end_time']) < time()) {
+                                    $distributor_info['tag_name'] = '';
+                                }
+                                $child_data_v = array_merge($child_data_v, $distributor_info);
+                                $child_v['data'][$child_data_k] = $child_data_v;
+                            }
+                            $nav_v['children'][$child_k] = $child_v;
+                        }
+                        $params["data"]['data'][$nav_k] = $nav_v;
+                    }
+                    break;
+
+                case 'shop':
+                    if (empty($params["data"]) or !is_array($params["data"])) {
+                        break;
+                    }
+                    $distributor_ids = array_column($params['data'], 'distributor_id');
+                    $distributorService = new DistributorService();
+                    //解析挂件里最新的店铺信息
+                    $distributor_ids = array_filter(array_unique($distributor_ids));
+                    if (!$distributor_ids) {
+                        break;
+                    }
+                    $distributor_list = $distributorService->entityRepository->getLists(['distributor_id' => $distributor_ids], 'distributor_id, name, logo, first_letter, tag_name, tag_start_time, tag_end_time');
+                    if (!$distributor_list) {
+                        break;
+                    }
+                    $distributor_map = array_column($distributor_list, null, 'distributor_id');
+
+                    foreach ($params['data'] as $tmp_k => $tmp_v) {
+                        $distributor_info = $distributor_map[$tmp_v['distributor_id']] ?? [];
+                        if (!$distributor_info) {
+                            continue;
+                        }
+                        //店铺标签不在有效期内
+                        if (intval($distributor_info['tag_start_time']) > time() or intval($distributor_info['tag_end_time']) < time()) {
+                            $distributor_info['tag_name'] = '';
+                        }
+                        $tmp_v = array_merge($tmp_v, $distributor_info);
+                        $params['data'][$tmp_k] = $tmp_v;
+                    }
+                    break;
+                    
                 case "store":
                     if (isset($params["data"]) && is_array($params["data"])) {
                         $distributor_map = [];
@@ -1373,6 +1510,148 @@ class PagesTemplateServices
             ];
         }
         return $list;
+    }
+
+    public function getWidgetItems($params)
+    {
+        if ($params['data_type'] != 'sales') {
+            if (!isset($params['data_value']) || !$params['data_value']) {
+                return [
+                    'data' => [],
+                    'filter' => [],
+                    'goodsSort' => null,
+                ];
+            }
+        }
+
+        $filter = [
+            'company_id' => $params['company_id'],
+            'regionauth_id' => $params['regionauth_id'] ?? 0,
+            'approve_status' => ['onsale', 'only_show'],
+            'audit_status' => 'approved',
+            'type' => 0,
+            'item_type' => 'normal',
+            'is_gift' => 0,
+            // 'store|gt' => 0,
+            'valid_distributor' => 1, //过滤有效的店铺
+            'is_default' => 1,
+        ];
+
+        if (isset($params['distributor_id']) && $params['distributor_id']) {
+            $filter['distributor_id'] = $params['distributor_id'];
+        }
+
+        if (isset($params['sort_gte'])) {
+            $filter['sort|gte'] = intval($params['sort_gte']);
+        }
+
+        $orderBy = [
+            'sort' => 'desc',
+            'sales' => 'desc',
+        ];
+
+        $newFilter = [];
+        $goodsSort = null;
+        switch ($params['data_type']) {
+            case 'main_category'://管理分类
+                if (!is_array($params['data_value'])) {
+                    $params['data_value'] = explode(',', $params['data_value']);
+                }
+                $filter['item_category'] = array_pop($params['data_value']);
+                $newFilter['main_category'] = $filter['item_category'];
+                break;
+            case 'category'://销售分类
+                if (!is_array($params['data_value'])) {
+                    $params['data_value'] = explode(',', $params['data_value']);
+                }
+                $filter['category_id'] = array_pop($params['data_value']);
+                $newFilter['category_id'] = $filter['category_id'];
+                break;
+            case 'seckill'://限时特惠
+                $filter['seckill_id'] = $params['data_value'];
+                $newFilter['seckill_id'] = $params['data_value'];
+                //判断秒杀活动是否在有效期内
+                $promotionSeckillActivityService = new PromotionSeckillActivityService();
+                $seckillInfo = $promotionSeckillActivityService->getSeckillInfo(['company_id' => $filter['company_id'], 'seckill_id' => $filter['seckill_id']], false);
+                if (empty($seckillInfo) or $seckillInfo['activity_end_time'] < time()) {
+                    return [
+                        'data' => [],
+                        'filter' => [],
+                        'goodsSort' => null,
+                    ];
+                }
+                break;
+            case 'group'://拼团
+                $filter['group_id'] = $params['data_value'];
+                $newFilter['group_id'] = $params['data_value'];
+                break;
+            case 'items_group'://商品分组
+                $itemsGroupRelItemService = new ItemsGroupRelItemService();
+                $rs = $itemsGroupRelItemService->repository->getLists(['group_id' => $params['data_value']], 'goods_id');
+                if ($rs) {
+                    $filter['goods_id'] = array_column($rs, 'goods_id');
+                    $newFilter['goods_id'] = array_column($rs, 'goods_id');
+                } else {
+                    $filter['goods_id'] = -1;
+                    $newFilter['goods_id'] = -1;
+                }                
+                break;
+            case 'sales'://按销量
+                $orderBy = ['sales' => 'desc'];
+                $goodsSort = 1;
+                break;
+            case 'items'://指定商品
+                $filter['goods_id'] = $params['data_value'];
+                $newFilter['goods_id'] = $params['data_value'];
+                break;
+            case 'distributor'://指定店铺
+                $filter['distributor_id'] = $params['data_value'];
+                $newFilter['distributor_id'] = $params['data_value'];
+                break;
+            case 'price'://按价格
+                if (!is_array($params['data_value'])) {
+                    $params['data_value'] = json_decode($params['data_value'], true);
+                }
+                if (isset($params['data_value'][0])) {
+                    $filter['price|gte'] = intval($params['data_value'][0] * 100);
+                    $newFilter['start_price'] = intval($params['data_value'][0] * 100);
+                }
+                if (isset($params['data_value'][1])) {
+                    $filter['price|lte'] = intval($params['data_value'][1] * 100);
+                    $newFilter['end_price'] = intval($params['data_value'][1] * 100);
+                }
+                break;
+            default:
+                return [
+                    'data' => [],
+                    'filter' => [],
+                    'goodsSort' => null,
+                ];
+        }
+        $pageSize = $params['num'] ?? 10;
+        $page = $params['page'] ?? 1;
+        if (!empty($params['pageSize'])) {
+            $pageSize = intval($params['pageSize']);
+        }
+
+        $itemsService = new ItemsService();
+        $result = $itemsService->getItemListData($filter, $page, $pageSize, $orderBy, false);
+
+        if ($result['list'] && $params['data_type'] == 'seckill') {
+            $promotionSeckillActivityService = new PromotionSeckillActivityService();
+            $seckillInfo = $promotionSeckillActivityService->getSeckillInfo(['company_id' => $filter['company_id'], 'seckill_id' => $filter['seckill_id']], false);
+
+            foreach ($result['list'] as $key => $row) {
+                $result['list'][$key]['activity_start_time'] = $seckillInfo['activity_start_time'];
+                $result['list'][$key]['activity_end_time'] = $seckillInfo['activity_end_time'];
+            }
+        }
+
+        return [
+            'data' => $result['list'],
+            'filter' => $newFilter,
+            'goodsSort' => $goodsSort,
+        ];
     }
 
     /**
@@ -1462,5 +1741,128 @@ class PagesTemplateServices
         }
 
         return true;
+    }
+
+    public function filterTemplateContentByMemberTags($companyId, $userId, $list) {
+        $tagRelWidgetIds = [];
+        foreach ($list as $key => $widget) {
+            if (!empty($widget['params']['meber_tags'])) {
+                if ($userId > 0) {
+                    foreach ($widget['params']['meber_tags'] as $relTag) {
+                        if (!isset($tagRelWidgetIds[$relTag['tag_id']])) {
+                            $tagRelWidgetIds[$relTag['tag_id']] = [$key];
+                        } else {
+                            if (!in_array($key, $tagRelWidgetIds[$relTag['tag_id']])) {
+                                $tagRelWidgetIds[$relTag['tag_id']][] = $key;
+                            }
+                        }
+                    }
+                } else {
+                    unset($list[$key]);
+                }
+            }
+
+            if ($widget['name'] == 'contentpart') {
+                if (!empty($widget['params']['data']['data'])) {
+                    foreach ($widget['params']['data']['data'] as $pkey => $part) {
+                        if (!empty($part['meber_tags'])) {
+                            if ($userId > 0) {
+                                foreach ($part['meber_tags'] as $relTag) {
+                                    if (!isset($tagRelWidgetIds[$relTag['tag_id']])) {
+                                        $tagRelWidgetIds[$relTag['tag_id']] = [$key.'_'.$pkey];
+                                    } else {
+                                        if (!in_array($key.'_'.$pkey, $tagRelWidgetIds[$relTag['tag_id']])) {
+                                            $tagRelWidgetIds[$relTag['tag_id']][] = $key.'_'.$pkey;
+                                        }
+                                    }
+                                }
+                            } else {
+                                unset($list[$key]['params']['data']['data'][$pkey]);
+                            }
+                        }
+
+                        if (!empty($part['children'])) {
+                            foreach ($part['children'] as $ckey => $child) {
+                                if (!empty($child['meber_tags'])) {
+                                    if ($userId > 0) {
+                                        foreach ($child['meber_tags'] as $relTag) {
+                                            if (!isset($tagRelWidgetIds[$relTag['tag_id']])) {
+                                                $tagRelWidgetIds[$relTag['tag_id']] = [$key.'_'.$pkey.'_'.$ckey];
+                                            } else {
+                                                if (!in_array($key.'_'.$pkey.'_'.$ckey, $tagRelWidgetIds[$relTag['tag_id']])) {
+                                                    $tagRelWidgetIds[$relTag['tag_id']][] = $key.'_'.$pkey.'_'.$ckey;
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        unset($list[$key]['params']['data']['data'][$pkey]['children'][$ckey]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($tagRelWidgetIds) {
+            $checkParams = [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'tag_id' => array_keys($tagRelWidgetIds),
+            ];
+            $memberTagsService = new MemberTagsService();
+            $bindTags = $memberTagsService->checkAndProcessTag($checkParams);
+
+            $filterWidgetIds = [];
+            foreach ($bindTags as $tag) {
+                if ($tag['related'] && isset($tagRelWidgetIds[$tag['tag_id']])) {
+                    $filterWidgetIds = array_merge($filterWidgetIds, $tagRelWidgetIds[$tag['tag_id']]);
+                }
+            }
+
+            foreach ($list as $key => $widget) {
+                if (!empty($widget['params']['meber_tags']) && !in_array($key, $filterWidgetIds)) {
+                    unset($list[$key]);
+                    continue;
+                }
+
+                if ($widget['name'] == 'contentpart') {
+                    if (!empty($widget['params']['data']['data'])) {
+                        foreach ($widget['params']['data']['data'] as $pkey => $part) {
+                            if (!empty($part['meber_tags']) && !in_array($key.'_'.$pkey, $filterWidgetIds)) {
+                                unset($list[$key]['params']['data']['data'][$pkey]);
+                                continue;
+                            }
+
+                            if (!empty($part['children'])) {
+                                foreach ($part['children'] as $ckey => $child) {
+                                    if (!empty($child['meber_tags']) && !in_array($key.'_'.$pkey.'_'.$ckey, $filterWidgetIds)) {
+                                        unset($list[$key]['params']['data']['data'][$pkey]['children'][$ckey]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach ($list as $key => $widget) {
+            if ($widget['name'] == 'contentpart') {
+                if (!empty($widget['params']['data']['data'])) {
+                    foreach ($widget['params']['data']['data'] as $pkey => $part) {
+                        if (!empty($part['children'])) {
+                            $widget['params']['data']['data'][$pkey]['children'] = array_values($part['children']);
+                        }
+                    }
+
+                    $list[$key]['params']['data']['data'] = array_values($widget['params']['data']['data']);
+                }
+            }
+        }
+        $list = array_values($list);
+
+        return $list;
     }
 }

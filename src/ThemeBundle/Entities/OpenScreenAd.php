@@ -309,6 +309,20 @@ class OpenScreenAd
     }
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="start_time", type="bigint", options={"comment":"开始时间"})
+     */
+    private $start_time;
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="end_time", type="bigint", options={"comment":"结束时间"})
+     */
+    private $end_time;
+
+    /**
      * Set created.
      *
      * @param int $created
@@ -426,5 +440,53 @@ class OpenScreenAd
     public function getIsJump()
     {
         return $this->is_jump;
+    }
+
+    /**
+     * Get start_time
+     *
+     * @return integer
+     */
+    public function getStartTime()
+    {
+        return $this->start_time;
+    }
+
+    /**
+     * Set start_time
+     *
+     * @param integer $startTime
+     *
+     * @return OpenScreenAd
+     */
+    public function setStartTime($startTime)
+    {
+        $this->start_time = $startTime;
+
+        return $this;
+    }
+
+    /**
+     * Get end_time
+     *
+     * @return integer
+     */
+    public function getEndTime()
+    {
+        return $this->end_time;
+    }
+
+    /**
+     * Set end_time
+     *
+     * @param integer $endTime
+     *
+     * @return OpenScreenAd
+     */
+    public function setEndTime($endTime)
+    {
+        $this->end_time = $endTime;
+
+        return $this;
     }
 }

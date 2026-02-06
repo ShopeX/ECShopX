@@ -387,8 +387,16 @@ class DistributorItemsService
                        ->setMaxResults($pageSize);
                 }
 
-                if (!$column) {
+                if (!$column || $column == '*') {
                     $column = 'items.*';
+                } else {
+                    if (!is_array($column)) {
+                        $column = explode(',', $column);
+                    }
+                    array_walk($column, function (&$v) {
+                        $v = 'items.'.$v;
+                    });
+                    $column = implode(',', $column);
                 }
                 $column .= ',(CASE items.store WHEN 0 THEN 0 ELSE 1 END) as v_store';
                 $result['list'] = $query->select($column)->execute()->fetchAll();

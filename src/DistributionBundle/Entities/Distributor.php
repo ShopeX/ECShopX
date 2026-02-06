@@ -93,6 +93,13 @@ class Distributor
     /**
      * @var string
      *
+     * @ORM\Column(name="first_letter", type="string", length="5", options={"comment":"店铺名称首字母", "default":""})
+     */
+    private $first_letter = "";
+
+    /**
+     * @var string
+     *
      * @ORM\Column(name="auto_sync_goods", type="boolean", options={"comment":"自动同步总部商品", "default"=false})
      */
     private $auto_sync_goods = false;
@@ -657,6 +664,30 @@ class Distributor
     public function getName()
     {
         return $this->name;
+    }
+
+    /**
+     * Set firstLetter.
+     *
+     * @param string $firstLetter
+     *
+     * @return Distributor
+     */
+    public function setFirstLetter($firstLetter)
+    {
+        $this->first_letter = $firstLetter;
+
+        return $this;
+    }
+
+    /**
+     * Get firstLetter.
+     *
+     * @return string
+     */
+    public function getFirstLetter()
+    {
+        return $this->first_letter;
     }
 
     /**

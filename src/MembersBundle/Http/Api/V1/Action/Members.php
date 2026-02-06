@@ -33,11 +33,15 @@ use MembersBundle\Services\MemberOperateLogService;
 use KaquanBundle\Services\VipGradeOrderService;
 use MembersBundle\Traits\MemberSearchFilter;
 use DistributionBundle\Services\DistributorUserService;
+use DistributionBundle\Services\DistributorService;
+use DistributionBundle\Entities\Distributor;
 use SalespersonBundle\Services\SalespersonService;
+use MembersBundle\Entities\MembersAssociations;
 
 use Dingo\Api\Exception\ResourceException;
 use PointBundle\Services\PointMemberService;
 use ThirdPartyBundle\Services\ShopexCrm\GetMemberListService;
+use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
 use WorkWechatBundle\Services\WorkWechatRelService;
 use CommunityBundle\Services\CommunityChiefService;
 use CommunityBundle\Services\CommunityChiefDistributorService;
@@ -46,8 +50,9 @@ use PopularizeBundle\Services\PromoterService;
 use MembersBundle\Events\CreateMemberSuccessEvent;
 use KaquanBundle\Services\UserDiscountService;
 use MembersBundle\Entities\MembersDeleteRecord;
+use MembersBundle\Services\MemberSalespersonNotifyService;
 
-use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
+use EspierBundle\Services\Config\ConfigRequestFieldsService;
 
 class Members extends Controller
 {
@@ -254,6 +259,10 @@ class Members extends Controller
      *     @SWG\Parameter( in="query", type="string", required=false, name="vip_grade", description="付费会员类型" ),
      *     @SWG\Parameter( in="query", type="string", required=false, name="remarks", description="备注" ),
      *     @SWG\Parameter( in="query", type="string", required=false, name="username", description="姓名" ),
+     *     @SWG\Parameter( in="query", type="string", required=false, name="employee_number", description="绑定导购编号" ),
+     *     @SWG\Parameter( in="query", type="string", required=false, name="store_bn", description="绑定门店编号" ),
+     *     @SWG\Parameter( in="query", type="string", required=false, name="birthday_start", description="生日开始日期，格式：Y-m-d" ),
+     *     @SWG\Parameter( in="query", type="string", required=false, name="birthday_end", description="生日结束日期，格式：Y-m-d" ),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *                  @SWG\Property( property="list", type="array",
@@ -329,10 +338,14 @@ class Members extends Controller
             'have_consume' => ['sometimes|' . Rule::in(['true', 'false']), '有无购买记录参数不正确'],
             'distributor_id' => ['sometimes|integer|min:1', '请确认您选择的店铺是否存在'],
             'shop_id' => ['sometimes|integer|min:1', '请确认您选择的门店是否存在'],
-            'tag_id' => ['sometimes|integer|min:1', '请确认您选择的会员标签是否存在'],
+            'tag_id' => ['sometimes', '请确认您选择的会员标签是否存在'],
             'grade_id' => ['sometimes', '请确认您选择的会员等级是否存在'],
             'vip_grade' => ['sometimes|' . Rule::in(['notvip', 'svip', 'vip', 'vip,svip']), '付费会员类型参数不正确'],
             'promoter_mobile' => ['sometimes|regex:/^1[3456789][0-9]{9}$/', '来源推广员请填写正确的手机号'],
+            'employee_number' => ['sometimes|string', '导购编号'],
+            'store_bn' => ['sometimes|string', '门店编号'],
+            'birthday_start' => ['sometimes|date_format:Y-m-d', '请填写正确的生日开始日期'],
+            'birthday_end' => ['sometimes|date_format:Y-m-d', '请填写正确的生日结束日期'],
             //'inviter_id' =>[],
             //'user_card_code' =>[],
             //'user_id' => [],
@@ -342,6 +355,10 @@ class Members extends Controller
             throw new ResourceException($error);
         }
         $filter = $this->dataFilter($postdata, $authdata);
+        $user = app('auth')->user();
+        if ($user->get('operator_type') == 'distributor') { //店铺端
+            $filter['op_distributor'] = $user->get('distributor_id');
+        }
         if (isset($postdata['inviter_mobile']) && $postdata['inviter_mobile']) {
             $inviterId = $this->memberService->getUserIdByMobile($postdata['inviter_mobile'], $authdata['company_id']);
             $filter['inviter_id'] = $inviterId ?: '-1';
@@ -373,6 +390,68 @@ class Members extends Controller
                 $filter['user_id'] = $promoterUserIds;
             }
         }
+
+        // 绑定导购编号或绑定门店编号查询
+        if ((isset($postdata['store_name']) && $postdata['store_name']) ||
+            (isset($postdata['employee_number']) && $postdata['employee_number'])) {
+
+            $bindMemberIds = $this->memberService->getBindMemberIdsBySalesperson(
+                $authdata['company_id'],
+                $postdata['employee_number'] ?? null,
+                $postdata['store_name'] ?? null
+            );
+
+            if (!empty($bindMemberIds)) {
+                // 如果已有 user_id 条件，取交集；否则直接设置
+                $existingUserIds = null;
+                // 处理 user_id|in 的情况（优先级最高）
+                if (isset($filter['user_id|in'])) {
+                    $existingUserIds = is_array($filter['user_id|in']) ? $filter['user_id|in'] : [$filter['user_id|in']];
+                    unset($filter['user_id|in']);
+                } elseif (isset($filter['user_id']) && $filter['user_id']) {
+                    $existingUserIds = is_array($filter['user_id']) ? $filter['user_id'] : [$filter['user_id']];
+                    unset($filter['user_id']);
+                }
+
+                // 处理 user_id|notIn 的情况：需要排除 notIn 中的ID，然后取交集
+                if (isset($filter['user_id|notIn'])) {
+                    $notInIds = is_array($filter['user_id|notIn']) ? $filter['user_id|notIn'] : [$filter['user_id|notIn']];
+                    $bindMemberIds = array_diff($bindMemberIds, $notInIds);
+                    // 如果排除后没有剩余ID，设置为空结果
+                    if (empty($bindMemberIds)) {
+                        unset($filter['user_id|notIn']);
+                        $filter['user_id|in'] = [-1];
+                    } else {
+                        unset($filter['user_id|notIn']);
+                        if ($existingUserIds !== null) {
+                            $filter['user_id|in'] = array_intersect($existingUserIds, $bindMemberIds);
+                            if (empty($filter['user_id|in'])) {
+                                $filter['user_id|in'] = [-1];
+                            }
+                        } else {
+                            $filter['user_id|in'] = $bindMemberIds;
+                        }
+                    }
+                } else {
+                    if ($existingUserIds !== null) {
+                        $filter['user_id|in'] = array_intersect($existingUserIds, $bindMemberIds);
+                        // 如果交集为空，设置为不存在的ID，确保查询结果为空
+                        if (empty($filter['user_id|in'])) {
+                            $filter['user_id|in'] = [-1];
+                        }
+                    } else {
+                        $filter['user_id|in'] = $bindMemberIds;
+                    }
+                }
+            } else {
+                // 如果没有找到绑定的会员，设置为不存在的ID，确保查询结果为空
+                // 如果已有 user_id 条件，也需要清空并设置为空结果
+                unset($filter['user_id'], $filter['user_id|in'], $filter['user_id|notIn']);
+                $filter['user_id|in'] = [-1];
+            }
+        }
+
+        unset($filter['distributor_id']);
         $result['list'] = $this->memberService->getMemberList($filter, $page, $limit);
         $result['total_count'] = $this->memberService->getMemberCount($filter);
 
@@ -420,7 +499,7 @@ class Members extends Controller
                 // 是否可调整上级（非推广员、有上级推广员）
                 $isCanChangepid = $promoterService->getMemberIsCanChangepid($companyId, $userIds);
             }
-            
+
             $allMobile = [];
             foreach ($result['list'] as &$value) {
                 $value['habbit'] = json_decode($value['habbit'], true);
@@ -455,7 +534,7 @@ class Members extends Controller
                     $value['mobile'] = data_masking('mobile', (string) $value['mobile']);
                     $value['username'] = data_masking('truename', (string) $value['username']);
                     $value['inviter'] = $value['inviter'] == '-' ? $value['inviter'] : data_masking('mobile', (string) $value['inviter']);
-                    $value['sex'] = $value['sex'] == '0' ? '-' : data_masking('sex', (string) $value['sex']);
+                    // $value['sex'] = $value['sex'] == '0' ? '-' : data_masking('sex', (string) $value['sex']);
                 }
 
             }
@@ -480,7 +559,131 @@ class Members extends Controller
                     }
                 }
             }
-            
+
+            // 为每个成员添加 requestFields
+            if ($result['list']) {
+                $userIds = array_column($result['list'], 'user_id');
+                $membersInfoFilter = [
+                    'user_id' => $userIds,
+                    'company_id' => $companyId,
+                ];
+                // 批量获取所有成员的 members_info 数据
+                $membersInfoList = $this->memberService->membersInfoRepository->getListNotPagination($membersInfoFilter, '*');
+                $membersInfoIndex = [];
+                foreach ($membersInfoList as $info) {
+                    $membersInfoIndex[$info['user_id']] = $info;
+                }
+
+                // 获取验证字段配置
+                $requestValidateList = (new ConfigRequestFieldsService())->getListAndHandleSettingFormat($companyId, ConfigRequestFieldsService::MODULE_TYPE_MEMBER_INFO);
+
+                // 为每个成员生成 requestFields
+                foreach ($result['list'] as &$member) {
+                    $requestFields = [];
+                    $datapassRequestFields = [];
+
+                    if (isset($membersInfoIndex[$member['user_id']])) {
+                        $info = $membersInfoIndex[$member['user_id']];
+                        $info["other_params"] = (array)jsonDecode($info["other_params"] ?? null);
+
+                        foreach ($requestValidateList as $keyName => $item) {
+                            // 根据数据库中定义的字段名去member和info里获取实际的值，如果都拿不到，则去info的other_params.custom_data里去取
+                            if (isset($member[$keyName])) {
+                                $requestFields[$keyName] = $member[$keyName];
+                            } elseif (isset($info[$keyName])) {
+                                $requestFields[$keyName] = $info[$keyName];
+                            } else {
+                                $requestFields[$keyName] = $info["other_params"]["custom_data"][$keyName] ?? null;
+                            }
+
+                            $fieldType = $item["field_type"] ?? null;
+                            // 如果字段是checkbox则只把选中的值拼接成字符串
+                            if ($fieldType == ConfigRequestFieldsService::FIELD_TYPE_CHECKBOX && !empty($requestFields[$keyName])) {
+                                // 获取已经选中的选项
+                                $checkedItemList = [];
+                                $requestFields[$keyName] = (array)jsonDecode($requestFields[$keyName]);
+                                foreach ($requestFields[$keyName] as &$checkboxItem) {
+                                    if (!empty($checkboxItem["ischecked"]) && ($checkboxItem["ischecked"] === "true" || $checkboxItem["ischecked"] === true)) {
+                                        $checkboxItem["ischecked"] = true;
+                                        $checkedItemList[] = $checkboxItem["name"] ?? "";
+                                    } else {
+                                        $checkboxItem["ischecked"] = false;
+                                    }
+                                }
+                                unset($checkboxItem);
+                            }
+                            if ($item['field_type'] == ConfigRequestFieldsService::FIELD_TYPE_MOBILE) {
+                                $datapassRequestFields['mobile'][] = $keyName;
+                            }
+                        }
+
+                        // 转换字段值为描述
+                        (new ConfigRequestFieldsService())->transformGetDescByValue($companyId, ConfigRequestFieldsService::MODULE_TYPE_MEMBER_INFO, $requestFields);
+                    }
+
+                    $member["requestFields"] = $requestFields;
+                    $member['datapassRequestFields'] = $datapassRequestFields;
+                }
+            }
+
+
+            // 批量查询会员的绑定导购和绑定门店
+            $this->memberService->batchGetBindSalesperson($companyId, $result['list']);
+
+            // 批量查询注册分销商名称
+            $regDistributorIds = array_filter(array_unique(array_column($result['list'], 'reg_distributor')), function($id) {
+                return $id > 0;
+            });
+            $regDistributorNames = [];
+            if (!empty($regDistributorIds)) {
+                $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
+                $distributorFilter = [
+                    'distributor_id' => $regDistributorIds,
+                    'company_id' => $companyId,
+                ];
+                $distributorList = $distributorRepository->getLists($distributorFilter, 'distributor_id,name');
+
+                if (!empty($distributorList)) {
+                    foreach ($distributorList as $distributor) {
+                        $regDistributorNames[$distributor['distributor_id']] = $distributor['name'] ?? '';
+                    }
+                }
+            }
+
+            // 将分销商名称添加到会员列表中
+            foreach ($result['list'] as &$member) {
+                $regDistributorId = $member['reg_distributor'] ?? 0;
+                $member['reg_distributor_name'] = $regDistributorNames[$regDistributorId] ?? '';
+            }
+            unset($member);
+
+            // 批量查询分配的店铺（op_distributor）对应的门店名称
+            $opDistributorIds = array_filter(array_unique(array_column($result['list'], 'op_distributor')), function($id) {
+                return $id > 0;
+            });
+            $opDistributorNames = [];
+            if (!empty($opDistributorIds)) {
+                $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
+                $distributorFilter = [
+                    'distributor_id' => $opDistributorIds,
+                    'company_id' => $companyId,
+                ];
+                $distributorList = $distributorRepository->getLists($distributorFilter, 'distributor_id,name');
+
+                if (!empty($distributorList)) {
+                    foreach ($distributorList as $distributor) {
+                        $opDistributorNames[$distributor['distributor_id']] = $distributor['name'] ?? '';
+                    }
+                }
+            }
+
+            // 将门店名称添加到会员列表中，字段名为 maintain_store
+            foreach ($result['list'] as &$member) {
+                $opDistributorId = $member['op_distributor'] ?? 0;
+                $member['maintain_store'] = $opDistributorNames[$opDistributorId] ?? '';
+            }
+            unset($member);
+
         }
         return $this->response->array($result);
     }
@@ -568,11 +771,50 @@ class Members extends Controller
             ];
             $result['wechatUserInfo'] = $wechatUserService->getUserInfo($filter);
             $unionid = $result['wechatUserInfo']['unionid'] ?? '';
+
+            // 绑定导购和绑定门店信息（通过 unionid 查询）
             if($unionid){
                 $requestSalesperson = new MarketingCenterRequest();
-                $resultSalesperson = $requestSalesperson->call($companyId, 'basics.member.getBindSalesperson', ['unionid' => $unionid]);
+                $resultSalesperson = $requestSalesperson->call($companyId, 'basics.member.getBindSalesperson', ['external_member_id' => $result['user_id']]);
                 // [2025-08-01 17:09:24] production.DEBUG: MarketingCenter:result===>{"status":"success","code":"200","message":"success","data":{"salesperson_id":8,"work_userid":"18964058319","member_id":"8","external_member_type":1,"external_userid":"wmZ_c_cQAAZ8RAXTS1EZbpCv0TASdw1A","suite_external_userid":"","unionid":"oFvDQ69HXH8Wcbw19tE9h0RM4MvY","member_status":1,"bind_status":1,"bind_time":1753949254,"bind_cancel_time":1754063999,"friend_status":1,"become_friend_time":1753949070,"employee_number":"18964058319","store_bn":"09876555","store_name":"桂林路店"}}
-                $result['salesperson_info'] = $resultSalesperson['data'] ?? [];
+                $salespersonData = $resultSalesperson['data'] ?? [];
+                $result['salesperson_info'] = $salespersonData;
+
+                // 绑定门店信息
+                if (!empty($salespersonData)) {
+                    $result['store_info'] = [
+                        'store_bn' => $salespersonData['store_bn'] ?? '',
+                        'store_name' => $salespersonData['store_name'] ?? '',
+                    ];
+                } else {
+                    $result['store_info'] = [
+                        'store_bn' => '',
+                        'store_name' => '',
+                    ];
+                }
+            } else {
+                $result['salesperson_info'] = [];
+                $result['store_info'] = [
+                    'store_bn' => '',
+                    'store_name' => '',
+                ];
+            }
+
+
+            // 注册门店信息（根据 reg_distributor 查询）
+            if (!empty($result['reg_distributor']) && $result['reg_distributor'] > 0) {
+                $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
+                $distributorInfo = $distributorRepository->getInfo([
+                    'distributor_id' => $result['reg_distributor'],
+                    'company_id' => $companyId,
+                ]);
+                if ($distributorInfo) {
+                    $result['reg_distributor'] = $distributorInfo['name'] ?? '';
+                } else {
+                    $result['reg_distributor'] = '';
+                }
+            } else {
+                $result['reg_distributor'] = '';
             }
 
             $depositTrade = new DepositTrade();
@@ -1372,5 +1614,374 @@ class Members extends Controller
         $result['vipgrade'] = $vipgrade ? $vipgrade : ['is_vip' => false];
 
         return $this->response->array($result);
+    }
+
+
+    /**
+     * @SWG\Put(
+     *     path="/member/regDistributor",
+     *     summary="批量更新会员注册分销商",
+     *     tags={"会员"},
+     *     description="批量更新会员的注册分销商ID(reg_distributor字段)",
+     *     operationId="reChangeRegDistributor",
+     *     @SWG\Parameter(
+     *         name="Authorization",
+     *         in="header",
+     *         description="JWT验证token",
+     *         required=true,
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="user_id",
+     *         in="query",
+     *         description="会员ID数组，支持数组格式或JSON字符串格式，如：[1,2,3] 或 \"[1,2,3]\"",
+     *         required=true,
+     *         type="array",
+     *         @SWG\Items(type="integer")
+     *     ),
+     *     @SWG\Parameter(
+     *         name="distributor_id",
+     *         in="query",
+     *         description="分销商ID",
+     *         required=true,
+     *         type="integer",
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @SWG\Property(property="status", type="boolean", example=true, description="操作状态"),
+     *                 @SWG\Property(property="message", type="string", example="更新成功", description="提示信息"),
+     *                 @SWG\Property(property="affected_rows", type="integer", example=5, description="受影响的行数"),
+     *             ),
+     *          ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/MembersErrorRespones") ) )
+     * )
+     */
+    public function reChangeRegDistributor(Request $request){
+        $companyId = app('auth')->user()->get('company_id');
+        $inputData = $request->input();
+
+        // 参数验证
+        $rules = [
+            'user_id' => ['required', '会员ID必填'],
+            'distributor_id' => ['required|integer', '分销商ID必填'],
+        ];
+        $errorMessage = validator_params($inputData, $rules);
+        if ($errorMessage) {
+            throw new ResourceException($errorMessage);
+        }
+
+        $userIds = $inputData['user_id'];
+        $distributorId = intval($inputData['distributor_id']);
+
+        // 确保 user_id 是数组
+        if (!is_array($userIds)) {
+            if (is_string($userIds)) {
+                $userIds = json_decode($userIds, true);
+            } else {
+                $userIds = [$userIds];
+            }
+        }
+
+        if (empty($userIds)) {
+            throw new ResourceException('会员ID不能为空');
+        }
+
+        // 过滤掉无效的 user_id
+        $userIds = array_filter(array_map('intval', $userIds), function($id) {
+            return $id > 0;
+        });
+
+        if (empty($userIds)) {
+            throw new ResourceException('有效的会员ID不能为空');
+        }
+
+        // 查询当前会员的门店信息，过滤掉门店一致的会员
+        $membersRepository = app('registry')->getManager('default')->getRepository(\MembersBundle\Entities\Members::class);
+        $currentMembers = $membersRepository->lists([
+            'company_id' => $companyId,
+            'user_id' => $userIds,
+        ],["created" => "DESC"],1000,1,false);
+
+        // 如果查询不到会员信息，则报错
+        if (empty($currentMembers['list'])) {
+            throw new ResourceException('未找到指定的会员信息');
+        }
+
+        // 过滤出需要更新的会员（门店不一致的）
+        $needUpdateUserIds = [];
+        foreach ($currentMembers['list'] as $member) {
+            $currentDistributorId = intval($member['op_distributor'] ?? 0);
+            // 如果当前门店和提交的门店不一致，则需要更新
+            if ($currentDistributorId != $distributorId) {
+                $needUpdateUserIds[] = intval($member['user_id']);
+            }
+        }
+
+        // 如果所有会员的门店都一致，则不做处理
+        if (empty($needUpdateUserIds)) {
+            app('log')->info('批量更新会员注册分销商：所有会员门店已一致，无需更新', [
+                'company_id' => $companyId,
+                'user_ids' => $userIds,
+                'distributor_id' => $distributorId,
+            ]);
+
+            return $this->response->array([
+                'status' => true,
+                'message' => '所有会员门店已一致，无需更新',
+                'affected_rows' => 0,
+            ]);
+        }
+
+        // 通知导购端批量解绑会员（在更新前先通知，只通知需要更新的会员）
+        try {
+            $notifyService = new MemberSalespersonNotifyService();
+            $notifyResult = $notifyService->notifyUnbindMembers($companyId, $needUpdateUserIds);
+
+            app('log')->info('批量更新会员注册分销商：通知导购端解绑结果', [
+                'company_id' => $companyId,
+                'user_ids' => $needUpdateUserIds,
+                'notify_result' => $notifyResult,
+            ]);
+        } catch (\Exception $e) {
+            // 通知失败不影响主流程，只记录日志
+            app('log')->error('批量更新会员注册分销商：通知导购端解绑失败', [
+                'company_id' => $companyId,
+                'user_ids' => $needUpdateUserIds,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        // 批量更新 reg_distributor 和 op_distributor（只更新需要更新的会员）
+        $filter = [
+            'company_id' => $companyId,
+            'user_id' => $needUpdateUserIds,
+        ];
+        $updateData = [
+            // 'reg_distributor' => $distributorId,
+            'op_distributor' => $distributorId,
+        ];
+
+        $result = $membersRepository->updateBy($filter, $updateData);
+
+        app('log')->info('批量更新会员注册分销商', [
+            'company_id' => $companyId,
+            'original_user_ids' => $userIds,
+            'need_update_user_ids' => $needUpdateUserIds,
+            'skipped_count' => count($userIds) - count($needUpdateUserIds),
+            'distributor_id' => $distributorId,
+            'affected_rows' => $result,
+        ]);
+
+        // 更新门店后，查询这批会员在当前门店下是否有好友关系的导购（只查询需要更新的会员）
+        try {
+            // 1. 获取门店的 shop_code（store_bn）
+            $distributorService = new DistributorService();
+            $distributorInfo = $distributorService->getInfoSimple([
+                'company_id' => $companyId,
+                'distributor_id' => $distributorId
+            ]);
+
+            if (empty($distributorInfo) || empty($distributorInfo['shop_code'])) {
+                app('log')->warning('批量更新会员注册分销商：未找到门店信息或门店编号', [
+                    'company_id' => $companyId,
+                    'distributor_id' => $distributorId,
+                ]);
+            } else {
+                $storeBn = $distributorInfo['shop_code'];
+
+                // 2. 获取会员的 unionid 列表（只查询需要更新的会员）
+                $membersAssociationsRepository = app('registry')->getManager('default')->getRepository(MembersAssociations::class);
+                $associations = $membersAssociationsRepository->lists([
+                    'user_id' => $needUpdateUserIds,
+                    'company_id' => $companyId,
+                    'user_type' => 'wechat'
+                ], 'user_id,unionid', 1, -1);
+
+                if (!empty($associations)) {
+                    $unionids = array_filter(array_column($associations, 'unionid'));
+
+                    if (!empty($unionids)) {
+                        // 3. 调用导购接口查询好友关系
+                        $marketingCenterRequest = new MarketingCenterRequest();
+                        $requestData = [
+                            'store_bn' => $storeBn,
+                            'unionids' => $unionids,
+                        ];
+
+                        app('log')->info('批量更新会员注册分销商：查询门店导购好友关系', [
+                            'company_id' => $companyId,
+                            'distributor_id' => $distributorId,
+                            'store_bn' => $storeBn,
+                            'unionids_count' => count($unionids),
+                        ]);
+
+                        $friendCheckResult = $marketingCenterRequest->call($companyId, 'members.store.friend.check', $requestData);
+
+                        app('log')->info('批量更新会员注册分销商：查询门店导购好友关系结果', [
+                            'company_id' => $companyId,
+                            'distributor_id' => $distributorId,
+                            'store_bn' => $storeBn,
+                            'result' => $friendCheckResult,
+                        ]);
+
+                        // 4. 构建 unionid => user_id 的映射（无论是否有返回数据都需要）
+                        $unionidToUserIdMap = [];
+                        foreach ($associations as $assoc) {
+                            if (!empty($assoc['unionid']) && !empty($assoc['user_id'])) {
+                                $unionidToUserIdMap[$assoc['unionid']] = $assoc['user_id'];
+                            }
+                        }
+
+                        // 记录有好友关系的 unionid
+                        $hasFriendUnionids = [];
+
+                        // 5. 如果查询到好友关系，更新对应会员信息
+                        if (!empty($friendCheckResult) &&
+                            !empty($friendCheckResult['data']) &&
+                            is_array($friendCheckResult['data'])) {
+
+                            // 收集需要更新的会员信息（有好友关系的）
+                            $updateMembers = [];
+                            foreach ($friendCheckResult['data'] as $friendData) {
+                                $unionid = $friendData['unionid'] ?? '';
+                                $workUserid = $friendData['work_userid'] ?? '';
+
+                                if (!empty($unionid) && !empty($workUserid) && isset($unionidToUserIdMap[$unionid])) {
+                                    $hasFriendUnionids[] = $unionid; // 记录有好友关系的 unionid
+                                    $updateMembers[] = [
+                                        'user_id' => $unionidToUserIdMap[$unionid],
+                                        'work_userid' => $workUserid,
+                                        'unionid' => $unionid,
+                                    ];
+                                }
+                            }
+
+                            // 批量更新有好友关系的会员信息
+                            if (!empty($updateMembers)) {
+                                $updateUserIds = array_column($updateMembers, 'user_id');
+
+                                // 按 work_userid 分组，因为每个会员可能对应不同的导购
+                                foreach ($updateMembers as $memberInfo) {
+                                    $updateFilter = [
+                                        'company_id' => $companyId,
+                                        'user_id' => $memberInfo['user_id'],
+                                    ];
+
+                                    $updateData = [
+                                        'is_become_friend' => 1,
+                                        'has_fp' => 1,
+                                        'fp_salesperson' => $memberInfo['work_userid'],
+                                    ];
+
+                                    $membersRepository->updateBy($updateFilter, $updateData);
+                                }
+
+                                app('log')->info('批量更新会员注册分销商：更新会员好友关系成功', [
+                                    'company_id' => $companyId,
+                                    'distributor_id' => $distributorId,
+                                    'store_bn' => $storeBn,
+                                    'updated_count' => count($updateMembers),
+                                    'updated_user_ids' => $updateUserIds,
+                                ]);
+                            } else {
+                                app('log')->warning('批量更新会员注册分销商：查询到好友关系但无法匹配到会员', [
+                                    'company_id' => $companyId,
+                                    'distributor_id' => $distributorId,
+                                    'store_bn' => $storeBn,
+                                    'friend_data' => $friendCheckResult['data'],
+                                ]);
+                            }
+                        } else {
+                            app('log')->info('批量更新会员注册分销商：未查询到好友关系或接口返回异常', [
+                                'company_id' => $companyId,
+                                'distributor_id' => $distributorId,
+                                'store_bn' => $storeBn,
+                                'result' => $friendCheckResult,
+                            ]);
+                        }
+
+                        // 6. 更新没有好友关系的会员（has_fp = 0）
+                        // 只有当导购接口成功返回数据时，才计算差集并更新
+                        // 计算没有好友关系的 unionid（本次需要更新的 unionid - 导购返回的有好友关系的 unionid）
+                        if (!empty($friendCheckResult) ) {
+
+                            // 只有导购接口成功返回时，才计算差集
+                            $noFriendUnionids = array_diff($unionids, $hasFriendUnionids);
+
+                            if (!empty($noFriendUnionids)) {
+                                $noFriendUserIds = [];
+                                foreach ($noFriendUnionids as $unionid) {
+                                    if (isset($unionidToUserIdMap[$unionid])) {
+                                        $noFriendUserIds[] = $unionidToUserIdMap[$unionid];
+                                    }
+                                }
+
+                                if (!empty($noFriendUserIds)) {
+                                    // 批量更新没有好友关系的会员 has_fp = 0
+                                    $updateFilter = [
+                                        'company_id' => $companyId,
+                                        'user_id' => $noFriendUserIds,
+                                    ];
+
+                                    $updateData = [
+                                        'has_fp' => 0,
+                                    ];
+
+                                    $noFriendResult = $membersRepository->updateBy($updateFilter, $updateData);
+
+                                    app('log')->info('批量更新会员注册分销商：更新无好友关系会员', [
+                                        'company_id' => $companyId,
+                                        'distributor_id' => $distributorId,
+                                        'store_bn' => $storeBn,
+                                        'updated_count' => count($noFriendUserIds),
+                                        'updated_user_ids' => $noFriendUserIds,
+                                        'affected_rows' => $noFriendResult,
+                                    ]);
+                                }
+                            }
+                        } else {
+                            app('log')->info('批量更新会员注册分销商：导购接口返回异常，不更新无好友关系会员', [
+                                'company_id' => $companyId,
+                                'distributor_id' => $distributorId,
+                                'store_bn' => $storeBn,
+                                'result' => $friendCheckResult,
+                            ]);
+                        }
+                    } else {
+                        app('log')->warning('批量更新会员注册分销商：未找到会员unionid', [
+                            'company_id' => $companyId,
+                            'user_ids' => $userIds,
+                        ]);
+                    }
+                } else {
+                    app('log')->warning('批量更新会员注册分销商：未找到会员关联信息', [
+                        'company_id' => $companyId,
+                        'user_ids' => $userIds,
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            // 查询好友关系失败不影响主流程，只记录日志
+            app('log')->error('批量更新会员注册分销商：查询门店导购好友关系失败', [
+                'company_id' => $companyId,
+                'distributor_id' => $distributorId,
+                'user_ids' => $userIds,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        return $this->response->array([
+            'status' => true,
+            'message' => '更新成功',
+            'affected_rows' => $result,
+        ]);
     }
 }

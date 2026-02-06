@@ -110,7 +110,7 @@ class WechatAuthRepository extends EntityRepository
                     array_walk($value, function (&$colVal) use ($qb) {
                         $colVal = $qb->expr()->literal($colVal);
                     });
-                    $qb = $qb->andWhere($qb->expr()->$k($field, $value));
+                    $qb = $qb->andWhere($qb->expr()->$k($v, $value));
                 } else {
                     $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
                 }

@@ -206,7 +206,7 @@ class PostService
                     // 如果是推广员不需要计算会员价
                     if ($result['list'] && ($v['user_id']??null)) {
                             // 计算会员价
-                            $result = $itemsService->getItemsListMemberPrice($result, $v['user_id'], $v['company_id']??1);
+                            $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], $v['user_id'], $v['company_id']??1);
                         }
                     //$itemList = $itemService->getItemsList();
                     //,'item_id,goods_id,brief,default_item_id,item_name,itemName,itemBn,price,pics,store'

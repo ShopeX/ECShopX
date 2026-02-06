@@ -167,6 +167,10 @@ class DiscountNewGiftCardService implements KaquanInterface
                 }
             }
             if (isset($dataInfo['vip_grade_ids'])) {
+                if(!is_array($dataInfo['vip_grade_ids'])){
+                    $dataInfo['vip_grade_ids'] = json_decode($dataInfo['vip_grade_ids'], true);
+                }
+
                 foreach ($detail['vip_grade_ids'] as $vgid) {
                     if (!in_array($vgid, $dataInfo['vip_grade_ids'])) {
                         throw new ResourceException(trans('KaquanBundle.members_only_expand_not_reduce_scope'));
@@ -262,6 +266,18 @@ class DiscountNewGiftCardService implements KaquanInterface
 
     public function __setParams(&$params, $is_create = false)
     {
+        // 设置券类型默认值
+        if (!isset($params['coupon_type']) || !in_array($params['coupon_type'], ['mall', 'guide'])) {
+            $params['coupon_type'] = 'mall';
+        }
+
+        // 设置导购发放数量默认值
+        if (!isset($params['guide_issue_quantity'])) {
+            $params['guide_issue_quantity'] = 0;
+        } else {
+            $params['guide_issue_quantity'] = intval($params['guide_issue_quantity']);
+        }
+
         if (isset($params['date_type'])) {
             switch ($params['date_type']) {
                 case self::DATE_TYPE_LONG:
@@ -318,7 +334,7 @@ class DiscountNewGiftCardService implements KaquanInterface
             $params['grade_ids'] = $ids;
         }
 
-        if (isset($params['vip_grade_ids']) && !empty($params['grade_ids'])) {
+        if (isset($params['vip_grade_ids']) && !empty($params['vip_grade_ids'])) {
             $ids = json_decode($params['vip_grade_ids'], true);
             $params['vip_grade_ids'] = $ids;
         }

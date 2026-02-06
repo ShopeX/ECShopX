@@ -516,6 +516,20 @@ class DiscountCards
     private $dm_use_channel;
 
     /**
+     * @var string
+     *
+     * @ORM\Column(name="coupon_type", type="string", length=10, options={"comment":"券类型。mall:商城券;guide:导购专属券", "default": "mall"})
+     */
+    private $coupon_type = 'mall';
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="guide_issue_quantity", type="integer", options={"comment":"导购发放数量", "default": 0})
+     */
+    private $guide_issue_quantity = 0;
+
+    /**
      * Get cardId
      *
      * @return integer
@@ -2131,5 +2145,53 @@ class DiscountCards
     public function getDmUseChannel()
     {
         return $this->dm_use_channel;
+    }
+
+    /**
+     * Set couponType.
+     *
+     * @param string $couponType
+     *
+     * @return DiscountCards
+     */
+    public function setCouponType($couponType = 'mall')
+    {
+        $this->coupon_type = $couponType;
+
+        return $this;
+    }
+
+    /**
+     * Get couponType.
+     *
+     * @return string
+     */
+    public function getCouponType()
+    {
+        return $this->coupon_type;
+    }
+
+    /**
+     * Set guideIssueQuantity.
+     *
+     * @param integer $guideIssueQuantity
+     *
+     * @return DiscountCards
+     */
+    public function setGuideIssueQuantity($guideIssueQuantity = 0)
+    {
+        $this->guide_issue_quantity = $guideIssueQuantity;
+
+        return $this;
+    }
+
+    /**
+     * Get guideIssueQuantity.
+     *
+     * @return integer
+     */
+    public function getGuideIssueQuantity()
+    {
+        return $this->guide_issue_quantity;
     }
 }

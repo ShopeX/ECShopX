@@ -40,6 +40,8 @@ $api->version('v1', function ($api) {
         // 商品分类-店铺推广
         $api->get('/wxapp/goods/promoter/category',            ['as' => 'goods.category.lists', 'uses' => 'Category@getPromoterCategoryList']);
 
+        //获取分组商品
+        $api->get('/wxapp/goods/get_group_items', ['as' => 'goods.items.get_group_items', 'uses' => 'ItemsGroupController@getGroupItems']);
     });
 
     $api->group(['namespace' => 'GoodsBundle\Http\FrontApi\V2\Action', 'middleware' => 'frontnoauth:h5app', 'prefix' => 'h5app'], function ($api) {

@@ -18,6 +18,8 @@
 namespace GoodsBundle\ApiServices;
 
 use GoodsBundle\Entities\ItemsCategory;
+use GoodsBundle\Entities\ItemRelAttributes;
+use PointsmallBundle\Entities\PointsmallItemRelAttributes;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Events\ItemCategoryAddEvent;
 use GoodsBundle\Services\ItemsRelCatsService;
@@ -135,6 +137,7 @@ class ItemsCategoryService
 
         $itemsAttributesService = new ItemsAttributesService();
         $attrList = $itemsAttributesService->getAttrList(['attribute_id' => $attributeIds], 1, 100);
+        
         $itemInfo['goods_params'] = [];
         $itemInfo['goods_spec'] = [];
         foreach ($attrList['list'] as $row) {

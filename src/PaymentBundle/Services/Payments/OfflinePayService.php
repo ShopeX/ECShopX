@@ -17,11 +17,12 @@
 
 namespace PaymentBundle\Services\Payments;
 
+use PaymentBundle\Interfaces\Payment;
+use Dingo\Api\Exception\ResourceException;
+use OrdersBundle\Traits\GetOrderServiceTrait;
+use CompanysBundle\Services\CommonLangModService;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Dingo\Api\Exception\ResourceException;
-use PaymentBundle\Interfaces\Payment;
-use OrdersBundle\Traits\GetOrderServiceTrait;
 
 class OfflinePayService implements Payment
 {
@@ -46,7 +47,7 @@ class OfflinePayService implements Payment
         if(!empty($data['pay_name'])){
             app('redis')->set($companyId.'_lang_pay_name_offline_pay:'.$lang,$data['pay_name']);
         }
-        $redisKey = $this->genReidsId($companyId);
+        $redisKey = $this->genReidsId($companyId, $lang);
         $result = app('redis')->set($redisKey, json_encode($data));
         return $result;
     }
@@ -58,7 +59,7 @@ class OfflinePayService implements Payment
     {
         $lang = $this->getLang();
         $exitLangName = app('redis')->get($companyId.'_lang_pay_name_offline_pay:'.$lang);
-        $data = app('redis')->get($this->genReidsId($companyId));
+        $data = app('redis')->get($this->genReidsId($companyId, $lang));
         if ($data) {
             $data = json_decode($data, true);
             if(!empty($exitLangName)){
@@ -91,9 +92,13 @@ class OfflinePayService implements Payment
     /**
      * 获取redis存储的ID
      */
-    private function genReidsId($companyId)
+    private function genReidsId($companyId, $lang = '')
     {
-        return $this->payType . 'Setting:' . sha1($companyId);
+        if (!empty($lang)) {
+            return $this->payType . 'Setting:' . sha1($companyId) . ':' . $lang;
+        }else {
+            return $this->payType . 'Setting:' . sha1($companyId);
+        }
     }
 
     /**

@@ -52,6 +52,13 @@ class PagesTemplate
     private $company_id;
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="regionauth_id", type="bigint", nullable=true, options={"comment":"区域id", "default":0})
+     */
+    private $regionauth_id = 0;
+
+    /**
      * @var string
      *
      * @ORM\Column(name="distributor_id", nullable=true, type="integer", options={"comment":"店铺id", "default":0})
@@ -124,9 +131,9 @@ class PagesTemplate
     /**
      * @var string
      *
-     * @ORM\Column(name="weapp_pages", nullable=true, type="string", options={"comment":"模版页面"})
+     * @ORM\Column(name="weapp_pages", nullable=true, type="string", options={"comment":"模版页面:index-首页 distributor_index-门店首页", "default": "index"})
      */
-    private $weapp_pages;
+    private $weapp_pages = 'index';
 
     /**
      * @var string
@@ -175,6 +182,30 @@ class PagesTemplate
     public function getCompanyId()
     {
         return $this->company_id;
+    }
+
+    /**
+     * Set regionauthId.
+     *
+     * @param int|null $regionauthId
+     *
+     * @return PagesTemplate
+     */
+    public function setRegionauthId($regionauthId = null)
+    {
+        $this->regionauth_id = $regionauthId;
+
+        return $this;
+    }
+
+    /**
+     * Get regionauthId.
+     *
+     * @return int|null
+     */
+    public function getRegionauthId()
+    {
+        return $this->regionauth_id;
     }
 
     /**

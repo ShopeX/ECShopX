@@ -491,7 +491,7 @@ class DiscountCardService implements KaquanInterface
                 array_map(function ($item) {
                     return Arr::only($item, ['item_id', 'use_limit']);
                 }, $relItem);
-                if(!empty($itemIds)){                
+                if(!empty($itemIds)){
                     $filter = ['company_id' => $detail['company_id'], 'item_id' => $itemIds];
                     $itemService = new ItemsService();
                     $itemsList = $itemService->getSkuItemsList($filter);
@@ -519,7 +519,7 @@ class DiscountCardService implements KaquanInterface
             $detail['rel_category_ids'] = $categoryIds;
             $detail['item_category'] = $categoryIds;
         }
-        $detail['use_all_items'] = $categoryIds ? 'category' : $detail['use_all_items'];
+        $detail['use_all_items'] = $categoryIds ? 'category' : $detail['use_all_items'] ?? [];
 
         //获取标签
         $detail['use_all_items'] = $detail['use_bound'] == self::FOR_TAG_ITEMS ? 'tag' : $detail['use_all_items'];
@@ -1060,7 +1060,15 @@ class DiscountCardService implements KaquanInterface
         }
         // 根据card_id查询
         if (isset($filter['card_id']) && $filter['card_id']) {
-            $criteria->andWhere($criteria->expr()->eq('kdc.card_id', $filter['card_id']));
+            if (is_array($filter['card_id'])) {
+                $criteria->andWhere($criteria->expr()->in('kdc.card_id', $filter['card_id']));
+            } else {
+                $criteria->andWhere($criteria->expr()->eq('kdc.card_id', $filter['card_id']));
+            }
+        }
+        // 根据coupon_type查询
+        if (isset($filter['coupon_type']) && $filter['coupon_type']) {
+            $criteria->andWhere($criteria->expr()->eq('kdc.coupon_type', $criteria->expr()->literal($filter['coupon_type'])));
         }
         //dd($criteria->getSQL());
 
@@ -1144,15 +1152,30 @@ class DiscountCardService implements KaquanInterface
             $criteria->expr()->andX(
                 $criteria->expr()->eq('kdc.card_type', $criteria->expr()->literal('new_gift')),
                 $criteria->expr()->eq('kdc.kq_status', DiscountNewGiftCardService::STATUS_NORMAL),
-                $criteria->expr()->gte('kdc.send_end_time', time()),
+                $criteria->expr()->orX(
+                    $criteria->expr()->andX(
+                        $criteria->expr()->isNotNull('kdc.send_end_time'),
+                        $criteria->expr()->gte('kdc.send_end_time', time())
+                    ),
+                    $criteria->expr()->isNull('kdc.send_end_time')
+                ),
                 $criteria->expr()->lte('kdc.send_begin_time', time())
             ),
             $criteria->expr()->andX(
                 $criteria->expr()->eq('kdc.card_type', $criteria->expr()->literal('new_gift')),
                 $criteria->expr()->lte('kdc.send_begin_time', time()),
                 $criteria->expr()->gt('kdc.fixed_term', 0),
-                $criteria->expr()->eq('kdc.send_end_time', 0),
-                $criteria->expr()->eq('kdc.end_date', 0),
+                $criteria->expr()->orX(
+                    $criteria->expr()->eq('kdc.send_end_time', 0),
+                    $criteria->expr()->isNull('kdc.send_end_time')
+                ),
+                $criteria->expr()->orX(
+                    $criteria->expr()->eq('kdc.end_date', 0),
+                    $criteria->expr()->andX(
+                        $criteria->expr()->neq('kdc.end_date', 0),
+                        $criteria->expr()->gte('kdc.end_date', $criteria->expr()->literal(time()))
+                    )
+                ),
                 $criteria->expr()->eq('kdc.kq_status', DiscountNewGiftCardService::STATUS_NORMAL)
             ),
             $criteria->expr()->andX(
@@ -1357,6 +1380,18 @@ class DiscountCardService implements KaquanInterface
 
     private function __setParams(&$dataInfo)
     {
+        // 设置券类型默认值
+        if (!isset($dataInfo['coupon_type']) || !in_array($dataInfo['coupon_type'], ['mall', 'guide'])) {
+            $dataInfo['coupon_type'] = 'mall';
+        }
+
+        // 设置导购发放数量默认值
+        if (!isset($dataInfo['guide_issue_quantity'])) {
+            $dataInfo['guide_issue_quantity'] = 0;
+        } else {
+            $dataInfo['guide_issue_quantity'] = intval($dataInfo['guide_issue_quantity']);
+        }
+
         //时间戳为标准0点时间
         if ($dataInfo['date_type'] == "DATE_TYPE_FIX_TERM") {
             $dataInfo['fixed_term'] = $dataInfo['days'];

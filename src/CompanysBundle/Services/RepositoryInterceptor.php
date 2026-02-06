@@ -290,13 +290,14 @@ class RepositoryInterceptor
         $fieldLangue = $repository->langField;
         $lang = $ns->getLang();
         $prkFilter = $filter[$prk] ?? ''; // 所有过滤字段keys
+        $companyId = $filter['company_id'] ?? 0;
         foreach ($filter as $key => $value) {
             $dataIdArr = '';
             // 必须是多语言字段
             // 可能存在xx|xx 这种数据, 所以要兼容
             $filterkeys = explode('|', $key);
             if (in_array($filterkeys[0], $fieldLangue)) {
-                $dataIdArr = $ns->filterByLang($lang, $key, $value, $table);
+                $dataIdArr = $ns->filterByLang($lang, $key, $value, $table, $companyId);
                 // 如果存在多语言字段主键，说明可能其他地方使用了主键过滤，我们需要合并掉
                 if (!empty($dataIdArr)) {
                     if (!empty($prkFilter)) {

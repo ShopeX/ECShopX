@@ -29,6 +29,7 @@ use PopularizeBundle\Services\PromoterGoodsService;
 use PopularizeBundle\Services\SettingService;
 use Dingo\Api\Exception\ResourceException;
 use SalespersonBundle\Services\SalespersonService;
+use WechatBundle\Services\Wxapp\CustomizePageService;
 
 class Category extends BaseController
 {
@@ -138,16 +139,44 @@ class Category extends BaseController
 
         $filter['is_main_category'] = $request->input('is_main_category', false);
 
+        $onlyTop = $request->input('only_top', false);
+        if ($onlyTop) {
+            $filter['parent_id'] = 0;
+            $filter['category_level'] = 1;
+        }
+
         $itemsCategoryService = new ItemsCategoryService();
-        $result = $itemsCategoryService->getItemsCategory($filter, true, 1, -1, ['sort' => 'DESC', 'created' => 'ASC'], 'category_id,category_name,category_level,parent_id,image_url');
+        $result = $itemsCategoryService->getItemsCategory($filter, true, 1, -1, ['sort' => 'DESC', 'created' => 'ASC'], 'category_id,category_name,category_level,parent_id,image_url,customize_page_id');
+
         // 分类获取不到获取商城主类目
         if (false == $filter['is_main_category'] && !$result) {
             $filter['is_main_category'] = true;
             if (isset($filter['distributor_id'])) {
                 unset($filter['distributor_id']);
             }
-            $result = $itemsCategoryService->getItemsCategory($filter, true, 1, -1, ['sort' => 'DESC', 'created' => 'ASC'], 'category_id,category_name,category_level,parent_id,image_url');
+            $result = $itemsCategoryService->getItemsCategory($filter, true, 1, -1, ['sort' => 'DESC', 'created' => 'ASC'], 'category_id,category_name,category_level,parent_id,image_url,customize_page_id');
         }
+
+        if ($result) {
+            $pageIds = array_filter(array_column($result, 'customize_page_id'));
+            if ($pageIds) {
+                $pageFilter = [
+                    'company_id' => $company_id,
+                    'is_open' => 1,
+                    'page_type' => 'category',
+                    'id' => $pageIds,
+                ];
+                $customizePageService = new CustomizePageService();
+                $pageList = $customizePageService->lists($pageFilter, 'id');
+                $validPageIds = array_column($pageList['list'], 'id');
+                foreach ($result as $key => $value) {
+                    if ($value['customize_page_id'] && !in_array($value['customize_page_id'], $validPageIds)) {
+                        $result[$key]['customize_page_id'] = 0;
+                    }
+                }
+            }
+        }
+
         return $this->response->array($result);
     }
     /**

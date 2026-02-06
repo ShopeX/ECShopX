@@ -38,6 +38,7 @@ class UserDiscount extends BaseController
      *     operationId="receiveCard",
      *     @SWG\Parameter( name="card_id", in="query", description="指定优惠券card_id", required=false, type="string"),
      *     @SWG\Parameter( name="salesperson_id", in="query", description="导购id", required=false, type="string"),
+     *     @SWG\Parameter( name="salesperson_code", in="query", description="导购编号(employee_number/work_userid)", required=false, type="string"),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -63,11 +64,16 @@ class UserDiscount extends BaseController
         $companyId = $user['company_id'];
         $cardId = $request->input('card_id');
         $salespersonId = $request->input('salesperson_id', 0);
+        $salespersonCode = $request->input('work_userid', '');
         $userId = $user['user_id'];
         if (!$user['user_id'] || !$user['mobile']) {
             throw new ResourceException('您还不是会员，无法领取优惠券');
         }
-        $result = $userDiscountService->userGetCard($companyId, $cardId, $userId, "商城本地领取", $salespersonId);
+        // 导购券领取数量限制检查（使用 salesperson_code）
+        if (!empty($salespersonCode)) {
+            $userDiscountService->checkGuideCouponLimit($companyId, $cardId, $salespersonCode);
+        }
+        $result = $userDiscountService->userGetCard($companyId, $cardId, $userId, "商城本地领取", $salespersonId, '', '', '', $salespersonCode);
         return $this->response->array(['status' => $result]);
     }
 

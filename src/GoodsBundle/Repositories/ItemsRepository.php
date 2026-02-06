@@ -448,7 +448,12 @@ class ItemsRepository extends EntityRepository
             return [];
         }
 
-        return $this->getColumnNamesData($entity);
+        $result =  $this->getColumnNamesData($entity);
+        //替换语言
+        $service = new MultiLangService();
+        $lang = $this->getLang();
+        $result = $service->getOneLangData($result,$this->multiLangField,$this->table,$lang,$result['item_id'],$this->table);
+        return $result;
     }
 
     /**
@@ -731,11 +736,15 @@ class ItemsRepository extends EntityRepository
         foreach ($businessLogicFields as $field) {
             unset($dbFilter[$field]);
         }
+        // 多语言处理filter
+        $service = new MultiLangService();
+        $dbFilter = $service->filterLang($dbFilter, $this->multiLangField, $this->table, $this->prk);
         
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder()->select($cols)->from($this->table);
         $qb = $this->_filter($dbFilter, $qb);
         $lists = $qb->execute()->fetchAll();
+        $lists = $service->getListAddLang($lists,$this->multiLangField,$this->table,$this->getLang(),$this->prk);
         return $lists;
     }
 
@@ -864,7 +873,6 @@ class ItemsRepository extends EntityRepository
             'distributor_ids' => $distributorIds,
             'item_params' => $itemParams,
             'item_spec' => $itemSpec,
-            'discount_rate' => $discountRate,
         ];
     }
 

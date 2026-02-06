@@ -1,0 +1,189 @@
+<?php
+
+namespace KujialeBundle\Entities;
+
+use Doctrine\ORM\Mapping as ORM;
+
+/**
+ * KujialeDesignerWorksRelCities
+ *
+ * @ORM\Table(name="kujiale_designer_works_rel_cities", indexes={@ORM\Index(name="idx_design_id", columns={"design_id"}), @ORM\Index(name="idx_plan_id", columns={"plan_id"}), @ORM\Index(name="idx_city_id", columns={"city_id"})})
+ * @ORM\Entity(repositoryClass="KujialeBundle\Repositories\KujialeDesignerWorksRelCitiesRepository")
+ */
+class KujialeDesignerWorksRelCities
+{
+    /**
+     * @var int
+     *
+     * @ORM\Column(name="id", type="bigint", nullable=false, options={"comment":"id"})
+     * @ORM\Id
+     * @ORM\GeneratedValue(strategy="IDENTITY")
+     */
+    private $id;
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="design_id", type="string", length=255, nullable=false, options={"comment":"方案id"})
+     */
+    private $design_id;
+
+    /**
+     * @var string|null
+     *
+     * @ORM\Column(name="plan_id", type="string", length=255, nullable=true, options={"comment":"户型ID"})
+     */
+    private $plan_id;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(name="city_id", type="integer", nullable=false, options={"comment":"城市ID"})
+     */
+    private $city_id;
+
+    /**
+     * @var int
+     *
+     * @ORM\Column(name="created", type="integer", nullable=false, options={"comment":"创建时间"})
+     */
+    private $created;
+
+    /**
+     * @var int|null
+     *
+     * @ORM\Column(name="updated", type="integer", nullable=true, options={"comment":"更新时间"})
+     */
+    private $updated;
+
+    /**
+     * Get id.
+     *
+     * @return int
+     */
+    public function getId()
+    {
+        return $this->id;
+    }
+
+    /**
+     * Set designId.
+     *
+     * @param string $designId
+     *
+     * @return KujialeDesignerWorksRelCities
+     */
+    public function setDesignId($designId)
+    {
+        $this->design_id = $designId;
+
+        return $this;
+    }
+
+    /**
+     * Get designId.
+     *
+     * @return string
+     */
+    public function getDesignId()
+    {
+        return $this->design_id;
+    }
+
+    /**
+     * Set planId.
+     *
+     * @param string|null $planId
+     *
+     * @return KujialeDesignerWorksRelCities
+     */
+    public function setPlanId($planId = null)
+    {
+        $this->plan_id = $planId;
+
+        return $this;
+    }
+
+    /**
+     * Get planId.
+     *
+     * @return string|null
+     */
+    public function getPlanId()
+    {
+        return $this->plan_id;
+    }
+
+    /**
+     * Set cityId.
+     *
+     * @param int $cityId
+     *
+     * @return KujialeDesignerWorksRelCities
+     */
+    public function setCityId($cityId)
+    {
+        $this->city_id = $cityId;
+
+        return $this;
+    }
+
+    /**
+     * Get cityId.
+     *
+     * @return int
+     */
+    public function getCityId()
+    {
+        return $this->city_id;
+    }
+
+    /**
+     * Set created.
+     *
+     * @param int $created
+     *
+     * @return KujialeDesignerWorksRelCities
+     */
+    public function setCreated($created)
+    {
+        $this->created = $created;
+
+        return $this;
+    }
+
+    /**
+     * Get created.
+     *
+     * @return int
+     */
+    public function getCreated()
+    {
+        return $this->created;
+    }
+
+    /**
+     * Set updated.
+     *
+     * @param int|null $updated
+     *
+     * @return KujialeDesignerWorksRelCities
+     */
+    public function setUpdated($updated = null)
+    {
+        $this->updated = $updated;
+
+        return $this;
+    }
+
+    /**
+     * Get updated.
+     *
+     * @return int|null
+     */
+    public function getUpdated()
+    {
+        return $this->updated;
+    }
+}
+

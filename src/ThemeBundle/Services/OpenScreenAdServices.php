@@ -32,6 +32,16 @@ class OpenScreenAdServices
     }
 
     /**
+     * @param $method
+     * @param $parameters
+     * @return mixed
+     */
+    public function __call($method, $parameters)
+    {
+        return $this->entityRepository->$method(...$parameters);
+    }
+
+    /**
      * 设置信息
      */
     public function getInfo($company_id)
@@ -63,7 +73,8 @@ class OpenScreenAdServices
             $saveAdd['waiting_time'] = $params['waiting_time'];
             $saveAdd['ad_url'] = $params['ad_url'];
             $saveAdd['app'] = $params['app'];
-
+            $saveAdd['start_time'] = $params['start_time'];
+            $saveAdd['end_time'] = $params['end_time'];
             return $this->saveAdd($saveAdd);
         } else {
             $saveUpdate['ad_material'] = $params['ad_material'];
@@ -75,6 +86,8 @@ class OpenScreenAdServices
             $saveUpdate['waiting_time'] = $params['waiting_time'];
             $saveUpdate['ad_url'] = $params['ad_url'];
             $saveUpdate['app'] = $params['app'];
+            $saveUpdate['start_time'] = $params['start_time'];
+            $saveUpdate['end_time'] = $params['end_time'];
             $saveUpdate['updated'] = time();
 
             return $this->saveUpdate($company_id, $saveUpdate);

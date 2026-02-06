@@ -36,6 +36,7 @@ use OrdersBundle\Services\CartService;
 use GoodsBundle\Services\ItemsRecommendService;
 use CompanysBundle\Services\SettingService as ItemSettingService;
 use TdksetBundle\Services\TdkGivenService;
+use KujialeBundle\Services\KujialeDesignerWorksService;
 
 class Items extends BaseController
 {
@@ -624,6 +625,14 @@ class Items extends BaseController
         }
         $result['itemName'] = $result['item_name'];
 
+        // 获取商品关联的设计作品
+        try {
+            $designerWorksService = new KujialeDesignerWorksService();
+            $result['design_works'] = $designerWorksService->getDesignerWorksByItemId($item_id);
+        } catch (\Exception $e) {
+            // 如果查询失败，返回空数组
+            $result['design_works'] = [];
+        }
 
         return $this->response->array($result);
     }

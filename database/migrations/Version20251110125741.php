@@ -39,6 +39,7 @@ class Version20251110125741 extends AbstractMigration
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='多语言字典库'
             ");
         }
+
         // 创建 item_multi_lang_mod_lang_zhCN 表
         $tableExists = $conn->fetchOne(
             "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'item_multi_lang_mod_lang_zhCN'"
@@ -47,6 +48,30 @@ class Version20251110125741 extends AbstractMigration
         if (!$tableExists) {
             $conn->executeStatement("
                 CREATE TABLE `item_multi_lang_mod_lang_zhCN` (
+                    `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'id',
+                    `company_id` bigint(20) NOT NULL COMMENT '公司id',
+                    `data_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '业务id字段',
+                    `table_name` varchar(255) NOT NULL DEFAULT '' COMMENT '表名',
+                    `field` varchar(255) NOT NULL DEFAULT '' COMMENT 'field,多语言对应字段',
+                    `module_name` varchar(255) NOT NULL DEFAULT '' COMMENT 'module_name,模块名',
+                    `lang` varchar(255) NOT NULL DEFAULT '' COMMENT '语言',
+                    `attribute_value` text NOT NULL COMMENT '多语言值',
+                    `created` int(11) NOT NULL,
+                    `updated` int(11) DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    KEY `ix_company_id` (`company_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='多语言字典库'
+            ");
+        }
+
+        // 创建 item_multi_lang_mod_lang_arSA 表
+        $tableExists = $conn->fetchOne(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'item_multi_lang_mod_lang_arSA'"
+        );
+        
+        if (!$tableExists) {
+            $conn->executeStatement("
+                CREATE TABLE `item_multi_lang_mod_lang_arSA` (
                     `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'id',
                     `company_id` bigint(20) NOT NULL COMMENT '公司id',
                     `data_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '业务id字段',
@@ -95,6 +120,30 @@ class Version20251110125741 extends AbstractMigration
         if (!$tableExists) {
             $conn->executeStatement("
                 CREATE TABLE `outside_item_multi_lang_mod_lang_zhCN` (
+                    `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'id',
+                    `company_id` bigint(20) NOT NULL COMMENT '公司id',
+                    `data_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '业务id字段',
+                    `table_name` varchar(255) NOT NULL DEFAULT '' COMMENT '表名',
+                    `field` varchar(255) NOT NULL DEFAULT '' COMMENT 'field,多语言对应字段',
+                    `module_name` varchar(255) NOT NULL DEFAULT '' COMMENT 'module_name,模块名',
+                    `lang` varchar(255) NOT NULL DEFAULT '' COMMENT '语言',
+                    `attribute_value` text NOT NULL COMMENT '多语言值',
+                    `created` int(11) NOT NULL,
+                    `updated` int(11) DEFAULT NULL,
+                    PRIMARY KEY (`id`),
+                    KEY `ix_company_id` (`company_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='多语言字典库'
+            ");
+        }
+
+        //outside_item_multi_lang_mod_lang_arSA
+        $tableExists = $conn->fetchOne(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'outside_item_multi_lang_mod_lang_arSA'"
+        );
+        
+        if (!$tableExists) {
+            $conn->executeStatement("
+                CREATE TABLE `outside_item_multi_lang_mod_lang_arSA` (
                     `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT 'id',
                     `company_id` bigint(20) NOT NULL COMMENT '公司id',
                     `data_id` bigint(20) NOT NULL DEFAULT '0' COMMENT '业务id字段',

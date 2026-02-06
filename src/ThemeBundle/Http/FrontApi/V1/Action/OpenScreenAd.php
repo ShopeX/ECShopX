@@ -64,14 +64,17 @@ class OpenScreenAd extends Controller
         $params = $request->all('company_id');
         $auth_info = $request->get('auth');
 
+        $filter['company_id'] = $auth_info['company_id'];
+        $filter['is_enable'] = 1;
+        $filter['start_time|lte'] = time();
+        $filter['end_time|gte'] = time();
         $OpenScreenAd = new OpenScreenAdServices();
-        $data = $OpenScreenAd->getInfo($auth_info['company_id']);
-        if (empty($data)) {
-            $response = [];
-        } else {
-            $response = $data;
+        $data = $OpenScreenAd->lists($filter, '*', 1, 1);
+        $result = !empty($data['list']) ? reset($data['list']) : [];
+        if ($result) {
+            $result['ad_url'] = json_decode($result['ad_url'], true);
         }
 
-        return $this->response->array($response);
+        return $this->response->array($result);
     }
 }

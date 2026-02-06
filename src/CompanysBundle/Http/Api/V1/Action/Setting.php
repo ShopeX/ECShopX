@@ -2149,4 +2149,65 @@ class Setting extends BaseController
         return $this->response->array($result);
     }
 
+    /**
+     * 获取酷家乐配置
+     * @route GET /company/kujiale/config
+     */
+    public function getKujialeConfig(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        if (!$companyId) {
+            throw new ResourceException('无法获取公司ID');
+        }
+
+        $redis = app('redis')->connection('default');
+        $key = 'kujiale:config:' . $companyId;
+        $raw = $redis->get($key);
+        $config = $raw ? json_decode($raw, true) : [];
+
+        return $this->response->array([
+            'success' => true,
+            'data' => [
+                'appKey' => $config['appKey'] ?? '',
+                'appSecret' => $config['appSecret'] ?? '',
+            ],
+        ]);
+    }
+
+    /**
+     * 保存酷家乐配置
+     * @route POST /company/kujiale/config
+     */
+    public function saveKujialeConfig(Request $request)
+    {
+        $validator = app('validator')->make($request->all(), [
+            'appKey' => 'required|string',
+            'appSecret' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            throw new \Dingo\Api\Exception\ValidationHttpException($validator->errors());
+        }
+
+        $companyId = app('auth')->user()->get('company_id');
+        if (!$companyId) {
+            throw new ResourceException('无法获取公司ID');
+        }
+
+        $config = [
+            'appKey' => $request->input('appKey'),
+            'appSecret' => $request->input('appSecret'),
+            'updated' => time(),
+        ];
+
+        $redis = app('redis')->connection('default');
+        $key = 'kujiale:config:' . $companyId;
+        $redis->set($key, json_encode($config));
+
+        return $this->response->array([
+            'success' => true,
+            'message' => '保存成功',
+        ]);
+    }
+
 }

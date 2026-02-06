@@ -66,6 +66,7 @@ use PromotionsBundle\Services\SpecificCrowdDiscountService;
 use EspierBundle\Services\Config\ConfigRequestFieldsService;
 use ThirdPartyBundle\Services\DmCrm\MemberService as DmMemberService;
 use CompanysBundle\Services\SettingService as SelfdeliveryAddressService;
+use WorkWechatBundle\Entities\WorkWechatRel;
 
 class Members extends Controller
 {
@@ -1632,9 +1633,9 @@ class Members extends Controller
         $params['item_id'] = array_column($result['list'], 'item_id');
         $itemsService = new ItemsService();
         $itemList = $itemsService->getItemListData($params, 1, $pageSize);
-        $itemList = $itemsService->getItemsListMemberPrice($itemList, $authInfo['user_id'], $authInfo['company_id']);
+        $itemList['list'] = $itemsService->getItemsListMemberPrice($itemList['list'], $authInfo['user_id'], $authInfo['company_id']);
         //营销标签
-        $itemList = $itemsService->getItemsListActityTag($itemList, $authInfo['company_id']);
+        $itemList['list'] = $itemsService->getItemsListActityTag($itemList['list'], $authInfo['company_id']);
         $itemList = array_column($itemList['list'], null, 'item_id');
         foreach ($result['list'] as $key => $value) {
             if (isset($itemList[$value['item_id']])) {

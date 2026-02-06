@@ -307,6 +307,8 @@ class DiscountCardController extends Controller
         if ($request->input('title')) {
             $filter['title|like'] = $request->input('title');
         }
+
+        $filter['coupon_type'] = ['guide'];
 //        if ($request->input('card_source')) {
 //            $filter['card_source'] = $request->input('card_source');
 //        }

@@ -15,6 +15,7 @@
 $api->version('v1', function ($api) {
     $api->group(['prefix' => 'h5app', 'namespace' => 'ThemeBundle\Http\FrontApi\V1\Action', 'middleware' => ['frontnoauth:h5app']], function ($api) {
         $api->get('/wxapp/pagestemplate/detail', ['middleware'=>'apicache','name' => '模板详情', 'as' => 'front.pagestemplate.detail', 'uses' => 'PagesTemplate@detail']);
+        $api->get('/wxapp/pagestemplate/widget/items', ['name' => '获取模板组件商品', 'as' => 'front.pagestemplate.widget.items', 'uses' => 'PagesTemplate@getWidgetItems']);
         $api->get('/wxapp/pagestemplate/shopDetail', ['name' => '店铺模板详情', 'as' => 'front.pagestemplate.shopDetail', 'uses' => 'PagesTemplate@shopDetail']);
         $api->get('/wxapp/pagestemplate/setInfo', ['name' => '模板设置信息', 'as' => 'front.pagestemplate.setInfo', 'uses' => 'PagesTemplate@setInfo']);
         $api->get('/wxapp/pagestemplate/gettdk', ['name' => '获取tdk配置信息', 'as' => 'front.pagestemplate.gettdk', 'uses' => 'PagesTemplate@getTdk']);
@@ -26,6 +27,12 @@ $api->version('v1', function ($api) {
 
         //会员中心分享设置
         $api->get('/wxapp/memberCenterShare/getInfo', ['name' => '获取会员中心分享信息', 'as' => 'front.memberCenterShare.getInfo', 'uses' => 'MemberCenterShare@getInfo']);
+
+        // 侧边栏设置
+        $api->get('/wxapp/sidebar/info', ['name' => '获取侧边栏设置', 'as' => 'front.sidebar.info', 'uses' => 'PagesSideBar@getPagesSideBar']);
+
+        // 广告列表
+        $api->get('/wxapp/ad/list', ['name' => '获取广告列表', 'as' => 'front.ad.list', 'uses' => 'PagesAdPlace@getAdList']);
     });
 });
 /* ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ taro小程序、h5、app端、pc端 ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ */

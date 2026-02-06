@@ -409,11 +409,27 @@ class ItemsCategory extends BaseController
     public function getCategoryInfo($category_id, request $request)
     {
         $filter['company_id'] = app('auth')->user()->get('company_id');
-        $itemsCategoryService = new ItemsCategoryService();
-
         $filter['category_id'] = $category_id;
-
-        $result = $itemsCategoryService->getCategoryInfo($filter);
+        $item_id = $request->input('item_id');
+        $is_point = $request->input('is_point', 0);
+        $otherParmas = [];
+        if ($item_id) {
+            $validator = app('validator')->make([
+                'item_id' => $item_id,
+                'is_point' => $is_point,
+            ], [
+                'item_id' => 'required|integer|min:1',
+                'is_point' => 'in:0,1',
+            ]);
+            if ($validator->fails()) {
+                throw new ResourceException('参数错误.', $validator->errors());
+            }
+            $otherParmas['item_id'] = $item_id;
+            $otherParmas['is_point'] = $is_point;
+        }
+        $itemsCategoryService = new ItemsCategoryService();
+        $result = $itemsCategoryService->getCategoryInfo($filter, $otherParmas);
+        
         return $this->response->array($result);
     }
 

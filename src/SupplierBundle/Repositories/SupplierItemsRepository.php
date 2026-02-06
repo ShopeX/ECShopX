@@ -57,7 +57,48 @@ class SupplierItemsRepository extends BaseRepository
 
         $result = $this->getColumnNamesData($entity);
         $service = new MultiLangService();
-        $service->addMultiLangByParams($result['item_id'],$data,'items');
+        $service->addMultiLangByParams($result['item_id'],$data, $this->table);
+        return $result;
+    }
+
+    public function updateOneBy(array $filter, array $data)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            throw new ResourceException("未查询到更新数据");
+        }
+        $entity = $this->setColumnNamesData($entity, $data);
+        $em = $this->getEntityManager();
+        $em->persist($entity);
+        $em->flush();
+
+        $result =  $this->getColumnNamesData($entity);
+        $service = new MultiLangService();
+        $service->updateLangDataNew($data,$this->table,$result['item_id'],$this->multiLangField, $filter['company_id'] ?? 0);
+        return $result;
+    }
+
+    public function lists($filter, $cols = '*', $page = 1, $pageSize = -1, $orderBy = array())
+    {
+        $result['total_count'] = $this->count($filter);
+        if ($result['total_count'] > 0) {
+            $conn = app('registry')->getConnection('default');
+            $qb = $conn->createQueryBuilder()->select($cols)->from($this->table);
+            $qb = $this->_filter($filter, $qb);
+            if ($orderBy) {
+                foreach ($orderBy as $filed => $val) {
+                    $qb->addOrderBy($filed, $val);
+                }
+            }
+            if ($pageSize > 0) {
+                $qb->setFirstResult(($page - 1) * $pageSize)
+                  ->setMaxResults($pageSize);
+            }
+            $lists = $qb->execute()->fetchAll();
+            $service = new MultiLangService();
+            $lists = $service->getListAddLang($lists,$this->multiLangField,$this->table,$this->getLang(),$this->prk);
+        }
+        $result['list'] = $lists ?? [];
         return $result;
     }
 
@@ -71,7 +112,7 @@ class SupplierItemsRepository extends BaseRepository
         $qb = $this->_filter($filter, $qb);
         $lists = $qb->execute()->fetchAll();
         $service = new MultiLangService();
-        $lists = $service->getListAddLang($lists,$this->multiLangField,'items',$this->getLang(),'item_id');
+        $lists = $service->getListAddLang($lists,$this->multiLangField,$this->table,$this->getLang(),'item_id');
         return $lists;
     }
 }

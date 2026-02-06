@@ -105,10 +105,10 @@ class RecommendLikeService
         }
 
         $itemsService = new ItemsService();
-        $result = $itemsService->getItemsListMemberPrice($result, $filter['user_id'] ?? 0, $filter['company_id']);
+        $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], $filter['user_id'] ?? 0, $filter['company_id']);
 
         //营销标签
-        $result = $itemsService->getItemsListActityTag($result, $filter['company_id']);
+        $result['list'] = $itemsService->getItemsListActityTag($result['list'], $filter['company_id']);
 
         $ItemTaxRateService = new ItemTaxRateService($filter['company_id']);
         foreach ($result['list'] as $key => $value) {

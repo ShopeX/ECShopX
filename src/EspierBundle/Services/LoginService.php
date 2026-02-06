@@ -35,6 +35,8 @@ use AliBundle\Factory\MiniAppFactory;
 use EmployeePurchaseBundle\Services\RelativesService;
 use ShuyunBundle\Jobs\MemberRegisterJob;
 use ShuyunBundle\Services\MembersService as ShuyunMembersService;
+use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
+use DistributionBundle\Services\DistributorService;
 
 class LoginService
 {
@@ -108,7 +110,6 @@ class LoginService
         // 创建/更新微信用户
         $weChatUserData = [
             'company_id' => $params['company_id'],
-            'company_id' => $params['company_id'],
             'open_id' => $openId,
             'unionid' => $unionId,
             // 记录千人千码参数
@@ -131,6 +132,8 @@ class LoginService
         app('log')->info('wxappPreLogin member====>'.var_export($member, true));
         if (!$member) {
             $member = $this->register($params);
+            // register push dg - 推送会员基础信息到导购端
+            // $this->pushMemberBasicInfoToSalesperson($params['company_id'], $member['user_id']);
         } else {
             // 数云模式
             if (config('common.oem-shuyun')) {
@@ -162,6 +165,8 @@ class LoginService
 
             }
         }
+
+        
         
         if (isset($params['salesperson_id']) && $params['salesperson_id']) {
             // 用户和导购的关联绑定
@@ -288,6 +293,31 @@ class LoginService
                 $params['source_from'] = $wechatUser['source_from'] ?? 'default';
             }
 
+            // 记录注册时的分销商和导购信息
+            if (isset($params['distributor_id']) && !empty($params['distributor_id'])) {
+                // 如果是字符串（门店编号），转换为门店ID
+                $distributorService = new DistributorService();
+                $distributorId = $distributorService->getShopIdByShopCode($params['distributor_id']);
+                if ($distributorId !== false) {
+                    $params['reg_distributor'] = (int)$distributorId;
+                } else {
+                    $params['reg_distributor'] = 0;
+                }
+            }else {
+                $params['reg_distributor'] = 0;
+            }
+
+            //op_distributor start
+            // op_distributor: 注册时默认与reg_distributor保持一致
+            $params['op_distributor'] = $params['reg_distributor'];
+            //op_distributor end
+            
+            // reg_salesperson: 取 gu_user_id，否则为空字符串
+            $params['reg_salesperson'] = '';
+            if (!empty($params['work_userid'])) {
+                $params['reg_salesperson'] = (string)$params['work_userid'];
+            }
+
             // 创建用户
             $result = $memberService->createMember($params);
 
@@ -312,6 +342,10 @@ class LoginService
                 $relativesService->bindRelative($relativeBindParams);
                 $employeesService->delInviteCode($params['company_id'], $inviteCode);
             }
+
+            // 检测导购好友关系
+            $this->checkSalespersonFriendStatus($result['user_id'], $params, $params['company_id']);
+
             $conn->commit();
 
             return $result;
@@ -452,6 +486,230 @@ class LoginService
             return true;
         } else {
             return false;
+        }
+    }
+
+    /**
+     * 推送会员基础信息到导购端
+     * @param int $companyId 企业ID
+     * @param int $userId 会员ID
+     * @return void
+     */
+    public function pushMemberBasicInfoToSalesperson($companyId, $userId)
+    {
+        try {
+            $memberService = new MemberService();
+            
+            // 获取会员完整信息（包括 members 和 members_info）
+            $memberInfo = $memberService->getMemberInfo([
+                'user_id' => $userId,
+                'company_id' => $companyId
+            ], true);
+            
+            if (!$memberInfo || !isset($memberInfo['user_id'])) {
+                app('log')->warning('推送会员基础信息到导购端：未找到会员信息', [
+                    'company_id' => $companyId,
+                    'user_id' => $userId
+                ]);
+                return;
+            }
+            
+            // 获取 unionid
+            $wechatUserService = new WechatUserService();
+            $wechatUserInfo = $wechatUserService->getUserInfo([
+                'user_id' => $userId,
+                'company_id' => $companyId
+            ]);
+            $unionid = $wechatUserInfo['unionid'] ?? '';
+            
+            // 准备推送数据
+            $pushData = [
+                'user_id' => (string)$memberInfo['user_id'],
+            ];
+            
+            // unionid
+            if ($unionid) {
+                $pushData['unionid'] = $unionid;
+            }
+            
+            // birthday (格式：YYYY-MM-DD)
+            if (!empty($memberInfo['birthday'])) {
+                $birthday = $memberInfo['birthday'];
+                // 如果是时间戳，转换为日期格式
+                if (is_numeric($birthday)) {
+                    $pushData['birthday'] = date('Y-m-d', $birthday);
+                } else {
+                    $pushData['birthday'] = $birthday;
+                }
+            }
+            
+            // reg_distributor (注册时的分销商编号 shop_code)
+            if (isset($memberInfo['reg_distributor']) && $memberInfo['reg_distributor'] > 0) {
+                $distributorService = new DistributorService();
+                $distributorInfo = $distributorService->getInfoSimple([
+                    'company_id' => $companyId,
+                    'distributor_id' => $memberInfo['reg_distributor']
+                ]);
+                if ($distributorInfo && !empty($distributorInfo['shop_code'])) {
+                    $pushData['reg_distributor'] = $distributorInfo['shop_code'];
+                }
+            }
+            
+            // reg_salesperson (注册时的导购ID)
+            if (isset($memberInfo['reg_salesperson']) && !empty($memberInfo['reg_salesperson'])) {
+                $pushData['reg_salesperson'] = (string)$memberInfo['reg_salesperson'];
+            }
+            
+            // fp_salesperson (分配的导购ID)
+            if (isset($memberInfo['fp_salesperson']) && $memberInfo['fp_salesperson'] > 0) {
+                $pushData['fp_salesperson'] = (int)$memberInfo['fp_salesperson'];
+            }
+            
+            // has_fp (是否有分配导购。0:否；1:是)
+            if (isset($memberInfo['has_fp'])) {
+                $pushData['has_fp'] = (int)$memberInfo['has_fp'];
+            }
+            
+            // grade_id (会员等级ID)
+            if (!empty($memberInfo['grade_id'])) {
+                $pushData['grade_id'] = (int)$memberInfo['grade_id'];
+            }
+            
+            // mobile (手机号)
+            if (!empty($memberInfo['mobile'])) {
+                $pushData['mobile'] = $memberInfo['mobile'];
+            }
+            
+            // username (用户名)
+            if (!empty($memberInfo['username'])) {
+                $pushData['username'] = $memberInfo['username'];
+            }
+            
+            // avatar (头像URL)
+            if (!empty($memberInfo['avatar'])) {
+                $pushData['avatar'] = $memberInfo['avatar'];
+            }
+            
+            // 调用导购端接口推送数据
+            $marketingCenterRequest = new MarketingCenterRequest();
+            $result = $marketingCenterRequest->call($companyId, 'basics.member.syncBasicInfo', $pushData);
+            
+            app('log')->info('推送会员基础信息到导购端', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'push_data' => $pushData,
+                'result' => $result
+            ]);
+            
+        } catch (\Exception $e) {
+            // 推送失败不影响注册流程，只记录日志
+            app('log')->error('推送会员基础信息到导购端失败', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * 检测导购好友关系并更新会员信息
+     * @param int $userId 会员ID
+     * @param array $params 注册参数
+     * @param int $companyId 公司ID
+     */
+    public function checkSalespersonFriendStatus($userId, $params, $companyId)
+    {
+        try {
+            // 检查是否有unionid和门店信息
+            $unionid = $params['unionid'] ?? '';
+            if (empty($unionid)) {
+                app('log')->info('注册时检测导购好友关系：缺少unionid，跳过检测', [
+                    'user_id' => $userId,
+                    'company_id' => $companyId
+                ]);
+                return;
+            }
+
+            // 获取门店编号（shop_code）
+            $shopCode = '';
+            $distributorId = $params['reg_distributor'] ?? $params['op_distributor'] ?? 0;
+            
+            if ($distributorId > 0) {
+                $distributorService = new DistributorService();
+                $distributorInfo = $distributorService->getInfoSimple([
+                    'distributor_id' => $distributorId,
+                    'company_id' => $companyId
+                ]);
+                $shopCode = $distributorInfo['shop_code'] ?? '';
+            }
+
+            if (empty($shopCode)) {
+                app('log')->info('注册时检测导购好友关系：缺少门店编号，跳过检测', [
+                    'user_id' => $userId,
+                    'company_id' => $companyId,
+                    'distributor_id' => $distributorId
+                ]);
+                return;
+            }
+
+            // 调用接口查询导购好友关系
+            $marketingCenterRequest = new MarketingCenterRequest();
+            $apiParams = [
+                'shop_code' => $shopCode,
+                'unionid' => $unionid
+            ];
+            
+            app('log')->info('注册时检测导购好友关系：开始查询', [
+                'user_id' => $userId,
+                'company_id' => $companyId,
+                'shop_code' => $shopCode,
+                'unionid' => $unionid
+            ]);
+
+            $result = $marketingCenterRequest->call($companyId, 'members.getFriendWorkUserid', $apiParams);
+            
+            app('log')->info('注册时检测导购好友关系：接口返回', [
+                'user_id' => $userId,
+                'company_id' => $companyId,
+                'result' => $result
+            ]);
+
+            // 检查返回结果
+            if (!empty($result['data']['work_userid'])) {
+                $workUserid = $result['data']['work_userid'];
+                
+                // 如果有work_userid（已加好友），更新会员信息
+                if (!empty($workUserid)) {
+                    $memberService = new MemberService();
+                    $updateParams = [
+                        'has_fp' => 1,
+                        'is_become_friend' => 1,
+                        'fp_salesperson' => $workUserid
+                    ];
+                    $filter = [
+                        'user_id' => $userId,
+                        'company_id' => $companyId
+                    ];
+                    
+                    $memberService->updateMemberInfo($updateParams, $filter);
+                    
+                    app('log')->info('注册时检测导购好友关系：已更新会员信息', [
+                        'user_id' => $userId,
+                        'company_id' => $companyId,
+                        'work_userid' => $workUserid,
+                        'update_params' => $updateParams
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            // 检测失败不影响注册流程，只记录日志
+            app('log')->error('注册时检测导购好友关系失败', [
+                'user_id' => $userId,
+                'company_id' => $companyId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
         }
     }
 }

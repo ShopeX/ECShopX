@@ -53,14 +53,15 @@ class CustomizePageService
         return $info['id'] ?? 0;
     }
 
-    public function getMyCustomId($companyId, $regionauthId = '')
+    public function getMyCustomId($companyId, $regionauthId)
     {
         $filter = [
             'company_id' => $companyId,
+            'regionauth_id' => $regionauthId > 0 ? [$regionauthId, 0] : 0,//小镇没有单独设置取平台的
             'page_type' => 'my',
             'is_open' => 1,
         ];
-        $pageList = $this->lists($filter, 'id', 1, 1);
+        $pageList = $this->lists($filter, 'id', 1, 1, ['regionauth_id' => 'desc']);
         if ($pageList['list']) {
             return $pageList['list'][0]['id'];
         }

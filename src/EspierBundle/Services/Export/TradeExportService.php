@@ -58,6 +58,7 @@ class TradeExportService implements ExportFileInterface
             'user_name' => '会员名称',
             'totalFee' => '订单总金额',
             'payFee' => '订单实付金额',
+            'payPoint' => '订单实付积分',
             'discountFee' => '订单优惠金额',
             'transactionId' => '支付流水号',
             'payDate' => '支付时间',
@@ -169,7 +170,21 @@ class TradeExportService implements ExportFileInterface
                         // 直接赋值，不再添加引号，由 ExportFileService 统一处理
                         $orderList[$key][$k] = $value[$k];
                     } elseif (in_array($k, ['totalFee', 'payFee', 'discountFee']) && isset($value[$k])) {
-                        $orderList[$key][$k] = $value[$k] / 100;
+                        // 如果是积分支付，订单实付金额显示为0
+                        if ($k == 'payFee' && isset($value['payType']) && $value['payType'] == 'point') {
+                            $orderList[$key][$k] = 0;
+                        } else {
+                            $orderList[$key][$k] = $value[$k] / 100;
+                        }
+                    } elseif ($k == 'payPoint') {
+                        // 新增：处理订单实付积分
+                        if (isset($value['payType']) && $value['payType'] == 'point') {
+                            // 积分支付时，订单实付积分 = payFee 的值（积分无需除以100）
+                            $orderList[$key][$k] = isset($value['payFee']) ? $value['payFee'] : 0;
+                        } else {
+                            // 非积分支付时，订单实付积分为0
+                            $orderList[$key][$k] = 0;
+                        }
                     } elseif (in_array($k, ['timeStart', 'timeExpire']) && isset($value[$k]) && $value[$k]) {
                         $orderList[$key][$k] = date('Y-m-d H:i:s', $value[$k]);
                     } elseif ($k == "tradeSourceType" && isset($value[$k])) {

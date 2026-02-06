@@ -50,6 +50,13 @@ class ItemsCategory
     private $company_id;
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="regionauth_id", type="bigint", options={"comment":"地区ID", "default":0})
+     */
+    private $regionauth_id = 0;
+
+    /**
      * @var string
      *
      * @ORM\Column(name="category_name", type="string", length=50, options={"comment":"分类名称"})
@@ -174,7 +181,7 @@ class ItemsCategory
      *
      * @ORM\Column(name="customize_page_id", type="bigint", nullable=true, options={"comment":"自定义模板id", "default":"0"})
      */
-    private $customize_page_id;
+    private $customize_page_id = 0;
 
     /**
      * @var integer
@@ -230,6 +237,30 @@ class ItemsCategory
     public function getCompanyId()
     {
         return $this->company_id;
+    }
+
+    /**
+     * Set regionauthId
+     *
+     * @param integer $regionauthId
+     *
+     * @return ItemsCategory
+     */
+    public function setRegionauthId($regionauthId)
+    {
+        $this->regionauth_id = $regionauthId;
+
+        return $this;
+    }
+
+    /**
+     * Get regionauthId
+     *
+     * @return integer
+     */
+    public function getRegionauthId()
+    {
+        return $this->regionauth_id;
     }
 
     /**

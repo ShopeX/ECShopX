@@ -18,11 +18,15 @@
 namespace PointsmallBundle\Repositories;
 
 use Doctrine\ORM\EntityRepository;
-use PointsmallBundle\Entities\PointsmallItems;
 use Doctrine\Common\Collections\Criteria;
+use PointsmallBundle\Entities\PointsmallItems;
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
+use GoodsBundle\Services\MultiLang\MultiLangService;
 
 class PointsmallItemsRepository extends EntityRepository
 {
+    use MagicLangTrait;
+    
     /**
      * 当前表名称
      */
@@ -34,6 +38,12 @@ class PointsmallItemsRepository extends EntityRepository
         'goods_color', 'goods_brand', 'item_address_province', 'item_address_city', 'regions_id', 'brand_logo', 'sort', 'templates_id', 'is_default', 'nospec', 'default_item_id', 'pics',
         'company_id', 'enable_agreement', 'date_type', 'item_category', 'weight', 'begin_date', 'end_date', 'fixed_term','tax_rate', 'created', 'updated', 'video_type', 'videos', 'video_pic_url', 'purchase_agreement',
         'intro', 'audit_status', 'audit_reason', 'crossborder_tax_rate','origincountry_id','type', 'pay_class'
+    ];
+
+    private $prk = 'item_id';
+    
+    private $multiLangField = [
+        'item_name','brief','intro'
     ];
 
     /**
@@ -50,6 +60,10 @@ class PointsmallItemsRepository extends EntityRepository
         $em->flush();
 
         $result = $this->getColumnNamesData($itemsEnt, $this->cols);
+        
+        $service = new MultiLangService();
+        $service->addMultiLangByParams($result['item_id'],$params,$this->table, $this->multiLangField);
+//        $service->saveLang($result['company_id'],$langBag,$this->table,$result['item_id'],$this->table);
         return $result;
     }
 
@@ -200,8 +214,19 @@ class PointsmallItemsRepository extends EntityRepository
         }
 
         $qb = $this->__filter($filter, $qb);
-
-        return $qb->execute();
+        if(isset($filter[$this->prk])){
+            if(is_array($filter[$this->prk])){
+                foreach ($filter[$this->prk] as $pprk){
+                    //更新数据
+                    $service = new MultiLangService();
+                    $service->updateLangDataNew($data,$this->table,$pprk, $this->multiLangField, $filter['company_id'] ?? 0);
+                }
+            }else{
+                $service = new MultiLangService();
+                $service->updateLangDataNew($data,$this->table,$filter[$this->prk], $this->multiLangField, $filter['company_id'] ?? 0);
+            }
+        }
+        return $qb->set('updated', time())->execute();
     }
 
 
@@ -272,8 +297,9 @@ class PointsmallItemsRepository extends EntityRepository
         $em = $this->getEntityManager();
         $em->persist($itemsEnt);
         $em->flush();
-
         $result = $this->getColumnNamesData($itemsEnt);
+        $service = new MultiLangService();
+        $service->updateLangDataNew($params,$this->table,$item_id, $this->multiLangField,$result['company_id'] ?? 0);
         return $result;
     }
 
@@ -303,7 +329,12 @@ class PointsmallItemsRepository extends EntityRepository
             return [];
         }
 
-        return $this->getColumnNamesData($entity);
+        $result = $this->getColumnNamesData($entity);
+         //替换语言
+        $service = new MultiLangService();
+        $lang = $this->getLang();
+        $result = $service->getOneLangData($result,$this->multiLangField,$this->table,$lang,$result['item_id'],$this->table);
+        return $result;
     }
 
     /**
@@ -317,6 +348,9 @@ class PointsmallItemsRepository extends EntityRepository
         }
 
         $result = $this->getColumnNamesData($itemsEnt);
+        $service = new MultiLangService();
+        $lang = $this->getLang();
+        $result = $service->getOneLangData($result,$this->multiLangField,$this->table,$lang,$result['item_id'],$this->table);
         return $result;
     }
 
@@ -387,6 +421,9 @@ class PointsmallItemsRepository extends EntityRepository
     public function list($filter, $orderBy = [], $pageSize = 100, $page = 1, $columns = null)
     {
         $criteria = Criteria::create();
+        // 多语言处理filter
+        $service = new MultiLangService();
+        $filter = $service->filterLang($filter, $this->multiLangField, $this->table, $this->prk);
         if ($filter) {
             foreach ($filter as $field => $value) {
                 $list = explode('|', $field);
@@ -427,6 +464,18 @@ class PointsmallItemsRepository extends EntityRepository
             }
         }
         $res['list'] = $newItemsList;
+        if(empty($res['list'])){
+            return $res;
+        }
+        $service = new MultiLangService();
+        $res['list'] = $service->getListAddLang($res['list'],$this->multiLangField,$this->table,$this->getLang(),$this->prk);
+        
+        // 历史原因特使处理
+        // 重新赋值多语言字段
+        foreach ($res['list'] as $k => &$v) {
+            $v['itemName'] = $v['item_name'] ?? '';
+        }
+
         return $res;
     }
 
@@ -533,8 +582,14 @@ class PointsmallItemsRepository extends EntityRepository
     {
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder()->select($cols)->from($this->table);
+        // 多语言处理filter
+        $service = new MultiLangService();
+        $filter = $service->filterLang($filter, $this->multiLangField, $this->table, $this->prk);
+        
         $qb = $this->__filter($filter, $qb);
         $lists = $qb->execute()->fetchAll();
+        $lists = $service->getListAddLang($lists,$this->multiLangField,$this->table,$this->getLang(),$this->prk);
+
         return $lists;
     }
 

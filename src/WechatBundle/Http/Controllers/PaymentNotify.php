@@ -47,17 +47,18 @@ class PaymentNotify extends Controller
         // 获取tradeInfo
         $tradeService = new TradeService();
         $tradeInfo = $tradeService->getInfo(['trade_id' => $data['out_trade_no']]);
+        $regionauthId = $tradeInfo['regionauth_id'] ?? 0;
         $distributorId = $tradeInfo['distributor_id'] ?? 0;
-        $services = new WechatPayService($distributorId);
+        $services = new WechatPayService($regionauthId, $distributorId);
         if ($companyId) {
             $payment = $services->getPayment($data['appid'], $data['appid'], $companyId);
         } else {
             if ($data['trade_type'] == 'APP') {
                 $companyId = app('redis')->get('wechatAppPayment:companyId:' . $data['appid']);
-                $services = new WechatAppPayService($distributorId);
+                $services = new WechatAppPayService($regionauthId, $distributorId);
             } else {
                 $companyId = app('redis')->get('wechatPayment:companyId:' . $data['appid']);
-                $services = new WechatH5PayService($distributorId);
+                $services = new WechatH5PayService($regionauthId, $distributorId);
             }
 
             if (!$companyId) {

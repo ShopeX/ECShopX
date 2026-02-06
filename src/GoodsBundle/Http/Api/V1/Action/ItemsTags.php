@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Dingo\Api\Exception\StoreResourceFailedException;
 use App\Http\Controllers\Controller as Controller;
 use GoodsBundle\Services\ItemsTagsService;
+use CompanysBundle\MultiLang\MultiLangItem;
 
 class ItemsTags extends Controller
 {
@@ -198,7 +199,61 @@ class ItemsTags extends Controller
         $filter['company_id'] = $companyId;
 
         if (isset($params['tag_name']) && $params['tag_name']) {
-            $filter['tag_name|contains'] = $params['tag_name'];
+            // tag_name是多语言字段，需要同时查询主表和多语言表，然后合并结果
+            // 使用完整的语言代码（如 zh-CN），MultiLangItem 会自动处理
+            $lang = $request->input('country_code', 'zh-CN');
+            if (empty($lang)) {
+                $lang = 'zh-CN';
+            }
+            
+            $tagIds = [];
+            
+            // 1. 在多语言表中查询，同时考虑company_id条件
+            $multiLangItem = new MultiLangItem($lang);
+            $langFilter = [
+                'table_name' => 'items_tags',
+                'field' => 'tag_name',
+                'attribute_value|contains' => $params['tag_name'],
+                'company_id' => $companyId,
+            ];
+            $langList = $multiLangItem->getListByFilter($langFilter, -1);
+            if (!empty($langList)) {
+                $langIds = array_column($langList, 'data_id');
+                $langIds = array_unique($langIds);
+                $tagIds = array_merge($tagIds, $langIds);
+            }
+            
+            // 2. 同时也在主表中查询（兼容没有多语言记录的数据）
+            // 直接查询主表，只考虑company_id和tag_name条件
+            $conn = app('registry')->getConnection('default');
+            $qb = $conn->createQueryBuilder();
+            $qb->select('tag_id')
+                ->from('items_tags')
+                ->where('company_id = :company_id')
+                ->andWhere('tag_name LIKE :tag_name');
+            $qb->setParameter('company_id', $companyId);
+            $qb->setParameter('tag_name', '%' . $params['tag_name'] . '%');
+            $mainTableResult = $qb->execute()->fetchAll(\PDO::FETCH_COLUMN);
+            if (!empty($mainTableResult)) {
+                $mainTableIds = array_unique($mainTableResult);
+                $tagIds = array_merge($tagIds, $mainTableIds);
+            }
+            
+            // 3. 合并去重后的tag_id列表
+            $tagIds = array_unique($tagIds);
+            
+            if (!empty($tagIds)) {
+                // 如果找到了匹配的tag_id，则使用tag_id查询
+                if (isset($filter['tag_id'])) {
+                    $filter['tag_id'] = array_intersect((array)$filter['tag_id'], $tagIds);
+                } else {
+                    $filter['tag_id'] = $tagIds;
+                }
+                // 移除tag_name条件，因为已经通过tag_id查询了
+            } else {
+                // 如果都没有找到，使用tag_name条件查询（虽然不太可能）
+                $filter['tag_name|contains'] = $params['tag_name'];
+            }
         }
         if($request->has('tag_source') && $tag_source = $request->input('tag_source','')){
             if($tag_source == 'distributor'){

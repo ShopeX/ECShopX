@@ -22,9 +22,92 @@ use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Request;
 use ThemeBundle\Jobs\PagesTemplateSyncJob;
 use ThemeBundle\Services\PagesTemplateServices;
+use GoodsBundle\Services\ItemsService;
+use CompanysBundle\Services\RegionauthService;
 
 class PagesTemplate extends Controller
 {
+    /**
+     * @SWG\Get(
+     *     path="/pagestemplate/widget/items",
+     *     summary="获取模板组件商品",
+     *     tags={"模板"},
+     *     description="获取模板组件商品",
+     *     @SWG\Parameter(
+     *         name="regionauth_id",
+     *         in="query",
+     *         description="区域id",
+     *         required=false,
+     *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="distributor_id",
+     *         in="query",
+     *         description="店铺id",
+     *         required=false,
+     *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="data_type",
+     *         in="query",
+     *         description="数据类型 main_category-主类目 category-分类 seckill-限时特惠 group-拼团 sales-按销量 items-指定商品 distributor-指定店铺",
+     *         required=true,
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="data_value",
+     *         in="query",
+     *         description="数据值",
+     *         required=true,
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="num",
+     *         in="query",
+     *         description="数量",
+     *         required=true,
+     *         type="integer",
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(property="data", type="object",
+     *                 @SWG\Property(property="data", type="array",
+     *                     @SWG\Items(type="object",
+     *                         @SWG\Property(property="item_id", type="integer"),
+     *                         @SWG\Property(property="item_name", type="string"),
+     *                     ),
+     *                 ),
+     *                 @SWG\Property(property="filter", type="object",
+     *                     @SWG\Property(property="main_category", type="integer"),
+     *                     @SWG\Property(property="category_id", type="integer"),
+     *                     @SWG\Property(property="seckill_id", type="integer"),
+     *                     @SWG\Property(property="group_id", type="integer"),
+     *                     @SWG\Property(property="item_id", type="integer"),
+     *                     @SWG\Property(property="distributor_id", type="integer"),
+     *                 ),
+     *                 @SWG\Property(property="goodsSort", type="integer"),
+     *             )
+     *         )
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/WechatErrorRespones") ) )
+     * )
+     */
+    public function getWidgetItems(Request $request)
+    {
+        $params = $request->all('regionauth_id', 'distributor_id', 'data_type', 'data_value', 'num', 'page', 'pageSize');
+        $params['company_id'] = app('auth')->user()->get('company_id');
+        $pages_template_services = new PagesTemplateServices();
+        $result = $pages_template_services->getWidgetItems($params);
+
+        //营销标签
+        $itemsService = new ItemsService();
+        $result['data'] = $itemsService->getItemsListActityTag($result['data'], $params['company_id'], $params['regionauth_id'], -1, 0, '', 'include_not_start');
+
+        return $this->response->array($result);
+    }
+
     /**
      * @SWG\Get(
      *     path="/pagestemplate/lists",
@@ -40,11 +123,25 @@ class PagesTemplate extends Controller
      *         type="string",
      *     ),
      *     @SWG\Parameter(
+     *         name="regionauth_id",
+     *         in="query",
+     *         description="区域id",
+     *         required=false,
+     *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
      *         name="distributor_id",
      *         in="query",
      *         description="门店id",
      *         required=false,
      *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="weapp_pages",
+     *         in="query",
+     *         description="小程序页码类型 index-首页 distributor_index-门店首页",
+     *         required=false,
+     *         type="string",
      *     ),
      *     @SWG\Parameter(
      *         name="page_no",
@@ -93,19 +190,39 @@ class PagesTemplate extends Controller
     {
         // Debug: 1e2364
         $company_id = app('auth')->user()->get('company_id');
+        $regionauth_id = $request->input('regionauth_id');
         $distributor_id = $request->input('distributor_id', 0);
-        $page_no = $request->input('page_no', 1);
-        $page_size = $request->input('page_size', 50);
+        $weapp_pages = $request->input('weapp_pages', 'index');
+        $page_no = $request->input('page', 1);
+        $page_size = $request->input('pageSize', 50);
+
+        if ($distributor_id > 0 && $weapp_pages == 'index') {
+            $weapp_pages = 'distributor_index';
+        }
 
         $params = [
             'company_id' => $company_id,
             'distributor_id' => $distributor_id,
+            'weapp_pages' => $weapp_pages,
             'page_no' => $page_no,
             'page_size' => $page_size
         ];
+        if (isset($regionauth_id)) {
+            $params['regionauth_id'] = $regionauth_id;
+        }
 
         $pages_template_services = new PagesTemplateServices();
         $result = $pages_template_services->lists($params);
+
+        if ($result['list']) {
+            $regionauthService = new RegionauthService();
+            $regionauthList = $regionauthService->getLists(['company_id' => $company_id, 'regionauth_id' => array_column($result['list'], 'regionauth_id')], 'regionauth_id,regionauth_name');
+            $regionauthNameMap = array_column($regionauthList, 'regionauth_name', 'regionauth_id');
+
+            foreach ($result['list'] as $key => $val) {
+                $result['list'][$key]['regionauth_name'] = $regionauthNameMap[$val['regionauth_id']] ?? '';
+            }
+        }
 
         return $this->response->array($result);
     }
@@ -123,6 +240,13 @@ class PagesTemplate extends Controller
      *         description="JWT验证token",
      *         required=true,
      *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="regionauth_id",
+     *         in="formData",
+     *         description="区域id",
+     *         required=false,
+     *         type="integer",
      *     ),
      *     @SWG\Parameter(
      *         name="distributor_id",
@@ -155,7 +279,7 @@ class PagesTemplate extends Controller
      *     @SWG\Parameter(
      *         name="weapp_pages",
      *         in="formData",
-     *         description="小程序页码类型",
+     *         description="小程序页码类型 index-首页 distributor_index-门店首页",
      *         required=false,
      *         type="string",
      *     ),
@@ -191,14 +315,20 @@ class PagesTemplate extends Controller
     public function add(Request $request)
     {
         $company_id = app('auth')->user()->get('company_id');
+        $regionauth_id = $request->input('regionauth_id', 0);
         $distributor_id = $request->input('distributor_id', 0);
         $template_name = $request->input('template_name');  //展示客户端名称 如小程序商城 yykweishop
         $template_title = $request->input('template_title');
         $template_pic = $request->input('template_pic');
         $weapp_pages = $request->input('weapp_pages', 'index'); //小程序页面类型 默认为首页页面
 
+        if ($distributor_id > 0 && $weapp_pages == 'index') {
+            $weapp_pages = 'distributor_index';
+        }
+
         $params = [
             'company_id' => $company_id,
+            'regionauth_id' => $regionauth_id,
             'distributor_id' => $distributor_id,
             'template_name' => $template_name,
             'template_title' => $template_title,
@@ -234,6 +364,13 @@ class PagesTemplate extends Controller
      *         description="JWT验证token",
      *         required=true,
      *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="regionauth_id",
+     *         in="formData",
+     *         description="区域id",
+     *         required=false,
+     *         type="integer",
      *     ),
      *     @SWG\Parameter(
      *         name="distributor_id",
@@ -306,18 +443,20 @@ class PagesTemplate extends Controller
 
         $template_title = $request->input('template_title', false);
         $template_pic = $request->input('template_pic', false);
-        if ($template_title !== false || $template_pic !== false) {
+        $regionauth_id = $request->input('regionauth_id', false);
+        if ($template_title !== false || $template_pic !== false || $regionauth_id !== false) {
             $pages_template_services = new PagesTemplateServices();
             $pages_template_services->updateInfo($company_id, $pages_template_id, [
                 'template_title' => $template_title ?: '',
                 'template_pic' => $template_pic ?: '',
+                'regionauth_id' => $regionauth_id ?: 0
             ]);
             return $this->response->array(['status' => true]);
         }
 
         $template_content = $request->input('template_content');
         $element_edit_status = $request->input('element_edit_status');
-        $template_name = $request->input('template_name');  //展示客户端名称 如小程序商城 yykweishop
+        $template_name = $request->input('template_name', 'yykweishop');  //展示客户端名称 如小程序商城 yykweishop
 
         $params = [
             'company_id' => $company_id,

@@ -99,7 +99,7 @@ class OpenScreenAd extends Controller
     public function Save(Request $request)
     {
         // 请求参数
-        $params = $request->all('ad_material', 'is_enable', 'show_time', 'position', 'is_jump', 'material_type', 'waiting_time', 'ad_url', 'app');
+        $params = $request->all('ad_material', 'is_enable', 'show_time', 'position', 'is_jump', 'material_type', 'waiting_time', 'ad_url', 'app', 'start_time', 'end_time');
 
         // 验证数据
         $rules = [
@@ -108,6 +108,8 @@ class OpenScreenAd extends Controller
             'show_time' => ['required|in:always,first', '请选择曝光时间'],
             'waiting_time' => ['required', '请设置秒数'],
             // 'app' => ['required', '请选择应用端'],
+            'start_time' => ['required', '请选择展示开始时间'],
+            'end_time' => ['required', '请选择展示结束时间'],
         ];
         $error = validator_params($params, $rules);
         if ($error) {

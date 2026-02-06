@@ -26,7 +26,7 @@ use Dingo\Api\Exception\ResourceException;
 
 class WeappCustomizePageRepository extends EntityRepository
 {
-    public $cols = ['id','template_name','company_id','page_name','page_description','page_share_title',
+    public $cols = ['id','template_name','company_id', 'regionauth_id', 'page_name','page_description','page_share_title',
         'page_share_desc','page_share_imageUrl','is_open', 'page_type'];
     public $table = 'wechat_weapp_customize_page'; // 多语言对应的表名
     public $module = 'wechat_weapp_customize_page'; // 多语言对应的模块

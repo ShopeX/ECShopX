@@ -142,6 +142,13 @@ class MemberTags
     private $source = 'self';
 
     /**
+     * @var string|null
+     *
+     * @ORM\Column(name="wechat_tag_id", type="string", length=100, nullable=true, options={"comment"="企业微信标签ID"})
+     */
+    private $wechat_tag_id;
+
+    /**
      * Get tagId.
      *
      * @return int
@@ -485,5 +492,29 @@ class MemberTags
     public function getSource()
     {
         return $this->source;
+    }
+
+    /**
+     * Set wechatTagId.
+     *
+     * @param string|null $wechatTagId
+     *
+     * @return MemberTags
+     */
+    public function setWechatTagId($wechatTagId = null)
+    {
+        $this->wechat_tag_id = $wechatTagId;
+
+        return $this;
+    }
+
+    /**
+     * Get wechatTagId.
+     *
+     * @return string|null
+     */
+    public function getWechatTagId()
+    {
+        return $this->wechat_tag_id;
     }
 }

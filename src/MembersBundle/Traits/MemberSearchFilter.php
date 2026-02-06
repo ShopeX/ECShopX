@@ -57,6 +57,13 @@ trait MemberSearchFilter
             $filter['created|lte'] = $postdata['time_start_end'];
         }
 
+        if (isset($postdata['birthday_start']) && $postdata['birthday_start']) {
+            $filter['birthday|gte'] = date('Y-m-d', strtotime($postdata['birthday_start']));
+        }
+        if (isset($postdata['birthday_end']) && $postdata['birthday_end']) {
+            $filter['birthday|lte'] = date('Y-m-d', strtotime($postdata['birthday_end']));
+        }
+
         if (isset($postdata['user_id']) && $postdata['user_id']) {
             $userIds = is_array($postdata['user_id']) ? $postdata['user_id'] : [$postdata['user_id']];
         }
@@ -108,7 +115,15 @@ trait MemberSearchFilter
         }
 
         if (isset($postdata['tag_id']) && $postdata['tag_id']) {
-            $filter['tag_id'] = $postdata['tag_id'];
+            // 如果 tag_id 包含逗号，则分割成数组
+            if (is_string($postdata['tag_id']) && strpos($postdata['tag_id'], ',') !== false) {
+                $tagIds = explode(',', $postdata['tag_id']);
+                $tagIds = array_map('trim', $tagIds);
+                $tagIds = array_filter($tagIds);
+                $filter['tag_id'] = !empty($tagIds) ? $tagIds : $postdata['tag_id'];
+            } else {
+                $filter['tag_id'] = $postdata['tag_id'];
+            }
         }
 
         if ($postdata['vip_grade'] == 'notvip') {

@@ -57,12 +57,12 @@ class MemberTags extends Controller
 
     public function createTags(Request $request)
     {
-        $params = $request->all('category_id', 'tag_name', 'description', 'tag_color', 'font_color');
+        $params = $request->all('category_id', 'tag_name', 'description', 'tag_color', 'font_color', 'group_id');
 
         $rules = [
             'tag_name' => ['required', '标签名称不能为空'],
-            'tag_color' => ['required', '标签颜色'],
-            'font_color' => ['required', '标签字体颜色'],
+            // 'tag_color' => ['required', '标签颜色'],
+            // 'font_color' => ['required', '标签字体颜色'],
         ];
         $error = validator_params($params, $rules);
         if ($error) {
@@ -83,8 +83,183 @@ class MemberTags extends Controller
             throw new StoreResourceFailedException('标签名称不能重复');
         }
 
-        $result = $this->memberTagService->create($params);
+        try {
+            $result = $this->memberTagService->createTagWithGroup($params);
+        } catch (\Exception $e) {
+            throw new StoreResourceFailedException($e->getMessage());
+        }
         return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/member/tag-group",
+     *     summary="新增标签组并关联标签",
+     *     tags={"会员"},
+     *     description="新增标签组，首次创建会自动生成默认组并关联现有标签",
+     *     operationId="createTagGroup",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="group_name", in="query", description="标签组名称", required=true, type="string"),
+     *     @SWG\Parameter( name="description", in="query", description="标签组描述", required=false, type="string"),
+     *     @SWG\Parameter( name="tag_ids", in="query", description="要关联的标签ID数组", required=false, type="array", @SWG\Items(type="integer")),
+     *     @SWG\Parameter( name="tags", in="query", description="需要创建并关联的标签列表", required=false, type="array", @SWG\Items(
+     *          @SWG\Property(property="tag_name", type="string"),
+     *          @SWG\Property(property="tag_color", type="string"),
+     *          @SWG\Property(property="font_color", type="string"),
+     *          @SWG\Property(property="description", type="string"),
+     *          @SWG\Property(property="category_id", type="integer")
+     *     )),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data",
+     *              type="object"
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/MembersErrorRespones") ) )
+     * )
+     */
+    public function createTagGroup(Request $request)
+    {
+        $params = $request->all('group_name', 'description', 'tag_ids', 'tags');
+        $rules = [
+            'group_name' => ['required', '标签组名称不能为空'],
+        ];
+        $error = validator_params($params, $rules);
+        if ($error) {
+            throw new StoreResourceFailedException($error);
+        }
+
+        $params['company_id'] = app('auth')->user()->get('company_id');
+        $params['distributor_id'] = app('auth')->user()->get('distributor_id');
+
+        // 支持逗号字符串或数组格式的标签ID
+        if (isset($params['tag_ids']) && $params['tag_ids'] && !is_array($params['tag_ids'])) {
+            $params['tag_ids'] = array_filter(explode(',', $params['tag_ids']));
+        }
+
+        $result = $this->memberTagService->createTagGroup($params);
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Get(
+     *     path="/member/tag-group",
+     *     summary="获取标签组列表（含组内标签）",
+     *     tags={"会员"},
+     *     description="按标签组维度分页返回，并附带组内标签列表",
+     *     operationId="getTagGroupList",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="page", in="query", description="页码", required=false, type="integer"),
+     *     @SWG\Parameter( name="page_size", in="query", description="每页数量", required=false, type="integer"),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data",
+     *              type="object"
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/MembersErrorRespones") ) )
+     * )
+     */
+    public function getTagGroupList(Request $request)
+    {
+        $page = (int)$request->get('page', 1);
+        $pageSize = (int)$request->get('pageSize', 20);
+        $groupName = $request->get('group_name', '');
+        $user = app('auth')->user()->get();
+        $filter = [
+            'company_id' => $user['company_id'],
+            // 'distributor_id' => $user['distributor_id'] ?? 0,
+        ];
+        // 如果传了group_name，添加到过滤条件中
+        if (!empty($groupName)) {
+            $filter['group_name'] = $groupName;
+        }
+        $result = $this->memberTagService->getTagGroupList($filter, $page, $pageSize);
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Put(
+     *     path="/member/tag-group/{group_id}",
+     *     summary="编辑标签组及标签",
+     *     tags={"会员"},
+     *     description="可修改标签组名称/描述，新增或更新标签，删除指定标签并清理会员关联",
+     *     operationId="updateTagGroup",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="group_id", in="path", description="标签组ID", required=true, type="integer"),
+     *     @SWG\Parameter( name="group_name", in="query", description="标签组名称", required=true, type="string"),
+     *     @SWG\Parameter( name="description", in="query", description="标签组描述", required=false, type="string"),
+     *     @SWG\Parameter( name="deleteids", in="query", description="需要删除的标签ID数组", required=false, type="array", @SWG\Items(type="integer")),
+     *     @SWG\Parameter( name="tags", in="query", description="需创建/更新的标签列表", required=false, type="array", @SWG\Items(
+     *          @SWG\Property(property="tag_id", type="integer", description="0表示新增"),
+     *          @SWG\Property(property="tag_name", type="string"),
+     *          @SWG\Property(property="tag_color", type="string"),
+     *          @SWG\Property(property="font_color", type="string"),
+     *          @SWG\Property(property="description", type="string"),
+     *          @SWG\Property(property="category_id", type="integer")
+     *     )),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data",
+     *              type="object"
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/MembersErrorRespones") ) )
+     * )
+     */
+    public function updateTagGroup(Request $request, $group_id)
+    {
+        $params = $request->all('group_name', 'description', 'deleteids', 'tags');
+        $params['group_id'] = (int)$group_id;
+
+        $rules = [
+            'group_name' => ['required', '标签组名称不能为空'],
+        ];
+        $error = validator_params($params, $rules);
+        if ($error) {
+            throw new StoreResourceFailedException($error);
+        }
+
+        $params['company_id'] = app('auth')->user()->get('company_id');
+        $params['distributor_id'] = app('auth')->user()->get('distributor_id');
+
+        // deleteids 支持逗号分隔
+        if (isset($params['deleteids']) && $params['deleteids'] && !is_array($params['deleteids'])) {
+            $params['deleteids'] = array_filter(explode(',', $params['deleteids']));
+        }
+
+        try {
+            $result = $this->memberTagService->updateTagGroup($params);
+        } catch (\Exception $e) {
+            throw new StoreResourceFailedException($e->getMessage().'---'.$e->getFile().'---'.$e->getLine());
+        }
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Delete(
+     *     path="/member/tag-group/{group_id}",
+     *     summary="删除标签组（仅支持无标签关联的组）",
+     *     tags={"会员"},
+     *     description="删除标签组，若已关联标签则不允许删除",
+     *     operationId="deleteTagGroup",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="group_id", in="path", description="标签组ID", required=true, type="integer"),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data",
+     *              type="object"
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/MembersErrorRespones") ) )
+     * )
+     */
+    public function deleteTagGroup($group_id)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        $distributorId = app('auth')->user()->get('distributor_id');
+        try {
+            $result = $this->memberTagService->deleteTagGroup((int)$group_id, $companyId, $distributorId);
+        } catch (\Exception $e) {
+            throw new StoreResourceFailedException($e->getMessage());
+        }
+        return $this->response->array(['status' => $result]);
     }
 
     /**

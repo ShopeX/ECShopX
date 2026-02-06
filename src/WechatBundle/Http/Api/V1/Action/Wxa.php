@@ -17,8 +17,10 @@
 
 namespace WechatBundle\Http\Api\V1\Action;
 
+use CompanysBundle\Services\RegionauthService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
+use PromotionsBundle\Services\ActivityCollectionService;
 use WechatBundle\Services\WeappService;
 use WechatBundle\Services\Wxapp\TemplateService;
 use Dingo\Api\Exception\StoreResourceFailedException;
@@ -493,7 +495,13 @@ class Wxa extends Controller
         $weappService = new WeappService($wxaAppId, $companyId);
 
         $page = $request->input('page', 'pages/index');
+        $regionauth_id = $request->input('regionauth_id', -1);
+        // if ($regionauth_id < 0) {
+        //     throw new StoreResourceFailedException('区域ID不能为空');
+        // }
+        
         $params = $request->input();
+        unset($params['regionauth_id']);
         foreach ($params as $key => $val) {
             if (in_array($key, ['wxaAppId', 'page']) || !$val || $val === 'undefined') {
                 unset($params[$key]);
@@ -508,7 +516,25 @@ class Wxa extends Controller
                 unset($params[$key]);
                 continue;
             }
+            if ($key == 'collection_id') {
+                $activityCollectionServiceObj = new ActivityCollectionService();
+                $rsCollection = $activityCollectionServiceObj->entityRepository->getInfoById($val);
+                if ($rsCollection && $rsCollection['regionauth_id']) {
+                    $regionauth_id = $rsCollection['regionauth_id'];
+                }
+                continue;
+            }
         }
+        
+        if ($regionauth_id > 0) {
+            //获取区域编码
+            $regionauthService = new RegionauthService();
+            $regionauthInfo = $regionauthService->entityRepository->getInfoById($regionauth_id);
+            if ($regionauthInfo) {
+                $params['crmcode'] = $regionauthInfo['regionauth_code'];
+            }
+        }
+        
         $scene = $params ? http_build_query($params) : '1';
 
         try {
@@ -517,7 +543,7 @@ class Wxa extends Controller
                 throw new \Exception($response['errmsg']);
             }
         } catch (\Exception $e) {          
-            throw new StoreResourceFailedException('小程序还从未通过审核，无法生成小程序码，请查看体验二维码');
+            throw new StoreResourceFailedException($e->getMessage());
         }
         $base64 = 'data:image/jpg;base64,' . base64_encode($response);
         return $this->response->array(['base64Image' => $base64]);

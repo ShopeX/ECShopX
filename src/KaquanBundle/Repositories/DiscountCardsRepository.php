@@ -567,6 +567,10 @@ class DiscountCardsRepository extends EntityRepository
         if (isset($data["card_type"]) && $data["card_type"]) {
             $entity->setCardType($data["card_type"]);
         }
+        //当前字段非必填
+        if (isset($data["coupon_type"])) {
+            $entity->setCouponType($data["coupon_type"]);
+        }
         if (isset($data["title"]) && $data["title"]) {
             $entity->setTitle($data["title"]);
         }
@@ -687,6 +691,10 @@ class DiscountCardsRepository extends EntityRepository
         }
         if (isset($data["quantity"]) && $data["quantity"]) {
             $entity->setQuantity($data["quantity"]);
+        }
+        //当前字段非必填
+        if (isset($data["guide_issue_quantity"])) {
+            $entity->setGuideIssueQuantity($data["guide_issue_quantity"]);
         }
         //当前字段非必填
         if (isset($data['use_all_shops'])) {

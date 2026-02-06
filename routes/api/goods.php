@@ -29,6 +29,8 @@ $api->version('v1', function($api) {
         $api->post('/goods/setItemsCategory', ['name' => '更新商品分类', 'as' => 'goods.items.category_change', 'uses' => 'Items@setItemsCategory']);
         $api->get('/goods/items', ['name' => '获取商品列表', 'as' => 'goods.items.lists', 'uses' => 'Items@getItemsList']);
         $api->get('/goods/items/onsale', ['name' => '获取可销售的商品列表', 'as' => 'goods.items.onsale.lists', 'uses' => 'Items@getOnsaleItemsList']);
+        $api->post('/goods/save_group_item', ['name' => '保存分组商品', 'as' => 'goods.items.save_group_item', 'uses' => 'ItemsGroupController@saveGroupItem']);
+        $api->get('/goods/get_group_items', ['name' => '查询分组商品', 'as' => 'goods.items.get_group_items', 'uses' => 'ItemsGroupController@getGroupItems']);
         $api->get('/goods/sku', ['name' => '获取商品列表', 'as' => 'goods.sku.lists', 'uses' => 'Items@getSkuList']);
         $api->get('/goods/items/{item_id}', ['name' => '获取商品详情', 'as' => 'goods.items.detail', 'uses' => 'Items@getItemsDetail']);
         $api->delete('/goods/items/{item_id}', ['name' => '删除商品', 'as' => 'goods.items.delete', 'uses' => 'Items@deleteItems']);

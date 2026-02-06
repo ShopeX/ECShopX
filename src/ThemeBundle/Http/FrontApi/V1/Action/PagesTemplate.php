@@ -20,13 +20,121 @@ namespace ThemeBundle\Http\FrontApi\V1\Action;
 use App\Http\Controllers\Controller as Controller;
 use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Request;
+use KaquanBundle\Services\DiscountCardService;
+use KaquanBundle\Services\KaquanService;
+use PromotionsBundle\Services\MarketingActivityService;
 use TdksetBundle\Services\TdkGlobalService;
 use ThemeBundle\Services\PagesTemplateServices;
 use ThemeBundle\Services\PagesTemplateSetServices;
 use DistributionBundle\Entities\Distributor;
+use GoodsBundle\Services\ItemsService;
 
 class PagesTemplate extends Controller
 {
+    /**
+     * @SWG\Get(
+     *     path="/h5app/wxapp/pagestemplate/widget/items",
+     *     summary="获取模板组件商品",
+     *     tags={"模板"},
+     *     description="获取模板组件商品",
+     *     @SWG\Parameter(
+     *         name="regionauth_id",
+     *         in="query",
+     *         description="区域id",
+     *         required=false,
+     *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="distributor_id",
+     *         in="query",
+     *         description="店铺id",
+     *         required=false,
+     *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="data_type",
+     *         in="query",
+     *         description="数据类型 main_category-主类目 category-分类 seckill-限时特惠 group-拼团 sales-按销量 items-指定商品 distributor-指定店铺",
+     *         required=true,
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="data_value",
+     *         in="query",
+     *         description="数据值",
+     *         required=true,
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="num",
+     *         in="query",
+     *         description="数量",
+     *         required=true,
+     *         type="integer",
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(property="data", type="object",
+     *                 @SWG\Property(property="data", type="array",
+     *                     @SWG\Items(type="object",
+     *                         @SWG\Property(property="item_id", type="integer"),
+     *                         @SWG\Property(property="item_name", type="string"),
+     *                     ),
+     *                 ),
+     *                 @SWG\Property(property="filter", type="object",
+     *                     @SWG\Property(property="main_category", type="integer"),
+     *                     @SWG\Property(property="category_id", type="integer"),
+     *                     @SWG\Property(property="seckill_id", type="integer"),
+     *                     @SWG\Property(property="group_id", type="integer"),
+     *                     @SWG\Property(property="item_id", type="integer"),
+     *                     @SWG\Property(property="distributor_id", type="integer"),
+     *                 ),
+     *                 @SWG\Property(property="goodsSort", type="integer"),
+     *             )
+     *         )
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/ThemeErrorRespones") ) )
+     * )
+     */
+    public function getWidgetItems(Request $request)
+    {
+        $authInfo = $request->get('auth');
+        $params = $request->all('regionauth_id', 'distributor_id', 'data_type', 'data_value', 'num', 'page', 'pageSize', 'sort_gte');
+        $params['company_id'] = $authInfo['company_id'];
+        $params['user_id'] = $authInfo['user_id'] ?? 0;
+        $pages_template_services = new PagesTemplateServices();
+        $result = $pages_template_services->getWidgetItems($params);
+
+        $itemsService = new ItemsService();
+        // 如果是推广员不需要计算会员价
+        if ($result['data']) {
+            // 计算会员价
+            $result['data'] = $itemsService->getItemsListMemberPrice($result['data'], $authInfo['user_id'], $params['company_id']);
+        }
+        //营销标签
+        if ($params['data_type'] == 'seckill') {
+            $promotionId = intval($params['data_value']);
+            $promotionType = 'limited_time_sale';
+        } else {
+            $promotionId = 0;
+            $promotionType = '';
+        }
+        $result['data'] = $itemsService->getItemsListActityTag($result['data'], $params['company_id'], $params['regionauth_id'], $params['user_id'], $promotionId, $promotionType, 'include_not_start');
+
+        //优惠券标签
+        /** @var DiscountCardService $kaquanService */
+        // $kaquanService = new KaquanService(new DiscountCardService());
+        // $result['data'] = $kaquanService->getCardListByItemList($params['company_id'], $params['regionauth_id'], $result['data'], $params['user_id']);
+
+        //会员优先购标识
+        // $marketingService = new MarketingActivityService();
+        // $result['data'] = $marketingService->getValidMemberPreferenceByItems($params['company_id'], $params['regionauth_id'], $result['data']);
+
+        return $this->response->array($result);
+    }
+
     /**
      * @SWG\Get(
      *     path="/h5app/wxapp/pagestemplate/detail",
@@ -105,6 +213,7 @@ class PagesTemplate extends Controller
     {
         $auth_info = $request->get('auth');
         $distributor_id = $request->input('distributor_id', 0);       //门店id
+        $regionauth_id = $request->input('regionauth_id', 0);       //区域id
         $weapp_pages = $request->input('weapp_pages', 'index'); //小程序页面类型
         $template_name = $request->input('template_name');       //小程序页面类型
         $version = $request->input('version', 'v1.0.2');       //小程序版本
@@ -116,6 +225,7 @@ class PagesTemplate extends Controller
         $e_activity_id = $request->input('e_activity_id', 0);
         $params = [
             'company_id' => $auth_info['company_id'],
+            'regionauth_id' => $regionauth_id,
             'user_id' => ($auth_info['user_id']) ?? 0,
             'distributor_id' => $distributor_id,
             'weapp_pages' => $weapp_pages,
@@ -228,7 +338,7 @@ class PagesTemplate extends Controller
             'company_id' => $auth_info['company_id'],
             'user_id' => ($auth_info['user_id']) ?? 0,
             'distributor_id' => $distributor_id,
-            'weapp_pages' => $weapp_pages,
+            'weapp_pages' => $weapp_pages == 'index' ? 'distributor_index' : $weapp_pages,
             'template_name' => $template_name,
             'version' => $version
         ];
@@ -241,6 +351,8 @@ class PagesTemplate extends Controller
         if (!isset($createDistributorInfo['is_valid']) || $createDistributorInfo['is_valid'] != "true") {
             throw new ResourceException('当前店铺已失效');
         }
+
+        $params['regionauth_id'] = $createDistributorInfo['regionauth_id'];
 
         $rules = [
             'distributor_id' => ['required|integer|min:1', '缺少门店id'],
@@ -305,6 +417,8 @@ class PagesTemplate extends Controller
         if ($error) {
             throw new ResourceException($error);
         }
+
+        $filter['regionauth_id'] = $request->input('regionauth_id', 0);
 
         $pages_template_set_services = new PagesTemplateSetServices();
         $result = $pages_template_set_services->getInfo($filter);

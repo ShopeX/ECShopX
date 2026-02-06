@@ -276,18 +276,21 @@ class CommonLangModService
         return true;
     }
 
-    public function filterByLang(string $lang, string $field, string $content, string $tableName)
+    public function filterByLang(string $lang, string $field, string $content, string $tableName, $companyId = 0)
     {
         // 处理带操作符的字段名，如 page_name|contains，只取字段名部分
         $fieldParts = explode('|', $field);
         $fieldName = $fieldParts[0];
         
         $filter = [
-            'lang'=>$lang,
+            // 'lang'=>$lang,
             'field'=>$fieldName,
             'table_name'=>$tableName,
             'attribute_value|contains'=>$content,
         ];
+        // if ($companyId > 0) {
+        //     $filter['company_id'] = $companyId;
+        // }
         $repository = $this->getLangMapRepository($lang);
         $list = $repository->getListByFilter($filter, -1, -1);
         if(empty($list)){
@@ -325,7 +328,15 @@ class CommonLangModService
         $fields = $fieldsArr['fields'];
         $fieldsOpts = $fieldsArr['fieldOpts'];
         foreach($totalLang as $lang) {
-            $filter = ['table_name' => $tableName, 'field' => $fields, 'lang' => $lang, 'data_id'=>$id];
+            if ($lang != $langue) {
+                continue;
+            }
+            $filter = [
+                'table_name' => $tableName, 
+                'field' => $fields,
+                // 'lang' => $lang, 
+                'data_id'=>$id
+            ];
             if (!empty($module)) {
                 $filter['module_name'] = $module;
             }
@@ -379,7 +390,15 @@ class CommonLangModService
         $fields = $fieldsArr['fields'];
         $fieldsOpts = $fieldsArr['fieldOpts'];
         foreach($totalLang as $lang) {
-            $filter = ['table_name' => $tableName, 'field' => $fields, 'lang' => $lang, 'data_id'=>$ids];
+            if ($lang != $langue) {
+                continue;
+            }
+            $filter = [
+                'table_name' => $tableName,
+                 'field' => $fields, 
+                // 'lang' => $lang,
+                'data_id'=>$ids
+            ];
             $repository = $this->getLangMapRepository($lang);
             $listTmp = $repository->getListByFilter($filter, -1, -1);
             if(empty($listTmp)){

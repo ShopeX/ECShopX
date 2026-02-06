@@ -24,6 +24,7 @@ class MultiLangItem
 //    private $module = 'item';
 
     private $table;
+    private $moduleNew;
     public function __construct(string $lang,string $module = 'item')
     {
         $this->lang = $lang;
@@ -31,6 +32,7 @@ class MultiLangItem
         if($module != 'item'){
             $moduleNew = 'outside_item';
         }
+        $this->moduleNew = $moduleNew;
         $tableLang = str_replace('-','',$lang);
         $this->table = $moduleNew."_multi_lang_mod_lang_$tableLang";
     }
@@ -225,7 +227,7 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
             $params['_offset'] = $offset;
         }
         // 添加 LIMIT OFFSET（使用 prepare 绑定）
-
+   
         $conn = app("registry")->getConnection("default");
         $stmt = $conn->prepare($sql);
         foreach ($params as $key => $val) {
@@ -346,5 +348,48 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
 
         return ['whereClauses' => $whereClauses, 'params' => $params];
     }
+
+    public function deleteByFilter(array $filter)
+    {
+        $conn = app("registry")->getConnection("default");
+        $schemaManager = $conn->getSchemaManager();
+        
+        // 获取所有匹配表前缀的语言表
+        $tablePrefix = $this->moduleNew . "_multi_lang_mod_lang_";
+        $allTables = $schemaManager->listTableNames();
+        $langTables = array_filter($allTables, function($tableName) use ($tablePrefix) {
+            return strpos($tableName, $tablePrefix) === 0;
+        });
+        
+        if (empty($langTables)) {
+            return false;
+        }
+        
+        // 构建 WHERE 子句和参数
+        $whereClauses = [];
+        $params = [];
+        foreach ($filter as $key => $value) {
+            $whereClauses[] = "`$key` = :$key";
+            $params[$key] = $value;
+        }
+        
+        // 如果没有过滤条件，返回 false（防止误删所有数据）
+        if (empty($whereClauses)) {
+            return false;
+        }
+        
+        $whereSql = implode(' AND ', $whereClauses);
+        
+        // 对每个语言表执行删除操作
+        $totalDeleted = 0;
+        foreach ($langTables as $table) {
+            $sql = "DELETE FROM `{$table}` WHERE {$whereSql}";
+            $deleted = $conn->executeStatement($sql, $params);
+            $totalDeleted += $deleted;
+        }
+        
+        return $totalDeleted > 0;
+    }
+
 
 }

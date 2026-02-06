@@ -68,6 +68,7 @@ class UserDiscountRepository extends EntityRepository
         $userCardData->setMostCost($cardInfo['most_cost']);
         $userCardData->setGetDate(time());
         $userCardData->setSalespersonId($params['salesperson_id'] ?? 0);
+        $userCardData->setSalespersonCode($params['salesperson_code'] ?? '');
         $userCardData->setApplyScope($cardInfo["apply_scope"] ?? '');
         if (isset($params['dm_card_code'])) {
             $userCardData->setDmCardCode($params['dm_card_code']);

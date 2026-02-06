@@ -138,6 +138,9 @@ $api->version('v1', function($api) {
         $api->get('/mail/setting', [ 'name'=>'获取邮件配置','middleware'=>'activated', 'as' => 'mail.setting.get', 'uses'=>'Setting@getMailSetting']);
         $api->post('/mail/setting', [ 'name'=>'保存邮件配置','middleware'=>'activated', 'as' => 'mail.setting.set', 'uses'=>'Setting@saveMailSetting']);
 
+        //酷家乐路由配置
+        $api->get('/kujiale/config', [ 'name'=>'获取酷家乐路由配置','middleware'=>'activated', 'as' => 'kujiale.config.get', 'uses'=>'Setting@getKujialeConfig']);
+        $api->post('/kujiale/config', [ 'name'=>'保存酷家乐路由配置','middleware'=>'activated', 'as' => 'kujiale.config.set', 'uses'=>'Setting@saveKujialeConfig']);
     });
 
     $api->group(['namespace' => 'CompanysBundle\Http\Api\V1\Action', 'middleware' => ['api.auth', 'activated', 'shoplog'], 'providers' => 'jwt'], function($api) {

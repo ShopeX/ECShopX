@@ -431,10 +431,10 @@ class Items extends BaseController
         $itemsService = new ItemsService();
         $result = $itemsService->getItemListData($params, $page, $pageSize, $orderBy, false);
 
-        $result = $itemsService->getItemsListMemberPrice($result, $authInfo['user_id'], $params['company_id']);
+        $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], $authInfo['user_id'], $params['company_id']);
 
         //营销标签
-        $result = $itemsService->getItemsListActityTag($result, $params['company_id']);
+        $result['list'] = $itemsService->getItemsListActityTag($result['list'], $params['company_id']);
 
         $result['goods_total'] = $result['total_count'];//兼容前端
 
@@ -761,6 +761,7 @@ class Items extends BaseController
                     $params['or']['item_id'] = $itemIds;
                 }
             }
+            $params['keywords'] = $keywords;
         }
 
         if ($request->input('item_name')) {
@@ -996,10 +997,10 @@ class Items extends BaseController
             // 如果是推广员不需要计算会员价
             if ($result['list']) {
                 // 计算会员价
-                $result = $itemsService->getItemsListMemberPrice($result, $authInfo['user_id'], $params['company_id']);
+                $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], $authInfo['user_id'], $params['company_id']);
             }
             //营销标签
-            $result = $itemsService->getItemsListActityTag($result, $params['company_id']);
+            $result['list'] = $itemsService->getItemsListActityTag($result['list'], $params['company_id']);
         }
 
         $memberFavItemsId = [];

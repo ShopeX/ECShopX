@@ -484,7 +484,7 @@ class SalespersonItems extends BaseController
         //营销标签
         $itemsService = new ItemsService();
         $itemList['list'][0] = $result;
-        $itemList = $itemsService->getItemsListActityTag($itemList, $authInfo['company_id']);
+        $itemList['list'] = $itemsService->getItemsListActityTag($itemList['list'], $authInfo['company_id']);
         $result = $itemList['list'][0];
 
         if ($result['promotion_activity'] ?? 0) {

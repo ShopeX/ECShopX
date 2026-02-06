@@ -94,6 +94,7 @@ if ($lumenRoutingKeyOne == 'wechatAuth') {
                 require __DIR__.'/../routes/frontapi/community.php';
                 require __DIR__.'/../routes/frontapi/employeepurchase.php';
                 require __DIR__.'/../routes/frontapi/ugc.php';
+                require __DIR__.'/../routes/frontapi/kujiale.php';
             }
             break;
         case ($dingoRoutingKeyOne == 'wxapp' || $dingoRoutingKeyOne == 'wxa') :
@@ -145,6 +146,7 @@ if ($lumenRoutingKeyOne == 'wechatAuth') {
             require __DIR__.'/../routes/api/bspay.php';
             require __DIR__.'/../routes/api/employeepurchase.php';
             require __DIR__.'/../routes/api/ugc.php';
+            require __DIR__.'/../routes/api/kujiale.php';
     }
 }
 

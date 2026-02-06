@@ -31,6 +31,7 @@ use Doctrine\ORM\Mapping as ORM;
  *    @ORM\Index(name="idx_status_expiredtime", columns={"status", "expired_time"}),
  *    @ORM\Index(name="idx_cardid_companyid_userid", columns={"card_id", "company_id", "user_id"}),
  *    @ORM\Index(name="idx_dm_card_code", columns={"dm_card_code"}),
+ *    @ORM\Index(name="idx_salesperson_code", columns={"salesperson_code"}),
  * })
  * @ORM\Entity(repositoryClass="KaquanBundle\Repositories\UserDiscountRepository")
  */
@@ -322,6 +323,13 @@ class UserDiscount
      * @ORM\Column(name="salesperson_id", type="bigint", nullable=true, options={"comment":"导购id"})
      */
     private $salesperson_id;
+
+    /**
+     * @var string
+     *
+     * @ORM\Column(name="salesperson_code", type="string", length=100, nullable=true, options={"comment":"导购编号(employee_number/work_userid)"})
+     */
+    private $salesperson_code;
 
     /**
      * @var integer
@@ -1330,6 +1338,30 @@ class UserDiscount
     public function getSalespersonId()
     {
         return $this->salesperson_id;
+    }
+
+    /**
+     * Set salespersonCode.
+     *
+     * @param string|null $salespersonCode
+     *
+     * @return UserDiscount
+     */
+    public function setSalespersonCode($salespersonCode = null)
+    {
+        $this->salesperson_code = $salespersonCode;
+
+        return $this;
+    }
+
+    /**
+     * Get salespersonCode.
+     *
+     * @return string|null
+     */
+    public function getSalespersonCode()
+    {
+        return $this->salesperson_code;
     }
 
     /**

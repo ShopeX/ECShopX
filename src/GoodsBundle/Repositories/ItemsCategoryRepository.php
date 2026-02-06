@@ -624,6 +624,9 @@ class ItemsCategoryRepository extends EntityRepository
         if (isset($data["company_id"]) && $data["company_id"]) {
             $entity->setCompanyId($data["company_id"]);
         }
+        if (isset($data["regionauth_id"]) && $data["regionauth_id"]) {
+            $entity->setRegionauthId($data["regionauth_id"]);
+        }
         if (isset($data["category_name"]) && $data["category_name"]) {
             $entity->setCategoryName($data["category_name"]);
         }
@@ -676,7 +679,7 @@ class ItemsCategoryRepository extends EntityRepository
             $entity->setCategoryCode($data['category_code']);
         }
 
-        if (isset($data["customize_page_id"]) && $data['customize_page_id']) {
+        if (isset($data["customize_page_id"])) {
             $entity->setCustomizePageId($data['customize_page_id']);
         }
         if (isset($data["category_id_taobao"]) && $data['category_id_taobao']) {
@@ -707,6 +710,7 @@ class ItemsCategoryRepository extends EntityRepository
         return [
             'id' => $entity->getCategoryId(),
             'category_id' => $entity->getCategoryId(),
+            'regionauth_id' => $entity->getRegionauthId(),
             'company_id' => $entity->getCompanyId(),
             'category_name' => $entity->getCategoryName(),
             'label' => $entity->getCategoryName(),

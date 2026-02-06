@@ -237,6 +237,12 @@ class MembersRepository extends EntityRepository
             'disabled' => $userEntity->getDisabled(),
             'remarks' => $userEntity->getRemarks(),
             'third_data' => $userEntity->getThirdData(),
+            'reg_distributor' => $userEntity->getRegDistributor(),
+            'reg_salesperson' => $userEntity->getRegSalesperson(),
+            'fp_salesperson' => $userEntity->getFpSalesperson(),
+            'has_fp' => $userEntity->getHasFp(),
+            'is_become_friend' => $userEntity->getIsBecomeFriend(),
+            'op_distributor' => $userEntity->getOpDistributor(),
         ];
 
         return $result;
@@ -309,6 +315,24 @@ class MembersRepository extends EntityRepository
         }
         if (isset($userData['third_data'])) {
             $userEntity->setThirdData($userData['third_data']);
+        }
+        if (isset($userData['reg_distributor'])) {
+            $userEntity->setRegDistributor($userData['reg_distributor']);
+        }
+        if (isset($userData['reg_salesperson'])) {
+            $userEntity->setRegSalesperson($userData['reg_salesperson']);
+        }
+        if (isset($userData['fp_salesperson'])) {
+            $userEntity->setFpSalesperson($userData['fp_salesperson']);
+        }
+        if (isset($userData['has_fp'])) {
+            $userEntity->setHasFp($userData['has_fp']);
+        }
+        if (isset($userData['is_become_friend'])) {
+            $userEntity->setIsBecomeFriend($userData['is_become_friend']);
+        }
+        if (isset($userData['op_distributor'])) {
+            $userEntity->setOpDistributor($userData['op_distributor']);
         }
         return $userEntity;
     }

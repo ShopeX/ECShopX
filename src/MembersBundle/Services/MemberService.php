@@ -148,6 +148,9 @@ class MemberService
             'industry' => isset($params['industry']) ? $params['industry'] : null,
             'birthday' => isset($params['birthday']) ? $params['birthday'] : null,
             'edu_background' => isset($params['edu_background']) ? $params['edu_background'] : null,
+            'reg_distributor' => isset($params['reg_distributor']) ? (int)$params['reg_distributor'] : 0,
+            'reg_salesperson' => $params['reg_salesperson'] ?? '',
+            'op_distributor' => isset($params['op_distributor']) ? (int)$params['op_distributor'] : 0,
         ];
 
         if ($isUpdatePassword) {
@@ -245,8 +248,8 @@ class MemberService
                             $params['distributor_id'] = $shopRelSalesperson['shop_id'];
                             app('log')->info('导购员信息 shopRelSalesperson===>'.json_encode($shopRelSalesperson) .':salesperson_id===>'.$salesperson['salesperson_id'] );
                         }
-                    }   
-                    app('log')->info('导购员信息 salesperson===>'.json_encode($salesperson) .':work_userid===>'.$params['work_userid'] );   
+                    }
+                    app('log')->info('导购员信息 salesperson===>'.json_encode($salesperson) .':work_userid===>'.$params['work_userid'] );
                 }
                 // 创建分销员数据
                 $promoterService = new PromoterService();
@@ -396,7 +399,7 @@ class MemberService
         if (!$dmMemberInfo) {
             throw new ResourceException('操作失败，请联系客服');
         }
-        
+
         $memberInfo = [
             'mobile' => $params['mobile'],
             'region_mobile' => $params['region_mobile'] ?? '',
@@ -619,7 +622,7 @@ class MemberService
         // 绑定达摩CRM会员
         $dmMemberService->memberBind(['mobile' => $params['mobile']]);
         return $result;
-        
+
     }
 
     /**
@@ -744,7 +747,7 @@ class MemberService
             // 会员的等级变更使用数云，这里不做处理
             return true;
         }
-        
+
         // 达摩crm, 等级不处理
         $ns = new DmCrmSettingService();
         if ($ns->getDmCrmSetting($companyId)['is_open'] ?? '') {
@@ -1199,7 +1202,7 @@ class MemberService
 
         $conn = app('registry')->getConnection('default');
 
-        $mFields = "DISTINCT m.user_id,m.company_id,m.grade_id,m.mobile,m.user_card_code,m.authorizer_appid,m.wxa_appid,m.source_id,m.monitor_id,m.latest_source_id,m.latest_monitor_id,m.created,m.updated,m.created_year,m.created_month,m.created_day,m.offline_card_code,m.inviter_id,m.source_from,m.password,m.disabled,m.use_point,m.remarks,m.third_data,m.region_mobile,m.mobile_country_code,";
+        $mFields = "DISTINCT m.user_id,m.company_id,m.grade_id,m.mobile,m.user_card_code,m.authorizer_appid,m.wxa_appid,m.source_id,m.monitor_id,m.latest_source_id,m.latest_monitor_id,m.created,m.updated,m.created_year,m.created_month,m.created_day,m.offline_card_code,m.inviter_id,m.source_from,m.password,m.disabled,m.use_point,m.remarks,m.third_data,m.region_mobile,m.mobile_country_code,m.reg_distributor,m.reg_salesperson,m.fp_salesperson,m.has_fp,m.op_distributor,";
         $row = $mFields . 'info.username,info.name,info.sex,info.birthday,info.address,info.email,info.industry,info.income,info.edu_background,info.habbit,info.avatar';
 
         $criteria = $conn->createQueryBuilder();
@@ -1218,6 +1221,11 @@ class MemberService
 
         if (isset($filter['tag_id']) && $filter['tag_id']) {
             $criteria->leftJoin('m', 'members_rel_tags', 'reltags', 'reltags.user_id = m.user_id');
+        }
+
+        // 积分查询需要关联 point_member 表
+        if (isset($filter['point|gte']) || isset($filter['point|lte']) || isset($filter['point'])) {
+            $criteria->leftJoin('m', 'point_member', 'pm', 'pm.user_id = m.user_id AND pm.company_id = m.company_id');
         }
 
         $this->_filter($filter, $criteria);
@@ -1346,7 +1354,7 @@ class MemberService
             ->from('members', 'm');
 
         //判断是否存在 members_info 的搜索条件
-        if (isset($filter['have_consume']) or isset($filter['username'])) {
+        if (isset($filter['have_consume']) or isset($filter['username']) or isset($filter['birthday|gte']) or isset($filter['birthday|lte']) or isset($filter['birthday'])) {
             $criteria->leftJoin('m', 'members_info', 'info', 'info.user_id = m.user_id');
         }
 
@@ -1495,23 +1503,39 @@ class MemberService
          **/
 
         if (isset($filter['tag_id']) && $filter['tag_id']) {
-            $criteria->andWhere($criteria->expr()->eq('reltags.tag_id', $criteria->expr()->literal($filter['tag_id'])));
+            // 如果 tag_id 是数组，使用 in 查询；否则使用 eq 查询
+            if (is_array($filter['tag_id'])) {
+                $tagIds = array_map(function($id) use ($criteria) {
+                    return $criteria->expr()->literal($id);
+                }, $filter['tag_id']);
+                $criteria->andWhere($criteria->expr()->in('reltags.tag_id', $tagIds));
+            } else {
+                $criteria->andWhere($criteria->expr()->eq('reltags.tag_id', $criteria->expr()->literal($filter['tag_id'])));
+            }
+            unset($filter['tag_id']);
         }
         unset($filter['distributor_id']);
         unset($filter['shop_id']);
-        unset($filter['tag_id']);
 
         //好像没什么用？
         //$criteria->andWhere($criteria->expr()->isNotNull('m.mobile'));
         //$criteria->andWhere($criteria->expr()->isNotNull('m.user_card_code'));
 
         if ($filter) {
-            $commonKey = ['company_id', 'user_id', 'created', 'updated', 'created_month', 'created_day', 'created_year', 'remarks', 'mobile'];
+            $commonKey = ['company_id', 'user_id', 'created', 'updated', 'created_month', 'created_day', 'created_year', 'remarks', 'mobile', 'birthday', 'fp_salesperson', 'has_fp', 'grade_id', 'op_distributor'];
             foreach ($filter as $field => $value) {
                 $list = explode('|', $field);
                 if (count($list) > 1) {
                     list($v, $k) = $list;
-                    $v = in_array($v, $commonKey) ? 'm.' . $v : $v;
+                    // birthday 字段在 members_info 表中，使用 info.birthday
+                    if ($v == 'birthday') {
+                        $v = 'info.' . $v;
+                    } elseif ($v == 'point') {
+                        // point 字段在 point_member 表中，使用 pm.point
+                        $v = 'pm.' . $v;
+                    } else {
+                        $v = in_array($v, $commonKey) ? 'm.' . $v : $v;
+                    }
                     if (in_array($k, ['like', 'notlike'])) {
                         $criteria->andWhere($criteria->expr()->$k($v, $criteria->expr()->literal('%' . $value . '%')));
                     } elseif (in_array($k, ['in', 'notIn'])) {
@@ -1521,10 +1545,19 @@ class MemberService
                     }
                     continue;
                 } elseif (in_array($field, $commonKey)) {
-                    if (is_array($value)) {
-                        $criteria->andWhere($criteria->expr()->in('m.' . $field, $value));
+                    // birthday 字段在 members_info 表中，使用 info.birthday
+                    if ($field == 'birthday') {
+                        if (is_array($value)) {
+                            $criteria->andWhere($criteria->expr()->in('info.' . $field, $value));
+                        } else {
+                            $criteria->andWhere($criteria->expr()->eq('info.' . $field, $criteria->expr()->literal($value)));
+                        }
                     } else {
-                        $criteria->andWhere($criteria->expr()->eq('m.' . $field, $criteria->expr()->literal($value)));
+                        if (is_array($value)) {
+                            $criteria->andWhere($criteria->expr()->in('m.' . $field, $value));
+                        } else {
+                            $criteria->andWhere($criteria->expr()->eq('m.' . $field, $criteria->expr()->literal($value)));
+                        }
                     }
                 } else {
                     $criteria->andWhere($criteria->expr()->eq('m.' . $field, $criteria->expr()->literal($value)));
@@ -1570,7 +1603,23 @@ class MemberService
 
         if (isset($filter['tag_id']) && $filter['tag_id']) {
             $criteria->leftJoin('m', 'members_rel_tags', 'reltags', 'reltags.user_id = m.user_id');
+            // 如果 tag_id 是数组，使用 in 查询；否则使用 eq 查询
+            if (is_array($filter['tag_id'])) {
+                $tagIds = array_map(function($id) use ($criteria) {
+                    return $criteria->expr()->literal($id);
+                }, $filter['tag_id']);
+                $criteria->andWhere($criteria->expr()->in('reltags.tag_id', $tagIds));
+            } else {
+                $criteria->andWhere($criteria->expr()->eq('reltags.tag_id', $criteria->expr()->literal($filter['tag_id'])));
+            }
+            unset($filter['tag_id']);
         }
+
+        // 积分查询需要关联 point_member 表
+        if (isset($filter['point|gte']) || isset($filter['point|lte']) || isset($filter['point'])) {
+            $criteria->leftJoin('m', 'point_member', 'pm', 'pm.user_id = m.user_id AND pm.company_id = m.company_id');
+        }
+
         $this->_filter($filter, $criteria);
 
         $count = $criteria->execute()->fetchColumn();
@@ -2370,5 +2419,310 @@ class MemberService
             app('log')->info('file:'.$throwable->getFile().',line:'.$throwable->getLine().',message:'.$throwable->getMessage());
             throw new ResourceException(trans('MembersBundle/Members.logout_failed'));
         }
+    }
+
+    /**
+     * 批量查询会员的绑定导购和绑定门店
+     *
+     * @param int $companyId 公司ID
+     * @param array &$memberList 会员列表（引用传递，会直接修改数组）
+     * @return array 返回查询结果
+     */
+    public function batchGetBindSalesperson($companyId, &$memberList)
+    {
+        if (empty($memberList)) {
+            return [];
+        }
+
+        try {
+            // 获取会员的 user_id 列表
+            $userIds = array_column($memberList, 'user_id');
+
+            // 批量获取会员的 unionid
+            $unionidMap = []; // user_id => unionid
+            $membersAssocRepository = app('registry')->getManager('default')->getRepository(MembersAssociations::class);
+            $filter = [
+                'user_id' => $userIds,
+                'company_id' => $companyId,
+                'user_type' => 'wechat',
+            ];
+            $associations = $membersAssocRepository->lists($filter, 'user_id,unionid');
+            if (!empty($associations['list'])) {
+                foreach ($associations['list'] as $assoc) {
+                    if (!empty($assoc['unionid'])) {
+                        $unionidMap[$assoc['user_id']] = $assoc['unionid'];
+                    }
+                }
+            }
+
+            // 构建批量请求数据
+            $batchData = [];
+            foreach ($memberList as $index => $member) {
+                $requestItem = [];
+                $userId = $member['user_id'];
+
+                // 优先使用 unionid，如果没有则使用 external_member_id (user_id)
+                if (!empty($unionidMap[$userId])) {
+                    $requestItem['unionid'] = $unionidMap[$userId];
+                } else {
+                    $requestItem['external_member_id'] = (string)$userId;
+                }
+
+                $batchData[] = $requestItem;
+            }
+
+            if (empty($batchData)) {
+                app('log')->info('[MemberService] 批量查询绑定导购：无有效数据', [
+                    'company_id' => $companyId,
+                    'member_count' => count($memberList),
+                ]);
+                return [];
+            }
+
+            // 调用导购平台批量查询接口
+            $request = new MarketingCenterRequest();
+
+            app('log')->info('[MemberService] 批量查询绑定导购：开始请求', [
+                'company_id' => $companyId,
+                'batch_count' => count($batchData),
+                'request_data' => $batchData,
+            ]);
+
+            // call 方法会自动将 $batchData 放到 data 字段，method 会作为第二个参数传入
+            $result = $request->call($companyId, 'basics.member.getBindSalespersonBatch', $batchData);
+
+            app('log')->info('[MemberService] 批量查询绑定导购：返回结果', [
+                'company_id' => $companyId,
+                'result' => $result,
+                'result_structure' => [
+                    'errcode' => $result['errcode'] ?? null,
+                    'errmsg' => $result['errmsg'] ?? null,
+                    'data' => [
+                        'success' => $result['data']['success'] ?? null,
+                        'total' => $result['data']['total'] ?? null,
+                        'success_count' => $result['data']['success_count'] ?? null,
+                        'fail_count' => $result['data']['fail_count'] ?? null,
+                        'results_count' => isset($result['data']['results']) ? count($result['data']['results']) : 0,
+                    ],
+                ],
+            ]);
+
+            // 将结果匹配到会员列表上
+            if (!empty($result['data']['results']) && is_array($result['data']['results'])) {
+                $matchedCount = 0;
+                foreach ($result['data']['results'] as $item) {
+                    $requestIndex = $item['request_index'] ?? null;
+
+                    // 根据 request_index 匹配到对应的会员
+                    if ($requestIndex !== null && isset($memberList[$requestIndex])) {
+                        $salespersonData = $item['data'] ?? [];
+
+                        // 添加绑定导购信息
+                        $memberList[$requestIndex]['salesperson_info'] = [
+                            'salesperson_id' => $salespersonData['salesperson_id'] ?? null,
+                            'work_userid' => $salespersonData['work_userid'] ?? '',
+                            'member_id' => $salespersonData['member_id'] ?? null,
+                            'external_member_type' => $salespersonData['external_member_type'] ?? null,
+                            'external_userid' => $salespersonData['external_userid'] ?? '',
+                            'suite_external_userid' => $salespersonData['suite_external_userid'] ?? '',
+                            'unionid' => $salespersonData['unionid'] ?? '',
+                            'member_status' => $salespersonData['member_status'] ?? null,
+                            'bind_status' => $salespersonData['bind_status'] ?? null,
+                            'bind_time' => $salespersonData['bind_time'] ?? null,
+                            'bind_cancel_time' => $salespersonData['bind_cancel_time'] ?? null,
+                            'friend_status' => $salespersonData['friend_status'] ?? null,
+                            'become_friend_time' => $salespersonData['become_friend_time'] ?? null,
+                            'employee_number' => $salespersonData['employee_number'] ?? '',
+                        ];
+
+                        // 添加绑定门店信息
+                        $memberList[$requestIndex]['store_info'] = [
+                            'store_bn' => $salespersonData['store_bn'] ?? '',
+                            'store_name' => $salespersonData['store_name'] ?? '',
+                        ];
+
+                        $matchedCount++;
+                    } else {
+                        app('log')->warning('[MemberService] 批量查询绑定导购：无法匹配会员', [
+                            'company_id' => $companyId,
+                            'request_index' => $requestIndex,
+                            'member_list_count' => count($memberList),
+                        ]);
+                    }
+                }
+
+                app('log')->info('[MemberService] 批量查询绑定导购：匹配完成', [
+                    'company_id' => $companyId,
+                    'matched_count' => $matchedCount,
+                    'total_results' => count($result['data']['results']),
+                ]);
+            } else {
+                app('log')->info('[MemberService] 批量查询绑定导购：无返回结果', [
+                    'company_id' => $companyId,
+                ]);
+            }
+
+            return $result;
+
+        } catch (\Exception $e) {
+            app('log')->error('[MemberService] 批量查询绑定导购失败', [
+                'company_id' => $companyId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * 根据导购编号或门店编号获取绑定的会员ID列表
+     *
+     * @param int $companyId 公司ID
+     * @param string|null $employeeNumber 导购编号（与storeBn二选一）
+     * @param string|null $storeBn 门店编号（与employeeNumber二选一）
+     * @return array 返回会员ID数组（user_id），如果查询失败或没有结果返回空数组
+     */
+    public function getBindMemberIdsBySalesperson(int $companyId, ?string $employeeNumber = null, ?string $storeBn = null): array
+    {
+        // 参数验证：必须提供 employee_number 或 store_bn 之一
+        if (empty($employeeNumber) && empty($storeBn)) {
+            app('log')->warning('[MemberService] 获取绑定会员ID：参数错误，必须提供employee_number或store_bn', [
+                'company_id' => $companyId,
+            ]);
+            return [];
+        }
+
+        $requestData = [];
+        if (!empty($employeeNumber)) {
+            $requestData['employee_number'] = $employeeNumber;
+        }
+        if (!empty($storeBn)) {
+            $requestData['store_bn'] = $storeBn;
+        }
+
+        try {
+            $marketingCenterRequest = new MarketingCenterRequest();
+
+            app('log')->info('[MemberService] 获取绑定会员ID：开始请求', [
+                'company_id' => $companyId,
+                'request_data' => $requestData,
+            ]);
+
+            $bindResult = $marketingCenterRequest->call($companyId, 'basics.salesperson.getBindMembers', $requestData);
+
+            app('log')->info('[MemberService] 获取绑定会员ID：返回结果', [
+                'company_id' => $companyId,
+                'result' => [
+                    'errcode' => $bindResult['errcode'] ?? null,
+                    'errmsg' => $bindResult['errmsg'] ?? null,
+                    'member_count' => isset($bindResult['data']['member_ids']) ? count($bindResult['data']['member_ids']) : 0,
+                ],
+            ]);
+
+            $bindMemberIds = [];
+            if (isset($bindResult['data']['member_ids']) && is_array($bindResult['data']['member_ids'])) {
+                // 将字符串类型的 member_id 转换为整数类型的 user_id
+                $bindMemberIds = array_map('intval', $bindResult['data']['member_ids']);
+                $bindMemberIds = array_filter($bindMemberIds); // 过滤掉0值
+                $bindMemberIds = array_values($bindMemberIds); // 重新索引数组
+            }
+
+            return $bindMemberIds;
+
+        } catch (\Exception $e) {
+            app('log')->error('[MemberService] 获取绑定会员ID失败', [
+                'company_id' => $companyId,
+                'request_data' => $requestData,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * 导购通知加好友
+     * 当导购端通知云店，已分配的客户已经加导购为好友时，更新会员的 is_become_friend 状态
+     *
+     * @param int $companyId 公司ID
+     * @param string $unionid 会员unionid
+     * @param string $salespersonCode 导购编号（employee_number）
+     * @return array 返回结果 ['success' => bool, 'message' => string, 'is_already_friend' => bool]
+     * @throws Exception
+     */
+    public function notifyBecomeFriend(int $companyId, string $unionid, string $salespersonCode): array
+    {
+        app('log')->info('[MemberService] 导购通知加好友：开始处理', [
+            'company_id' => $companyId,
+            'unionid' => $unionid,
+            'salesperson_code' => $salespersonCode,
+        ]);
+
+        // 1. 根据 unionid 查找会员关联信息
+        $membersAssociationsRepository = app('registry')->getManager('default')->getRepository(MembersAssociations::class);
+        $association = $membersAssociationsRepository->get([
+            'unionid' => $unionid,
+            'company_id' => $companyId,
+            'user_type' => 'wechat'
+        ]);
+
+        if (!$association) {
+            app('log')->warning('[MemberService] 导购通知加好友：未找到会员 unionid=' . $unionid . ':companyId=' . $companyId);
+            throw new Exception('会员不存在');
+        }
+
+        $userId = $association['user_id'];
+
+        // 2. 获取会员信息
+        $member = $this->membersRepository->find($userId);
+
+        if (!$member) {
+            app('log')->warning('[MemberService] 导购通知加好友：未找到会员记录 user_id=' . $userId);
+            throw new Exception('会员不存在');
+        }
+
+        // 3. 验证会员是否已分配给该导购（bind_status = 1）
+        // fp_salesperson 存储的是 employee_number（导购编号），类型为字符串
+        // 检查会员是否已分配给该导购
+        if ($member->getHasFp() != 1 || (string)$member->getFpSalesperson() != (string)$salespersonCode) {
+            app('log')->warning('[MemberService] 导购通知加好友：会员未分配给该导购', [
+                'user_id' => $userId,
+                'salesperson_code' => $salespersonCode,
+                'has_fp' => $member->getHasFp(),
+                'fp_salesperson' => $member->getFpSalesperson(),
+            ]);
+            throw new Exception('该会员未分配给该导购');
+        }
+
+        // 4. 幂等性检查：如果已经是好友状态，直接返回成功
+        if ($member->getIsBecomeFriend() == 1) {
+            app('log')->info('[MemberService] 导购通知加好友：幂等性检查通过，已是好友状态', [
+                'user_id' => $userId,
+                'salesperson_code' => $salespersonCode,
+            ]);
+            return [
+                'success' => true,
+                'message' => '已是好友状态',
+                'is_already_friend' => true,
+            ];
+        }
+
+        // 5. 更新 is_become_friend = 1
+        $member->setIsBecomeFriend(1);
+
+        $em = app('registry')->getManager('default');
+        $em->persist($member);
+        $em->flush();
+
+        app('log')->info('[MemberService] 导购通知加好友：更新成功', [
+            'user_id' => $userId,
+            'salesperson_code' => $salespersonCode,
+        ]);
+
+        return [
+            'success' => true,
+            'message' => '更新成功',
+            'is_already_friend' => false,
+        ];
     }
 }

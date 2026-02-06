@@ -26,6 +26,7 @@ use EspierBundle\Traits\Repository\FilterRepositoryTrait;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use GoodsBundle\Services\MultiLang\MultiLangOutsideItemService;
 use MerchantBundle\Entities\Merchant;
+use Overtrue\Pinyin\Pinyin;
 
 class DistributorRepository extends EntityRepository
 {
@@ -55,6 +56,7 @@ class DistributorRepository extends EntityRepository
         'address',
         'house_number',
         'name',
+        'first_letter',
         'auto_sync_goods',
         'logo',
         'contract_phone',
@@ -469,7 +471,7 @@ class DistributorRepository extends EntityRepository
         $result =  $this->getColumnNamesData($entity);
 
         if ($result){
-            $this->getLangService()->getOneLangData($result,$this->multiLangField,$this->table,$this->getLang(),$result[$this->prk],$this->table);
+            $result = $this->getLangService()->getOneLangData($result,$this->multiLangField,$this->table,$this->getLang(),$result[$this->prk],$this->table);
         }
 
         return $result;
@@ -681,10 +683,19 @@ class DistributorRepository extends EntityRepository
     private function setColumnNamesData($entity, $params)
     {
         foreach ($this->cols as $col) {
+            if ($col == 'first_letter') {
+                continue;
+            }
+
             if (isset($params[$col])) {
                 $fun = "set" . str_replace(" ", "", ucwords(str_replace("_", " ", $col)));
                 if (method_exists($entity, $fun)) {
                     $entity->$fun($params[$col]);
+                }
+
+                if ($col == 'name') {
+                    $firstLetter = $this->getFirstLetter($params[$col]);
+                    $entity->setFirstLetter($firstLetter);
                 }
             }
         }
@@ -727,5 +738,22 @@ class DistributorRepository extends EntityRepository
             return array_column($result, 'distributor_id');
         }
         return [];
+    }
+
+    //获取店铺名称的首字母
+    public function getFirstLetter($str = '')
+    {
+        $first_letter = strtoupper(mb_substr($str, 0, 1, 'utf-8'));
+        if (preg_match('/^[A-Z]$/', $first_letter)) {
+            return $first_letter;
+        }
+
+        $pinyin = new Pinyin();
+        $letters = $pinyin->abbr($str);    // NHSJ
+        $first_letter = strtoupper(substr($letters, 0, 1));
+        if (!preg_match('/^[A-Z]$/', $first_letter)) {
+            $first_letter = 'Z#';
+        }
+        return $first_letter;
     }
 }

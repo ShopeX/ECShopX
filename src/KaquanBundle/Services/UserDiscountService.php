@@ -315,18 +315,65 @@ class UserDiscountService implements UserDiscountInterface
     }
 
     /**
+     * 检查导购券领取数量限制
+     * @param int $companyId
+     * @param int $cardId
+     * @param int $salespersonId
+     * @throws ResourceException
+     */
+    public function checkGuideCouponLimit($companyId, $cardId, $salespersonCode)
+    {
+        if (empty($salespersonCode) || !$cardId) {
+            return;
+        }
+
+        // 获取券信息
+        $discountCardService = new KaquanService(new DiscountCardService());
+        $filter = [
+            'card_id' => $cardId,
+            'company_id' => $companyId,
+        ];
+        $cardInfo = $discountCardService->getKaquanDetail($filter, false, false);
+
+        // 判断是否为导购券
+        if (isset($cardInfo['coupon_type']) && $cardInfo['coupon_type'] == 'guide') {
+            // 查询该导购已经领取该券的数量（使用 salesperson_code）
+            $countFilter = [
+                'company_id' => $companyId,
+                'card_id' => $cardId,
+                'salesperson_code' => $salespersonCode,
+            ];
+            $receivedCount = $this->userDiscountRepository->getTotalNum($countFilter);
+
+            // 获取券的导购发放数量限制
+            $guideIssueQuantity = isset($cardInfo['guide_issue_quantity']) ? intval($cardInfo['guide_issue_quantity']) : 0;
+
+            // 如果设置了限制且已领取数量超过限制，则提示错误
+            if ($guideIssueQuantity > 0 && $receivedCount >= $guideIssueQuantity) {
+                throw new ResourceException('超过该券导购可领取的最大数量');
+            }
+        }
+    }
+
+    /**
      * [userGetCard 用户领取优惠券]
      * @param  int $companyId
      * @param  int $cardId
      * @param  int $userId
      * @param  string $sourceFrom
+     * @param  int $salespersonId
+     * @param  string $activityName
+     * @param  string $dmCardCode
+     * @param  string $mobile
+     * @param  string $salespersonCode
      * @return array
      */
-    public function userGetCard($companyId, $cardId, $userId, $sourceFrom = "商城本地领取", $salespersonId = 0, $activityName = '' , $dmCardCode = '', $mobile = '')
+    public function userGetCard($companyId, $cardId, $userId, $sourceFrom = "商城本地领取", $salespersonId = 0, $activityName = '' , $dmCardCode = '', $mobile = '', $salespersonCode = '')
     {
         if (!$companyId) {
             throw new ResourceException(trans('KaquanBundle.coupon_record_add_failed'));
         }
+
         $postdata['status'] = 1;
         // 校验优惠券是否能领取
         $cardInfo = $this->__getCardInfo($cardId, $companyId, $userId);
@@ -412,6 +459,7 @@ class UserDiscountService implements UserDiscountInterface
         $postdata['user_id'] = $userId;
         $postdata['code'] = $this->getCode($companyId, $cardId, $userId);
         $postdata['salesperson_id'] = $salespersonId;
+        $postdata['salesperson_code'] = $salespersonCode;
         $postdata['activity_name'] = $activityName;
         $status = $this->userDiscountRepository->userGetCard($postdata, $cardInfo);
         $salespersonTaskRecordService = new SalespersonTaskRecordService();

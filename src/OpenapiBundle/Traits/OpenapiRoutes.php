@@ -38,9 +38,16 @@ trait OpenapiRoutes
                 'ecx.member.basicInfo' => ['uses' => 'Member@basicInfo'], //会员基础信息
                 'ecx.member.orderList' => ['uses' => 'Member@getMemberOrderLists'], //会员订单列表,已完成订单
                 'ecx.member.browserHistoryList' => ['uses' => 'Member@geMembertBrowseList'], //会员浏览足迹
-                'ecx.member.list' => ['uses' => 'Member@memberInfoList'], //会员基础信息
+                'ecx.member.listFp' => ['uses' => 'Member@memberList'], //会员列表查询（增强版，支持分配导购筛选）
+                'ecx.member.list' => ['uses' => 'Member@memberInfoList'], //会员基础信息列表
                 'ecx.member.frequentItems' => ['uses' => 'Member@frequentItems'], //会员常购清单
                 'ecx.member.browserHistory' => ['uses' => 'Member@browseHistory'], //会员浏览足迹
+                'ecx.member.assignMemberToSalesperson' => ['uses' => 'Member@assignMemberToSalesperson'], //分配客户回调通知
+                'ecx.member.notifyBecomeFriend' => ['uses' => 'Member@notifyBecomeFriend'], //导购通知加好友
+                'ecx.member.cardGrades' => ['uses' => 'Member@getMemberCardGrades'], //获取会员卡等级列表
+                'ecx.member.tagLibrary' => ['uses' => 'Member@tagLibrary'], //获取标签库（标签和标签组）
+                'ecx.member.tagLibrary.push' => ['uses' => 'Member@tagLibraryPush'], //推送标签库到云店
+                'ecx.member.tag.relation.push' => ['uses' => 'Member@tagRelationPush'], //导购推送会员标签关系到云店
                 'ecx.order.list' => ['uses' => 'Order@list'], //会员订单信息
                 'ecx.salesperson.push' => ['uses' => 'ShopSalesperson@pushSalesperson'], //创建更新导购
                 'ecx.salesperson.bathStatusUpdate' => ['uses' => 'ShopSalesperson@bathUpdateSalespersonStatus'], //更新导购状态

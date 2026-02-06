@@ -743,7 +743,11 @@ class Items extends BaseController
         //获取translation
 //        $result['translation'] = (new MultiLangService())->getTranslation($result['item_id'],'items');
         //后台也改成替换
-        $result = (new MultiLangService())->getTranslationByLang($result,$result['item_id'],'items');
+        if ($operate_source == 'supplier' && !$page_from){
+            $result = (new MultiLangService())->getTranslationByLang($result,$result['item_id'],'supplier_items');
+        }else {
+            $result = (new MultiLangService())->getTranslationByLang($result,$result['item_id'],'items');
+        }
         if (!is_array($result['intro'])) {
             json_decode($result['intro']);
 
@@ -1380,6 +1384,10 @@ class Items extends BaseController
         if (isset($inputData['item_name']) && $inputData['item_name']) {
             $params['item_name|contains'] = $request->input('item_name');
         }
+        if(!empty($inputData['created_time_start']) && !empty($inputData['created_time_end'])){
+            $params['created|gte'] = $inputData['created_time_start'];
+            $params['created|lte'] = $inputData['created_time_end'];
+        }
         if (isset($inputData['consume_type']) && $inputData['consume_type']) {
             $params['consume_type'] = $request->input('consume_type');
         }
@@ -1746,7 +1754,7 @@ class Items extends BaseController
             $pageSize = ($pageSize <= 0) ? 10 : $pageSize;
             $result = $itemsService->getItemsList($params, $page, $pageSize);
         }
-        $result = $itemsService->dealListStore($result);
+        $result = $itemsService->dealListStore($result,$isGetSkuList);
 
         $result['warning_store'] = $warningStore;
         $result['filter'] = $params;
@@ -1754,7 +1762,7 @@ class Items extends BaseController
         if ($result['list']) {
             //营销标签
             if (method_exists($itemsService, 'getItemsListActityTag')) {
-                $result = $itemsService->getItemsListActityTag($result, $params['company_id']);
+                $result['list'] = $itemsService->getItemsListActityTag($result['list'], $params['company_id']);
             }
 
             $itemIds = array_column($result['list'], 'item_id');
@@ -2159,7 +2167,7 @@ class Items extends BaseController
 
         if ($result['list']) {
             //营销标签
-            $result = $itemsService->getItemsListActityTag($result, $params['company_id']);
+            $result['list'] = $itemsService->getItemsListActityTag($result['list'], $params['company_id']);
             //获取商品标签
             $itemIds = array_column($result['list'], 'item_id');
             $tagFilter = [
@@ -2640,10 +2648,10 @@ class Items extends BaseController
         // 如果是推广员不需要计算会员价
         if ($result['list']) {
             // 计算会员价
-            $result = $itemsService->getItemsListMemberPrice($result, 0, $filter['company_id']);
+            $result['list'] = $itemsService->getItemsListMemberPrice($result['list'], 0, $filter['company_id']);
         }
         //营销标签
-        $result = $itemsService->getItemsListActityTag($result, $filter['company_id']);
+        $result['list'] = $itemsService->getItemsListActityTag($result['list'], $filter['company_id']);
 
         return $this->response->array($result);
     }

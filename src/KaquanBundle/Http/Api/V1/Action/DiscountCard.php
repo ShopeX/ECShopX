@@ -59,6 +59,8 @@ class DiscountCard extends BaseController
      *     @SWG\Parameter(name="kq_status", in="query", description="卡券状态 0:正常 1:暂停 2:关闭", type="integer"),
      *     @SWG\Parameter(name="distributor_ids", in="query", description="指定店铺id列表 [1, 2]", type="string"),
      *     @SWG\Parameter(name="items", in="query", description="指定可兑换商品信息 [{'id': 1, 'limit': 3}, {'id': 2, 'limit': 4}]", type="string"),
+     *     @SWG\Parameter(name="coupon_type", in="query", description="券类型。mall:商城券;guide:导购专属券", type="string", default="mall"),
+     *     @SWG\Parameter(name="guide_issue_quantity", in="query", description="导购发放数量", type="integer", default=0),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -170,6 +172,12 @@ class DiscountCard extends BaseController
      *     @SWG\Parameter(
      *        name="store_self", in="query", description="平台版仅支持自营商品【总店】", type="string"
      *     ),
+     *     @SWG\Parameter(
+     *        name="coupon_type", in="query", description="券类型。mall:商城券;guide:导购专属券", type="string", default="mall"
+     *     ),
+     *     @SWG\Parameter(
+     *        name="guide_issue_quantity", in="query", description="导购发放数量", type="integer", default=0
+     *     ),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -219,6 +227,15 @@ class DiscountCard extends BaseController
             // 活动类型 长期/短期
             $data = $request->input();
             $data['company_id'] = $companyId;
+
+            // 处理券类型字段，默认为 mall
+            $data['coupon_type'] = $request->input('coupon_type', 'mall');
+            if (!in_array($data['coupon_type'], ['mall', 'guide'])) {
+                $data['coupon_type'] = 'mall';
+            }
+
+            // 处理导购发放数量字段，默认为 0
+            $data['guide_issue_quantity'] = intval($request->input('guide_issue_quantity', 0));
             $dateType = $request->input('date_type');
             if ($dateType == DiscountNewGiftCardService::DATE_TYPE_LONG) {
                 if (app('validator')->make($request->all(), [
@@ -255,6 +272,15 @@ class DiscountCard extends BaseController
 
         $postdata = $this->__doParams($request->input(), $companyId);
         $postdata['company_id'] = $companyId;
+
+        // 处理券类型字段，默认为 mall
+        $postdata['coupon_type'] = $request->input('coupon_type', 'mall');
+        if (!in_array($postdata['coupon_type'], ['mall', 'guide'])) {
+            $postdata['coupon_type'] = 'mall';
+        }
+
+        // 处理导购发放数量字段，默认为 0
+        $postdata['guide_issue_quantity'] = intval($request->input('guide_issue_quantity', 0));
 
         $postdata['source_id'] = app('auth')->user()->get('distributor_id');//如果是平台，这里是0
         $postdata['source_type'] = app('auth')->user()->get('operator_type');//如果是平台，这里是admin
@@ -620,6 +646,15 @@ class DiscountCard extends BaseController
         if ($request->input('title')) {
             $filter['title|like'] = $request->input('title');
         }
+        $isGuide = $request->input('is_guide',100);
+        if((int)$isGuide !== 100){
+            if ((int)$isGuide === 1) {
+                $filter['coupon_type'] = 'guide';
+            }else{
+                $filter['coupon_type'] = 'mall';
+            }
+        }
+        
         $store_self = $request->input('store_self');
         $sourceId = floatval($request->get('distributor_id', 0));//如果是平台，这里是0
         if ($store_self == "true") {//平台版仅支持自营商品【总店】

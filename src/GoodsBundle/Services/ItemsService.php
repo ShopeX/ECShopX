@@ -623,9 +623,19 @@ class ItemsService
                     app('log')->debug('debug:create:item_spec:'.__FUNCTION__.':'.__LINE__.':'.json_encode($params['spec_pics']));
                     $paramsData['image_url'] = $params['spec_pics'] ? explode(',', $params['spec_pics']) : [];
                 }
-
                 $sort++;
-                $this->itemRelAttributesRepository->create($paramsData);
+                // 如果商品关联规格存在更新，不存在新增
+                $itemRelParamsData = [
+                    'company_id' => $data['company_id'],
+                    'item_id' => $itemsResult['item_id'],
+                    'attribute_id' => $row['spec_id'],
+                ];
+                $itemRelParamsInfo = $this->itemRelAttributesRepository->getInfo($itemRelParamsData);
+                if (!empty($itemRelParamsInfo)) {
+                    $this->itemRelAttributesRepository->updateOneBy($itemRelParamsData, $paramsData);
+                }else {
+                    $this->itemRelAttributesRepository->create($paramsData);
+                }
             }
         }
 
@@ -818,6 +828,11 @@ class ItemsService
                 'item_bn' => $data['item_bn'],
             ];
             $item = $this->itemsRepository->getInfo($_filter);
+            // if(!isset($params['item_id'])){
+            //     if(!empty($item)){
+            //         $params['item_id'] = $item['item_id'];
+            //     } 
+            // }
             if ($item && isset($params['item_id']) && $params['item_id'] != $item['item_id']) {
                 throw new ResourceException(trans('GoodsBundle/Controllers/Items.item_bn_exists') . $data['item_bn']);
             }else if ($item && !isset($params['item_id'])) {
@@ -2015,6 +2030,19 @@ class ItemsService
             $categoryId = $filter['category_id'];
             unset($filter['category_id']);
         }
+        // 根据商品主类目id，获取到对应的子类目id
+        if (isset($filter['item_category']) && $filter['item_category']) {
+            $itemsCategoryService = new ItemsCategoryService();
+            $mainCatIds = [];
+            if (is_array($filter['item_category'])) {
+                foreach ($filter['item_category'] as $mainCatId) {
+                    $mainCatIds += $itemsCategoryService->getMainCatChildIdsBy($mainCatId, $filter['company_id']);
+                }
+            } else {
+                $mainCatIds = $itemsCategoryService->getMainCatChildIdsBy($filter['item_category'], $filter['company_id']);
+            }
+            $filter['item_category'] = $mainCatIds;
+        }
         // 根据商品参数刷选商品ID
         if (isset($filter['item_params']) && $filter['item_params']) {
             $itemIds = $this->getItemIdsByItemParamsId($filter, $itemIds);
@@ -2238,7 +2266,7 @@ class ItemsService
      */
     public function getItemsListMemberPrice($itemList, $userId, $companyId)
     {
-        $itemIds = array_column($itemList['list'], 'item_id');
+        $itemIds = array_column($itemList, 'item_id');
         $memberPriceService = new MemberPriceService();
         $filter = ['company_id' => $companyId, 'item_id' => $itemIds];
         $priceList = $memberPriceService->lists($filter);
@@ -2284,7 +2312,7 @@ class ItemsService
             }
         }
 
-        foreach ($itemList['list'] as &$item) {
+        foreach ($itemList as &$item) {
             $item['member_grade_name'] = $gradeName;
             $itemId = $item['item_id'];
             if (isset($newPrice[$itemId]) && $newPrice[$itemId] > 0) {
@@ -2463,16 +2491,22 @@ class ItemsService
             unset($newfilter['item_name'],$filter['item_name']);
         }
 
+        // 处理关键字，并提供多语言
         if(!empty($filter['keywords'])){
-            $listBn = $itemsRepository->getItemsLists(['or'=>[
-                ['item_bn|contains'=>$filter['keywords']],
-                ['item_name|contains'=>$filter['keywords']],
-                ]]);
-            $idsBn = array_column($listBn,'default_item_id');
-            unset($filter['keywords']);
             $lang = $itemsRepository->getLang();
             $langIds = $multiLangService->filterByLang($lang,'item_name',$filter['keywords'],'items');
-            $totalIds = array_merge($idsBn,$langIds);
+            $or = [
+                'or'=>[
+                    'item_bn|contains'=> $filter['keywords'],
+                    // ['item_name|contains'=> $filter['keywords']],
+                ]
+            ];
+            if (!empty($langIds)) {
+                $or['or']['item_id'] = $langIds;
+            }
+            $listBn = $itemsRepository->getItemsLists($or);
+            $idsBn = array_column($listBn,'default_item_id');
+            $totalIds = array_merge($idsBn, $langIds);
             $totalIds = array_unique($totalIds);
             if(!empty($newfilter['item_id'])){
                 $newfilter['item_id'] = array_merge($newfilter['item_id'],$totalIds);
@@ -2488,6 +2522,11 @@ class ItemsService
 //            ];
 //            unset($newfilter['keywords']);
 //        }
+  
+        // or 已经处理，如果存在unset
+        if (isset($newfilter['or'])) {
+            unset($newfilter['or']);
+        }
 
         return $newfilter;
     }
@@ -2807,10 +2846,10 @@ class ItemsService
 
     public function getItemsListActityTag($itemList, $companyId)
     {
-        $goodsIds = array_column($itemList['list'], 'goods_id');
+        $goodsIds = array_column($itemList, 'goods_id');
         if ($goodsIds) {
             $promotionItemTagService = new PromotionItemTagService();
-            $list = $promotionItemTagService->getPromotions($itemList['list'], $companyId, ['activity_price' => 'desc']);
+            $list = $promotionItemTagService->getPromotions($itemList, $companyId, ['activity_price' => 'desc']);
             foreach ($list as $value) {
                 if ($value['is_all_items'] == '2') {//指定商品适用
                     $newTags[$value['goods_id']][$value['promotion_id']] = [
@@ -2843,7 +2882,7 @@ class ItemsService
             ];
 
             $marketingService = new MarketingActivityService();
-            foreach ($itemList['list'] as &$items) {
+            foreach ($itemList as &$items) {
                 if (!isset($items['goods_id'])) {
                     continue;
                 }
@@ -2898,9 +2937,9 @@ class ItemsService
             /*if ($itemIds ?? null) {
                 $datalists = $this->itemsRepository->getItemsLists(['item_id' => $itemIds], 'market_price,price,goods_id');
                 $datalists = array_column($datalists, null, 'goods_id');
-                foreach ($itemList['list'] as $k => $items_info) {
+                foreach ($itemList as $k => $items_info) {
                     if (isset($datalists[$items_info['goods_id']])) {
-                        $itemList['list'][$k] =  array_merge($datalists[$items_info['goods_id']], $itemList['list'][$k]);
+                        $itemList[$k] =  array_merge($datalists[$items_info['goods_id']], $itemList[$k]);
                     }
                 }
             }*/
@@ -3117,8 +3156,11 @@ class ItemsService
      * @param $result
      * @return mixed
      */
-    public function dealListStore($result)
+    public function dealListStore($result, $isGetSkuList = false)
     {
+        if($isGetSkuList){
+            return $result;
+        }
         if (!$result['list']) {
             return $result;
         }
@@ -3235,7 +3277,6 @@ class ItemsService
         }
         return $itemsList;
     }
-
 
     /**
      * Dynamically call the KaquanService instance.

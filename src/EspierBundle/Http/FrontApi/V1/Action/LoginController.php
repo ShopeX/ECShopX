@@ -103,7 +103,8 @@ class LoginController extends Controller
                 ]);
                 break;
             case 'wxapp': // 微信小程序的授权登录
-                $params = $request->all('auth_type', 'appid', 'code', 'iv', 'encryptedData', 'signature', 'rawData', 'uid', 'source_id', 'monitor_id', 'inviter_id', 'source_from', 'distributor_id', 'salesperson_id', 'invite_code', 'employee_auth', 'purchanse_share_code', 'puid');
+                $params = $request->all('auth_type', 'appid', 'code', 'iv', 'encryptedData', 'signature', 'rawData', 'uid', 'source_id', 'monitor_id', 'inviter_id', 'source_from', 'distributor_id', 'salesperson_id', 'invite_code', 'employee_auth', 'purchanse_share_code', 'puid','gu_user_id','dtid','work_userid','channel');
+                app('log')->info('david----file:'.__FILE__.',line:'.__LINE__.'----params:'.json_encode($params));
                 $params['company_id'] = $companyId;
                 $params['wxa_appid'] = $authInfo['wxapp_appid'];
                 $params['authorizer_appid'] = $authInfo['woa_appid'];

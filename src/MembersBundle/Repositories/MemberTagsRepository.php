@@ -90,6 +90,19 @@ class MemberTagsRepository extends EntityRepository
             $qb = $qb->set($key, $qb->expr()->literal($val));
         }
 
+        if(isset($filter[$this->prk])){
+            if(is_array($filter[$this->prk])){
+                foreach ($filter[$this->prk] as $pprk){
+                    //更新数据
+                    $service = new MultiLangService();
+                    $service->updateLangData($data,$this->table,$pprk);
+                }
+            }else{
+                $service = new MultiLangService();
+                $service->updateLangData($data,$this->table,$filter[$this->prk]);
+            }
+        }
+
         $qb = $this->_filter($filter, $qb);
 
         return $qb->execute();
@@ -124,8 +137,10 @@ class MemberTagsRepository extends EntityRepository
             return true;
         }
         $em = $this->getEntityManager();
+        $service = new MultiLangService();
         foreach ($entityList as $entityProp) {
             $em->remove($entityProp);
+            $service->deleteMultiLangByParams($entityProp->getTagId(),$this->table);
             $em->flush();
         }
         return true;

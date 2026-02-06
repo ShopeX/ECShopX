@@ -50,7 +50,7 @@ class MultiLangService
             'tag_name'
         ],
         'membercard_grade'=>[
-            'grade_name','description'
+            'grade_name','description', 'background_pic_url', 'grade_background'
         ],
         'config_request_fields'=>[
             'label','validate_condition','alert_required_message'
@@ -159,6 +159,9 @@ class MultiLangService
         if (!empty($module)) {
             $filter['module_name'] = $module;
         }
+        // if (isset($body['company_id'])) {
+        //     $filter['company_id'] = $body['company_id'];
+        // }
 
         $content = (new MultiLangItem($lang))->getListByFilter($filter, -1);
 //        $content = $this->multiLangModRepository->getLists($filter, '*', 1, -1);
@@ -188,8 +191,12 @@ class MultiLangService
             $newField = $this->multiLangAttr[$tableName];
         }
         $filter = ['table_name' => $tableName, 'field' => $newField, 'data_id' => $ids];
+        // if (isset($dataList['company_id'])) {
+        //     $filter['company_id'] = $dataList['company_id'];
+        // }
         $service = new MultiLangItem($lang);
         $listTmp = $service->getListByFilter($filter, -1);
+        
         if (empty($listTmp)) {
             return $dataList;
         }
@@ -213,7 +220,7 @@ class MultiLangService
         return $dataList;
     }
 
-    public function updateLangData(array $langBag, string $tableName, int $dataId)
+    public function updateLangData(array $langBag, string $tableName, int $dataId, $company_id = 0)
     {
         $dataField = [];
         if(empty($this->multiLangAttr[$tableName])){
@@ -228,24 +235,58 @@ class MultiLangService
             return;
         }
         $service = new MultiLangItem($this->getLang());
-        foreach ($dataField as $k => $vv){
-
-
+        foreach ($dataField as $k => $vv) {
 //            $field = str_replace("_lang", "", $k);
             $updateData = [
                 'attribute_value' => $vv,
             ];
+            // if ($company_id > 0) {
+            //     $updateData['company_id'] = $company_id;
+            // }
             $filter = [
                 'table_name' => $tableName,
                 'field' => $k,
                 'data_id' => $dataId,
-                'lang' => '',
+                // 'lang' => '',
             ];
             $service->updateOrInsert($filter, $updateData);
         }
 
     }
 
+    public function updateLangDataNew(array $langBag, string $tableName, int $dataId, $multiLangAttr = [], $company_id = 0)
+    {
+        $dataField = [];
+        if(empty($multiLangAttr)){
+            return;
+        }
+        foreach ($multiLangAttr as $field) {
+            if(isset($langBag[$field])){
+                $dataField[$field] = $langBag[$field];
+            }
+        }
+        if(empty($dataField)){
+            return;
+        }
+        $service = new MultiLangItem($this->getLang());
+        foreach ($dataField as $k => $vv) {
+//            $field = str_replace("_lang", "", $k);
+            $updateData = [
+                'attribute_value' => $vv,
+            ];
+            // if ($company_id > 0) {
+            //     $updateData['company_id'] = $company_id;
+            // }
+            $filter = [
+                'table_name' => $tableName,
+                'field' => $k,
+                'data_id' => $dataId,
+                // 'lang' => '',
+            ];
+            $service->updateOrInsert($filter, $updateData);
+        }
+    }
+    
     public function updateLangDataParams(array $langBag, string $tableName, int $dataId)
     {
         $lang = $this->getLang();
@@ -259,21 +300,24 @@ class MultiLangService
                 'table_name' => $tableName,
                 'field' => $key,
                 'data_id' => $dataId,
-                'lang' => $lang,
+                // 'lang' => $lang,
             ];
             $service->updateByFilter($filter, $updateData);
         }
     }
 
     //搜索用
-    public function filterByLang(string $lang, string $field, string $content, string $tableName)
+    public function filterByLang(string $lang, string $field, string $content, string $tableName, $companyId = 0)
     {
         $filter = [
-            'lang' => $lang,
+            // 'lang' => $lang,
             'field' => $field,
             'table_name' => $tableName,
             'attribute_value|contains' => $content,
         ];
+        // if ($companyId > 0) {
+        //     $filter['company_id'] = $companyId;
+        // }
         $service = new MultiLangItem($lang);
         $list = $service->getListByFilter($filter, -1);
         if (empty($list)) {
@@ -282,6 +326,34 @@ class MultiLangService
         return array_column($list, 'data_id');
     }
 
+    public function filterLang($filter, $multiLangField, $table, $prk) 
+    {
+        $lang = $this->getLang();
+        $prkFilter = $filter[$prk] ?? ''; // 所有过滤字段keys
+        // 优化字段查询加入company_id
+        $companyId = $filter['company_id'] ?? 0;
+        foreach ($filter as $key => $value) {
+            $dataIdArr = '';
+            // 必须是多语言字段
+            // 可能存在xx|xx 这种数据, 所以要兼容
+            $filterkeys = explode('|', $key);
+            if (in_array($filterkeys[0], $multiLangField)) {
+                $dataIdArr = $this->filterByLang($lang, $filterkeys[0], $value, $table, $companyId);
+                // 如果存在多语言字段主键，说明可能其他地方使用了主键过滤，我们需要合并掉
+                if (!empty($dataIdArr)) {
+                    if (!empty($prkFilter)) {
+                        $filter[$prk] = array_merge((array)$prkFilter, $dataIdArr);
+                    }else{
+                        $filter[$prk] = $dataIdArr;
+                    }
+                    // 移除多语言字段的原始过滤条件，因为已经转换为按主键过滤
+                    unset($filter[$key]);
+                }
+            }
+        }
+        
+        return $filter;
+    }
 
     public function getItemSpec(array $itemId) //这里是sku级别啊！！！！拿规格值得
     {
@@ -405,10 +477,15 @@ class MultiLangService
         return $outPutData;
     }
 
-    public function addMultiLangByParams($id, array $params, string $module)
+    public function addMultiLangByParams($id, array $params, string $module , $multiLangAttr = [])
     {
         $lang = $this->getLang();
-        $multiLang = $this->multiLangAttr[$module] ?? [];
+        // 兼容商品多表，多语言字段，首先使用传入的多语言字段
+        if (!empty($multiLangAttr)) {
+            $multiLang = $multiLangAttr;
+        }else {
+            $multiLang = $this->multiLangAttr[$module] ?? [];            
+        }
         $langBag = [];
         if (!empty($multiLang)) {
             foreach ($multiLang as $vv) {
@@ -481,4 +558,11 @@ class MultiLangService
 //
 //    }
 
+    public function deleteMultiLangByParams(int $id, string $module)
+    {
+        $service = new MultiLangItem($this->getLang());
+        $filter['table_name'] = $module;
+        $filter['data_id'] = $id;
+        $service->deleteByFilter($filter);
+    }
 }

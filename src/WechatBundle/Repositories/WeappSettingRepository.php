@@ -105,7 +105,7 @@ class WeappSettingRepository extends EntityRepository
      * @param array $orderBy
      * @return array
      */
-    public function getParamByTempName($companyId, $templateName, $pageName = null, $configName = null, $version = 'v1.0.0', $pages_template_id = 0, $id = 0, $orderBy = [])
+    public function getParamByTempName($companyId, $templateName, $pageName = null, $configName = null, $version = null, $pages_template_id = 0, $id = 0, $orderBy = [])
     {
         $filter = ['company_id' => $companyId, 'template_name' => $templateName];
 

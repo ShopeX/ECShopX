@@ -25,7 +25,7 @@ use Dingo\Api\Exception\ResourceException;
 class OpenScreenAdRepository extends EntityRepository
 {
     public $table = "pages_open_screen_ad";
-    public $cols = ['id','company_id','ad_material','is_enable','show_time','position','is_jump','material_type','waiting_time','ad_url','app','created','updated'];
+    public $cols = ['id','company_id','ad_material','is_enable','show_time','position','is_jump','material_type','waiting_time','ad_url','app','start_time','end_time','created','updated'];
     /**
      * 新增
      *
@@ -174,7 +174,7 @@ class OpenScreenAdRepository extends EntityRepository
                     array_walk($value, function (&$colVal) use ($qb) {
                         $colVal = $qb->expr()->literal($colVal);
                     });
-                    $qb = $qb->andWhere($qb->expr()->$k($field, $value));
+                    $qb = $qb->andWhere($qb->expr()->$k($v, $value));
                 } else {
                     $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
                 }

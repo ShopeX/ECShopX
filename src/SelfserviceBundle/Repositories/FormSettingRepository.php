@@ -34,6 +34,7 @@ class FormSettingRepository extends EntityRepository
 
     public $prk = 'id';
     private $multiLangField = [
+        'field_title',
         'reason',
         'remark'
     ];

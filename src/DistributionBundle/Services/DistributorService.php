@@ -437,10 +437,15 @@ class DistributorService
             }
         }
         $distributorInfo = $this->getDefaultDistributor($filter['company_id']);
-        if (!$distributorInfo || $distributorInfo['is_valid'] === 'false' || $distributorInfo['is_valid'] === false || $distributorInfo['distributor_self'] === 0 || $distributorInfo['distributor_self'] === '0') {
+        if(empty($distributorInfo)){
             $distributorInfo = $this->getMainDistributor($filter['company_id']);
+        }else{
+            if ($distributorInfo['is_valid'] === 'false' || $distributorInfo['is_valid'] === false || $distributorInfo['distributor_self'] === 0 || $distributorInfo['distributor_self'] === '0') {
+                $distributorInfo = $this->getMainDistributor($filter['company_id']);
+            }
         }
-        
+
+
         return $distributorInfo;
     }
 
@@ -896,7 +901,7 @@ class DistributorService
         $fields = 'distributor_id';
         return $this->entityRepository->getLists($filter, $fields);
     }
-    
+
     /**
      * 追加店铺列表数据（适用于多个店铺id）
      * @param int $companyId 公司id
@@ -1300,7 +1305,7 @@ class DistributorService
 
     /**
      * 设置店铺收款主体
-     * 
+     *
      * @param int $companyId 公司ID
      * @param int $distributorId 店铺ID
      * @param int $paymentSubject 收款主体，0=平台，1=店铺
@@ -1314,11 +1319,11 @@ class DistributorService
             'distributor_id' => $distributorId,
             'company_id' => $companyId
         ]);
-        
+
         if (!$distributorInfo) {
             throw new ResourceException(trans('DistributionBundle/Services/DistributorService.distributor_not_exists_or_no_permission'));
         }
-        
+
         // 检查店铺下是否有未完成的退款单
         // 需要检查的退款状态：READY(未审核)、AUDIT_SUCCESS(审核成功待退款)、PROCESSING(已发起退款等待到账)、CHANGE(退款异常)
         $aftersalesRefundService = new AftersalesRefundService();
@@ -1329,11 +1334,11 @@ class DistributorService
         ];
         // 使用count方法检查是否存在未完成的退款单（性能更好）
         $refundCount = $aftersalesRefundService->aftersalesRefundRepository->count($refundFilter);
-        
+
         if ($refundCount > 0) {
             throw new ResourceException(trans('DistributionBundle/Services/DistributorService.has_unfinished_refund_cannot_switch_payment_subject'));
         }
-        
+
         // 支付配置校验
         if ($paymentSubject == 1) {
             // 切换为店铺时，需要校验店铺的支付配置
@@ -1342,20 +1347,20 @@ class DistributorService
             // 切换为平台时，需要校验平台的支付配置
             $this->validatePlatformPaymentConfig($companyId);
         }
-        
+
         // 更新收款主体
         $updateData = ['payment_subject' => $paymentSubject];
         $this->entityRepository->updateBy(
             ['distributor_id' => $distributorId, 'company_id' => $companyId],
             $updateData
         );
-        
+
         return true;
     }
 
     /**
      * 校验店铺支付配置
-     * 
+     *
      * @param int $companyId 公司ID
      * @param int $distributorId 店铺ID
      * @throws ResourceException
@@ -1367,17 +1372,17 @@ class DistributorService
         app('log')->debug('validateDistributorPaymentConfig::paymentStatus====>'.json_encode($paymentStatus, 1));
         $wxpayOpen = $paymentStatus['wxpay']['is_open'] ?? false;
         $alipayOpen = $paymentStatus['alipay']['is_open'] ?? false;
-        
+
         // 检查是否至少有一个支付方式开启
         if (!$wxpayOpen && !$alipayOpen) {
             throw new ResourceException(trans('DistributionBundle/Services/DistributorService.switch_to_distributor_payment_subject_need_at_least_one_payment'));
         }
-        
+
         // 检查已开启的支付方式配置是否完整
         if ($wxpayOpen) {
             $this->validateWxpayConfig($companyId, $distributorId);
         }
-        
+
         if ($alipayOpen) {
             $this->validateAlipayConfig($companyId, $distributorId);
         }
@@ -1385,7 +1390,7 @@ class DistributorService
 
     /**
      * 校验平台支付配置
-     * 
+     *
      * @param int $companyId 公司ID
      * @throws ResourceException
      */
@@ -1396,12 +1401,12 @@ class DistributorService
         app('log')->debug('validatePlatformPaymentConfig::paymentStatus====>'.json_encode($paymentStatus));
         $wxpayOpen = $paymentStatus['wxpay']['is_open'] ?? false;
         $alipayOpen = $paymentStatus['alipay']['is_open'] ?? false;
-        
+
         // 检查已开启的支付方式配置是否完整
         if ($wxpayOpen) {
             $this->validateWxpayConfig($companyId, 0);
         }
-        
+
         if ($alipayOpen) {
             $this->validateAlipayConfig($companyId, 0);
         }
@@ -1409,7 +1414,7 @@ class DistributorService
 
     /**
      * 校验微信支付配置
-     * 
+     *
      * @param int $companyId 公司ID
      * @param int $distributorId 店铺ID，0表示平台
      * @throws ResourceException
@@ -1419,9 +1424,9 @@ class DistributorService
         $wxpayService = new WechatPayService($distributorId, false);
         $wxpayServiceWrapper = new PaymentsService($wxpayService);
         $wxpayConfig = $wxpayServiceWrapper->getPaymentSetting($companyId);
-        
+
         $requiredFields = ['app_id', 'merchant_id', 'key', 'cert', 'cert_key'];
-        
+
         foreach ($requiredFields as $field) {
             $value = $wxpayConfig[$field] ?? '';
             if (empty($value) && $value !== '0') {
@@ -1436,7 +1441,7 @@ class DistributorService
 
     /**
      * 校验支付宝配置
-     * 
+     *
      * @param int $companyId 公司ID
      * @param int $distributorId 店铺ID，0表示平台
      * @throws ResourceException
@@ -1446,9 +1451,9 @@ class DistributorService
         $alipayService = new AlipayService($distributorId, false);
         $alipayServiceWrapper = new PaymentsService($alipayService);
         $alipayConfig = $alipayServiceWrapper->getPaymentSetting($companyId);
-        
+
         $requiredFields = ['app_id', 'ali_public_key', 'private_key'];
-        
+
         foreach ($requiredFields as $field) {
             $value = $alipayConfig[$field] ?? '';
             if (empty($value) && $value !== '0') {
