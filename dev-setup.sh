@@ -595,102 +595,40 @@ configure_env() {
 }
 
 # ===========================================
-# 动态修改 docker-compose 文件，移除未安装项目的卷映射
+# 删除因容器卷映射产生的空目录（如果用户跳过了安装）
 # ===========================================
 
-modify_docker_compose() {
-    log_info "根据安装选择调整 Docker Compose 配置..."
+cleanup_empty_directories() {
+    log_info "检查并清理因容器卷映射产生的空目录..."
     
-    cd "$PROJECT_ROOT"
-    
-    if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
-        log_warning "未找到 $DOCKER_COMPOSE_FILE 文件，跳过配置调整"
-        return 0
-    fi
-    
-    # 创建临时文件
-    local temp_file="${DOCKER_COMPOSE_FILE}.tmp"
-    cp "$DOCKER_COMPOSE_FILE" "$temp_file"
-    
-    # 根据安装标志移除对应的卷映射
-    # docker-compose 文件格式: - ../ECShopX_admin-frontend:/data/httpd/ECShopX_admin-frontend
-    
-    # 移除管理后台的卷映射（如果未安装）
-    if [ "$INSTALLED_ADMIN" = false ]; then
-        log_info "移除 ECShopX_admin-frontend 的卷映射..."
-        # 直接匹配包含项目名称的行（docker-compose 格式: - ../ECShopX_admin-frontend:...）
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' '/ECShopX_admin-frontend/d' "$temp_file"
-        else
-            sed -i '/ECShopX_admin-frontend/d' "$temp_file"
-        fi
-    fi
-    
-    # 移除移动商城的卷映射（如果未安装）
-    if [ "$INSTALLED_VSHOP" = false ]; then
-        log_info "移除 ECShopX_mobile-frontend 的卷映射..."
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' '/ECShopX_mobile-frontend/d' "$temp_file"
-        else
-            sed -i '/ECShopX_mobile-frontend/d' "$temp_file"
-        fi
-    fi
-    
-    # 移除PC商城的卷映射（如果未安装）
-    if [ "$INSTALLED_PC" = false ]; then
-        log_info "移除 ECShopX_desktop-frontend 的卷映射..."
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' '/ECShopX_desktop-frontend/d' "$temp_file"
-        else
-            sed -i '/ECShopX_desktop-frontend/d' "$temp_file"
-        fi
-    fi
-    
-    # 清理可能产生的空行（连续两个空行变为一个）
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' '/^$/N;/^\n$/d' "$temp_file"
-    else
-        sed -i '/^$/N;/^\n$/d' "$temp_file"
-    fi
-    
-    # 替换原文件
-    mv "$temp_file" "$DOCKER_COMPOSE_FILE"
-    log_success "Docker Compose 配置已调整"
-    
-    # 删除未安装项目的目录（如果存在，可能是之前容器创建的）
-    if [ "$INSTALLED_ADMIN" = false ]; then
-        ADMIN_DIR="$PARENT_DIR/ECShopX_admin-frontend"
-        if [ -d "$ADMIN_DIR" ]; then
-            log_info "删除未安装的管理后台目录: $ADMIN_DIR"
+    # 检查管理后台目录
+    ADMIN_DIR="$PARENT_DIR/ECShopX_admin-frontend"
+    if [ -d "$ADMIN_DIR" ] && [ ! -f "$ADMIN_DIR/package.json" ]; then
+        # 检查目录是否为空或只包含容器创建的基础文件
+        local file_count=$(find "$ADMIN_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$file_count" -eq 0 ] || [ "$file_count" -le 2 ]; then
+            log_info "删除因容器卷映射产生的空目录: $ADMIN_DIR"
             rm -rf "$ADMIN_DIR"
         fi
     fi
     
-    if [ "$INSTALLED_VSHOP" = false ]; then
-        VSHOP_DIR="$PARENT_DIR/ECShopX_mobile-frontend"
-        if [ -d "$VSHOP_DIR" ]; then
-            log_info "删除未安装的移动商城目录: $VSHOP_DIR"
+    # 检查移动商城目录
+    VSHOP_DIR="$PARENT_DIR/ECShopX_mobile-frontend"
+    if [ -d "$VSHOP_DIR" ] && [ ! -f "$VSHOP_DIR/package.json" ]; then
+        local file_count=$(find "$VSHOP_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$file_count" -eq 0 ] || [ "$file_count" -le 2 ]; then
+            log_info "删除因容器卷映射产生的空目录: $VSHOP_DIR"
             rm -rf "$VSHOP_DIR"
         fi
     fi
     
-    if [ "$INSTALLED_PC" = false ]; then
-        PC_DIR="$PARENT_DIR/ECShopX_desktop-frontend"
-        if [ -d "$PC_DIR" ]; then
-            log_info "删除未安装的PC商城目录: $PC_DIR"
+    # 检查PC商城目录
+    PC_DIR="$PARENT_DIR/ECShopX_desktop-frontend"
+    if [ -d "$PC_DIR" ] && [ ! -f "$PC_DIR/package.json" ]; then
+        local file_count=$(find "$PC_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+        if [ "$file_count" -eq 0 ] || [ "$file_count" -le 2 ]; then
+            log_info "删除因容器卷映射产生的空目录: $PC_DIR"
             rm -rf "$PC_DIR"
-        fi
-    fi
-    
-    # 如果容器已存在，需要停止并删除，以便重新创建时应用新的配置
-    if container_exists; then
-        log_info "检测到现有容器，需要重启以应用新的卷映射配置..."
-        if is_container_running; then
-            log_info "停止现有容器..."
-            $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" down
-        else
-            log_info "删除已停止的容器..."
-            $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" rm -f
         fi
     fi
 }
@@ -703,9 +641,6 @@ run_docker() {
     log_step "启动 Docker 容器..."
     
     cd "$PROJECT_ROOT"
-    
-    # 在启动前修改 docker-compose 文件
-    modify_docker_compose
     
     if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
         log_error "未找到 $DOCKER_COMPOSE_FILE 文件"
@@ -785,6 +720,9 @@ run_docker() {
     
     # 等待服务就绪
     wait_for_services
+    
+    # 清理因容器卷映射产生的空目录（如果用户跳过了安装）
+    cleanup_empty_directories
 }
 
 # ===========================================
