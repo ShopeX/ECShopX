@@ -264,6 +264,8 @@ class ShopSalespersonController extends Controller
      * @SWG\Get(
      *     path="/h5app/wxapp/salespersonadmin/storemanagerinfo",
      *     summary="店铺业务员管理-查询管理信息",
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
      public function storemanagerinfo(Request $request){
         $authInfo = $request->get('auth');
@@ -303,9 +305,11 @@ class ShopSalespersonController extends Controller
      }
 
     /**
-     * @SWG\post(
+     * @SWG\Post(
      *     path="/h5app/wxapp/salespersonadmin/addsalesperson",
      *     summary="店铺业务员管理-增加业务员",
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
      public function addsalesperson(Request $request){
         $authInfo = $request->get('auth');
@@ -393,9 +397,11 @@ class ShopSalespersonController extends Controller
      }  
      
     /**
-     * @SWG\post(
+     * @SWG\Post(
      *     path="/h5app/wxapp/salespersonadmin/updatesalesperson",
      *     summary="店铺业务员管理-更新业务员",
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function updatesalesperson(Request $request){
         $authInfo = $request->get('auth');
@@ -435,6 +441,8 @@ class ShopSalespersonController extends Controller
      * @SWG\Get(
      *     path="/h5app/wxapp/salespersonadmin/salespersonlist",
      *     summary="店铺业务员管理-查询业务员列表",
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function salespersonlist(Request $request){
         $authInfo = $request->get('auth');
@@ -501,6 +509,8 @@ class ShopSalespersonController extends Controller
      * @SWG\Get(
      *     path="/h5app/wxapp/salespersonadmin/salespersoninfo",
      *     summary="店铺业务员管理-查询业务员列表",
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function salespersoninfo(Request $request){
         $authInfo = $request->get('auth');
@@ -571,6 +581,8 @@ class ShopSalespersonController extends Controller
      * @SWG\Get(
      *     path="/h5app/wxapp/salespersonadmin/brokagestaticlist",
      *     summary="店铺业务员管理-查询业绩统计",
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function brokagestaticlist(Request $request){
         $authInfo = $request->get('auth');

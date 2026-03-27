@@ -18,7 +18,7 @@ class DmCrm extends Controller
      *     description="达摩CRM配置信息保存",
      *     operationId="setSetting",
      *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
-     *     @SWG\Parameter( name="ent_sign", in="query", description="ent_sign required=true, type="string"),
+     *     @SWG\Parameter( name="ent_sign", in="query", description="ent_sign", required=true, type="string"),
      *     @SWG\Parameter( name="app_key", in="query", description="app_key", required=true, type="string"),
      *     @SWG\Parameter( name="app_secret", in="query", description="app_secret", required=true, type="string"),
      *     @SWG\Parameter( name="company_id", in="query", description="company_id", required=true, type="string"),
@@ -31,7 +31,7 @@ class DmCrm extends Controller
      *                 type="array",
      *                 @SWG\Items(
      *                     type="object",
-     *                     @SWG\Property(property="status", type="stirng"),
+     *                     @SWG\Property(property="status", type="string"),
      *                 )
      *             ),
      *          ),

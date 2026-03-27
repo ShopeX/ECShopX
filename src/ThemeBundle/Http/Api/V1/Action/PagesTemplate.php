@@ -50,14 +50,14 @@ class PagesTemplate extends Controller
      *     @SWG\Parameter(
      *         name="data_type",
      *         in="query",
-     *         description="数据类型 main_category-主类目 category-分类 seckill-限时特惠 group-拼团 sales-按销量 items-指定商品 distributor-指定店铺",
+     *         description="数据类型 main_category-主类目 category-分类 seckill-限时特惠 group-拼团 sales-按销量 items-指定商品 pointsmall_items-指定积分商品 distributor-指定店铺",
      *         required=true,
      *         type="string",
      *     ),
      *     @SWG\Parameter(
      *         name="data_value",
      *         in="query",
-     *         description="数据值",
+     *         description="数据值；当 data_type=pointsmall_items 时为积分商品 item_id，多个逗号分隔",
      *         required=true,
      *         type="string",
      *     ),
@@ -101,9 +101,11 @@ class PagesTemplate extends Controller
         $pages_template_services = new PagesTemplateServices();
         $result = $pages_template_services->getWidgetItems($params);
 
-        //营销标签
-        $itemsService = new ItemsService();
-        $result['data'] = $itemsService->getItemsListActityTag($result['data'], $params['company_id'], $params['regionauth_id'], -1, 0, '', 'include_not_start');
+        // 积分商品不走普通商品营销标签
+        if (isset($params['data_type']) && $params['data_type'] !== 'pointsmall_items') {
+            $itemsService = new ItemsService();
+            $result['data'] = $itemsService->getItemsListActityTag($result['data'], $params['company_id'], $params['regionauth_id'], -1, 0, '', 'include_not_start');
+        }
 
         return $this->response->array($result);
     }

@@ -35,8 +35,15 @@ class UploadDistributor
         '店铺类型' => 'distribution_type',
         '店铺号' => 'shop_code',
         '店铺名称' => 'name',
+        '门店分类' => 'distributor_category',
+        '店铺状态' => 'shop_status',
         '联系人姓名' => 'contact',
         '联系方式' => 'contract_phone',
+        '联系方式展示' => 'contact_show',
+        '是否展示导购' => 'show_salesperson',
+        // '上传企微码' => 'work_wechat_qrcode',
+        '企微链接' => 'work_wechat_link',
+        '导购码' => 'show_salesperson_qrcode',
         '店铺所在省市区' => 'addr1',
         '店铺详细地址' => 'addr2',
         '店铺详细地址门牌号' => 'addr3',
@@ -55,8 +62,15 @@ class UploadDistributor
         '店铺类型' => ['size' => 255, 'remarks' => '店铺类型,0:自营', 'is_need' => true],
         '店铺号' => ['size' => 255, 'remarks' => '店铺号，仅可填写英文数字的组合，英文不区分大小写', 'is_need' => true],
         '店铺名称' => ['size' => 255, 'remarks' => '店铺名称', 'is_need' => true],
+        '门店分类' => ['size' => 255, 'remarks' => '下拉选取配置的门店分类名称', 'is_need' => false],
+        '店铺状态' => ['size' => 10, 'remarks' => '启用:正常可售门店; 禁用:线上不可售门店; 废弃:前端不展示', 'is_need' => true],
         '联系人姓名' => ['size' => 255, 'remarks' => '联系人姓名', 'is_need' => true],
-        '联系方式' => ['size' => 255, 'remarks' => '联系方式', 'is_need' => true],
+        '联系方式' => ['size' => 255, 'remarks' => '手机号', 'is_need' => true],
+        '联系方式展示' => ['size' => 25, 'remarks' => '开启:附近门店列表展示电话入口，关闭:不展示', 'is_need' => false],
+        '是否展示导购' => ['size' => 25, 'remarks' => '开启:显示微信咨询顾问入口，关闭:不展示', 'is_need' => true],
+        // '上传企微码' => ['size' => 255, 'remarks' => '可上传店铺企微服务二维码', 'is_need' => false],
+        '企微链接' => ['size' => 255, 'remarks' => '素材管理中复制上传的企微服务码图链接', 'is_need' => false],
+        '导购码' => ['size' => 25, 'remarks' => '导购企微码', 'is_need' => false],
         '店铺所在省市区' => ['size' => 255, 'remarks' => '店铺所在省市区，省市区以英文逗号分隔，仅接受3个层级，位置1省，位置2市，位置3区', 'is_need' => true],
         '店铺详细地址' => ['size' => 255, 'remarks' => '店铺详细地址', 'is_need' => true],
         '店铺详细地址门牌号' => ['size' => 255, 'remarks' => '店铺详细地址门牌号', 'is_need' => false],
@@ -76,6 +90,8 @@ class UploadDistributor
         '店铺号' => 'shop_code',
         '联系人姓名' => 'contact',
         '联系方式' => 'contract_phone',
+        '店铺状态' => 'shop_status',
+        '是否展示导购' => 'show_salesperson',
         '店铺所在省市区' => 'addr1',
         '店铺详细地址' => 'addr2',
         '开启快递配送' => 'is_delivery',
@@ -206,11 +222,42 @@ class UploadDistributor
             'address' => $data['addr2'] ?? '',
 
         ];
+        if (!empty($data['distributor_category'])) {
+            $categoryId = $this->getDistributorCategoryIdByName($companyId, $data['distributor_category']);
+            if ($categoryId > 0) {
+                $insertData['distributor_category_id'] = $categoryId;
+            }
+        }
+        if (!empty($data['shop_status'])) {
+            $insertData['is_valid'] = $this->formatShopStatus($data['shop_status']);
+        }
+        if (isset($data['contact_show']) && $data['contact_show'] !== '') {
+            $insertData['show_mobile'] = $this->formatOnOff($data['contact_show']);
+        }
+        if (isset($data['show_salesperson']) && $data['show_salesperson'] !== '') {
+            $insertData['show_salesperson'] = $this->formatOnOff($data['show_salesperson']);
+        }
+        // if (!empty($data['work_wechat_qrcode'])) {
+        //     $insertData['work_wechat_qrcode'] = $data['work_wechat_qrcode'];
+        // }
+        if (!empty($data['work_wechat_link'])) {
+            $insertData['fixed_salesperson_qrcode_url'] = $data['work_wechat_link'];
+        }
+        if (!empty($data['show_salesperson_qrcode'])) {
+            $insertData['show_salesperson_qrcode'] = $data['show_salesperson_qrcode'];
+        }
+        if (!empty($data['show_salesperson_qrcode']) && trim($data['show_salesperson_qrcode']) === '是') {
+            $insertData['show_salesperson'] = 2;
+        } elseif (!empty($data['work_wechat_link'])) {
+            $insertData['show_salesperson'] = 1;
+        }
+        unset($insertData['show_salesperson_qrcode'],$insertData['work_wechat_link']);
+        // app('log')->info('Data: '.json_encode($data));
         if (!empty($data['hour1']) && !empty($data['hour2'])) {
             // 验证时间格式，必须是 HH:MM 格式（如 02:00）
             $hour1 = trim($data['hour1']);
             $hour2 = trim($data['hour2']);
-            
+
             // 验证格式：必须是 HH:MM，且只能有一个冒号
             if (!preg_match('/^([0-1][0-9]|2[0-3]):([0-5][0-9])$/', $hour1)) {
                 throw new ResourceException('错误，经营开始时间格式错误');
@@ -218,8 +265,10 @@ class UploadDistributor
             if (!preg_match('/^([0-1][0-9]|2[0-3]):([0-5][0-9])$/', $hour2)) {
                 throw new ResourceException('错误，经营结束时间格式错误');
             }
-            
+
             $insertData['hour'] = $hour1 . '-' . $hour2;
+        } else {
+            $insertData['hour'] = '';
         }
 
         if ($data['is_delivery'] === '是') {
@@ -272,12 +321,60 @@ class UploadDistributor
         $distributorData = $distributorRepository->getInfo(['shop_code' => $data['shop_code']]);
         if (!empty($distributorData)) {
             unset($insertData['shop_code']);
+            // app('log')->info('Update Data: '.json_encode($insertData));
             $distributorRepository->updateBy(['shop_code' => $data['shop_code']], $insertData);
 //            throw new ResourceException('错误，店铺号已经存在');
         }else{
             $distributorRepository->create($insertData);
         }
 
+    }
+
+    private function formatShopStatus(string $status): string
+    {
+        $status = trim($status);
+        switch ($status) {
+            case '启用':
+                return 'true';
+            case '禁用':
+                return 'false';
+            case '废弃':
+                return 'delete';
+            default:
+                return 'true';
+        }
+    }
+
+    private function formatOnOff(string $value): int
+    {
+        $value = trim($value);
+        if (in_array($value, ['开', '是', '1', 'true', 'TRUE','开启'], true)) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private function getDistributorCategoryIdByName(int $companyId, string $categoryName): int
+    {
+        $categoryName = trim($categoryName);
+        if ($companyId <= 0 || $categoryName === '') {
+            return 0;
+        }
+        try {
+            $conn = app('registry')->getConnection('default');
+            $qb = $conn->createQueryBuilder();
+            $qb->select('category_id')
+                ->from('distribution_distributor_category')
+                ->where('company_id = :company_id')
+                ->andWhere('category_name = :category_name')
+                ->setParameter('company_id', $companyId)
+                ->setParameter('category_name', $categoryName)
+                ->setMaxResults(1);
+            $row = $qb->execute()->fetch();
+            return isset($row['category_id']) ? (int)$row['category_id'] : 0;
+        } catch (\Exception $e) {
+            return 0;
+        }
     }
 
 }

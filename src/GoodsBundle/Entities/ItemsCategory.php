@@ -24,10 +24,9 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * ItemsCategory 商品分类表
  *
  * @ORM\Table(name="items_category", options={"comment"="商品分类表"}, indexes={
- *    @ORM\Index(name="ix_company_id", columns={"company_id"}),
+ *    @ORM\Index(name="ix_company_main_show", columns={"company_id", "is_main_category", "is_show_front"}),
  *    @ORM\Index(name="ix_distributor_id", columns={"distributor_id"}),
  *    @ORM\Index(name="ix_parent_id", columns={"parent_id"}),
- *    @ORM\Index(name="ix_is_main_category", columns={"is_main_category"}),
  * })
  * @ORM\Entity(repositoryClass="GoodsBundle\Repositories\ItemsCategoryRepository")
  */
@@ -90,6 +89,13 @@ class ItemsCategory
      * @ORM\Column(name="is_main_category", nullable=true, type="boolean", options={"comment":"是否为商品主类目", "default":false})
      */
     private $is_main_category;
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="is_show_front", type="smallint", options={"comment":"是否前台展示", "default":1})
+     */
+    private $is_show_front = 1;
 
     /**
      * @var string
@@ -477,6 +483,30 @@ class ItemsCategory
     public function getIsMainCategory()
     {
         return $this->is_main_category;
+    }
+
+    /**
+     * Set isShowFront
+     *
+     * @param int $isShowFront
+     *
+     * @return ItemsCategory
+     */
+    public function setIsShowFront($isShowFront)
+    {
+        $this->is_show_front = $isShowFront;
+
+        return $this;
+    }
+
+    /**
+     * Get isShowFront
+     *
+     * @return int
+     */
+    public function getIsShowFront()
+    {
+        return $this->is_show_front;
     }
 
     /**

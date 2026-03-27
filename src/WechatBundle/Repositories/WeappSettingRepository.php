@@ -32,11 +32,17 @@ class WeappSettingRepository extends EntityRepository
     public $langField = [
         'page_name','name','params|serialize'
     ]; // 多语言字段
-    
+    private $repositoryLangInterceptor; // 多语言拦截器
+
     public function getEntity()
     {
         $entity = new WeappSetting();
         return $entity;
+    }
+
+    public function setRepositoryLangInterceptor($interceptor)
+    {
+        $this->repositoryLangInterceptor = $interceptor;
     }
 
     /**
@@ -89,7 +95,11 @@ class WeappSettingRepository extends EntityRepository
                 $conn->update($this->table, $saveData, ['id' => $id]);
             }
         }
-       
+
+        if ($this->repositoryLangInterceptor) {
+            $this->repositoryLangInterceptor->saveLangData($companyId, $id, $saveData);
+        }
+
         return $id;
     }
 

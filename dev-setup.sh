@@ -355,8 +355,8 @@ check_and_clone_frontend() {
         
         if [ -z "$answer" ] || [ "$answer" = "Y" ] || [ "$answer" = "y" ] || [ "$answer" = "yes" ] || [ "$answer" = "YES" ]; then
             if [ -d "$ADMIN_DIR" ]; then
-                log_info "删除现有目录..."
-                rm -rf "$ADMIN_DIR"
+                log_info "清空现有目录内容..."
+                find "$ADMIN_DIR" -mindepth 1 -delete 2>/dev/null
             fi
             
             log_info "正在从 Gitee 克隆管理后台（ECShopX_admin-frontend）..."
@@ -388,11 +388,6 @@ check_and_clone_frontend() {
             fi
         else
             log_warning "跳过管理后台（ECShopX_admin-frontend）克隆"
-            # 如果目录存在但用户选择不安装，删除目录
-            if [ -d "$ADMIN_DIR" ]; then
-                log_info "删除未安装的管理后台目录..."
-                rm -rf "$ADMIN_DIR"
-            fi
         fi
     else
         log_info "ECShopX_admin-frontend 目录已存在且包含 package.json，跳过克隆"
@@ -420,8 +415,8 @@ check_and_clone_frontend() {
         
         if [ -z "$answer" ] || [ "$answer" = "Y" ] || [ "$answer" = "y" ] || [ "$answer" = "yes" ] || [ "$answer" = "YES" ]; then
             if [ -d "$VSHOP_DIR" ]; then
-                log_info "删除现有目录..."
-                rm -rf "$VSHOP_DIR"
+                log_info "清空现有目录内容..."
+                find "$VSHOP_DIR" -mindepth 1 -delete 2>/dev/null
             fi
             
             log_info "正在从 Gitee 克隆移动商城（ECShopX_mobile-frontend）..."
@@ -453,11 +448,6 @@ check_and_clone_frontend() {
             fi
         else
             log_warning "跳过移动商城（ECShopX_mobile-frontend）克隆"
-            # 如果目录存在但用户选择不安装，删除目录
-            if [ -d "$VSHOP_DIR" ]; then
-                log_info "删除未安装的移动商城目录..."
-                rm -rf "$VSHOP_DIR"
-            fi
         fi
     else
         log_info "ECShopX_mobile-frontend 目录已存在且包含 package.json，跳过克隆"
@@ -481,8 +471,8 @@ check_and_clone_frontend() {
         
         if [ -z "$answer" ] || [ "$answer" = "Y" ] || [ "$answer" = "y" ] || [ "$answer" = "yes" ] || [ "$answer" = "YES" ]; then
             if [ -d "$PC_DIR" ]; then
-                log_info "删除现有目录..."
-                rm -rf "$PC_DIR"
+                log_info "清空现有目录内容..."
+                find "$PC_DIR" -mindepth 1 -delete 2>/dev/null
             fi
             
             log_info "正在从 Gitee 克隆PC商城（ECShopX_desktop-frontend）..."
@@ -514,11 +504,6 @@ check_and_clone_frontend() {
             fi
         else
             log_warning "跳过PC商城（ECShopX_desktop-frontend）克隆"
-            # 如果目录存在但用户选择不安装，删除目录
-            if [ -d "$PC_DIR" ]; then
-                log_info "删除未安装的PC商城目录..."
-                rm -rf "$PC_DIR"
-            fi
         fi
     else
         log_info "ECShopX_desktop-frontend 目录已存在且包含 package.json，跳过克隆"
@@ -591,112 +576,6 @@ configure_env() {
                 break
             fi
         done
-    fi
-}
-
-# ===========================================
-# 删除因容器卷映射产生的空目录（如果用户跳过了安装）
-# ===========================================
-
-cleanup_empty_directories() {
-    log_info "检查并清理因容器卷映射产生的空目录..."
-    
-    local cleaned_count=0
-    local failed_dirs=()
-    
-    # 删除空目录的辅助函数
-    remove_empty_dir() {
-        local dir=$1
-        local dir_name=$2
-        local container_path=""
-        
-        # 确定容器内的路径
-        if [ "$dir_name" = "ECShopX_admin-frontend" ]; then
-            container_path="/data/httpd/ECShopX_admin-frontend"
-        elif [ "$dir_name" = "ECShopX_mobile-frontend" ]; then
-            container_path="/data/httpd/ECShopX_mobile-frontend"
-        elif [ "$dir_name" = "ECShopX_desktop-frontend" ]; then
-            container_path="/data/httpd/ECShopX_desktop-frontend"
-        fi
-        
-        if [ -d "$dir" ] && [ ! -f "$dir/package.json" ]; then
-            # 检查目录是否为空或只包含容器创建的基础文件
-            local file_count=$(find "$dir" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
-            if [ "$file_count" -eq 0 ] || [ "$file_count" -le 2 ]; then
-                # 先尝试直接删除
-                if rm -rf "$dir" 2>/dev/null; then
-                    log_success "已清理空目录: $dir_name"
-                    cleaned_count=$((cleaned_count + 1))
-                    return 0
-                fi
-                
-                # 如果删除失败，尝试修改权限后再删除
-                if chmod -R u+w "$dir" 2>/dev/null && rm -rf "$dir" 2>/dev/null; then
-                    log_success "已清理空目录: $dir_name"
-                    cleaned_count=$((cleaned_count + 1))
-                    return 0
-                fi
-                
-                # 如果容器正在运行，尝试通过容器删除（容器有挂载权限）
-                if is_container_running && [ -n "$container_path" ]; then
-                    if docker exec "$CONTAINER_NAME" sh -c "rm -rf $container_path" 2>/dev/null; then
-                        # 等待一下，让文件系统同步
-                        sleep 1
-                        # 再次尝试删除主机目录
-                        if rm -rf "$dir" 2>/dev/null; then
-                            log_success "已清理空目录: $dir_name"
-                            cleaned_count=$((cleaned_count + 1))
-                            return 0
-                        fi
-                    fi
-                fi
-                
-                # 如果还是失败，尝试修改所有者（如果是当前用户创建的）
-                local current_user=$(whoami)
-                if chown -R "$current_user" "$dir" 2>/dev/null && rm -rf "$dir" 2>/dev/null; then
-                    log_success "已清理空目录: $dir_name"
-                    cleaned_count=$((cleaned_count + 1))
-                    return 0
-                fi
-                
-                # 如果还是失败，记录失败的目录
-                failed_dirs+=("$dir_name:$dir")
-                return 1
-            fi
-        fi
-        return 0
-    }
-    
-    # 检查管理后台目录
-    remove_empty_dir "$PARENT_DIR/ECShopX_admin-frontend" "ECShopX_admin-frontend"
-    
-    # 检查移动商城目录
-    remove_empty_dir "$PARENT_DIR/ECShopX_mobile-frontend" "ECShopX_mobile-frontend"
-    
-    # 检查PC商城目录
-    remove_empty_dir "$PARENT_DIR/ECShopX_desktop-frontend" "ECShopX_desktop-frontend"
-    
-    # 汇总结果
-    if [ $cleaned_count -gt 0 ]; then
-        log_success "已清理 $cleaned_count 个空目录"
-    fi
-    
-    # 如果有失败的目录，统一提示
-    if [ ${#failed_dirs[@]} -gt 0 ]; then
-        echo ""
-        log_warning "以下目录因权限问题无法自动清理："
-        for dir_info in "${failed_dirs[@]}"; do
-            local name="${dir_info%%:*}"
-            local path="${dir_info#*:}"
-            echo "  - $name: $path"
-        done
-        echo ""
-        log_info "如需手动清理，可使用以下命令："
-        for dir_info in "${failed_dirs[@]}"; do
-            local path="${dir_info#*:}"
-            echo "  sudo rm -rf \"$path\""
-        done
-        echo ""
     fi
 }
 
@@ -787,9 +666,6 @@ run_docker() {
     
     # 等待服务就绪
     wait_for_services
-    
-    # 清理因容器卷映射产生的空目录（如果用户跳过了安装）
-    cleanup_empty_directories
 }
 
 # ===========================================
@@ -938,6 +814,12 @@ configure_application() {
     else
         log_info "应用密钥已存在，跳过生成"
     fi
+    
+    # 迁移前修正 ECShopX 目录权限（容器内 www-data:www-data）
+    log_info "修正 ECShopX 目录权限为 www-data:www-data..."
+    docker exec "$CONTAINER_NAME" chown -R www-data:www-data /data/httpd/ECShopX 2>/dev/null || {
+        log_warning "修正目录权限失败，继续执行迁移"
+    }
     
     # 执行数据库迁移
     log_info "执行数据库迁移..."

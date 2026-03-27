@@ -1,0 +1,13 @@
+# TypeScript build info files
+*.tsbuildinfo
+
+# Source files (only ship dist)
+src/
+*.ts
+!*.d.ts
+
+# Development files
+tsconfig.json
+*.test.*
+*.spec.*
+*.test-data.*

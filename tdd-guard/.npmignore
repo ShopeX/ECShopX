@@ -1,0 +1,52 @@
+# Source files (only dist is needed)
+src/
+*.ts
+!*.d.ts
+
+# Test files
+**/*.test.*
+**/*.spec.*
+coverage/
+.vitest/
+
+# Development files
+.env
+.env.*
+.git/
+.gitignore
+.husky/
+.claude/
+docs/
+hooks/
+
+# Config files
+tsconfig.json
+tsconfig.*.json
+vitest.config.ts
+eslint.config.mjs
+prettier.config.*
+commitlint.config.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts we don't need
+*.tsbuildinfo
+*.map
+
+# Python publishing
+.venv/
+*.egg-info/
+__pycache__/
+pyproject.toml

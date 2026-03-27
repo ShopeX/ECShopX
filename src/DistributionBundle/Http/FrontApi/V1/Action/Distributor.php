@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use GoodsBundle\Services\ItemsService;
 use MembersBundle\Services\MemberService;
+use MembersBundle\Services\WechatUserService;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Services\ItemsTagsService;
 use CompanysBundle\Services\SettingService;
@@ -49,7 +50,10 @@ use DistributionBundle\Services\DistributorTagsService;
 use DistributionBundle\Services\DistributorWhiteListService;
 use DistributionBundle\Services\DistributorSalesCountService;
 use DistributionBundle\Services\DistributorAftersalesAddressService;
+use DistributionBundle\Services\DistributorCategoryService;
 use ThirdPartyBundle\Services\Map\TencentMapService as TencentMapRequest;
+use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
+use WorkWechatBundle\Services\WorkWechatService;
 
 class Distributor extends BaseController
 {
@@ -576,6 +580,7 @@ class Distributor extends BaseController
      *     @SWG\Parameter(in="query", type="integer", required=false, name="is_ziti", description="是否支持自提【null 不筛选】【0 不支持自提】【1 支持自提】" ),
      *     @SWG\Parameter(in="query", type="integer", required=false, name="is_delivery", description="是否支持快递【null 不筛选】【0 不支持快递】【1 支持快递】" ),
      *     @SWG\Parameter(in="query", type="integer", required=false, name="is_dada", description="是否支持同城配【null 不筛选】【0 不支持同城配】【1 支持同城配】" ),
+     *     @SWG\Parameter(in="query", type="string", required=false, name="distributor_category_id", description="店铺分类id" ),
      *     @SWG\Parameter(in="query", type="integer", required=false, name="show_tag", description="是否为每个店铺展示自己的店铺标签【0 不展示】【1 展示】" ),
      *     @SWG\Parameter(in="query", type="integer", required=false, name="show_discount", description="是否为每个店铺展示自己的店铺优惠券【0 不展示】【1 展示】" ),
      *     @SWG\Parameter(in="query", type="integer", required=false, name="show_marketing_activity", description="是否为每个店铺展示自己的店铺满折满减满赠活动【0 不展示】【1 展示】" ),
@@ -642,6 +647,8 @@ class Distributor extends BaseController
      *                          @SWG\Property(property="phone", type="string", default="17621716237", description="手机号"),
      *                          @SWG\Property(property="distance_show", type="string", default="0", description="距离显示"),
      *                          @SWG\Property(property="distance_unit", type="string", default="m", description="距离单位"),
+     *                          @SWG\Property(property="work_qrcode", type="string", example="https://example.com/qrcode/xxx", description="导购二维码"),
+     *                          @SWG\Property(property="work_qrcode_configid", type="string", example="cfg_123", description="导购二维码配置ID"),
      *                          @SWG\Property(property="tagList", type="array",description="店铺标签信息",
      *                              @SWG\Items(type="object", required={"tag_id","tag_name","tag_color","font_color","tag_icon"},
      *                                  @SWG\Property(property="tag_id", type="integer", default="1", description="店铺标签id"),
@@ -714,6 +721,7 @@ class Distributor extends BaseController
      *                          @SWG\Property(property="tag_icon", type="string", default="", description="店铺标签的图片"),
      *                      ),
      *                  ),
+     *                  @SWG\Property(property="background_url", type="string", example="https://example.com/background.jpg", description="门店列表背景图"),
      *                  @SWG\Property(property="default_address", type="object",
      *                      @SWG\Property(property="address_id", type="string", default="415", description="地址id"),
      *                      @SWG\Property(property="company_id", type="string", default="1", description="公司id"),
@@ -749,6 +757,10 @@ class Distributor extends BaseController
         $companyId = (int)$authInfo['company_id']; // 企业id
         $userId = (int)($authInfo["user_id"] ?? 0); // 用户id
         $unionid = (string)($authInfo["unionid"] ?? ""); // 获取用户的unionid
+        if ($userId > 0 && $unionid === '') {
+            $wechatUserService = new WechatUserService();
+            $unionid = (string)($wechatUserService->getUnionidByUserId($userId, $companyId) ?? '');
+        }
 
         $page = $request->input('page', 1);// 当前页
         $pageSize = $request->input('pageSize', 10); // 每页的数量
@@ -779,8 +791,11 @@ class Distributor extends BaseController
             // 判断门店的信息是否是推荐门店还是附近门店
             "is_recommend" => 0
         ];
+        $result["background_url"] = (new DistributorService())->getDistributorListBackground($companyId);
 
         $filter = [];
+
+        $filter['is_valid'] = 'true';
 
         $type = $request->input('type', 0); // 过滤条件
         $noHaving = false; // 是否过滤离用户的经纬度比较远的店铺 【true 不过滤】【false 过滤】
@@ -902,11 +917,18 @@ class Distributor extends BaseController
             $filter["is_dada"] = $isDada;
         }
 
+        // 筛选 店铺分类
+        $distributorCategoryId = $request->input('distributor_category_id');
+        if (!is_null($distributorCategoryId) && $distributorCategoryId !== '') {
+            $filter['distributor_category_id'] = $distributorCategoryId;
+        }
+
 
         // 默认拿不是总店的店铺
         $filter['distributor_self'] = 0;
 
-        $filter['is_valid'] = 'true';
+        // $filter['is_valid'] = 'true';
+        $filter['is_valid'] = ['true', 'false'];
         if ($request->input('get_shop')) {
             $filter['shop_id|neq'] = '';
         }
@@ -919,6 +941,31 @@ class Distributor extends BaseController
             if ($ids) {
                 $filter['distributor_id'] = $ids;
             }
+        }
+
+        // bind=1 时走导购接口获取绑定门店
+        if ((int)$request->input('bind', 0) === 1) {
+            if (empty($unionid)) {
+                return $this->response->array($result);
+            }
+            $storeBn = '';
+            try {
+                $marketingCenterRequest = new MarketingCenterRequest();
+                $bindResult = $marketingCenterRequest->call($companyId, 'members.store.bind.getStoreId', [
+                    'unionid' => $unionid,
+                ]);
+                $storeBn = (string)($bindResult['data']['store_bn'] ?? '');
+            } catch (\Exception $e) {
+                app('log')->warning('获取导购绑定门店失败', [
+                    'company_id' => $companyId,
+                    'user_id' => $userId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            if ($storeBn === '' || $storeBn === '0') {
+                return $this->response->array($result);
+            }
+            $filter['shop_code'] = $storeBn;
         }
 
         $distributorService = new DistributorService();
@@ -966,6 +1013,23 @@ class Distributor extends BaseController
                 $filter['distributor_id'] = array_intersect($distributorIds, is_array($filter["distributor_id"]) ? $filter["distributor_id"] : [$filter["distributor_id"]]);
             } else {
                 $filter['distributor_id'] = $distributorIds;
+            }
+        }
+
+        // 排除指定门店
+        $excludeDistributorId = (int)$request->input('exclude_distributor_id', 0);
+        if ($excludeDistributorId > 0) {
+            if (isset($filter['distributor_id'])) {
+                if (is_array($filter['distributor_id'])) {
+                    $filter['distributor_id'] = array_values(array_diff($filter['distributor_id'], [$excludeDistributorId]));
+                    if (empty($filter['distributor_id'])) {
+                        return $this->response->array($result);
+                    }
+                } elseif ((int)$filter['distributor_id'] === $excludeDistributorId) {
+                    return $this->response->array($result);
+                }
+            } else {
+                $filter['distributor_id|neq'] = $excludeDistributorId;
             }
         }
 
@@ -1096,6 +1160,8 @@ class Distributor extends BaseController
         if ($showScore) {
             $distributorService->appendScore($companyId, $result["list"]);
         }
+        // 追加店铺分类名称
+        $distributorService->appendDistributorCategoryName($companyId, $result["list"]);
         // 追加店铺商品
         if($showItems){
            $item_tag_id = $request->input('item_tag_id',[]);
@@ -1105,6 +1171,181 @@ class Distributor extends BaseController
 
             $distributorService->appendItemsByFilter((int)$companyId, $result['list'],['item_id'=>$itemIds]);
         }
+        
+        // 添加导购二维码和config_id
+        $userId = (int)($authInfo['user_id'] ?? 0);
+        $distributorService->appendSalespersonQrcode($companyId, $result['list'], $userId);
+        
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Get(
+     *     path="/wxapp/distributor/salesperson/qrcode",
+     *     summary="获取单门店导购二维码",
+     *     tags={"店铺"},
+     *     description="根据门店ID获取单门店导购二维码",
+     *     operationId="getDistributorSalespersonQrcodeSingle",
+     *     @SWG\Parameter(name="x-wxapp-session", in="header", description="JWT验证token", required=false, type="string"),
+     *     @SWG\Parameter(name="Authorization", in="header", description="JWT验证token", required=false, type="string"),
+     *     @SWG\Parameter(in="query", type="integer", required=true, name="distributor_id", description="店铺id"),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(property="data", type="object",
+     *                 @SWG\Property(property="work_qrcode", type="string", example="https://example.com/qrcode/xxx", description="导购二维码"),
+     *                 @SWG\Property(property="work_qrcode_configid", type="string", example="cfg_123", description="导购二维码配置ID"),
+     *                 @SWG\Property(property="salesperson_name", type="string", example="张三", description="导购姓名"),
+     *                 @SWG\Property(property="salesperson_avatar", type="string", example="https://example.com/avatar/xxx.jpg", description="导购头像"),
+     *                 @SWG\Property(property="show_float", type="string", example="1", description="是否展示浮层：0关闭，1打开（来自企业微信配置）")
+     *             )
+     *         )
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/DistributionErrorRespones") ) )
+     * )
+     */
+    public function getDistributorSalespersonQrcodeSingle(Request $request)
+    {
+        $authInfo = $request->get('auth');
+        $companyId = (int)($authInfo['company_id'] ?? $request->get('company_id', 0));
+        if ($companyId <= 0) {
+            throw new ResourceException('公司ID不能为空');
+        }
+        $distributorId = (int)$request->input('distributor_id', 0);
+        if ($distributorId <= 0) {
+            throw new ResourceException('店铺ID不能为空');
+        }
+
+        $userId = (int)($authInfo['user_id'] ?? 0);
+        $unionid = (string)($authInfo['unionid'] ?? '');
+        if ($userId > 0 && $unionid === '') {
+            $wechatUserService = new WechatUserService();
+            $unionid = (string)($wechatUserService->getUnionidByUserId($userId, $companyId) ?? '');
+        }
+
+        // 获取导购背景图、默认导购头像及是否展示浮层（与 workwechat/config 接口一致）
+        $bgAvatarUrl = '';
+        $defaultSalespersonAvatar = '';
+        $showFloat = '0';
+        try {
+            $workWechatService = new WorkWechatService();
+            $workWechatConfig = $workWechatService->getViewConfig($companyId);
+            $bgAvatarUrl = $workWechatConfig['bg_avatar_url'] ?? '';
+            $defaultSalespersonAvatar = $workWechatConfig['avatar_url'] ?? '';
+            $showFloat = in_array((string)($workWechatConfig['show_float'] ?? '0'), ['0', '1'], true) ? (string)$workWechatConfig['show_float'] : '0';
+        } catch (\Exception $e) {
+            app('log')->warning('获取企业微信配置失败', [
+                'company_id' => $companyId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $distributorService = new DistributorService();
+        $distributorInfo = $distributorService->getInfoSimple([
+            'company_id' => $companyId,
+            'distributor_id' => $distributorId,
+        ]);
+        $storeBn = (string)($distributorInfo['shop_code'] ?? '');
+        if ($storeBn === '') {
+            return $this->response->array([
+                'work_qrcode' => '',
+                'work_qrcode_configid' => '',
+                'salesperson_name' => '',
+                'salesperson_avatar' => '',
+                'salesperson_common_name' => '',
+                'bg_avatar_url' => $bgAvatarUrl,
+                'show_float' => $showFloat,
+            ]);
+        }
+
+        $data = [
+            'work_qrcode' => '',
+            'work_qrcode_configid' => '',
+            'salesperson_name' => '',
+            'salesperson_avatar' => '',
+            'salesperson_common_name' => '',
+            'bg_avatar_url' => $bgAvatarUrl,
+            'show_float' => $showFloat,
+        ];
+        try {
+            $marketingCenterRequest = new MarketingCenterRequest();
+            $result = $marketingCenterRequest->call($companyId, 'members.store.salesperson.qrcode.single', [
+                'store_bn' => $storeBn,
+                'unionid' => $unionid,
+            ]);
+            if (!empty($result['data'])) {
+                $data = array_merge($data, (array)$result['data']);
+            }
+        } catch (\Exception $e) {
+            app('log')->warning('获取单门店导购二维码失败', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'distributor_id' => $distributorId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        if (!empty($data['work_qrcode']) && empty($data['salesperson_avatar'])) {
+            $data['salesperson_avatar'] = $defaultSalespersonAvatar;
+            $data['salesperson_common_name'] = '客服';
+        }
+        if (!isset($data['show_float'])) {
+            $data['show_float'] = $showFloat;
+        }
+        return $this->response->array($data);
+    }
+
+    /**
+     * @SWG\Get(
+     *     path="/wxapp/distributor/category/list",
+     *     summary="获取店铺分类列表",
+     *     tags={"店铺"},
+     *     description="获取店铺分类列表",
+     *     operationId="getFrontDistributorCategoryList",
+     *     @SWG\Parameter( name="x-wxapp-session", in="header", description="JWT验证token", required=false, type="string"),
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=false, type="string"),
+     *     @SWG\Parameter( name="page", in="query", description="页码", required=false, type="integer"),
+     *     @SWG\Parameter( name="pageSize", in="query", description="每页长度", required=false, type="integer"),
+     *     @SWG\Parameter( name="category_name", in="query", description="店铺分类名称", required=false, type="string"),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *              @SWG\Property( property="total_count", type="string", example="2", description="总数"),
+     *              @SWG\Property( property="list", type="array",
+     *                  @SWG\Items( type="object",
+     *                      @SWG\Property( property="category_id", type="integer", example="1", description="分类ID"),
+     *                      @SWG\Property( property="company_id", type="integer", example="1", description="公司ID"),
+     *                      @SWG\Property( property="category_name", type="string", example="旗舰店", description="店铺分类名称"),
+     *                      @SWG\Property( property="category_code", type="string", example="A001", description="分类编号"),
+     *                      @SWG\Property( property="created", type="string", example="1712143771", description="创建时间"),
+     *                      @SWG\Property( property="updated", type="string", example="1712143771", description="更新时间")
+     *                  ),
+     *              ),
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/DistributionErrorRespones") ) )
+     * )
+     */
+    public function getDistributorCategoryList(Request $request)
+    {
+        $authInfo = $request->get('auth');
+        $companyId = (int)($authInfo['company_id'] ?? $request->get('company_id', 0));
+        if ($companyId <= 0) {
+            throw new ResourceException('公司ID不能为空');
+        }
+
+        $page = (int)$request->input('page', 1);
+        $pageSize = (int)$request->input('pageSize', 20);
+        $categoryName = $request->input('category_name', '');
+
+        $filter = ['company_id' => $companyId];
+        if (!empty($categoryName)) {
+            $filter['category_name|contains'] = $categoryName;
+        }
+
+        $service = new DistributorCategoryService();
+        $result = $service->lists($filter, $page, $pageSize);
+
         return $this->response->array($result);
     }
 

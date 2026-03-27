@@ -371,7 +371,7 @@ class OrderInvoiceService
         $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
        
         $update_data = [];
-        $update_data['invoice_status'] = $updateData['invoice_status'];
+        $update_data['invoice_status'] = $updateData['invoice_status'] ?? $invoice['invoice_status'];
         $status_filter = ['order_id' => $invoice['order_id']];
 
         app('log')->info(__FUNCTION__.':'.__LINE__.':status_filter:'.json_encode($status_filter));

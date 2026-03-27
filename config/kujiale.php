@@ -13,6 +13,7 @@ return [
         'search' => 'https://openapi.kujiale.com/v2/commodity/search',  //搜索商品
         'detail' => 'https://openapi.kujiale.com/v2/commodity/detail',  //商品详情
         'designer_works' => 'https://openapi.kujiale.com/v2/designeroc/design/excellent/list',  //设计师方案作品
+        'excellent_search' => 'https://openapi.kujiale.com/v2/designex/excellent/search',  //优秀方案搜索
         'designer_works_detail' => 'https://openapi.kujiale.com/v2/design/{designId}/basic/v2',  //设计师方案作品详情
         'designer_works_tag' => 'https://openapi.kujiale.com/v2/design/new-tag',  //设计师方案作品标签
         'designer_tags_list' => 'https://openapi.kujiale.com/v2/design/new-tag/category/list',  //方案标签

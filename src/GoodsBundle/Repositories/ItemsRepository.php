@@ -241,15 +241,31 @@ class ItemsRepository extends EntityRepository
 
         $qb = $this->_filter($filter, $qb);
         if(isset($filter[$this->prk])){
+            $companyId = 0;
+            if ( ($filter['company_id'] ?? 0) > 0) {
+                $companyId = $filter['company_id'];
+            }
             if(is_array($filter[$this->prk])){
                 foreach ($filter[$this->prk] as $pprk){
+                    if ( !$companyId ) {
+                        $itemsEnt = $this->find($pprk);
+                        if ( $itemsEnt ) {
+                            $companyId = $itemsEnt->getCompanyId();   
+                        }
+                    }
                     //更新数据
                     $service = new MultiLangService();
-                    $service->updateLangData($data,'items',$pprk);
+                    $service->updateLangData($data,'items',$pprk,$companyId);
                 }
             }else{
+                if ( !$companyId ) {
+                    $itemsEnt = $this->find($filter[$this->prk]);
+                    if ( $itemsEnt ) {
+                        $companyId = $itemsEnt->getCompanyId();   
+                    }
+                }
                 $service = new MultiLangService();
-                $service->updateLangData($data,'items',$filter[$this->prk]);
+                $service->updateLangData($data,'items',$filter[$this->prk],$companyId);
             }
         }
 
@@ -417,7 +433,8 @@ class ItemsRepository extends EntityRepository
         $em->persist($itemsEnt);
         $em->flush();
         $service = new MultiLangService();
-        $service->updateLangData($params,'items',$item_id);
+        $companyId = $itemsEnt->getCompanyId();
+        $service->updateLangData($params,'items',$item_id,$companyId);
         $result = $this->getColumnNamesData($itemsEnt);
         return $result;
     }

@@ -42,12 +42,12 @@ class Jushuitan extends Controller
      *                 type="array",
      *                 @SWG\Items(
      *                     type="object",
-     *                     @SWG\Property(property="status", type="stirng"),
+     *                     @SWG\Property(property="status", type="string"),
      *                 )
      *             ),
      *          ),
      *     ),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/OrdersErrorRespones") ) )
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( @SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer") ) )
      * )
      */
     public function setSetting(Request $request)
@@ -85,12 +85,12 @@ class Jushuitan extends Controller
      *                 type="array",
      *                 @SWG\Items(
      *                     type="object",
-     *                     @SWG\Property(property="is_open", type="stirng", description="是否开启"),
+     *                     @SWG\Property(property="is_open", type="string", description="是否开启"),
      *                 )
      *             ),
      *          ),
      *     ),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/OrdersErrorRespones") ) )
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( @SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer") ) )
      * )
      */
     public function getSetting(Request $request)

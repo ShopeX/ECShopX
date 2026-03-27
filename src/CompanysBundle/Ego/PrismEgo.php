@@ -60,38 +60,38 @@ class PrismEgo
         }
         $return = $this->getToken($result['code']);
 
-        $upgradeEgo = new UpgradeEgo();
-        $passportUid = $return['data']['passport_uid'] ?? '';
-        $agreement_id = $credentials['agreement_id'] ?? '';
-        $this->checkFreeOrNoSaas($passportUid);
-        $upgradeEgo->confirmAgreement($passportUid, $agreement_id);
-        $upgradeEgo->getActive($passportUid);
+        // $upgradeEgo = new UpgradeEgo();
+        // $passportUid = $return['data']['passport_uid'] ?? '';
+        // $agreement_id = $credentials['agreement_id'] ?? '';
+        // $this->checkFreeOrNoSaas($passportUid);
+        // $upgradeEgo->confirmAgreement($passportUid, $agreement_id);
+        // $upgradeEgo->getActive($passportUid);
 
         return $return;
     }
 
     // 获取companys已有的记录数
-    private function checkFreeOrNoSaas($passportUid)
-    {
-        $upgradeEgo = new UpgradeEgo();
-        $license = $upgradeEgo->getSwooleLicense();
-        // 如果是独立部署或者是免费版则检查
-        if (!config('common.system_is_saas')
-            || (isset($license['Product_type']) && ($license['Product_type'] == 'ECSHOPX2_FREE'))
-        ) {
-            $conn = app('registry')->getConnection('default');
-            $qb = $conn->createQueryBuilder();
-            $qb->select('count(*)')
-               ->from('companys')
-               ->where($qb->expr()->neq('passport_uid', $qb->expr()->literal($passportUid)));
-            $count = $qb->execute()->fetchColumn();
-            if ($count >= 1) {
-                throw new AccessDeniedHttpException('超级管理员账号或密码不正确');
-            }
-        }
+    // private function checkFreeOrNoSaas($passportUid)
+    // {
+    //     $upgradeEgo = new UpgradeEgo();
+    //     $license = $upgradeEgo->getSwooleLicense();
+    //     // 如果是独立部署或者是免费版则检查
+    //     if (!config('common.system_is_saas')
+    //         || (isset($license['Product_type']) && ($license['Product_type'] == 'ECSHOPX2_FREE'))
+    //     ) {
+    //         $conn = app('registry')->getConnection('default');
+    //         $qb = $conn->createQueryBuilder();
+    //         $qb->select('count(*)')
+    //            ->from('companys')
+    //            ->where($qb->expr()->neq('passport_uid', $qb->expr()->literal($passportUid)));
+    //         $count = $qb->execute()->fetchColumn();
+    //         if ($count >= 1) {
+    //             throw new AccessDeniedHttpException('超级管理员账号或密码不正确');
+    //         }
+    //     }
 
-        return true;
-    }
+    //     return true;
+    // }
 
     public function getToken($code)
     {

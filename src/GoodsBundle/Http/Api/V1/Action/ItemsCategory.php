@@ -142,6 +142,9 @@ class ItemsCategory extends BaseController
         if ($errorMessage) {
             throw new ResourceException($errorMessage);
         }
+        if (isset($params['customize_page_id']) && empty($params['customize_page_id'])) {
+            $params['customize_page_id'] = 0;
+        }
         $result = $itemsCategoryService->createClassificationService($params, $companyId, $distributorId);
         return $this->response->array($result);
     }
@@ -370,6 +373,60 @@ class ItemsCategory extends BaseController
 
     /**
      * @SWG\Get(
+     *     path="/goods/category/saleable-filter",
+     *     summary="获取分类可售过滤开关",
+     *     tags={"商品"},
+     *     description="获取分类可售过滤开关",
+     *     operationId="getSaleableCategoryFilterStatus",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", type="string" ),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="enabled", type="boolean", example="true", description="是否启用过滤")
+     *          )
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/GoodsErrorRespones") ) )
+     * )
+     */
+    public function getSaleableCategoryFilterStatus(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        $itemsCategoryService = new ItemsCategoryService();
+        $enabled = $itemsCategoryService->isSaleableCategoryFilterEnabled((int)$companyId);
+        return $this->response->array(['enabled' => $enabled]);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/goods/category/saleable-filter",
+     *     summary="设置分类可售过滤开关",
+     *     tags={"商品"},
+     *     description="设置分类可售过滤开关",
+     *     operationId="setSaleableCategoryFilterStatus",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", type="string" ),
+     *     @SWG\Parameter( name="enabled", in="formData", description="是否启用过滤", required=true, type="boolean" ),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="enabled", type="boolean", example="true", description="是否启用过滤")
+     *          )
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/GoodsErrorRespones") ) )
+     * )
+     */
+    public function setSaleableCategoryFilterStatus(Request $request)
+    {
+        $enabledRaw = $request->input('enabled', null);
+        if ($enabledRaw === null) {
+            throw new ResourceException('enabled必填');
+        }
+        $enabled = in_array($enabledRaw, [1, '1', true, 'true'], true);
+        $companyId = app('auth')->user()->get('company_id');
+        $itemsCategoryService = new ItemsCategoryService();
+        $itemsCategoryService->setSaleableCategoryFilterEnabled((int)$companyId, $enabled);
+        return $this->response->array(['enabled' => $enabled]);
+    }
+
+    /**
+     * @SWG\Get(
      *     path="/goods/category/{category_id}",
      *     summary="获取单条分类数据",
      *     tags={"商品"},
@@ -429,7 +486,7 @@ class ItemsCategory extends BaseController
         }
         $itemsCategoryService = new ItemsCategoryService();
         $result = $itemsCategoryService->getCategoryInfo($filter, $otherParmas);
-        
+
         return $this->response->array($result);
     }
 
@@ -445,6 +502,7 @@ class ItemsCategory extends BaseController
      *     @SWG\Parameter( name="category_name", in="formData", description="分类名称", required=false, type="string"),
      *     @SWG\Parameter( name="sort", in="formData", description="排序", required=false, type="string"),
      *     @SWG\Parameter( name="image_url", in="formData", description="图片url", required=false, type="string"),
+     *     @SWG\Parameter( name="is_show_front", in="formData", description="是否前台展示，0=不展示，1=展示", required=false, type="integer"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *                  @SWG\Property( property="status", type="string", example="true", description=""),

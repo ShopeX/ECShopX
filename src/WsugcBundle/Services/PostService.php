@@ -31,6 +31,7 @@ use WsugcBundle\Services\PostFavoriteService;
 use MembersBundle\Entities\WechatUserInfo;
 use MembersBundle\Entities\MembersAssociations;
 use PointBundle\Services\PointMemberService;
+use CompanysBundle\Services\CommonLangModService;
 
 class PostService
 {
@@ -56,8 +57,103 @@ class PostService
     {
         return $this->entityRepository->$method(...$parameters);
     }
+
+    /**
+     * 多语言列表前：将 PostController 组装的复合 content|contains 转为 post_id，避免进入 RepositoryLangInterceptor 时把数组传给 filterByLang。
+     * 与 PostRepository::_filter 语义对齐：title OR content（多语言映射表）OR keyword_topics_post_id。
+     * 若已有 post_id（话题/收藏等），与关键字解析结果取并集并去重；ID 规范为 int，有真实 ID 时剔除 -1 占位。
+     *
+     * @param array $filter
+     * @return array
+     */
+    private function normalizePostListFilterForMultilang(array $filter): array
+    {
+        $key = 'content|contains';
+        if (!isset($filter[$key]) || !is_array($filter[$key])) {
+            return $filter;
+        }
+        $value = $filter[$key];
+        if (!array_key_exists('content', $value) || !array_key_exists('keyword_topics_post_id', $value)) {
+            return $filter;
+        }
+
+        $searchText = isset($value['content']) && is_string($value['content']) ? trim($value['content']) : '';
+        $topicPostIds = isset($value['keyword_topics_post_id']) && is_array($value['keyword_topics_post_id'])
+            ? $value['keyword_topics_post_id'] : [];
+
+        /** @var \WsugcBundle\Repositories\PostRepository $postRepo */
+        $postRepo = app('registry')->getManager('default')->getRepository(Post::class);
+        $table = $postRepo->table;
+        $companyId = $filter['company_id'] ?? 0;
+
+        $langMod = new CommonLangModService();
+        $lang = $langMod->getLang();
+        $dataIdArr = [];
+        if ($searchText !== '') {
+            $suffix = '|contains';
+            $langField = $postRepo->langField ?? [];
+            if (in_array('title', $langField, true)) {
+                $dataIdArr = array_merge($dataIdArr, $langMod->filterByLang($lang, 'title' . $suffix, $searchText, $table, $companyId));
+            }
+            if (in_array('content', $langField, true)) {
+                $dataIdArr = array_merge($dataIdArr, $langMod->filterByLang($lang, 'content' . $suffix, $searchText, $table, $companyId));
+            }
+            $dataIdArr = array_values(array_unique($dataIdArr));
+        }
+
+        $mergedIds = array_values(array_unique(array_merge($dataIdArr, $topicPostIds)));
+
+        // 统一为整数、去掉空值；若存在真实 post_id 则去掉 -1/-1 占位（Controller 在无话题命中时用 [-1]）
+        $normalizePostIds = static function (array $ids): array {
+            $out = [];
+            foreach ($ids as $id) {
+                if ($id === '' || $id === null) {
+                    continue;
+                }
+                if (is_numeric($id)) {
+                    $out[] = (int) $id;
+                }
+            }
+            $out = array_values(array_unique($out, SORT_REGULAR));
+            $hasPositive = false;
+            foreach ($out as $pid) {
+                if ($pid > 0) {
+                    $hasPositive = true;
+                    break;
+                }
+            }
+            if ($hasPositive) {
+                $out = array_values(array_filter($out, static function ($pid) {
+                    return (int) $pid !== -1;
+                }));
+            }
+            return $out;
+        };
+
+        $mergedIds = $normalizePostIds($mergedIds);
+
+        unset($filter[$key]);
+
+        $hasPostId = array_key_exists('post_id', $filter) && $filter['post_id'] !== '' && $filter['post_id'] !== null;
+        if ($hasPostId) {
+            $existing = $normalizePostIds((array) $filter['post_id']);
+            // 与「关键字 OR 话题」一致：与已有 post_id（话题/收藏等）取并集，避免 intersect 与多语言 ID 对不上导致永远无数据
+            if ($existing === []) {
+                $filter['post_id'] = $mergedIds !== [] ? $mergedIds : [-1];
+            } else {
+                $union = array_values(array_unique(array_merge($existing, $mergedIds), SORT_REGULAR));
+                $filter['post_id'] = $union !== [] ? $union : [-1];
+            }
+        } else {
+            $filter['post_id'] = $mergedIds !== [] ? $mergedIds : [-1];
+        }
+
+        return $filter;
+    }
+
     public function getPostList($filter,$cols="*", $page = 1, $pageSize = -1, $orderBy=[],$fromAdmin=false,$user_id_auth=0)
     {
+        $filter = $this->normalizePostListFilterForMultilang($filter);
         $postService = new PostService();
         $defaultOrderBy=[
             'p_order' => 'asc',

@@ -86,6 +86,7 @@ class OrderInvoice extends Controller
      * @SWG\Post(
      *     path="/wxapp/order/invoice_request",
      *     summary="订单申请开票",
+     *     @SWG\Response(response=200, description="成功"),
      * )
      */
     public function invoiceRequest(Request $request)

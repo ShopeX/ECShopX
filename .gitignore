@@ -28,5 +28,10 @@ cghooks.lock
 doc/
 .aicontext
 .copilot-config.json
-.cursor/
+.cursor/debug.log
+.cursor/.tdd-guard-validating
+.claude/tdd-guard
 .qoder/
+.tasks/
+storage/csv
+storage/excel

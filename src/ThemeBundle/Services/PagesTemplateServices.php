@@ -750,7 +750,7 @@ class PagesTemplateServices
                     'company_id' => $params['company_id'],
                     'distributor_id' => $distributor_id,
                     'status' => 1,
-                    'weapp_pages' => $weapp_pages
+                    // 'weapp_pages' => $weapp_pages // # 暂时把页面查询条件取消 by ECX-8045 店铺首页页面空白
                 ];
             }
         }
@@ -1608,6 +1608,34 @@ class PagesTemplateServices
                 $filter['distributor_id'] = $params['data_value'];
                 $newFilter['distributor_id'] = $params['data_value'];
                 break;
+            case 'pointsmall_items'://指定积分商品
+                $pointsmallItemIds = $this->parsePointsmallItemIds($params['data_value']);
+                if (empty($pointsmallItemIds)) {
+                    return [
+                        'data' => [],
+                        'filter' => [],
+                        'goodsSort' => null,
+                    ];
+                }
+                $pointsmallFilter = [
+                    'company_id' => $params['company_id'],
+                    'approve_status' => ['onsale', 'only_show'],
+                    'audit_status' => 'approved',
+                    'item_id' => $pointsmallItemIds,
+                ];
+                $pointsmallPageSize = $params['num'] ?? 10;
+                $pointsmallPage = $params['page'] ?? 1;
+                if (!empty($params['pageSize'])) {
+                    $pointsmallPageSize = intval($params['pageSize']);
+                }
+                $pointsmallOrderBy = ['sort' => 'desc', 'item_id' => 'desc'];
+                $pointsmallItemsService = new \PointsmallBundle\Services\ItemsService();
+                $pointsmallResult = $pointsmallItemsService->getItemListData($pointsmallFilter, $pointsmallPage, $pointsmallPageSize, $pointsmallOrderBy, false);
+                return [
+                    'data' => $pointsmallResult['list'] ?? [],
+                    'filter' => ['pointsmall_item_id' => $pointsmallItemIds],
+                    'goodsSort' => null,
+                ];
             case 'price'://按价格
                 if (!is_array($params['data_value'])) {
                     $params['data_value'] = json_decode($params['data_value'], true);
@@ -1652,6 +1680,33 @@ class PagesTemplateServices
             'filter' => $newFilter,
             'goodsSort' => $goodsSort,
         ];
+    }
+
+    /**
+     * 解析 data_value 为积分商品 item_id 数组（支持逗号分隔字符串或数组，过滤 ≤0）
+     *
+     * @param mixed $dataValue
+     * @return int[]
+     */
+    private function parsePointsmallItemIds($dataValue)
+    {
+        if ($dataValue === null || $dataValue === '') {
+            return [];
+        }
+        if (is_string($dataValue)) {
+            $dataValue = array_map('trim', explode(',', $dataValue));
+        }
+        if (!is_array($dataValue)) {
+            return [];
+        }
+        $ids = [];
+        foreach ($dataValue as $v) {
+            $id = intval($v);
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        return array_values(array_unique($ids));
     }
 
     /**

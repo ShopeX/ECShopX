@@ -174,7 +174,7 @@ class CommentController extends Controller {
 
         $authInfo = $request->get('auth');
         $user_id=0;
-        $company_id=0;
+        $company_id= $params['company_id']??0;
         if($authInfo && $authInfo['user_id']){
             $user_id=$authInfo['user_id'];
             $company_id=$authInfo['company_id'];

@@ -102,6 +102,9 @@ class OperatorsRepository extends EntityRepository
         if (isset($data['passport_uid']) && $data['passport_uid']) {
             $operatorEntity->setPassportUid($data['passport_uid']);
         }
+        if (isset($data['shopex_bind_account']) && $data['shopex_bind_account']) {
+            $operatorEntity->setShopexBindAccount($data['shopex_bind_account']);
+        }
         if (isset($data['operator_type']) && $data['operator_type']) {
             $operatorEntity->setOperatorType($data['operator_type']);
         }
@@ -168,6 +171,7 @@ class OperatorsRepository extends EntityRepository
             'password' => $operatorEntity->getPassword(),
             'eid' => $operatorEntity->getEid(),
             'passport_uid' => $operatorEntity->getPassportUid(),
+            'shopex_bind_account' => $operatorEntity->getShopexBindAccount(),
             'operator_type' => $operatorEntity->getOperatorType(),
             'shop_ids' => json_decode($operatorEntity->getShopIds(), true),
             'distributor_ids' => json_decode($operatorEntity->getDistributorIds(), true),

@@ -298,6 +298,7 @@ class Items extends BaseController
      *     path="/goods/set_commission_ratio",
      *     summary="设置商品佣金费率",
      *     tags={"商品"},
+     *     @SWG\Response(response=200, description="成功"),
      * )
      */
     public function setCommissionRatio(Request $request)
@@ -1830,8 +1831,7 @@ class Items extends BaseController
                 // $cost_price = bcdiv($value['cost_price'],'100',10); //成本格
                 // $tax_rate = bcdiv($value['tax_rate'],'100',10) + 1; //税率
                 if ($value['cost_price'] && ($value['price'] > $value['cost_price'])) {
-                    $gross_profit_rate = ($value['price'] - $value['cost_price']) / $value['price'];
-                    $value['gross_profit_rate'] = bcmul($gross_profit_rate,'100',2).'%';
+                    $value['gross_profit_rate'] = bcmul(($value['price'] - $value['cost_price']) * 100, $value['price'], 2).'%';
                 } else {
                     $value['gross_profit_rate'] = '-';
                 }

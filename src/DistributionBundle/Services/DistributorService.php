@@ -43,6 +43,9 @@ use AftersalesBundle\Services\AftersalesRefundService;
 use PaymentBundle\Services\PaymentsService;
 use PaymentBundle\Services\Payments\WechatPayService;
 use PaymentBundle\Services\Payments\AlipayService;
+use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
+use MembersBundle\Services\WechatUserService;
+use DistributionBundle\Services\DistributorCategoryService;
 
 class DistributorService
 {
@@ -50,6 +53,10 @@ class DistributorService
 
     /** @var \DistributionBundle\Repositories\DistributorRepository */
     public $entityRepository;
+
+    /** @var \CompanysBundle\Services\RepositoryLangInterceptor|null */
+    private $repositoryByLanguage = null;
+
     public function __construct()
     {
         $this->entityRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
@@ -581,6 +588,53 @@ class DistributorService
                 }
                 $selfDeliveryService = new selfDeliveryService();
                 $row['selfDeliveryRule'] = $selfDeliveryService->getSelfDeliverySetting($row['company_id'],$row['distributor_id'], $row['distributor_self']);
+            }
+        }
+        return $distributorList;
+    }
+
+    /**
+     * 获取经多语言包装的 Distributor Repository，用于按当前语言查询（单例，同一 Service 实例内复用）
+     * @return \CompanysBundle\Services\RepositoryLangInterceptor
+     */
+    public function getRepositoryByLanguage()
+    {
+        if ($this->repositoryByLanguage === null) {
+            $this->repositoryByLanguage = getRepositoryLangue(Distributor::class);
+        }
+        return $this->repositoryByLanguage;
+    }
+
+    /**
+     * 按当前语言获取店铺列表（多语言），并对结果做与 lists() 相同的格式化
+     * @param array $filter
+     * @param array $orderBy
+     * @param int $pageSize
+     * @param int $page
+     * @param bool $noHaving
+     * @param string $column
+     * @return array{list: array, total_count: int}
+     */
+    public function getListByLang($filter, $orderBy = ['created' => 'desc'], $pageSize = 100, $page = 1, $noHaving = false, $column = "*")
+    {
+        $distributorList = $this->getRepositoryByLanguage()->lists($filter, $orderBy, $pageSize, $page, true, $column, $noHaving);
+        if ($distributorList['list'] ?? null) {
+            foreach ($distributorList['list'] as &$row) {
+                $row = $this->formatStoreInfo($row);
+                if (isset($row['distance'])) {
+                    if ($row['distance'] < 1) {
+                        $row['distance_show'] = bcmul($row['distance'], 1000);
+                        $row['distance_unit'] = 'm';
+                    } else {
+                        $row['distance_show'] = $row['distance'];
+                        $row['distance_unit'] = 'km';
+                    }
+                } else {
+                    $row['distance_show'] = '';
+                    $row['distance_unit'] = '';
+                }
+                $selfDeliveryService = new selfDeliveryService();
+                $row['selfDeliveryRule'] = $selfDeliveryService->getSelfDeliverySetting($row['company_id'], $row['distributor_id'], $row['distributor_self']);
             }
         }
         return $distributorList;
@@ -1180,6 +1234,42 @@ class DistributorService
     }
 
     /**
+     * 追加店铺分类名称
+     * @param int $companyId 公司id
+     * @param array $distributorList 店铺列表
+     */
+    public function appendDistributorCategoryName(int $companyId, array &$distributorList): void
+    {
+        if (empty($distributorList)) {
+            return;
+        }
+
+        $distributorCategoryIds = array_unique(array_filter(array_column($distributorList, 'distributor_category_id')));
+        if (empty($distributorCategoryIds)) {
+            foreach ($distributorList as &$value) {
+                $value['distributor_category_name'] = '';
+            }
+            unset($value);
+            return;
+        }
+
+        $distributorCategoryService = new DistributorCategoryService();
+        $categoryFilter = [
+            'company_id' => $companyId,
+            'category_id' => $distributorCategoryIds,
+        ];
+        $categoryList = $distributorCategoryService->categoryRepository->getLists($categoryFilter, 'category_id,category_name');
+        $categoryMap = [];
+        foreach ($categoryList as $category) {
+            $categoryMap[$category['category_id']] = $category['category_name'] ?? '';
+        }
+        foreach ($distributorList as &$value) {
+            $value['distributor_category_name'] = $categoryMap[$value['distributor_category_id']] ?? '';
+        }
+        unset($value);
+    }
+
+    /**
      * 追加店铺的商品信息
      * @param int $companyId
      * @param array $distributorList
@@ -1464,5 +1554,109 @@ class DistributorService
                 }
             }
         }
+    }
+
+    /**
+     * 追加导购二维码和config_id
+     * @param int $companyId 公司id
+     * @param array $distributorList 店铺列表（引用传递）
+     * @param int $userId 用户id，可为0
+     */
+    public function appendSalespersonQrcode(int $companyId, array &$distributorList, int $userId = 0): void
+    {
+        if (empty($distributorList)) {
+            return;
+        }
+
+        // 转换userId为unionId
+        $unionid = '';
+        if ($userId > 0) {
+            $wechatUserService = new WechatUserService();
+            $unionid = $wechatUserService->getUnionidByUserId($userId, $companyId);
+            if (!$unionid) {
+                $unionid = '';
+            }
+        }
+
+        // 提取所有店铺编号
+        $storeBns = [];
+        foreach ($distributorList as $distributor) {
+            if (!empty($distributor['shop_code'])) {
+                $storeBns[] = $distributor['shop_code'];
+            }
+        }
+
+        if (empty($storeBns)) {
+            // 如果没有店铺编号，为每个店铺设置空值
+            foreach ($distributorList as &$distributor) {
+                $distributor['work_qrcode'] = '';
+                $distributor['work_qrcode_configid'] = '';
+                $distributor['salesperson_name'] = '';
+                $distributor['salesperson_avatar'] = '';
+            }
+            unset($distributor);
+
+            return;
+        }
+
+        // 调用导购接口获取二维码
+        $qrcodeMap = [];
+        try {
+            $marketingCenterRequest = new MarketingCenterRequest();
+            $requestData = [
+                'store_bns' => array_unique($storeBns),
+                'unionid' => $unionid,
+            ];
+
+            $result = $marketingCenterRequest->call($companyId, 'members.store.salesperson.qrcode', $requestData);
+
+            if (!empty($result['data'])) {
+                $qrcodeMap = $result['data'];
+            }
+        } catch (\Exception $e) {
+            app('log')->warning('获取导购二维码失败', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // 为每个店铺追加二维码信息
+        foreach ($distributorList as &$distributor) {
+            $shopCode = $distributor['shop_code'] ?? '';
+            if (!empty($shopCode) && isset($qrcodeMap[$shopCode])) {
+                $distributor['work_qrcode'] = $qrcodeMap[$shopCode]['work_qrcode'] ?? '';
+                $distributor['work_qrcode_configid'] = $qrcodeMap[$shopCode]['work_qrcode_configid'] ?? '';
+                $distributor['salesperson_name'] = $qrcodeMap[$shopCode]['salesperson_name'] ?? '';
+                $distributor['salesperson_avatar'] = $qrcodeMap[$shopCode]['salesperson_avatar'] ?? '';
+            } else {
+                $distributor['work_qrcode'] = '';
+                $distributor['work_qrcode_configid'] = '';
+                $distributor['salesperson_name'] = '';
+                $distributor['salesperson_avatar'] = '';
+            }
+        }
+        unset($distributor);
+    }
+
+    private function getDistributorListBackgroundKey(int $companyId): string
+    {
+        return 'distributor_list_background:' . $companyId;
+    }
+
+    public function setDistributorListBackground(int $companyId, string $backgroundUrl): bool
+    {
+        $redis = app('redis')->connection('default');
+        return (bool)$redis->set($this->getDistributorListBackgroundKey($companyId), $backgroundUrl);
+    }
+
+    public function getDistributorListBackground(int $companyId): string
+    {
+        $redis = app('redis')->connection('default');
+        $result = $redis->get($this->getDistributorListBackgroundKey($companyId));
+        if (empty($result) || $result === 'null') {
+            return '';
+        }
+        return (string)$result;
     }
 }

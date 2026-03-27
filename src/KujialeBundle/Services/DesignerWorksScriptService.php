@@ -7,7 +7,7 @@ use KujialeBundle\Services\api\ApiService;
 class DesignerWorksScriptService
 {
     /**
-     * @var ApiService $apiService 
+     * @var ApiService $apiService
      */
     private $apiService;
 
@@ -15,6 +15,11 @@ class DesignerWorksScriptService
         $this->apiService = new ApiService();
     }
 
+    /**
+     * 预处理并保存本批设计师作品，返回本批已保存的 (design_id, plan_id) 列表
+     * @param array $worksList API 返回的作品列表
+     * @return array 已保存的 [['design_id' => xx, 'plan_id' => xx], ...]
+     */
     public function preProcDesignerWorks($worksList){
         $worksInfoList = [];
         $workService = new KujialeDesignerWorksService();
@@ -57,7 +62,12 @@ class DesignerWorksScriptService
             $tmp = array_merge($tmp,$result['authorVo']);
             $worksInfoList[] = $tmp;
         }
-        $workService->saveDesignerWorks($worksInfoList);
+        if (!empty($worksInfoList)) {
+            $workService->saveDesignerWorks($worksInfoList);
+        }
+        return array_map(function ($row) {
+            return ['design_id' => $row['designId'], 'plan_id' => $row['planId']];
+        }, $worksInfoList);
     }
 
     /**
@@ -73,22 +83,38 @@ class DesignerWorksScriptService
                 $tagsService->saveTags($tagsList);
             }
 
-            // 获取设计师方案
+            // 获取设计师方案，并收集本次拉取到的 (design_id, plan_id)
+            // API 分页：start=起始位置(0,50,100...)，num=每页条数(最大50)，start=(page-1)*num
             $start = 0;
             $num = 50;
-            $worksList = $this->apiService->getDesignerWorks($start,$num);
-            app('log')->info('当前处理设计师方案 第 '.($start + 1).' - '.($start + $num).' 条数据。共有：'.$worksList['count'].'条数据');
+            $fetchedKeys = []; // 本次拉取到的 design_id|plan_id 集合，用于无数据删除
+            $worksList = $this->apiService->getDesignerWorks($start, $num);
             if($worksList) {
-                // 如果有更多数据的话
-                $this->preProcDesignerWorks($worksList);
-                // 如果还有数据，继续抓取
-                while ($worksList['hasMore']) {
+                $batch = $this->preProcDesignerWorks($worksList);
+                foreach ($batch as $pair) {
+                    $fetchedKeys[$pair['design_id'] . '|' . $pair['plan_id']] = true;
+                }
+                while (!empty($worksList['hasMore'])) {
                     $start += $num;
-                    $worksList = $this->apiService->getDesignerWorks($start,$num);
-                    app('log')->info('当前处理设计师方案 第 '.($start + 1).' - '.($start + $num).' 条数据。共有：'.$worksList['count'].'条数据');
-                    if ($worksList) {
-                        // 如果有更多数据的话
-                        $this->preProcDesignerWorks($worksList);
+                    $worksList = $this->apiService->getDesignerWorks($start, $num);
+                    if (!$worksList || empty($worksList['result'])) {
+                        break; // 本页无数据则结束，避免 API 异常导致死循环
+                    }
+                    $batch = $this->preProcDesignerWorks($worksList);
+                    foreach ($batch as $pair) {
+                        $fetchedKeys[$pair['design_id'] . '|' . $pair['plan_id']] = true;
+                    }
+                }
+            }
+
+            // 无数据删除：仅当本次有拉取到数据时，删除库中有但本次未拉到的作品
+            if (!empty($fetchedKeys)) {
+                $workService = new KujialeDesignerWorksService();
+                $dbWorks = $workService->getLists([]);
+                foreach ($dbWorks as $row) {
+                    $key = $row['design_id'] . '|' . $row['plan_id'];
+                    if (empty($fetchedKeys[$key])) {
+                        $workService->deleteWorkAndRelated($row['design_id'], $row['plan_id']);
                     }
                 }
             }
@@ -136,7 +162,7 @@ class DesignerWorksScriptService
                             $goods_rel = [
                                 'picId' => $work['pic_id'],
                                 'obsBrandGoodId' => $godds
-                            ]; 
+                            ];
                             $picService->saveGoodsRel($goods_rel);
                         }
                     }

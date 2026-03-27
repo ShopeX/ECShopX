@@ -47,18 +47,19 @@ class PaymentNotify extends Controller
         // 获取tradeInfo
         $tradeService = new TradeService();
         $tradeInfo = $tradeService->getInfo(['trade_id' => $data['out_trade_no']]);
-        $regionauthId = $tradeInfo['regionauth_id'] ?? 0;
+        // $regionauthId = $tradeInfo['regionauth_id'] ?? 0;
+        // 必须用订单的 distributor_id 取支付配置，与下单时一致；若误传 regionauth_id 会命中错误的 Redis key，拿到错误 API key 导致验签失败
         $distributorId = $tradeInfo['distributor_id'] ?? 0;
-        $services = new WechatPayService($regionauthId, $distributorId);
+        $services = new WechatPayService($distributorId, true);
         if ($companyId) {
             $payment = $services->getPayment($data['appid'], $data['appid'], $companyId);
         } else {
             if ($data['trade_type'] == 'APP') {
                 $companyId = app('redis')->get('wechatAppPayment:companyId:' . $data['appid']);
-                $services = new WechatAppPayService($regionauthId, $distributorId);
+                $services = new WechatAppPayService($distributorId, true);
             } else {
                 $companyId = app('redis')->get('wechatPayment:companyId:' . $data['appid']);
-                $services = new WechatH5PayService($regionauthId, $distributorId);
+                $services = new WechatH5PayService($distributorId, true);
             }
 
             if (!$companyId) {

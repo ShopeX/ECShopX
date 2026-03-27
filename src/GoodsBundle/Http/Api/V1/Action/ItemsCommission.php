@@ -88,7 +88,7 @@ class ItemsCommission extends Controller
      *                          @SWG\Property( property="goods_id", type="string", example="normal", description="货品id"),
      *                          @SWG\Property( property="commission_type", type="string", example="every", description="佣金计算方式 1:按照比例,2:按照填写金额"),
      *                          @SWG\Property( property="commission", type="string", example="", description="佣金"),
-     *                          @SWG\Property( property="sku_commission", type="array", example="", description="sku佣金"),
+     *                          @SWG\Property( property="sku_commission", type="array", description="sku佣金", @SWG\Items(type="object")),
      *                          
      *                       ),
      *                  ),

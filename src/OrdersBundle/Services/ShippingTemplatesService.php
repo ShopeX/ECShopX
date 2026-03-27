@@ -753,4 +753,14 @@ class ShippingTemplatesService
         }
         return $nodes_found;
     }
+
+    /**
+     * 获取运费模板信息
+     * @param array $filter 查询条件
+     * @return mixed
+     */
+    public function getShippingTemplateInfo(array $filter)
+    {
+        return $this->shippingTemplatesRepository->getInfo($filter);
+    }
 }

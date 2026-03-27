@@ -2871,7 +2871,8 @@ class WxappOrder extends Controller
      * @SWG\Post(
      *     path="/order/cancel/deliverystaff",
      *     summary="取消配送",
-     *
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function cancelDeliveryStaff(Request $request)
     {
@@ -2912,7 +2913,8 @@ class WxappOrder extends Controller
      * @SWG\Post(
      *     path="/order/deliverypackag/confirm",
      *     summary="订单打包确认",
-     *
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function confirmDeliveryPackag(Request $request)
     {
@@ -3047,7 +3049,6 @@ class WxappOrder extends Controller
      *     @SWG\Parameter(name="pay_sn", in="path", description="付款流水单号", required=false, type="string"),
      *     @SWG\Parameter(name="voucher_pic", in="path", description="凭证图片", required=true, type="string"),
      *     @SWG\Parameter(name="transfer_remark", in="path", description="转账备注", required=false, type="string"),
-     *     ),
      *     @SWG\Response(response=200, description="成功返回结构", @SWG\Schema(type="object", @SWG\Property(property="status", type="string", description="状态"))),
      * )
      */

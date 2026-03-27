@@ -160,7 +160,9 @@ class DeliveryStaffData extends BaseController
       * @SWG\Get(
       *     path="/datacube/Deliverystaffdata/export",
       *     summary="获取配送员统计列表",
-      **/
+      *     @SWG\Response(response=200, description="成功"),
+      * )
+      */
     public function exportDeliverystaffdata(Request $request)
     {
         $merchantId = app('auth')->user()->get('merchant_id');

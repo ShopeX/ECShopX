@@ -51,7 +51,7 @@ $api->version('v1', function ($api) {
         // 拼团活动
         $api->get('/promotions/groups', ['name'=>'获取拼团活动列表','middleware' => 'activated', 'as' => 'promotions.groups.list', 'uses' => 'PromotionGroupsActivity@getPromotionGroupsActivityList']);
         $api->get('/promotions/groups/{groupId}', ['name'=>'获取拼团活动详情','middleware' => 'activated', 'as' => 'promotions.groups.detail', 'uses' => 'PromotionGroupsActivity@getPromotionGroupsActivityDetail']);
-        $api->get('/promotions/groups/{groupId}/team/', ['name'=>'获取拼团数据详情','middleware' => 'activated', 'as' => 'promotions.groups.teamlist', 'uses' => 'PromotionGroupsActivity@getPromotionGroupsTeamList']);
+        $api->get('/promotions/groups/{groupId}/team', ['name'=>'获取拼团数据详情','middleware' => 'activated', 'as' => 'promotions.groups.teamlist', 'uses' => 'PromotionGroupsActivity@getPromotionGroupsTeamList']);
         $api->get('/promotions/groups/team/{teamId}', ['name'=>'获取拼团数据成员详情','middleware' => 'activated', 'as' => 'promotions.groups.teaminfo', 'uses' => 'PromotionGroupsActivity@getPromotionGroupsTeamInfo']);
         $api->post('/promotions/groups', ['name'=>'创建拼团活动','middleware' => 'activated', 'as' => 'promotions.groups.create', 'uses' => 'PromotionGroupsActivity@createPromotionGroupsActivity']);
         $api->put('/promotions/groups/{groupId}', ['name'=>'更新拼团活动','middleware' => 'activated', 'as' => 'promotions.groups.update', 'uses' => 'PromotionGroupsActivity@updatePromotionGroupsActivity']);

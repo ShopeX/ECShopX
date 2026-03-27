@@ -64,7 +64,7 @@ class SettingService
      */
     function getSetting($companyId, $keyname){
         if(app('redis')->hget('ugc_setting:'.$companyId, $keyname)??null){
-            return app('redis')->hget('ugc_setting',$keyname);
+            return app('redis')->hget('ugc_setting:'.$companyId,$keyname);
         }
         else{
             $result=$this->entityRepository->getInfo(['keyname'=>$keyname]);

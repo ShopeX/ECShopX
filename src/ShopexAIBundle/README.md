@@ -1,17 +1,10 @@
 # ShopexAI Bundle
 
-本Bundle为shopex提供AI文章生成和图片生成功能，适用于PHP 7.4及以上版本。
+本Bundle为shopex提供AI文章生成和图片生成功能，适用于PHP 8.2及以上版本。
 
-## PHP 7.4 适配说明
+## PHP 8.2 说明
 
-
-### 使用注意事项
-
-1. PHP 7.4 不支持联合类型声明（Union Types），如果后续开发中需要使用，请改用文档注释（PHPDoc）的方式
-2. PHP 7.4 不支持构造函数属性提升（Constructor Property Promotion），需要分开声明属性和构造函数参数
-3. PHP 7.4 不支持命名参数（Named Arguments），调用函数时请使用位置参数
-4. PHP 7.4 不支持match表达式，请使用switch-case语句
-5. PHP 7.4 支持空值合并赋值运算符（??=）、箭头函数，可以继续使用
+PHP 8.2 支持联合类型、构造函数属性提升、命名参数、match 表达式等特性，可正常使用。
 
 ## 功能介绍
 

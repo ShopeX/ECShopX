@@ -21,6 +21,8 @@ $api->version('v1', function($api) {
         $api->put('/distributor/{distributor_id}/payment-subject', ['name' => '设置店铺收款主体','middleware'=>'activated', 'as' => 'distributor.payment.subject.set', 'uses'=>'Distributor@setPaymentSubject']);
         $api->get('/distributor/count/{distributorId}', ['name' => '获取店铺统计','middleware'=>'activated', 'as' => 'front.wxapp.distributor.count', 'uses'=>'Distributor@getDistributorCount']);
         $api->get('/distributor/wxacode',  ['name' => '获取店铺小程序码','middleware'=>'activated', 'as' => 'distributor.wxacode',           'uses'=>'Distributor@getWxaDistributorCodeStream']);
+        $api->post('/distributor/list/background', ['name' => '保存门店列表背景图','middleware'=>'activated', 'as' => 'distributor.list.background.save', 'uses'=>'Distributor@saveDistributorListBackground']);
+        $api->get('/distributor/list/background', ['name' => '获取门店列表背景图','middleware'=>'activated', 'as' => 'distributor.list.background.get', 'uses'=>'Distributor@getDistributorListBackground']);
 
         $api->get('/distributor/easylist',                 ['name' => '获取店铺简易列表','middleware'=>'activated',  'as' => 'distributor.easy.list',    'uses'=>'Distributor@getEasyList']);
 
@@ -59,6 +61,13 @@ $api->version('v1', function($api) {
         $api->post('/distributor/reltag', ['name'=> '店铺关联标签','middleware'=>'activated', 'as' => 'distributor.tag.rel', 'uses' =>'DistributorTags@tagsRelDistributor']);
         // 店铺与店铺标签做解绑
         $api->post('/distributor/deltag', ['name'=> '店铺与店铺标签做解绑','middleware'=>'activated', 'as' => 'distributor.tag.del', 'uses' =>'DistributorTags@tagsRemoveDistributor']);
+
+        // 店铺分类
+        $api->post('/distributor/category', ['name' => '新增店铺分类', 'middleware' => 'activated', 'as' => 'distributor.category.create', 'uses' => 'DistributorCategory@createCategory']);
+        $api->put('/distributor/category/{categoryId}', ['name' => '更新店铺分类', 'middleware' => 'activated', 'as' => 'distributor.category.update', 'uses' => 'DistributorCategory@updateCategory']);
+        $api->delete('/distributor/category/{categoryId}', ['name' => '删除店铺分类', 'middleware' => 'activated', 'as' => 'distributor.category.delete', 'uses' => 'DistributorCategory@deleteCategory']);
+        $api->get('/distributor/category', ['name' => '获取店铺分类列表', 'middleware' => 'activated', 'as' => 'distributor.category.list', 'uses' => 'DistributorCategory@getCategoryList']);
+        $api->get('/distributor/category/{categoryId}', ['name' => '获取店铺分类详情', 'middleware' => 'activated', 'as' => 'distributor.category.get', 'uses' => 'DistributorCategory@getCategoryInfo']);
 
         //店铺门店相关接口开始
         $api->post('/shops',                 ['name' => '创建店铺门店','middleware'=>'activated',  'as' => 'shops.create',  'uses'=>'DistributorShopController@createShops']);

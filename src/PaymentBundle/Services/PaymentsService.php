@@ -410,7 +410,7 @@ class PaymentsService
         $bsPaySetting = $bsPayService->getPaymentSetting($company_id);
         $bsPayPayment = [];
         if ($bsPaySetting && $bsPaySetting['is_open']) {
-            $bsPayPayment = $bsPaySetting['pay_channel'];
+            $bsPayPayment = explode(',', $bsPaySetting['pay_channel']);
         }
 
         // PayPal支付
@@ -630,13 +630,13 @@ class PaymentsService
                 break;
             case 'wxMiniProgram':
             default:
-                if (in_array('wx_lite', $adaPayPayment)) {
+                if (!empty($adaPayPayment) && in_array('wx_lite', $adaPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'adapay',
                         'pay_channel' => 'wx_lite',
                         'pay_type_name' => $lang == 'en-CN' ? 'WeChat Pay' : '微信支付'
                     ];
-                } elseif (in_array('wx_lite', $bsPayPayment)) {
+                } elseif (!empty($bsPayPayment) && in_array('wx_lite', $bsPayPayment)) {
                     $result[] = [
                         'pay_type_code' => 'bspay',
                         'pay_channel' => 'wx_lite',

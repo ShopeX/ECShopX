@@ -9,6 +9,13 @@
             <directory suffix="Test.php">./tests</directory>
         </testsuite>
     </testsuites>
+    <listeners>
+        <listener class="TddGuard\PHPUnit\TddGuardListener">
+            <arguments>
+                <string></string>
+            </arguments>
+        </listener>
+    </listeners>
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="CACHE_DRIVER" value="array"/>

@@ -80,6 +80,12 @@ class ItemsCategory extends BaseController
      *                        description="图片url",
      *                        type="string"
      *                    ),
+     *                    @SWG\Property(
+     *                        property="is_show_front",
+     *                        description="是否前台展示，0=不展示，1=展示；不传时默认1",
+     *                        type="integer",
+     *                        enum={0, 1}
+     *                    ),
      *               )
      *           )
      *      )
@@ -118,6 +124,7 @@ class ItemsCategory extends BaseController
             'form.*.category_name' => ['required', '分类名称必填'],
             'form.*.sort' => ['sometimes', ''],
             'form.*.image_url' => ['sometimes', ''],
+            'form.*.is_show_front' => ['sometimes', ''],
         ];
         $params['form'] = $request->input('form');
         $params['company_id'] = $request->input('company_id');
@@ -125,6 +132,9 @@ class ItemsCategory extends BaseController
         $errorMessage = validator_params($params, $rules);
         if ($errorMessage) {
             throw new ResourceException($errorMessage);
+        }
+        if ( isset($params['form']['customize_page_id']) && empty($params['form']['customize_page_id'])) {
+            $params['form']['customize_page_id'] = 0;
         }
         $result = $itemsCategoryService->saveItemsCategory($params['form'], $params['company_id'], $params['distributor_id']);
         return $this->response->array($result);
@@ -393,6 +403,7 @@ class ItemsCategory extends BaseController
      *     @SWG\Parameter(in="formData", description="路径", name="path", type="string"),
      *     @SWG\Parameter(in="formData", description="图片地址", name="image_url", type="string"),
      *     @SWG\Parameter(in="formData", description="排序", name="sort", type="string"),
+     *     @SWG\Parameter(in="formData", description="是否前台展示，0=不展示，1=展示", name="is_show_front", type="integer"),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",

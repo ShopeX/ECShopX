@@ -1,0 +1,1 @@
+"""Tests for TDD Guard pytest reporter."""

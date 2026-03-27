@@ -38,13 +38,75 @@ ECShopX is an open-source e-commerce system developed by ShopeX, leveraging 23 y
 * Open API: Provide a rich set of RESTful APIs to facilitate integration with third-party systems such as ERP, WMS, CRM, etc.
 * Modular design: The core functions are highly modular, making it easy to perform secondary development and extend functionalities.
 
-## System Requirements
-- php >= 7.4
+## Docker Deployment (Recommended)
+
+Use the automated deployment script to quickly set up a development environment, including PHP, Nginx, MySQL, Redis, and other services.
+
+### Prerequisites
+- Software: Docker and Docker Compose (Docker Desktop is recommended for macOS)
+- System: macOS or Linux
+
+### Quick Installation
+
+```bash
+curl -fsSL https://oss.shopex.cn/ecx/install.sh | bash
+```
+- Follow the script prompts to deploy the system
+
+The script will automatically:  
+1. Check the Docker environment  
+2. Clone the frontend projects (if not already present)  
+3. Start Docker containers (PHP, Nginx, MySQL, Redis)  
+4. Configure the PHP application (install dependencies, run database migrations, initialize admin password)  
+5. Build frontend projects (Admin panel, H5, PC storefront)
+
+### Script Options
+
+```bash
+bash dev-setup.sh --rebuild    # Rebuild images
+bash dev-setup.sh --skip-admin # Skip admin panel build
+bash dev-setup.sh --skip-vshop # Skip mobile storefront (H5) build
+bash dev-setup.sh --skip-pc    # Skip PC storefront build
+```
+
+### Access URLs
+- **Admin Panel**: http://localhost:8080
+- **H5 Frontend**: http://localhost:8081
+- **PC Frontend**: http://localhost:8082
+- **API Endpoint**: http://localhost:8080/api/
+
+```bash
+# View logs
+docker-compose -f docker-compose.dev.yml logs -f
+
+# Check service status
+docker exec ecshopx-dev supervisorctl status
+
+# Enter container
+docker exec -it ecshopx-dev sh
+
+# Stop services
+docker-compose -f docker-compose.dev.yml down
+
+# Restart services
+docker-compose -f docker-compose.dev.yml restart
+```
+
+### Notes
+
+- The initial deployment may take 10–30 minutes (downloading images, installing dependencies, building frontend)
+- Frontend projects will be cloned to a directory at the same level as the current project
+- You will be prompted to set an admin password during the script execution
+- Ensure ports 8080, 8081, 8082, 3306, and 6379 are not in use
+
+## Manual Deployment
+
+### System Requirements
+- php >= 8.2
 - lumen = 8.3
 - mysql >= 5.7
 - redis >= 4.0
   
-## Installation Guide
 ### Configure the .env file
 * Update database settings
 * Update Redis settings

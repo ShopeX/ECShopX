@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": "node .cursor/hooks/cursor-adapter.js",
+        "matcher": "Write|Edit|MultiEdit"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node .cursor/hooks/cursor-adapter.js"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "node .cursor/hooks/cursor-adapter.js"
+      }
+    ]
+  }
+}

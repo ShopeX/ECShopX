@@ -3623,7 +3623,8 @@ class Order extends Controller
       * @SWG\Post(
       *     path="/order/deliverystaff/confirm",
       *     summary="订单自配送员确认",
-      *
+      *     @SWG\Response(response=200, description="成功"),
+      * )
       */
     public function confirmDeliveryStaff(Request $request)
     {
@@ -3672,7 +3673,8 @@ class Order extends Controller
      * @SWG\Post(
      *     path="/order/cancel/deliverystaff",
      *     summary="订单自配送员确认",
-     *
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function cancelDeliveryStaff(Request $request)
     {
@@ -3715,7 +3717,8 @@ class Order extends Controller
      * @SWG\Post(
      *     path="/order/deliverypackag/confirm",
      *     summary="订单打包确认",
-     *
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function confirmDeliveryPackag(Request $request)
     {

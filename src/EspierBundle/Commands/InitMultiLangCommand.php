@@ -66,7 +66,8 @@ class InitMultiLangCommand extends Command
 
     // 写入config/langue.php
     private function writeLangueConfig($lang){
-        $config = config('langue');
+        $config = config('langue.list') ?? config('langue');
+        $config = is_array($config) ? $config : [];
         // 如果语言已存在，则不重复添加
         if (!in_array($lang, $config)) {
             $config[] = $lang;

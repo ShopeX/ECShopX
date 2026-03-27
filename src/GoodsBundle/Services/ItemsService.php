@@ -183,6 +183,12 @@ class ItemsService
                 // 如果有外部的商品ID则表示为更新，否则为强制刷新
                 $isForceCreate = (isset($params['item_id']) && $params['item_id']) ? false : true;
                 $isMiniPrice = 0;
+                // 多规格场景，goods_bn如果为空则生成一个唯一值
+                if ( empty($data['goods_bn'])) {
+                    if ( method_exists($this->itemtypeObject, '__getBn')) {
+                        $data['goods_bn'] = $this->itemtypeObject->__getBn('PC');
+                    }
+                }
                 foreach ($specItems as $row) {
                     $itemsResult = $this->createItems($data, $row, $isForceCreate);
                     $itemIds[] = $itemsResult['item_id'];
@@ -3178,6 +3184,71 @@ class ItemsService
             $v['store'] = array_sum($goods_num[$v['goods_id']]);
         }
         return $result;
+    }
+
+    /**
+     * 模板组件等仅含默认子品的列表：多规格商品按 goods_id + distributor_id 汇总全部子品库存，避免默认子品无库存时误置灰。
+     *
+     * @param array $list getItemListData 等返回的列表行（须含 company_id、goods_id、distributor_id、nospec、store）
+     * @return array
+     */
+    public function applyMultiSpecTotalStoreForItemList(array $list)
+    {
+        if (!$list) {
+            return $list;
+        }
+        $companyId = $list[0]['company_id'] ?? null;
+        if ($companyId === null || $companyId === '') {
+            return $list;
+        }
+        $goodsIds = [];
+        foreach ($list as $row) {
+            if (!$this->isWidgetListItemMultiSpec($row['nospec'] ?? null)) {
+                continue;
+            }
+            $gid = $row['goods_id'] ?? null;
+            if ($gid !== null && $gid !== '') {
+                $goodsIds[$gid] = true;
+            }
+        }
+        if (!$goodsIds) {
+            return $list;
+        }
+        $rsGoods = $this->itemsRepository->getLists(
+            ['company_id' => $companyId, 'goods_id' => array_keys($goodsIds)],
+            'goods_id, distributor_id, store'
+        );
+        $sumByPair = [];
+        foreach ($rsGoods as $goods) {
+            $key = $goods['goods_id'] . '_' . (int) ($goods['distributor_id'] ?? 0);
+            if (!isset($sumByPair[$key])) {
+                $sumByPair[$key] = 0;
+            }
+            $sumByPair[$key] += (int) ($goods['store'] ?? 0);
+        }
+        foreach ($list as $k => $v) {
+            if (!$this->isWidgetListItemMultiSpec($v['nospec'] ?? null)) {
+                continue;
+            }
+            $gid = $v['goods_id'] ?? null;
+            if ($gid === null || $gid === '') {
+                continue;
+            }
+            $key = $gid . '_' . (int) ($v['distributor_id'] ?? 0);
+            if (array_key_exists($key, $sumByPair)) {
+                $list[$k]['store'] = $sumByPair[$key];
+            }
+        }
+
+        return $list;
+    }
+
+    /**
+     * @param mixed $nospec 与 Items 实体一致：true/1/'true' 为单规格，false/0/'false' 为多规格
+     */
+    private function isWidgetListItemMultiSpec($nospec): bool
+    {
+        return $nospec === false || $nospec === 'false' || $nospec === 0 || $nospec === '0';
     }
 
     /**

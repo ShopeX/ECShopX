@@ -2447,8 +2447,8 @@ class MemberService
                 'user_type' => 'wechat',
             ];
             $associations = $membersAssocRepository->lists($filter, 'user_id,unionid');
-            if (!empty($associations['list'])) {
-                foreach ($associations['list'] as $assoc) {
+            if (!empty($associations)) {
+                foreach ($associations as $assoc) {
                     if (!empty($assoc['unionid'])) {
                         $unionidMap[$assoc['user_id']] = $assoc['unionid'];
                     }

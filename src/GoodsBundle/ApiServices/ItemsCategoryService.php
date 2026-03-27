@@ -22,6 +22,7 @@ use GoodsBundle\Entities\ItemRelAttributes;
 use PointsmallBundle\Entities\PointsmallItemRelAttributes;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Events\ItemCategoryAddEvent;
+use GoodsBundle\Services\ItemsAttributesService;
 use GoodsBundle\Services\ItemsRelCatsService;
 
 class ItemsCategoryService
@@ -123,8 +124,10 @@ class ItemsCategoryService
 
     /**
      * 获取单个分类信息
+     * @param array $filter 过滤条件
+     * @param int $itemId 商品ID，默认为0。如果不为0，则goods_spec下的attribute_values只返回该商品关联的属性值
      */
-    public function getCategoryInfo($filter)
+    public function getCategoryInfo($filter, $itemId = 0)
     {
         $itemInfo = $this->itemsCategoryRepository->getInfo($filter);
         if (!$itemInfo) {
@@ -136,8 +139,7 @@ class ItemsCategoryService
         }
 
         $itemsAttributesService = new ItemsAttributesService();
-        $attrList = $itemsAttributesService->getAttrList(['attribute_id' => $attributeIds], 1, 100);
-        
+        $attrList = $itemsAttributesService->getAttrList(['attribute_id' => $attributeIds], 1, 100, ['attribute_sort' => 'asc'], $itemId);
         $itemInfo['goods_params'] = [];
         $itemInfo['goods_spec'] = [];
         foreach ($attrList['list'] as $row) {
@@ -276,6 +278,9 @@ class ItemsCategoryService
                 'parent_id_taobao' => $row['parent_id_taobao'] ?? 0,
                 'taobao_category_info' => json_encode($row['taobao_category_info'] ?? []),
             ];
+            if (array_key_exists('is_show_front', $row)) {
+                $params['is_show_front'] = $row['is_show_front'];
+            }
             if (isset($row['category_id']) && $row['category_id']) {
                 $result = $this->itemsCategoryRepository->updateOneBy(['category_id' => $row['category_id'], 'company_id' => $companyId], $params);
             } else {

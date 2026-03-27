@@ -18,6 +18,7 @@
 namespace SuperAdminBundle\Services;
 
 use CompanysBundle\Entities\Companys;
+use CompanysBundle\Services\CommonLangModService;
 use Dingo\Api\Exception\DeleteResourceFailedException;
 use SuperAdminBundle\Entities\ShopMenu;
 use Dingo\Api\Exception\StoreResourceFailedException;
@@ -350,17 +351,36 @@ class ShopMenuService
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
-            //删除原来的菜单
+            //删除原来的菜单：分页取全量 shopmenu_id → 先分批删 rel → 再按 condition 删主表
             if ($data) {
                 $versions = array_column($data, 'version');
                 $versions = array_unique($versions);
                 $filter = ['version' => $versions, 'company_id' => $company_id];
-                $shopMenuList = $this->shopMenuRepository->lists($filter);
-                if (!empty($shopMenuList['list'])) {
-                    $shopMenuIdList = array_column($shopMenuList['list'], 'shopmenu_id');
-                    $this->shopMenuRepository->deleteBy(['shopmenu_id' => $shopMenuIdList]);
-                    $this->shopMenuRelTypeRepository->deleteBy(['shopmenu_id' => $shopMenuIdList]);
+                $pageSize = 5000;
+                $page = 1;
+                $shopMenuIdList = [];
+                do {
+                    $shopMenuList = $this->shopMenuRepository->lists($filter, '*', $page, $pageSize, []);
+                    if (empty($shopMenuList['list'])) {
+                        break;
+                    }
+                    $shopMenuIdList = array_merge($shopMenuIdList, array_column($shopMenuList['list'], 'shopmenu_id'));
+                    $page++;
+                } while (count($shopMenuList['list']) >= $pageSize);
+                // 先删 rel 表（分批，每批 2000）
+                foreach (array_chunk($shopMenuIdList, 2000) as $chunk) {
+                    $this->shopMenuRelTypeRepository->deleteBy(['shopmenu_id' => $chunk]);
                 }
+                // 删主表前：对 shopMenuIdList 逐条、每 config 语种清理多语言表，避免再次导入同 version+company 时残留
+                $langues = config('langue.list') ?? config('langue') ?: [];
+                $commonLang = new CommonLangModService();
+                foreach ($shopMenuIdList as $shopmenu_id) {
+                    foreach ($langues as $langue) {
+                        $commonLang->deleteLang($company_id, 'shop_menu', $shopmenu_id, 'shop_menu', $langue);
+                    }
+                }
+                // 再删主表
+                $this->shopMenuRepository->deleteBy(['version' => $versions, 'company_id' => $company_id]);
             }
 
             $menuIdMapping = [];//菜单新旧ID的映射关系
@@ -414,6 +434,17 @@ class ShopMenuService
                             'company_id'  => $company_id
                         ];
                         $this->shopMenuRelTypeRepository->create($createData);
+                    }
+                    // 多语言：仅当 name_lang 存在且为数组时，对 config 每语种若有值则 saveLang；否则仅主表 name（向后兼容）
+                    if (isset($row['name_lang']) && is_array($row['name_lang'])) {
+                        $langues = config('langue.list') ?? config('langue') ?: [];
+                        $commonLang = new CommonLangModService();
+                        foreach ($langues as $langue) {
+                            $value = $row['name_lang'][$langue] ?? '';
+                            if ($value !== '' && $value !== null) {
+                                $commonLang->saveLang($company_id, ['name' => $value], 'shop_menu', (int) $insert['shopmenu_id'], 'shop_menu', $langue);
+                            }
+                        }
                     }
                 } else {
                     throw new StoreResourceFailedException($row['name'].'菜单唯一标识不能为空');
@@ -611,6 +642,42 @@ class ShopMenuService
         }
 
         return $tree;
+    }
+
+    /**
+     * 为导出用 list 补全主表 name 与各语种 name_lang（config 全语种），保证 list[].name 与 shop_menu.name 一致。
+     *
+     * @param array $list getShopMenu 返回的 list
+     * @return array 每项含 name（主表）、name_lang（键为 config 语言码）
+     */
+    public function enrichListForExport(array $list): array
+    {
+        if (empty($list)) {
+            return [];
+        }
+        $langues = config('langue.list') ?? config('langue') ?: [];
+        $shopmenuIds = array_values(array_unique(array_column($list, 'shopmenu_id')));
+        $rawRepo = app('registry')->getManager('default')->getRepository(ShopMenu::class);
+        $mainNames = $rawRepo->getMainTableNamesByShopmenuIds($shopmenuIds);
+        $commonLang = new CommonLangModService();
+        foreach ($list as &$item) {
+            $sid = $item['shopmenu_id'] ?? null;
+            $cid = $item['company_id'] ?? 0;
+            $item['name'] = $mainNames[$sid] ?? $item['name'] ?? '';
+            $item['name_lang'] = [];
+            foreach ($langues as $langue) {
+                $item['name_lang'][$langue] = $commonLang->getFieldByLangue(
+                    $cid,
+                    $langue,
+                    'name',
+                    $sid,
+                    'shop_menu',
+                    'shop_menu'
+                ) ?: '';
+            }
+        }
+        unset($item);
+        return $list;
     }
 
     public function getApisByShopmenuAliasName($filter)

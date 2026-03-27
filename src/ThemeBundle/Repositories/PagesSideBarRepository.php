@@ -244,10 +244,10 @@ class PagesSideBarRepository extends EntityRepository
      */
     public function lists($filter, $cols = '*', $page = 1, $pageSize = -1, $orderBy = array())
     {
-        $result['total'] = $this->count($filter);
+        $result['total_count'] = $this->count($filter);
         $result['list'] = [];
         
-        if ($result['total'] > 0) {
+        if ($result['total_count'] > 0) {
             $result['list'] = $this->getLists($filter, $cols, $page, $pageSize, $orderBy);
         }
         

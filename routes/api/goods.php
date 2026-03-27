@@ -48,7 +48,9 @@ $api->version('v1', function($api) {
         // 分类
         $api->get('/goods/category', ['name'=> '获取商品分类列表', 'as' => 'goods.category.lists', 'uses' => 'ItemsCategory@getCategory']);
         $api->get('/goods/category/{category_id}', ['name'=> '获取单条分类数据', 'as' => 'goods.category.get', 'uses' => 'ItemsCategory@getCategoryInfo']);
+        $api->get('/goods/category/saleable-filter/get', ['name'=> '获取分类可售过滤开关', 'as' => 'goods.category.saleable_filter.get', 'uses' => 'ItemsCategory@getSaleableCategoryFilterStatus']);
         $api->post('/goods/category', ['name' => '添加分类', 'as' => 'goods.category.create', 'uses' => 'ItemsCategory@createCategory']);
+        $api->post('/goods/category/saleable-filter', ['name' => '设置分类可售过滤开关', 'as' => 'goods.category.saleable_filter.set', 'uses' => 'ItemsCategory@setSaleableCategoryFilterStatus']);
         $api->post('/goods/createcategory', ['name' => '添加分类', 'as' => 'goods.createcategory.create', 'uses' => 'ItemsCategory@createClassification']);
         $api->delete('/goods/category/{category_id}', ['name' => '删除分类', 'as' => 'goods.category.delete', 'uses' => 'ItemsCategory@deleteCategory']);
         $api->put('/goods/category/{category_id}', ['name' => '更新单条分类信息', 'as' => 'goods.category.update', 'uses' => 'ItemsCategory@updateCategory']);

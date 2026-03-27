@@ -1,0 +1,200 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install PHP dependencies
+        working-directory: reporters/phpunit
+        run: composer install --no-progress --no-suggest
+
+      - name: Check JavaScript/TypeScript formatting
+        run: npm run format:check
+
+      - name: Check PHP formatting
+        working-directory: reporters/phpunit
+        run: composer run format:check
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install PHP dependencies
+        working-directory: reporters/phpunit
+        run: composer install --no-progress --no-suggest
+
+      - name: Run JavaScript/TypeScript linter
+        run: npm run lint:check
+
+      - name: Run PHP linter
+        working-directory: reporters/phpunit
+        run: composer run lint:check
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type checking
+        run: npm run typecheck
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.19'
+
+      - name: Install golangci-lint binary
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.3.1
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build workspace packages
+        run: npm run build --workspaces --if-present
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+  reporter-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build workspace packages
+        run: npm run build --workspaces --if-present
+
+      - name: Install PHPUnit dependencies
+        working-directory: reporters/phpunit
+        run: composer install --no-progress --no-suggest
+
+      - name: Set up Python virtual environment and install pytest
+        working-directory: reporters/pytest
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -e . pytest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89.0
+          components: rustfmt, clippy
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Build Rust reporter
+        working-directory: reporters/rust
+        run: cargo build --release
+
+      - name: Run reporter tests
+        run: npm run test:reporters
+
+  all-checks-pass:
+    name: All Checks Pass
+    runs-on: ubuntu-latest
+    needs: [format, lint, typecheck, unit-tests, reporter-tests]
+    steps:
+      - name: All checks passed
+        run: echo "All CI checks passed successfully!"

@@ -1,0 +1,30 @@
+---
+name: TDD Guard
+description: TDD Development Workflow
+alwaysApply: true
+priority: 4
+---
+
+## Overview
+
+TDD Guard is a Cursor hook that enforces Test-Driven Development by intercepting file operations.
+When your agent tries to skip tests or over-implement, TDD Guard blocks the action and explains what needs to happen instead.
+
+## Features
+- **Captures**: Intercepts Edit, MultiEdit, and Write operations
+- **Analyzes**: Examines test results, file paths, and code changes
+- **Validates**: Checks TDD compliance using an AI model
+- **Blocks**: Prevents operations that skip tests or over-implement
+- **Guides**: Explains violations and suggests corrections
+
+## When Blocked（被拦截时）
+
+当 hook 返回 block 时，Agent 必须：
+
+1. **读取 `reason`**：block 返回的 `reason` 中会说明违规原因与「正确的下一步」。
+2. **按 reason 执行**：在本会话内按「正确的下一步」操作（例如：仅添加最小实现、只加方法 stub、先建空类再跑测试），不得跳过或扩大范围。
+3. **禁止绕过**：不得通过执行脚本（如 `sed`、`echo` 重定向）或提示用户「请手动在 XXX 文件加入以下内容」等方式规避 Edit/Write 拦截。详见 **workflow.mdc** 的「Developer 约束」。
+
+## Hook 不可用时的行为
+
+当 tdd-guard hook 不可用（未安装、超时或执行错误）时：Developer 仍须按同一 TDD 规则自律执行（RED-GREEN-REFACTOR、一次一测、最小实现），仅不再有自动拦截；行为标准与 hook 启用时一致。

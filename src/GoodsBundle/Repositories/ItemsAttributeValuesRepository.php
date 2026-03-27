@@ -80,7 +80,8 @@ class ItemsAttributeValuesRepository extends EntityRepository
         if(isset($filter[$this->prk])){
             //更新数据
             $service = new MultiLangService();
-            $service->updateLangData($data,$this->table,$filter[$this->prk]);
+            $companyId = $entity->getCompanyId();
+            $service->updateLangData($data,$this->table,$filter[$this->prk],$companyId);
         }
 
         return $this->getColumnNamesData($entity);

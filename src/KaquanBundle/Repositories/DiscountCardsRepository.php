@@ -792,6 +792,9 @@ class DiscountCardsRepository extends EntityRepository
                 } else {
                     $data['vip_grade_ids'] = '';
                 }
+            } else {
+                $val = is_string($data['vip_grade_ids']) ? trim($data['vip_grade_ids'], ", \t\n\r") : $data['vip_grade_ids'];
+                $data['vip_grade_ids'] = ($val === '' || $val === '[]' || $val === null) ? '' : $data['vip_grade_ids'];
             }
             $entity->setVipGradeIds($data['vip_grade_ids']);
         }

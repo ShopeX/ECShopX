@@ -301,6 +301,8 @@ class CustomizePage extends Controller
                     $result['list'][$key]['category_name'] = $categoryList[$val['id']]['category_name'];
                 }
                 $result['list'][$key]['regionauth_name'] = $regionauthNameMap[$val['regionauth_id']] ?? '';
+                // DB / fetchAll 返回整型；对外与 Swagger 约定一致输出为字符串 "0" / "1"
+                $result['list'][$key]['is_open'] = (string) (int) ($val['is_open'] ?? 0);
             }
         }
         return $this->response->array($result);

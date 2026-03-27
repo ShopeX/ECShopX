@@ -24,7 +24,7 @@ $api->version('v1', function($api) {
         $api->get('/selfhelp/formtem', ['name'=>'获取表单模板列表', 'middleware'=>'activated',  'as' => 'selfhelp.template.list',  'uses'=>'FormTemplateController@getDatalist']);
         $api->get('/selfhelp/formtem/{id}', [ 'name'=>'获取表单模板详情','middleware'=>'activated',  'as' => 'selfhelp.template.info',  'uses'=>'FormTemplateController@getDataInfo']);
         $api->post('/selfhelp/formtem/discard/{id}', ['name'=>'废弃表单模板',  'middleware'=>'activated',  'as' => 'selfhelp.template.delete',  'uses'=>'FormTemplateController@deleteData']);
-        $api->post('/selfhelp/formtem/restore/{id}', ['name'=>'恢复表单模板',  'middleware'=>'activated',  'as' => 'selfhelp.template.delete',  'uses'=>'FormTemplateController@deleteData']);
+        $api->post('/selfhelp/formtem/restore/{id}', ['name'=>'恢复表单模板',  'middleware'=>'activated',  'as' => 'selfhelp.template.delete',  'uses'=>'FormTemplateController@restoreData']);
 
 
         $api->post('/selfhelp/setting/physical', ['name'=>'配置体测表单',  'middleware'=>'activated',  'as' => 'selfhelp.setting.physical.set',  'uses'=>'UserDailyRecordController@settingPhysical']);

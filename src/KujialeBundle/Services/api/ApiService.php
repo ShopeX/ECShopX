@@ -93,12 +93,12 @@ class ApiService
 
     /**
      * 获取设计师方案作品
+     * @param int $start 分页查询起始位置，从0开始。与页数关系：start=(page-1)*num
+     * @param int $num 分页窗口大小，最大50
      */
     public function getDesignerWorks($start, $num){
         $apiUrl = config('kujiale.apiUrl.designer_works');
-        // $tmp = $this->getData(['page' =>$start, 'pageSize' => $num],$apiUrl,'post');
-        return $this->getData(['page' => $start, 'pageSize' => $num],$apiUrl,'get');
-        // return $this->getData($params,$apiUrl,'post');
+        return $this->getData(['start' => $start, 'num' => $num], $apiUrl, 'get');
     }
 
     /**
@@ -136,6 +136,27 @@ class ApiService
     public function getDesignerWorksPicList($designId, $start = 0, $num = 50){
         $apiUrl = config('kujiale.apiUrl.designer_works_pic');
         return $this->getData(['design_id' => $designId , 'start' => $start, 'num' => $num],$apiUrl,'get');
+    }
+
+    /**
+     * 优秀方案搜索 POST designex/excellent/search
+     * @param array $params 支持: page(必填), pageSize(必填), orderType(必填), tagIds, key, cityIds, searchName, communityName, appuid, nodeId, filterType
+     * @return array|false 成功返回接口 d 字段，失败返回 false
+     */
+    public function excellentSearch(array $params)
+    {
+        $apiUrl = config('kujiale.apiUrl.excellent_search');
+        $body = [
+            'page' => (int)($params['page'] ?? 1),
+            'pageSize' => (int)($params['pageSize'] ?? 20),
+            'orderType' => (int)($params['orderType'] ?? 0),
+        ];
+        if (isset($params['tagIds']) && is_array($params['tagIds'])) {
+            $body['tagIds'] = $params['tagIds'];
+        }
+        
+        $body['filterType'] = 0;
+        return $this->getData($body, $apiUrl, 'post');
     }
 
     /**

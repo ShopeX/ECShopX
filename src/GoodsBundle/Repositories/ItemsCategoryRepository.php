@@ -167,9 +167,10 @@ class ItemsCategoryRepository extends EntityRepository
         $em->persist($entity);
         $em->flush();
 
-        if(isset($filter[$this->prk])){
+        if (isset($filter[$this->prk])) {
+            $companyId = $entity->getCompanyId();
             $service = new MultiLangService();
-            $service->updateLangData($data,'items_category',$filter[$this->prk]);
+            $service->updateLangData($data, 'items_category', $filter[$this->prk], $companyId);
         }
 
         return $this->getColumnNamesData($entity);
@@ -389,6 +390,8 @@ class ItemsCategoryRepository extends EntityRepository
         if (empty($categoryNames)) {
             return [];
         }
+
+        $categoryNames = array_map('trim', $categoryNames);
 
         $lang = $this->getLang();
         $multiLangItem = new MultiLangItem($lang);
@@ -662,6 +665,9 @@ class ItemsCategoryRepository extends EntityRepository
         if (isset($data["is_main_category"])) {
             $entity->setIsMainCategory($data["is_main_category"]);
         }
+        if (isset($data["is_show_front"])) {
+            $entity->setIsShowFront($data["is_show_front"]);
+        }
         if (isset($data["created"]) && $data["created"]) {
             $entity->setCreated($data["created"]);
         }
@@ -719,6 +725,7 @@ class ItemsCategoryRepository extends EntityRepository
             'path' => $entity->getPath(),
             'sort' => $entity->getSort(),
             'is_main_category' => $entity->getIsMainCategory(),
+            'is_show_front' => $entity->getIsShowFront(),
             'goods_params' => $entity->getGoodsParams() ? json_decode($entity->getGoodsParams(), true) : [],
             'goods_spec' => $entity->getGoodsSpec() ? json_decode($entity->getGoodsSpec(), true) : [],
             'category_level' => $entity->getCategoryLevel(),

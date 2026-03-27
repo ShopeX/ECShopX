@@ -52,55 +52,55 @@ class CompanysActivationEgo
     ];
 
     //延长本地开发环境的有效期
-    public function extendCompanyDemoLicense($companyId)
-    {
-        $upgradeEgo = new UpgradeEgo();
-        $license = $upgradeEgo->getSwooleLicense();
-        if (!isset($license['license_utype']) || $license['license_utype'] != 'developer') {
-            throw new ResourceException('只能延长开发版的有效期');
-        }
+    // public function extendCompanyDemoLicense($companyId)
+    // {
+    //     $upgradeEgo = new UpgradeEgo();
+    //     $license = $upgradeEgo->getSwooleLicense();
+    //     if (!isset($license['license_utype']) || $license['license_utype'] != 'developer') {
+    //         throw new ResourceException('只能延长开发版的有效期');
+    //     }
 
-        if (config('app.env') != 'local') {
-            throw new ResourceException('只能延长本地开发环境的有效期');
-        }
+    //     if (config('app.env') != 'local') {
+    //         throw new ResourceException('只能延长本地开发环境的有效期');
+    //     }
 
-        $resourcesRepository = app('registry')->getManager('default')->getRepository(Resources::class);
-        $data = app('redis')->connection('companys')->get($this->genReidsId($companyId));
-        if ($data) {
-            $data = json_decode($data, 1);
-            $data['resource_id'] = $data['resouce_id'];
-            if ($data['source'] != 'demo') {
-                throw new ResourceException('只能延长测试激活码的有效期');
-            }
-        } else {
-            $data = $resourcesRepository->getInfo(['company_id' => $companyId, 'source' => 'demo']);
-        }
-        if (!$data) {
-            throw new ResourceException('没有有效企业的信息');
-        }
+    //     $resourcesRepository = app('registry')->getManager('default')->getRepository(Resources::class);
+    //     $data = app('redis')->connection('companys')->get($this->genReidsId($companyId));
+    //     if ($data) {
+    //         $data = json_decode($data, 1);
+    //         $data['resource_id'] = $data['resouce_id'];
+    //         if ($data['source'] != 'demo') {
+    //             throw new ResourceException('只能延长测试激活码的有效期');
+    //         }
+    //     } else {
+    //         $data = $resourcesRepository->getInfo(['company_id' => $companyId, 'source' => 'demo']);
+    //     }
+    //     if (!$data) {
+    //         throw new ResourceException('没有有效企业的信息');
+    //     }
 
-        if ($data['expired_at'] > time()) {
-            throw new ResourceException('只能过期之后再延长有效期');
-        }
+    //     if ($data['expired_at'] > time()) {
+    //         throw new ResourceException('只能过期之后再延长有效期');
+    //     }
 
-        $data['expired_at'] = time() + 15*24*60*60;
-        $result = $resourcesRepository->update($data['resource_id'], $data);
-        if ($result) {
-            $this->saveLicenseRedis($result, $result['company_id']);
-        }
+    //     $data['expired_at'] = time() + 15*24*60*60;
+    //     $result = $resourcesRepository->update($data['resource_id'], $data);
+    //     if ($result) {
+    //         $this->saveLicenseRedis($result, $result['company_id']);
+    //     }
 
-        $companysService = new CompanysService();
-        $resources = $companysService->getCompanyLastResource($companyId);
-        $res = [
-            'company_id' => $companyId,
-            'expired_at' => $resources['expiredAt'],
-            'resouce_id' => $resources['resourceId'],
-            'source' => $resources['source'],
-        ];
-        app('redis')->connection('companys')->set($this->genReidsId($companyId), json_encode($res));
+    //     $companysService = new CompanysService();
+    //     $resources = $companysService->getCompanyLastResource($companyId);
+    //     $res = [
+    //         'company_id' => $companyId,
+    //         'expired_at' => $resources['expiredAt'],
+    //         'resouce_id' => $resources['resourceId'],
+    //         'source' => $resources['source'],
+    //     ];
+    //     app('redis')->connection('companys')->set($this->genReidsId($companyId), json_encode($res));
 
-        return true;
-    }
+    //     return true;
+    // }
 
     public function createDemoCompanyLicense($params)
     {
@@ -754,13 +754,13 @@ class CompanysActivationEgo
             'desc' => $type == 'purchased' ? '已购买' : '试用'
         ];
         // 免费版，返回验证成功
-        $upgradeEgo = new UpgradeEgo();
-        $license = $upgradeEgo->getSwooleLicense();
-        if (isset($license['Product_type']) && ($license['Product_type'] == 'ECSHOPX2_FREE')) {
-            $data['expired_at'] = strtotime('2037-01-01');
-            $data['desc'] = '已购买';
-            $data['valid'] = 'true';
-        }
+        // $upgradeEgo = new UpgradeEgo();
+        // $license = $upgradeEgo->getSwooleLicense();
+        // if (isset($license['Product_type']) && ($license['Product_type'] == 'ECSHOPX2_FREE')) {
+        //     $data['expired_at'] = strtotime('2037-01-01');
+        //     $data['desc'] = '已购买';
+        //     $data['valid'] = 'true';
+        // }
         return $data;
     }
 

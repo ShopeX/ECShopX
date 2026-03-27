@@ -25,12 +25,22 @@ use Dingo\Api\Exception\DeleteResourceFailedException;
 use Dingo\Api\Exception\StoreResourceFailedException;
 use Dingo\Api\Exception\UpdateResourceFailedException;
 use Dingo\Api\Exception\ResourceException;
+use GoodsBundle\Services\MultiLang\MagicLangTrait;
+use GoodsBundle\Services\MultiLang\MultiLangOutsideItemService;
 
 class OfflineBankAccountRepository extends EntityRepository
 {
+    use MagicLangTrait;
 
+    private $multiLangField = ['bank_account_name', 'bank_name', 'remark'];
     public $table = "offline_bank_account";
+    public $prk = 'id';
     public $cols = ['id','company_id','bank_account_name','bank_account_no','bank_name','china_ums_no','pic','remark','is_default','created','updated'];
+
+    public function getLangService()
+    {
+        return new MultiLangOutsideItemService($this->table, $this->table, $this->multiLangField);
+    }
     /**
      * 新增
      *
@@ -45,7 +55,10 @@ class OfflineBankAccountRepository extends EntityRepository
         $em->persist($entity);
         $em->flush();
 
-        return $this->getColumnNamesData($entity);
+        $dataRet = $this->getColumnNamesData($entity);
+        $this->getLangService()->addMultiLangByParams($dataRet[$this->prk], $data, $this->table);
+
+        return $dataRet;
     }
 
     /**
@@ -67,8 +80,12 @@ class OfflineBankAccountRepository extends EntityRepository
         $em->persist($entity);
         $em->flush();
 
+        if (isset($filter[$this->prk])) {
+            $this->getLangService()->updateLangData($data, $this->table, $filter[$this->prk]);
+        }
+
         return $this->getColumnNamesData($entity);
-     }
+    }
 
     /**
      * 更新多条数数据
@@ -78,15 +95,25 @@ class OfflineBankAccountRepository extends EntityRepository
      */
     public function updateBy(array $filter, array $data)
     {
-        $conn = app("registry")->getConnection("default");
-        $qb = $conn->createQueryBuilder()->update($this->table);
-        foreach($data as $key=>$val) {
-            $qb = $qb->set($key, $qb->expr()->literal($val));
+        $entityList = $this->findBy($filter);
+        if (!$entityList) {
+            throw new ResourceException("未查询到更新数据");
         }
 
-        $qb = $this->_filter($filter, $qb);
+        $em = $this->getEntityManager();
+        $result = [];
+        foreach ($entityList as $entityProp) {
+            $entityProp = $this->setColumnNamesData($entityProp, $data);
+            $em->persist($entityProp);
+            $em->flush();
+            $tmp = $this->getColumnNamesData($entityProp);
+            if (isset($tmp[$this->prk])) {
+                $this->getLangService()->updateLangData($data, $this->table, $tmp[$this->prk]);
+            }
+            $result[] = $tmp;
+        }
 
-        return $qb->execute();
+        return $result;
     }
 
     /**
@@ -214,6 +241,8 @@ class OfflineBankAccountRepository extends EntityRepository
               ->setMaxResults($pageSize);
         }
         $lists = $qb->execute()->fetchAll();
+        $lists = $this->getLangService()->getListAddLang($lists, $this->multiLangField, $this->table, $this->getLang(), $this->prk);
+
         return $lists;
      }
 
@@ -239,6 +268,7 @@ class OfflineBankAccountRepository extends EntityRepository
                   ->setMaxResults($pageSize);
             }
             $lists = $qb->execute()->fetchAll();
+            $lists = $this->getLangService()->getListAddLang($lists, $this->multiLangField, $this->table, $this->getLang(), $this->prk);
         }
         $result['list'] = $lists ?? [];
         return $result;
@@ -256,7 +286,12 @@ class OfflineBankAccountRepository extends EntityRepository
             return [];
         }
 
-        return $this->getColumnNamesData($entity);
+        $result = $this->getColumnNamesData($entity);
+        if ($result) {
+            $this->getLangService()->getOneLangData($result, $this->multiLangField, $this->table, $this->getLang(), $result[$this->prk], $this->table);
+        }
+
+        return $result;
      }
 
     /**
@@ -271,7 +306,12 @@ class OfflineBankAccountRepository extends EntityRepository
             return [];
         }
 
-        return $this->getColumnNamesData($entity);
+        $result = $this->getColumnNamesData($entity);
+        if ($result) {
+            $this->getLangService()->getOneLangData($result, $this->multiLangField, $this->table, $this->getLang(), $result[$this->prk], $this->table);
+        }
+
+        return $result;
      }
 
     /**

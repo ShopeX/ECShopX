@@ -327,6 +327,25 @@ class ShopMenuRepository extends EntityRepository
     }
 
     /**
+     * 根据 shopmenu_id 列表获取主表 name（未做多语言合并），用于导出时保证 list[].name 与主表一致。
+     *
+     * @param array $shopmenuIds
+     * @return array [shopmenu_id => name]
+     */
+    public function getMainTableNamesByShopmenuIds(array $shopmenuIds): array
+    {
+        if (empty($shopmenuIds)) {
+            return [];
+        }
+        $res = $this->lists(['shopmenu_id' => $shopmenuIds], 'shopmenu_id,name', 1, 5000);
+        $result = [];
+        foreach ($res['list'] ?? [] as $row) {
+            $result[$row['shopmenu_id']] = $row['name'] ?? '';
+        }
+        return $result;
+    }
+
+    /**
      * 设置entity数据，用于插入和更新操作
      *
      * @param $entity

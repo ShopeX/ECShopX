@@ -84,6 +84,13 @@ class Operators
     private $passport_uid;
 
     /**
+     * @var string|null
+     *
+     * @ORM\Column(name="shopex_bind_account", type="string", nullable=true, options={"comment":"可选绑定 Shopex 登录账号"})
+     */
+    private $shopex_bind_account;
+
+    /**
      * @var \DateTime $created
      *
      * @Gedmo\Timestampable(on="create")
@@ -310,6 +317,26 @@ class Operators
     public function getPassportUid()
     {
         return $this->passport_uid;
+    }
+
+    /**
+     * @param string|null $shopexBindAccount
+     *
+     * @return Operators
+     */
+    public function setShopexBindAccount($shopexBindAccount)
+    {
+        $this->shopex_bind_account = $shopexBindAccount;
+
+        return $this;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getShopexBindAccount()
+    {
+        return $this->shopex_bind_account;
     }
 
     /**

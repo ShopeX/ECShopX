@@ -48,6 +48,7 @@ use CompanysBundle\Ego\CompanysActivationEgo;
 use GoodsBundle\Services\ItemsCategoryService;
 use DistributionBundle\Services\PickupLocationService;
 use DistributionBundle\Services\DistributorAftersalesAddressService;
+use DistributionBundle\Services\DistributorCategoryService;
 use SystemLinkBundle\Services\WdtErp\Client\WdtErpClient;
 use SystemLinkBundle\Services\WdtErp\Client\Pager;
 use SystemLinkBundle\Services\WdtErpSettingService;
@@ -72,6 +73,9 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="name", in="query", description="店铺名称", required=true, type="string"),
      *     @SWG\Parameter( name="contact", in="query", description="联系人姓名", required=true, type="string"),
      *     @SWG\Parameter( name="mobile", in="query", description="联系方式", required=true, type="string"),
+     *     @SWG\Parameter( name="show_mobile", in="query", description="是否展示手机号 1:展示 0:不展示", required=false, type="string"),
+     *     @SWG\Parameter( name="show_salesperson", in="query", description="是否展示导购 0:不展示 1:展示固定URL 2:展示归属导购", required=false, type="string"),
+     *     @SWG\Parameter( name="fixed_salesperson_qrcode_url", in="query", description="导购固定码URL", required=false, type="string"),
      *     @SWG\Parameter( name="hour", in="query", description="经营时间", required=true, type="string"),
      *     @SWG\Parameter( name="is_ziti", in="query", description="是否支持自提", required=true, type="string"),
      *     @SWG\Parameter( name="is_delivery", in="query", description="是否快递", required=true, type="string"),
@@ -91,6 +95,7 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="contract_phone", in="query", description="固定座机", type="string"),
      *     @SWG\Parameter( name="introduce", in="query", description="店铺介绍", type="string"),
      *     @SWG\Parameter( name="distribution_type", in="query", description="店铺类型", type="string"),
+     *     @SWG\Parameter( name="distributor_category_id", in="query", description="店铺分类id", type="string"),
      *     @SWG\Parameter( name="merchant_id", in="query", description="所属商户", type="string"),
      *     @SWG\Parameter( name="offline_aftersales", in="query", description="本店订单到店售后", type="string"),
      *     @SWG\Parameter( name="offline_aftersales_distributor_id", in="query", description="本店订单到其他店铺售后", type="string"),
@@ -112,6 +117,9 @@ class Distributor extends Controller
      *                  @SWG\Property( property="is_distributor", type="string", example="true", description="是否是主店铺"),
      *                  @SWG\Property( property="company_id", type="string", example="1", description="公司id"),
      *                  @SWG\Property( property="mobile", type="string", example="13712345678", description="手机号"),
+     *                  @SWG\Property( property="show_mobile", type="string", example="1", description="是否展示手机号 1:展示 0:不展示"),
+     *                  @SWG\Property( property="show_salesperson", type="string", example="1", description="是否展示导购 0:不展示 1:展示固定URL 2:展示归属导购"),
+     *                  @SWG\Property( property="fixed_salesperson_qrcode_url", type="string", example="https://example.com/qr.png", description="导购固定码URL"),
      *                  @SWG\Property( property="address", type="string", example="上海市徐汇区宜山路七0一弄23", description="地址"),
      *                  @SWG\Property( property="name", type="string", example="测试x", description="名称"),
      *                  @SWG\Property( property="auto_sync_goods", type="string", example="false", description="自动同步总部商品"),
@@ -151,6 +159,7 @@ class Distributor extends Controller
      *                  @SWG\Property( property="business", type="string", example="1", description="业务类型"),
      *                  @SWG\Property( property="introduce", type="string", example="1", description="店铺介绍"),
      *                  @SWG\Property( property="distribution_type", type="string", example="1", description="店铺类型"),
+     *                  @SWG\Property( property="distributor_category_id", type="string", example="1", description="店铺分类id"),
      *                  @SWG\Property( property="merchant_id", type="string", example="1", description="所属商户"),
      *          ),
      *     )),
@@ -327,6 +336,16 @@ class Distributor extends Controller
         if (isset($params['is_ziti'])) {
             $params['is_ziti'] = (!$params['is_ziti'] || $params['is_ziti'] === 'false') ? false : true;
         }
+        if (isset($params['show_mobile'])) {
+            $params['show_mobile'] = ($params['show_mobile'] === 1 || $params['show_mobile'] === '1' || $params['show_mobile'] === true || $params['show_mobile'] === 'true') ? 1 : 0;
+        } else {
+            $params['show_mobile'] = 1;
+        }
+        if (isset($params['show_salesperson'])) {
+            $params['show_salesperson'] = ($params['show_salesperson'] === 1 || $params['show_salesperson'] === '1' || $params['show_salesperson'] === true || $params['show_salesperson'] === 'true') ? 1 : 0;
+        } else {
+            $params['show_salesperson'] = 1;
+        }
         if (isset($params['is_delivery'])) {
             $params['is_delivery'] = (!$params['is_delivery'] || $params['is_delivery'] === 'false') ? false : true;
         } else {
@@ -495,6 +514,10 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="name", in="query", description="店铺名称", required=true, type="string"),
      *     @SWG\Parameter( name="contact", in="query", description="联系人姓名", required=true, type="string"),
      *     @SWG\Parameter( name="mobile", in="query", description="联系方式", required=true, type="string"),
+     *     @SWG\Parameter( name="show_mobile", in="query", description="是否展示手机号 1:展示 0:不展示", required=false, type="string"),
+     *     @SWG\Parameter( name="show_salesperson", in="query", description="是否展示导购 1:展示 0:不展示", required=false, type="string"),
+     *     @SWG\Parameter( name="fixed_salesperson_qrcode_url", in="query", description="导购固定码URL", required=false, type="string"),
+     *     @SWG\Parameter( name="fixed_salesperson_qrcode", in="query", description="导购固定码", required=false, type="string"),
      *     @SWG\Parameter( name="hour", in="query", description="经营时间", required=true, type="string"),
      *     @SWG\Parameter( name="is_ziti", in="query", description="是否支持自提", required=true, type="string"),
      *     @SWG\Parameter( name="is_delivery", in="query", description="是否快递", required=true, type="string"),
@@ -514,6 +537,7 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="contract_phone", in="query", description="固定座机", type="string"),
      *     @SWG\Parameter( name="introduce", in="query", description="店铺介绍", type="string"),
      *     @SWG\Parameter( name="distribution_type", in="query", description="店铺类型", type="string"),
+     *     @SWG\Parameter( name="distributor_category_id", in="query", description="店铺分类id", type="string"),
      *     @SWG\Parameter( name="merchant_id", in="query", description="所属商户", type="string"),
      *     @SWG\Parameter( name="offline_aftersales", in="query", description="本店订单到店售后", type="string"),
      *     @SWG\Parameter( name="offline_aftersales_distributor_id", in="query", description="本店订单到其他店铺售后", type="string"),
@@ -535,6 +559,10 @@ class Distributor extends Controller
      *                  @SWG\Property( property="is_distributor", type="string", example="true", description="是否是主店铺"),
      *                  @SWG\Property( property="company_id", type="string", example="1", description="公司id"),
      *                  @SWG\Property( property="mobile", type="string", example="13712345678", description="手机号"),
+     *                  @SWG\Property( property="show_mobile", type="string", example="1", description="是否展示手机号 1:展示 0:不展示"),
+     *                  @SWG\Property( property="show_salesperson", type="string", example="1", description="是否展示导购 1:展示 0:不展示"),
+     *                  @SWG\Property( property="fixed_salesperson_qrcode_url", type="string", example="https://example.com/qr.png", description="导购固定码URL"),
+     *                  @SWG\Property( property="fixed_salesperson_qrcode", type="string", example="QR123456", description="导购固定码"),
      *                  @SWG\Property( property="address", type="string", example="上海市虹口区横浜路131号附近", description="具体地址"),
      *                  @SWG\Property( property="name", type="string", example="xxx", description="名称"),
      *                  @SWG\Property( property="auto_sync_goods", type="string", example="1", description="自动同步总部商品"),
@@ -574,6 +602,7 @@ class Distributor extends Controller
      *                  @SWG\Property( property="business", type="string", example="1", description="业务类型"),
      *                  @SWG\Property( property="introduce", type="string", example="1", description="店铺介绍"),
      *                  @SWG\Property( property="distribution_type", type="string", example="1", description="店铺类型"),
+     *                  @SWG\Property( property="distributor_category_id", type="string", example="1", description="店铺分类id"),
      *                  @SWG\Property( property="merchant_id", type="string", example="1", description="所属商户"),
      *          ),
      *     )),
@@ -587,10 +616,10 @@ class Distributor extends Controller
             1 => 'city',
             2 => 'area',
         ];
-        $params = $request->all('name', 'address', 'house_number', 'mobile', 'regions_id', 'regions', 'contact',
+        $params = $request->all('name', 'address', 'house_number', 'mobile', 'show_mobile', 'show_salesperson', 'fixed_salesperson_qrcode_url', 'regions_id', 'regions', 'contact',
             'shop_id', 'is_ziti', 'lng', 'lat', 'hour', 'logo', 'banner', 'auto_sync_goods', 'is_audit_goods',
             'is_delivery', 'shop_code', 'distributor_self', 'regionauth_id', 'is_open', 'rate', 'is_dada', 'business',
-            'is_valid', 'contract_phone', 'introduce','merchant_id','distribution_type', 'is_require_subdistrict',
+            'is_valid', 'contract_phone', 'introduce','merchant_id','distribution_type', 'distributor_category_id', 'is_require_subdistrict',
             'is_require_building', 'offline_aftersales', 'offline_aftersales_distributor_id', 'offline_aftersales_other',
             'offline_aftersales_address','is_self_delivery','freight_time','is_open_salesman','is_refund_freight', 'wdt_shop_no', 'jst_shop_id','open_divided');
         $merchantId = app('auth')->user()->get('merchant_id');
@@ -619,6 +648,15 @@ class Distributor extends Controller
 
         if (isset($params['offline_aftersales_other'])) {
             $params['offline_aftersales_other'] = (!$params['offline_aftersales_other'] || $params['offline_aftersales_other'] === 'false') ? false : true;
+        }
+
+        if (isset($params['show_mobile'])) {
+            $params['show_mobile'] = ($params['show_mobile'] === 1 || $params['show_mobile'] === '1' || $params['show_mobile'] === true || $params['show_mobile'] === 'true') ? 1 : 0;
+        }
+        if (isset($params['show_salesperson'])) {
+            $params['show_salesperson'] = in_array((string)$params['show_salesperson'], ['0', '1', '2'], true)
+                ? (int)$params['show_salesperson']
+                : 0;
         }
 
         // 脱敏的字段
@@ -970,6 +1008,7 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="is_app", in="query", description="是否店务端app", required=false, type="string"),
      *     @SWG\Parameter( name="distribution_type", in="query", description="店铺类型:0自营;1加盟", required=false, type="string"),
      *     @SWG\Parameter( name="merchant_id", in="query", description="所属商家", required=false, type="string"),
+     *     @SWG\Parameter( name="distributor_category_id", in="query", description="店铺分类id", required=false, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *                  @SWG\Property( property="total_count", type="string", example="36", description=""),
@@ -1043,7 +1082,9 @@ class Distributor extends Controller
      *                          @SWG\Property( property="created", type="string", example="1571129662", description=""),
      *                          @SWG\Property( property="updated", type="string", example="1571130101", description="修改时间"),
      *                          @SWG\Property( property="merchant_name", type="string", example="1", description="所属商家"),
-     *                          @SWG\Property( property="distribution_type", type="string", example="1", description="店铺类型")
+     *                          @SWG\Property( property="distribution_type", type="string", example="1", description="店铺类型"),
+     *                          @SWG\Property( property="distributor_category_id", type="string", example="1", description="店铺分类id"),
+     *                          @SWG\Property( property="distributor_category_name", type="string", example="旗舰店", description="店铺分类名称")
      *                       ),
      *                  ),
      *                  @SWG\Property( property="distributor_self", type="string", example="51", description="是否是总店配置"),
@@ -1080,6 +1121,10 @@ class Distributor extends Controller
 
         if ($request->input('is_valid')) {
             $filter['is_valid'] = $request->input('is_valid');
+        }
+
+        if ($request->input('distributor_category_id')) {
+            $filter['distributor_category_id'] = $request->input('distributor_category_id');
         }
 
         if ($request->input('name')) {
@@ -1154,7 +1199,7 @@ class Distributor extends Controller
         // 虚拟门店不在列表做展示
         $filter['distributor_self'] = 0;
         $distributorService = new DistributorService();
-        $data = $distributorService->lists($filter, ["created" => "DESC"], $pageSize, $page);
+        $data = $distributorService->getListByLang($filter, ["created" => "DESC"], $pageSize, $page);
         $data['tagList'] = [];
         // 是否有权限查看加密数据
         $datapassBlock = $request->get('x-datapass-block', 0);
@@ -1187,10 +1232,26 @@ class Distributor extends Controller
             foreach ($rs['list'] as $v) {
                 $adapayMembers[$v['operator_type']][$v['operator_id']] = $v;
             }
+            // 批量获取店铺分类名称
+            $distributorCategoryIds = array_unique(array_filter(array_column($data['list'], 'distributor_category_id')));
+            $categoryMap = [];
+            if (!empty($distributorCategoryIds)) {
+                $distributorCategoryService = new DistributorCategoryService();
+                $categoryFilter = [
+                    'company_id' => $companyId,
+                    'category_id' => $distributorCategoryIds,
+                ];
+                $categoryList = $distributorCategoryService->categoryRepository->getLists($categoryFilter, 'category_id,category_name');
+                foreach ($categoryList as $category) {
+                    $categoryMap[$category['category_id']] = $category['category_name'] ?? '';
+                }
+            }
+
             foreach ($data['list'] as &$value) {
                 $value['tagList'] = $newTags[$value['distributor_id']] ?? [];
                 $value['link'] = 'pages/index?dtid=' . $value['distributor_id'];
                 $value['is_openAccount'] = isset($adapayMembers['distributor'][$value['distributor_id']]) ?? false;
+                $value['distributor_category_name'] = $categoryMap[$value['distributor_category_id']] ?? '';
                 if ($datapassBlock) {
                     $value['mobile'] = data_masking('mobile', (string) $value['mobile']);
                     $value['contact'] = data_masking('truename', (string) $value['contact']);
@@ -1267,7 +1328,7 @@ class Distributor extends Controller
      *             @SWG\Property(property="status", type="boolean", example=true),
      *         ),
      *     ),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/ErrorResponse") ) )
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( @SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer") ) )
      * )
      */
     public function setPaymentSubject(Request $request, $distributor_id)
@@ -2677,5 +2738,77 @@ class Distributor extends Controller
             }
         }
         return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/distributor/list/background",
+     *     summary="保存门店列表背景图",
+     *     tags={"店铺"},
+     *     description="保存门店列表背景图URL到Redis",
+     *     operationId="saveDistributorListBackground",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="background_url", in="query", description="背景图URL", required=true, type="string"),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="status", type="boolean", example="true", description="保存状态"),
+     *                  @SWG\Property( property="background_url", type="string", example="https://example.com/background.jpg", description="背景图URL"),
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/DistributionErrorRespones") ) )
+     * )
+     */
+    public function saveDistributorListBackground(Request $request)
+    {
+        $params = $request->all('background_url');
+        
+        $rules = [
+            'background_url' => ['required', trans('DistributionBundle/Controllers/Distributor.background_url_required')],
+        ];
+        $error = validator_params($params, $rules);
+        if ($error) {
+            throw new StoreResourceFailedException($error);
+        }
+
+        $companyId = app('auth')->user()->get('company_id');
+        $backgroundUrl = trim($params['background_url']);
+        $distributorService = new DistributorService();
+        $result = $distributorService->setDistributorListBackground($companyId, $backgroundUrl);
+
+        if ($result) {
+            return $this->response->array([
+                'status' => true,
+                'background_url' => $backgroundUrl,
+            ]);
+        } else {
+            throw new ResourceException(trans('DistributionBundle/Controllers/Distributor.background_save_failed'));
+        }
+    }
+
+    /**
+     * @SWG\Get(
+     *     path="/distributor/list/background",
+     *     summary="获取门店列表背景图",
+     *     tags={"店铺"},
+     *     description="获取门店列表背景图URL",
+     *     operationId="getDistributorListBackground",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="background_url", type="string", example="https://example.com/background.jpg", description="背景图URL"),
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/DistributionErrorRespones") ) )
+     * )
+     */
+    public function getDistributorListBackground(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        $distributorService = new DistributorService();
+        $backgroundUrl = $distributorService->getDistributorListBackground($companyId);
+
+        return $this->response->array([
+            'background_url' => $backgroundUrl,
+        ]);
     }
 }

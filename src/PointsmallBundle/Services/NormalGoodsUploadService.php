@@ -679,7 +679,7 @@ class NormalGoodsUploadService
                 'item_main_category' => '',
                 'item_name' => '',
                 'item_bn' => '',
-                'brief' => '2为一条单规格商品，3-8为一条多规格商品  此文件为DOEM模拟数据，使用该模板请删除本句，重新修改数据。'
+                'brief' => '2为一条单规格商品，3-8为一条多规格商品  此文件为DEMO模拟数据，使用该模板请删除本句，重新修改数据。'
             ]
         ];
         $header = array_flip($this->header);

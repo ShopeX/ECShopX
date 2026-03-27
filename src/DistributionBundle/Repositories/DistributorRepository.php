@@ -33,6 +33,18 @@ class DistributorRepository extends EntityRepository
     use FilterRepositoryTrait,MagicLangTrait;
 
     public $table = "distribution_distributor";
+    public $primaryKey = 'distributor_id';
+    public $module = 'distribution_distributor';
+    public $langField = [
+        'name',
+        'contact',
+        'logo',
+        'province',
+        'city',
+        'area',
+        'address',
+        'introduce'
+    ];
 
     private $multiLangField = [
         'name',
@@ -53,6 +65,9 @@ class DistributorRepository extends EntityRepository
         'is_distributor',
         'company_id',
         'mobile',
+        'show_mobile',
+        'show_salesperson',
+        'fixed_salesperson_qrcode_url',
         'address',
         'house_number',
         'name',
@@ -84,6 +99,7 @@ class DistributorRepository extends EntityRepository
         'wechat_work_department_id',
         'distributor_self',
         'regionauth_id',
+        'distributor_category_id',
         'is_open',
         'rate',
         'is_dada',

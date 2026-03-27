@@ -23,6 +23,7 @@ use GoodsBundle\Entities\ItemsCategory;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Entities\ItemRelAttributes;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
+use Doctrine\DBAL\Connection;
 use PointsmallBundle\Entities\PointsmallItemRelAttributes;
 use PointsmallBundle\Entities\PointsmallItems;
 
@@ -117,6 +118,30 @@ class ItemsCategoryService
         return $result;
         // $itemsCategoryInfo = $this->itemsCategoryRepository->lists($filter, $orderBy, $pageSize, $page);
         // return $this->getTree($itemsCategoryInfo['list'], 0, 0, $isShow);
+    }
+
+    public function isSaleableCategoryFilterEnabled(int $companyId): bool
+    {
+        if ($companyId <= 0) {
+            return false;
+        }
+        $redis = app('redis')->connection('default');
+        $value = $redis->get($this->getSaleableCategoryFilterKey($companyId));
+        return (string)$value === '1';
+    }
+
+    public function setSaleableCategoryFilterEnabled(int $companyId, bool $enabled): bool
+    {
+        if ($companyId <= 0) {
+            return false;
+        }
+        $redis = app('redis')->connection('default');
+        return (bool)$redis->set($this->getSaleableCategoryFilterKey($companyId), $enabled ? '1' : '0');
+    }
+
+    private function getSaleableCategoryFilterKey(int $companyId): string
+    {
+        return 'goods:category:saleable_filter:' . $companyId;
     }
 
     /**
@@ -264,6 +289,8 @@ class ItemsCategoryService
 
     /**
      * 获取单个分类信息
+     * @param array $filter 过滤条件
+     * @param int $itemId 商品ID，默认为0。如果不为0，则goods_spec下的attribute_values只返回该商品关联的属性值
      */
     public function getCategoryInfo($filter, $otherParams = [])
     {
@@ -277,8 +304,9 @@ class ItemsCategoryService
         }
 
         $itemsAttributesService = new ItemsAttributesService();
-        $attrList = $itemsAttributesService->getAttrList(['attribute_id' => $attributeIds], 1, 100, ['attribute_sort' => 'asc']);
-        
+        $itemIdForAttrs = (int)($otherParams['item_id'] ?? 0);
+        $attrList = $itemsAttributesService->getAttrList(['attribute_id' => $attributeIds], 1, 100, ['attribute_sort' => 'asc'], $itemIdForAttrs);
+
         // 如果提供了item_id，获取商品的自定义属性值
         $customAttributeValues = [];
         if (isset($otherParams['item_id']) && $otherParams['item_id']) {
@@ -426,6 +454,119 @@ class ItemsCategoryService
             }
         }
         return [];
+    }
+
+    /**
+     * 基于店铺可售商品清洗分类树
+     * @param int $companyId
+     * @param int $distributorId
+     * @param array $categories
+     * @return array
+     */
+    public function filterCategoryTreeBySaleableItems(int $companyId, int $distributorId, array $categories): array
+    {
+        if ($companyId <= 0 || $distributorId <= 0 || empty($categories)) {
+            return $categories;
+        }
+
+        $categoryIdMap = $this->getSaleableCategoryIdMap($companyId, $distributorId);
+        if (empty($categoryIdMap)) {
+            return [];
+        }
+
+        return $this->filterCategoryTreeByCategoryMap($categories, $categoryIdMap);
+    }
+
+    private function getSaleableCategoryIdMap(int $companyId, int $distributorId): array
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('distinct rc.category_id, c.path')
+            ->from('goods_items_rel_cats', 'rc')
+            ->innerJoin('rc', 'distribution_distributor_items', 'd', 'rc.item_id = d.item_id')
+            ->innerJoin('rc', 'items', 'i', 'rc.item_id = i.item_id')
+            ->leftJoin('rc', 'items_category', 'c', 'rc.category_id = c.category_id AND c.company_id = :company_id')
+            ->where('d.company_id = :company_id')
+            ->andWhere('d.distributor_id = :distributor_id')
+            ->andWhere('d.is_can_sale = 1')
+            ->andWhere('d.goods_can_sale = 1')
+            ->andWhere('i.approve_status IN (:approve_status)')
+            ->setParameter('company_id', $companyId)
+            ->setParameter('distributor_id', $distributorId)
+            ->setParameter('approve_status', ['onsale', 'only_show'], Connection::PARAM_STR_ARRAY);
+
+        $rows = $qb->execute()->fetchAll();
+        $map = [];
+        foreach ($rows as $row) {
+            $categoryId = $row['category_id'] ?? null;
+            if ($categoryId !== null && $categoryId !== '') {
+                // 同时存储字符串和整数格式，确保类型匹配
+                $categoryIdStr = (string)$categoryId;
+                $map[$categoryIdStr] = true;
+                // 如果是数字，也存储整数格式
+                if (is_numeric($categoryIdStr)) {
+                    $map[(int)$categoryIdStr] = true;
+                }
+                
+                // 如果分类有路径，将路径中的所有父级分类ID也加入map
+                // 这样，如果三级分类在可售列表中，它的父级分类（一级和二级）也会在map中
+                $path = $row['path'] ?? '';
+                if ($path) {
+                    $pathIds = explode(',', $path);
+                    foreach ($pathIds as $pathId) {
+                        $pathId = trim($pathId);
+                        if ($pathId !== '' && $pathId !== $categoryIdStr) {
+                            $map[(string)$pathId] = true;
+                            if (is_numeric($pathId)) {
+                                $map[(int)$pathId] = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return $map;
+    }
+
+    private function filterCategoryTreeByCategoryMap(array $categories, array $categoryIdMap): array
+    {
+        $result = [];
+        foreach ($categories as $category) {
+            // 保存原始是否有子节点的状态
+            $hasOriginalChildren = isset($category['children']) && !empty($category['children']);
+            
+            // 先递归处理子节点
+            if ($hasOriginalChildren) {
+                $category['children'] = $this->filterCategoryTreeByCategoryMap($category['children'], $categoryIdMap);
+            }
+
+            // 确保 category_id 转换为字符串，兼容整数和字符串类型
+            $categoryId = isset($category['category_id']) ? (string)$category['category_id'] : '';
+            
+            // 判断是否有保留的子节点（过滤后）
+            $hasFilteredChildren = !empty($category['children']);
+            
+            // 判断当前节点是否在可售列表中（同时检查字符串和整数格式）
+            $isInSaleableMap = false;
+            if ($categoryId !== '') {
+                // 检查字符串格式
+                if (isset($categoryIdMap[$categoryId])) {
+                    $isInSaleableMap = true;
+                } elseif (is_numeric($categoryId)) {
+                    // 如果字符串格式不匹配，尝试整数格式
+                    $categoryIdInt = (int)$categoryId;
+                    if (isset($categoryIdMap[$categoryIdInt])) {
+                        $isInSaleableMap = true;
+                    }
+                }
+            }
+            
+            // 保留条件：当前节点在可售列表中，或者有保留的子节点（说明子节点中有可售的）
+            if ($hasFilteredChildren || $isInSaleableMap) {
+                $result[] = $category;
+            }
+        }
+        return $result;
     }
 
     /**

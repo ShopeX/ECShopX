@@ -695,9 +695,26 @@ if (!function_exists('get_app_pay_type')) {
     function get_app_pay_type($payType, $userDevice = '')
     {
         $appPayType = '07'; //微信小程序
+        
+        // 针对自带明确终端的支付方式，优先返回对应渠道
+        switch ($payType) {
+            case 'wxpaypc':
+                return '01'; // 微信正扫 (PC)
+            case 'wxpayh5':
+            case 'wxpayjs':
+                return '12'; // 微信H5支付(直连)
+            case 'wxpayapp':
+                return '09'; // 微信app支付(直连)
+            case 'alipay':
+            case 'alipayh5':
+            case 'alipayapp':
+                return '13'; // 支付宝app支付
+        }
+
         if (empty($userDevice)) {
             return $appPayType;
         }
+
         switch ($payType) {
             case 'wxpay':
             case 'hfpay':
@@ -710,21 +727,6 @@ if (!function_exists('get_app_pay_type')) {
                 if ($userDevice == 'miniprogram') {
                     $appPayType = '07';
                 }
-                break;
-            case 'wxpaypc':
-                $appPayType = '01';
-                break;
-            case 'alipay':
-            case 'alipayh5':
-            case 'alipayapp':
-                $appPayType = '13';
-                break;
-            case 'wxpayh5':
-            case 'wxpayjs':
-                $appPayType = '12';
-                break;
-            case 'wxpayapp':
-                $appPayType = '09';
                 break;
             default:
                 $appPayType = '00';
@@ -939,7 +941,7 @@ if (!function_exists('getRepositoryLangue')) {
     function getRepositoryLangue($entityName)
     {
         $repository =  app('registry')->getManager('default')->getRepository($entityName);
-        $classObj = new \CompanysBundle\Services\RepositoryInterceptor($repository);
+        $classObj = new \CompanysBundle\Services\RepositoryLangInterceptor($repository);
 
         return $classObj;
     }

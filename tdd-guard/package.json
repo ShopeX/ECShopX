@@ -1,0 +1,99 @@
+{
+  "name": "tdd-guard",
+  "version": "1.1.0",
+  "description": "Automated Test-Driven Development enforcement for Claude Code",
+  "author": "Nizar Selander",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nizos/tdd-guard.git"
+  },
+  "keywords": [
+    "tdd",
+    "test-driven-development",
+    "claude",
+    "claude-code",
+    "hooks",
+    "testing",
+    "ai-tools",
+    "code-quality",
+    "linting"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "workspaces": [
+    "reporters/vitest",
+    "reporters/jest",
+    "reporters/storybook"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "tdd-guard": "dist/cli/tdd-guard.js"
+  },
+  "files": [
+    "dist",
+    "!dist/*.tsbuildinfo",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:workspaces": "npm run build --workspaces --if-present",
+    "build": "tsc --build tsconfig.build.json && npm run build:workspaces",
+    "test": "vitest run --project default --project golangci-lint",
+    "test:unit": "vitest run --project unit --project golangci-lint",
+    "test:integration": "vitest run --project integration",
+    "pretest:reporters": "npx playwright install chromium --only-shell 2>/dev/null || true",
+    "test:reporters": "vitest run --project reporters",
+    "test:coverage": "vitest run --coverage",
+    "lint": "npm run build:workspaces && eslint . --fix --report-unused-disable-directives --max-warnings 0",
+    "lint:check": "npm run build:workspaces && eslint . --report-unused-disable-directives --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run build:workspaces && tsc --noEmit",
+    "checks": "npm run typecheck && npm run lint && npm run format && npm run test",
+    "pre-commit": "npm run format:check && npm run lint:check && npm run typecheck && npm run test:unit",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.25",
+    "@anthropic-ai/sdk": "^0.72.1",
+    "@types/uuid": "^10.0.0",
+    "dotenv": "^17.2.3",
+    "minimatch": "^10.0.3",
+    "uuid": "^13.0.0",
+    "zod": "^4.3.6"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{json,md,css,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.4.0",
+    "@commitlint/config-conventional": "^20.4.0",
+    "@types/node": "^25.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.39.2",
+    "eslint-plugin-sonarjs": "^3.0.6",
+    "get-port": "^7.1.0",
+    "globals": "^17.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.8.1",
+    "tdd-guard-vitest": "*",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "js-yaml": "^4.1.1"
+  }
+}

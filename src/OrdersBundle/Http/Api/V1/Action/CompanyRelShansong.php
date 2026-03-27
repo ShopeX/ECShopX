@@ -33,7 +33,7 @@ class CompanyRelShansong extends Controller
      *     description="获取商户闪送应用配置信息",
      *     operationId="getInfo",
      *     @SWG\Response(
-     *         response="200",
+     *         response=200,
      *         description="响应信息返回",
      *         @SWG\Schema(
      *            @SWG\Property(property="data", type="object", description="",
@@ -43,12 +43,11 @@ class CompanyRelShansong extends Controller
      *               @SWG\Property(property="client_id", type="string", example="", description="App-key"),
      *               @SWG\Property(property="app_secret", type="string", example="", description="App-密钥"),
      *               @SWG\Property(property="online", type="boolean", example="1", description="是否上线"),
-     *               @SWG\Property(property="is_open", type="string", example="0", description="是否开启"),
-     *               ),
-     *            ),
+     *               @SWG\Property(property="is_open", type="string", example="0", description="是否开启")
+     *            )
      *         ),
      *     ),
-     * @SWG\Response(response="default", description="错误返回结构", @SWG\Schema(type="array", @SWG\Items(ref="#/definitions/OrdersErrorRespones")))
+     *     @SWG\Response(response="default", description="错误返回结构", @SWG\Schema(@SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer")))
      * )
      */
     public function getInfo()

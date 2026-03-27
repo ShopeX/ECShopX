@@ -534,6 +534,7 @@ class Companys extends BaseController
      * @SWG\Get(
      *     path="/company/applications",
      *     summary="查询应用列表",
+     *     @SWG\Response(response=200, description="成功"),
      * )
      */
     public function getApplications(Request $request)

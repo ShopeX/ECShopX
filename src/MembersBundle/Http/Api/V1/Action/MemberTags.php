@@ -102,13 +102,7 @@ class MemberTags extends Controller
      *     @SWG\Parameter( name="group_name", in="query", description="标签组名称", required=true, type="string"),
      *     @SWG\Parameter( name="description", in="query", description="标签组描述", required=false, type="string"),
      *     @SWG\Parameter( name="tag_ids", in="query", description="要关联的标签ID数组", required=false, type="array", @SWG\Items(type="integer")),
-     *     @SWG\Parameter( name="tags", in="query", description="需要创建并关联的标签列表", required=false, type="array", @SWG\Items(
-     *          @SWG\Property(property="tag_name", type="string"),
-     *          @SWG\Property(property="tag_color", type="string"),
-     *          @SWG\Property(property="font_color", type="string"),
-     *          @SWG\Property(property="description", type="string"),
-     *          @SWG\Property(property="category_id", type="integer")
-     *     )),
+     *     @SWG\Parameter( name="tags", in="query", description="需要创建并关联的标签列表，JSON字符串", required=false, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data",
      *              type="object"
@@ -188,14 +182,7 @@ class MemberTags extends Controller
      *     @SWG\Parameter( name="group_name", in="query", description="标签组名称", required=true, type="string"),
      *     @SWG\Parameter( name="description", in="query", description="标签组描述", required=false, type="string"),
      *     @SWG\Parameter( name="deleteids", in="query", description="需要删除的标签ID数组", required=false, type="array", @SWG\Items(type="integer")),
-     *     @SWG\Parameter( name="tags", in="query", description="需创建/更新的标签列表", required=false, type="array", @SWG\Items(
-     *          @SWG\Property(property="tag_id", type="integer", description="0表示新增"),
-     *          @SWG\Property(property="tag_name", type="string"),
-     *          @SWG\Property(property="tag_color", type="string"),
-     *          @SWG\Property(property="font_color", type="string"),
-     *          @SWG\Property(property="description", type="string"),
-     *          @SWG\Property(property="category_id", type="integer")
-     *     )),
+     *     @SWG\Parameter( name="tags", in="query", description="需创建/更新的标签列表，JSON字符串", required=false, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data",
      *              type="object"

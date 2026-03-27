@@ -37,14 +37,14 @@ use MembersBundle\Services\MemberTagsService;
 use GoodsBundle\Services\ItemsService;
 use OrdersBundle\Services\TradeService;
 use ThirdPartyBundle\Services\DmCrm\MemberService as DmMemberService;
-use DistributionBundle\Services\DistributorService;
-use DistributionBundle\Entities\Distributor;
-use SalespersonBundle\Services\SalespersonService;
-use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
 use MembersBundle\Services\TagLibraryPushService;
 use MembersBundle\Entities\MemberTagGroup;
 use MembersBundle\Entities\MemberTagGroupRel;
 use MembersBundle\Entities\MemberTags;
+use DistributionBundle\Services\DistributorService;
+use DistributionBundle\Entities\Distributor;
+use SalespersonBundle\Services\SalespersonService;
+use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
 
 class Member extends Controller
 {
@@ -1486,7 +1486,7 @@ class Member extends Controller
      *     @SWG\Parameter( in="query", type="integer", required=false, name="page_size", description="每页数量，默认10" ),
      *     @SWG\Parameter( in="query", type="string", required=false, name="birthday_start", description="生日开始日期，格式：YYYY-MM-DD" ),
      *     @SWG\Parameter( in="query", type="string", required=false, name="birthday_end", description="生日结束日期，格式：YYYY-MM-DD" ),
-     *     @SWG\Parameter( in="query", type="array", required=false, name="tag_id", description="标签ID，支持多个，格式：tag_id[]=1&tag_id[]=2" ),
+     *     @SWG\Parameter( in="query", type="array", required=false, name="tag_id", description="标签ID，支持多个，格式：tag_id[]=1&tag_id[]=2", @SWG\Items(type="integer") ),
      *     @SWG\Parameter( in="query", type="string", required=false, name="type", description="分配状态：noassign=未分配，assign=已分配" ),
      *     @SWG\Parameter( in="query", type="string", required=false, name="salesperson_code", description="导购编号（work_userid）" ),
      *     @SWG\Parameter( in="query", type="string", required=false, name="keyword", description="关键词（用于按手机号模糊查询）" ),

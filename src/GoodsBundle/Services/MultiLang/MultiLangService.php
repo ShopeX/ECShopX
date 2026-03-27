@@ -220,7 +220,7 @@ class MultiLangService
         return $dataList;
     }
 
-    public function updateLangData(array $langBag, string $tableName, int $dataId, $company_id = 0)
+    public function updateLangData(array $langBag, string $tableName, int $dataId, $companyId = 0)
     {
         $dataField = [];
         if(empty($this->multiLangAttr[$tableName])){
@@ -240,15 +240,16 @@ class MultiLangService
             $updateData = [
                 'attribute_value' => $vv,
             ];
-            // if ($company_id > 0) {
-            //     $updateData['company_id'] = $company_id;
-            // }
             $filter = [
                 'table_name' => $tableName,
                 'field' => $k,
                 'data_id' => $dataId,
                 // 'lang' => '',
             ];
+            if ($companyId > 0) {
+                $filter['company_id'] = $companyId;
+            }
+            // app('log')->debug('updateLangData filter:'.json_encode($filter). ' updateData:'.json_encode($updateData). ' company_id:'.$companyId);
             $service->updateOrInsert($filter, $updateData);
         }
 

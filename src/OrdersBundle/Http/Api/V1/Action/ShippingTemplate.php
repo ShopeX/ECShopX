@@ -199,9 +199,9 @@ class ShippingTemplate extends Controller
         $data['company_id'] = app('auth')->user()->get('company_id');
         $data['distributor_id'] = app('auth')->user()->get('distributor_id');
         $data['name'] = $request->input('name');
-        $data['is_free'] = $request->input('is_free');
+        $data['is_free'] = (int)$request->input('is_free', 0);
         $data['valuation'] = $request->input('valuation');
-        $data['status'] = $request->input('status');
+        $data['status'] = (int)$request->input('status', 0);
         $data['fee_conf'] = $request->input('fee_conf');
         $data['free_conf'] = $request->input('free_conf');
         $data['nopost_conf'] = $request->input('nopost_conf');

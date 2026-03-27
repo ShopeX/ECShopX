@@ -1,0 +1,35 @@
+{
+  "name": "tdd-guard-vitest",
+  "version": "0.1.6",
+  "description": "Vitest reporter for TDD Guard",
+  "author": "Nizar Selander",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nizos/tdd-guard.git",
+    "directory": "reporters/vitest"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "!dist/*.tsbuildinfo",
+    "!dist/*.test-data.*"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "tdd-guard": "^1.1.0"
+  },
+  "peerDependencies": {
+    "vitest": ">=3.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

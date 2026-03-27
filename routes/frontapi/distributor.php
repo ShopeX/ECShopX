@@ -48,12 +48,16 @@ $api->version('v1', function ($api) {
         $api->get('/wxapp/distributor/list', ['as' => 'front.wxapp.distributor.list',  'uses'=>'Distributor@getDistributorList']);
         $api->get('/wxapp/distributor/alllist', ['as' => 'front.wxapp.distributor.alllist',  'uses'=>'Distributor@getAllDistributorList']);
         $api->get('/wxapp/distributor/get_all_distributor', ['as' => 'front.wxapp.distributor.get_all_distributor',  'uses'=>'Distributor@getAllDistributor']);
+        // 获取店铺分类列表
+        $api->get('/wxapp/distributor/category/list', ['as' => 'front.wxapp.distributor.category.list', 'uses' => 'Distributor@getDistributorCategoryList']);
         // 获取总部自提点店铺的详细信息
         $api->get('/wxapp/distributor/self', ['as' => 'front.wxapp.distributor.self',  'uses'=>'Distributor@getDistributionSelfDetail']);
         // 获取默认的店铺详细信息
         $api->get('/wxapp/distributor/default', ['as' => 'front.wxapp.distributor.default',  'uses'=>'Distributor@getDistributionDefaultDetail']);
         //获取店铺配送方式
         $api->get('/wxapp/distributor/deliverytype', ['as' => 'front.wxapp.distributor.deliverytype',  'uses'=>'Distributor@getDeliveryType']);
+        // 获取单门店导购二维码
+        $api->get('/wxapp/distributor/salesperson/qrcode', ['as' => 'front.wxapp.distributor.salesperson.qrcode.single', 'uses' => 'Distributor@getDistributorSalespersonQrcodeSingle']);
         // 逆地址解析
         $api->get('/wxapp/distributor/areainfo', ['as' => 'front.wxapp.distributor.list',  'uses'=>'Distributor@getAreaInfo']);
 

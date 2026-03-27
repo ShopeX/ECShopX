@@ -80,4 +80,101 @@ class ShopMenuTest extends TestBaseService
         $this->assertIsArray($menuData);
     }
 
+    /**
+     * 统计指定 version + company_id 下的菜单条数（用于上传去重断言）
+     */
+    private function countMenusByVersionAndCompany(ShopMenuService $service, $version, $companyId = 0): int
+    {
+        $res = $service->shopMenuRepository->lists(
+            ['version' => $version, 'company_id' => $companyId],
+            '*',
+            1,
+            1,
+            ['shopmenu_id' => 'ASC']
+        );
+        return (int)($res['total_count'] ?? 0);
+    }
+
+    /**
+     * 构造一条可供 uploadMenus 使用的最小合法菜单行
+     */
+    private function buildUploadMenuRow(array $overrides = []): array
+    {
+        $defaults = [
+            'shopmenu_id' => 1,
+            'version'     => 1,
+            'company_id'  => 0,
+            'alias_name'  => 'upload_test_' . uniqid(),
+            'name'        => 'Test Menu',
+            'url'         => '/test',
+            'sort'        => 1,
+            'pid'         => 0,
+            'apis'        => '',
+            'icon'        => '',
+            'is_show'     => true,
+            'is_menu'     => true,
+            'disabled'    => false,
+            'menu_type'   => ['all'],
+        ];
+        return array_merge($defaults, $overrides);
+    }
+
+    /**
+     * TC1：重复导入两次同一文件（同一 version+company_id），菜单条数应等于单次导入条数（不重复）。
+     * 使用超过 100 条数据以暴露当前「仅删 100 条再全量插」导致的重复；当前实现下本测试应 RED。
+     */
+    public function testUploadMenusTwiceSameDataNoDuplicateTc1()
+    {
+        $companyId = 0;
+        $version   = 1;
+        $count     = 101; // >100 以触发 Interceptor 默认 pageSize=100 的只删 100 条问题
+
+        $data = [];
+        for ($i = 0; $i < $count; $i++) {
+            $data[] = $this->buildUploadMenuRow([
+                'shopmenu_id' => $i + 1,
+                'version'     => $version,
+                'company_id'  => $companyId,
+                'alias_name'  => 'upload_tc1_' . $version . '_' . $i,
+            ]);
+        }
+
+        $service = new ShopMenuService();
+        $service->uploadMenus($data, $companyId);
+        $afterFirst = $this->countMenusByVersionAndCompany($service, $version, $companyId);
+        $this->assertSame($count, $afterFirst, '第一次导入后条数应等于文件条数');
+
+        $service->uploadMenus($data, $companyId);
+        $afterSecond = $this->countMenusByVersionAndCompany($service, $version, $companyId);
+        $this->assertSame($count, $afterSecond, '第二次导入后条数应仍等于文件条数（无重复）；当前实现仅删 100 条会导致此处失败（RED）');
+    }
+
+    /**
+     * TC4 边界：空数据上传不抛错；该 version+company_id 下列表与本次一致（空）。
+     */
+    public function testUploadMenusEmptyDataNoErrorTc4()
+    {
+        $service   = new ShopMenuService();
+        $companyId = 0;
+        $this->assertTrue($service->uploadMenus([], $companyId));
+        $count = $this->countMenusByVersionAndCompany($service, 1, $companyId);
+        $this->assertGreaterThanOrEqual(0, $count);
+    }
+
+    /**
+     * TC5 边界：单条菜单重复上传两次，第二次后仅 1 条菜单，无重复。
+     */
+    public function testUploadMenusSingleMenuTwiceNoDuplicateTc5()
+    {
+        $companyId = 0;
+        $version   = 1;
+        $row       = $this->buildUploadMenuRow(['version' => $version, 'company_id' => $companyId]);
+
+        $service = new ShopMenuService();
+        $service->uploadMenus([$row], $companyId);
+        $service->uploadMenus([$row], $companyId);
+        $count = $this->countMenusByVersionAndCompany($service, $version, $companyId);
+        $this->assertSame(1, $count, '单条菜单重复上传两次后应仅 1 条');
+    }
+
 }

@@ -45,7 +45,7 @@ class Items implements ExportFileInterface
         'item_bn' => 'SKU编码',
         // 'supplier_goods_bn' => '供应商商品货号',
         'supplier_name' => '供应商名称',
-        'brief' => '简介',
+        'brief' => '副标题',
         'price' => '销售价',
         'market_price' => '市场价',
         'cost_price' => '成本价',

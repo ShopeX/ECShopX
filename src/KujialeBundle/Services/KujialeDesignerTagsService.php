@@ -25,6 +25,8 @@ class KujialeDesignerTagsService
      */
     public function saveTags($tagParams){
         $saveParams = [];
+        /** 本次接口返回的 tag_category_id|tag_id 集合，用于无数据时删除库中多余标签 */
+        $keptKeys = [];
 
         foreach($tagParams as $tag){
             $tmp = [];
@@ -38,14 +40,16 @@ class KujialeDesignerTagsService
                     $tmp['tag_id'] = $t['id'];
                     $tmp['tag_name'] = $t['name'];
                     $saveParams[] = $tmp;
+                    $keptKeys[$tmp['tag_category_id'] . '|' . $tmp['tag_id']] = true;
                 }
             }
         }
-        if(!empty($saveParams)){
-            try{
-                $conn = app('registry')->getConnection('default');
-                $conn->beginTransaction();
 
+        try{
+            $conn = app('registry')->getConnection('default');
+            $conn->beginTransaction();
+
+            if(!empty($saveParams)){
                 foreach($saveParams as $save){
                     $filter['tag_category_id'] = $save['tag_category_id'];
                     $filter['tag_id'] = $save['tag_id'];
@@ -57,11 +61,24 @@ class KujialeDesignerTagsService
                         $this->tagsRepository->create($save);
                     }
                 }
-                $conn->commit();
-            }catch(\Exception $e){
-                $conn->rollback();
-                throw $e;
             }
+
+            // 无数据删除：删除数据库中存在但本次接口未返回的标签
+            $dbList = $this->tagsRepository->getLists([], 1, -1);
+            foreach ($dbList as $row) {
+                $key = $row['tag_category_id'] . '|' . $row['tag_id'];
+                if (empty($keptKeys[$key])) {
+                    $this->tagsRepository->deleteBy([
+                        'tag_category_id' => $row['tag_category_id'],
+                        'tag_id' => $row['tag_id'],
+                    ]);
+                }
+            }
+
+            $conn->commit();
+        }catch(\Exception $e){
+            $conn->rollback();
+            throw $e;
         }
         return true;
     }

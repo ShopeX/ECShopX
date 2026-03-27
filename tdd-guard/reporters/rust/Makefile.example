@@ -1,0 +1,95 @@
+# Example Makefile for Rust projects with TDD Guard integration
+
+# Variables
+PROJECT_ROOT := $(shell pwd)
+CARGO := cargo
+NEXTEST := cargo nextest
+TDD_GUARD := tdd-guard-rust
+
+# Check if nextest is available
+HAS_NEXTEST := $(shell command -v cargo-nextest 2> /dev/null)
+
+# Default target
+.PHONY: all
+all: build test
+
+# Build the project
+.PHONY: build
+build:
+	$(CARGO) build --release
+
+# Run tests with TDD Guard
+.PHONY: test
+test:
+ifdef HAS_NEXTEST
+	$(NEXTEST) run 2>&1 | $(TDD_GUARD) --project-root $(PROJECT_ROOT) --passthrough
+else
+	$(CARGO) test -- -Z unstable-options --format json 2>&1 | $(TDD_GUARD) --project-root $(PROJECT_ROOT) --passthrough
+endif
+
+# Run tests with TDD enforcement
+.PHONY: test-tdd
+test-tdd:
+	tdd-guard on && $(MAKE) test
+
+# Run tests without TDD Guard (for debugging)
+.PHONY: test-plain
+test-plain:
+ifdef HAS_NEXTEST
+	$(NEXTEST) run
+else
+	$(CARGO) test
+endif
+
+# Install the TDD Guard Rust reporter
+.PHONY: install-reporter
+install-reporter:
+	$(CARGO) install --path .
+
+# Clean build artifacts
+.PHONY: clean
+clean:
+	$(CARGO) clean
+	rm -rf .claude/tdd-guard/data/test.json
+
+# Run clippy for linting
+.PHONY: lint
+lint:
+	$(CARGO) clippy -- -D warnings
+
+# Format code
+.PHONY: fmt
+fmt:
+	$(CARGO) fmt
+
+# Check formatting
+.PHONY: fmt-check
+fmt-check:
+	$(CARGO) fmt -- --check
+
+# Run all checks (format, lint, test)
+.PHONY: check
+check: fmt-check lint test
+
+# Install development dependencies
+.PHONY: dev-setup
+dev-setup:
+	$(CARGO) install cargo-nextest
+	$(CARGO) install tdd-guard-rust
+
+# Help target
+.PHONY: help
+help:
+	@echo "Available targets:"
+	@echo "  all          - Build and test (default)"
+	@echo "  build        - Build the project"
+	@echo "  test         - Run tests with TDD Guard"
+	@echo "  test-tdd     - Run tests with TDD enforcement"
+	@echo "  test-plain   - Run tests without TDD Guard"
+	@echo "  lint         - Run clippy linting"
+	@echo "  fmt          - Format code"
+	@echo "  fmt-check    - Check code formatting"
+	@echo "  check        - Run all checks"
+	@echo "  clean        - Clean build artifacts"
+	@echo "  dev-setup    - Install development dependencies"
+	@echo "  help         - Show this help message"

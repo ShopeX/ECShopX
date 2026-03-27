@@ -124,7 +124,7 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
                 $insertData['field']= $filter['field'];
                 $insertData['module_name'] = $filter['table_name'];
                 $insertData['attribute_value'] = $value;
-                $insertData['company_id'] = $data['company_id'] ?? 1;
+                $insertData['company_id'] = $filter['company_id'] ?? 1;
                 $insertData['created'] = time();
                 $this->insert($insertData);
             }else{

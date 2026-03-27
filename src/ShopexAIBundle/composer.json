@@ -3,7 +3,7 @@
     "description": "ShopexAI Bundle for generating articles and images",
     "type": "library",
     "require": {
-        "php": "^7.4",
+        "php": "^8.2",
         "alibabacloud/client": "^1.5",
         "guzzlehttp/guzzle": "^7.0"
     },

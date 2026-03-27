@@ -67,5 +67,10 @@ $api->version('v1', function($api) {
         $token = app('auth')->guard('shuyunapi')->attempt($credentials);
         return response()->json(['data'=>['token'=>$token]]);
     }]);
+
+    $api->group(['namespace' => 'CompanysBundle\Http\Api\V1\Action', 'middleware' => ['api.auth', 'shoplog'], 'providers' => 'jwt'], function ($api) {
+        $api->get('/operator/shopex-bind/status', ['name' => 'Shopex绑定状态', 'as' => 'operator.shopex_bind.status', 'uses' => 'ShopexBind@status']);
+        $api->post('/operator/shopex-bind', ['name' => 'Shopex账号绑定', 'as' => 'operator.shopex_bind', 'uses' => 'ShopexBind@bind']);
+    });
 });
 

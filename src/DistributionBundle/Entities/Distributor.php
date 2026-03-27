@@ -66,6 +66,28 @@ class Distributor
     private $mobile;
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="show_mobile", type="smallint", options={"comment":"是否展示手机号 1:展示 0:不展示", "default": 1})
+     */
+    private $show_mobile = 1;
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="show_salesperson", type="smallint", options={"comment":"是否展示导购 0:不展示 1:展示固定URL 2:展示归属导购", "default": 1})
+     */
+    private $show_salesperson = 0;
+
+    /**
+     * @var string|null
+     *
+     * @ORM\Column(name="fixed_salesperson_qrcode_url", type="string", length=255, nullable=true, options={"comment":"导购固定码URL"})
+     */
+    private $fixed_salesperson_qrcode_url;
+
+
+    /**
      * @var string
      *
      * 店铺地址
@@ -346,6 +368,13 @@ class Distributor
     private $regionauth_id = 0;
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="distributor_category_id", type="bigint", options={"comment":"店铺分类id", "default": 0})
+     */
+    private $distributor_category_id = 0;
+
+    /**
      * @var boolean
      *
      * @ORM\Column(name="is_open", type="string", options={"comment":"是否开启分账","default":"false"})
@@ -565,6 +594,79 @@ class Distributor
     {
         return $this->company_id;
     }
+
+    /**
+     * Set showMobile
+     *
+     * @param integer $showMobile
+     *
+     * @return Distributor
+     */
+    public function setShowMobile($showMobile)
+    {
+        $this->show_mobile = $showMobile;
+
+        return $this;
+    }
+
+    /**
+     * Get showMobile
+     *
+     * @return integer
+     */
+    public function getShowMobile()
+    {
+        return $this->show_mobile;
+    }
+
+    /**
+     * Set showSalesperson
+     *
+     * @param integer $showSalesperson
+     *
+     * @return Distributor
+     */
+    public function setShowSalesperson($showSalesperson)
+    {
+        $this->show_salesperson = $showSalesperson;
+
+        return $this;
+    }
+
+    /**
+     * Get showSalesperson
+     *
+     * @return integer
+     */
+    public function getShowSalesperson()
+    {
+        return $this->show_salesperson;
+    }
+
+    /**
+     * Set fixedSalespersonQrcodeUrl
+     *
+     * @param string|null $fixedSalespersonQrcodeUrl
+     *
+     * @return Distributor
+     */
+    public function setFixedSalespersonQrcodeUrl($fixedSalespersonQrcodeUrl = null)
+    {
+        $this->fixed_salesperson_qrcode_url = $fixedSalespersonQrcodeUrl;
+
+        return $this;
+    }
+
+    /**
+     * Get fixedSalespersonQrcodeUrl
+     *
+     * @return string|null
+     */
+    public function getFixedSalespersonQrcodeUrl()
+    {
+        return $this->fixed_salesperson_qrcode_url;
+    }
+
 
     /**
      * Set mobile
@@ -1425,6 +1527,20 @@ class Distributor
     }
 
     /**
+     * Set distributorCategoryId.
+     *
+     * @param int $distributorCategoryId
+     *
+     * @return Distributor
+     */
+    public function setDistributorCategoryId($distributorCategoryId)
+    {
+        $this->distributor_category_id = $distributorCategoryId;
+
+        return $this;
+    }
+
+    /**
      * Set isOPen.
      *
      * @param string $isOPen
@@ -1446,6 +1562,16 @@ class Distributor
     public function getRegionauthId()
     {
         return $this->regionauth_id;
+    }
+
+    /**
+     * Get distributorCategoryId.
+     *
+     * @return int
+     */
+    public function getDistributorCategoryId()
+    {
+        return $this->distributor_category_id;
     }
 
     /**

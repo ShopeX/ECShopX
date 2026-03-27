@@ -25,16 +25,26 @@ class LangueRepository
 {
     private $repository;
 
-    public function __construct($repository)
+    /** @var CommonLangModService|null 可选注入，测试用；为 null 时内部 new CommonLangModService() */
+    private $commonLangModService;
+
+    public function __construct($repository, ?CommonLangModService $commonLangModService = null)
     {
         $this->repository = $repository;
+        $this->commonLangModService = $commonLangModService;
     }
 
     public function createLangue($data)
     {   
         $repository = $this->repository;
+        $ns = $this->commonLangModService ?? new CommonLangModService();
         $entity = $repository->getEntity();
-        $entity = $repository->setColumnNamesData($entity, $data);
+        if (!$ns->isDefaultLang()) {
+            $dataCopy = $ns->stripLangFieldsFromData($data, $repository->langField);
+            $entity = $repository->setColumnNamesData($entity, $dataCopy);
+        } else {
+            $entity = $repository->setColumnNamesData($entity, $data);
+        }
         $em = $repository->getEntityManager();
         $em->persist($entity);
         $em->flush();
@@ -42,11 +52,10 @@ class LangueRepository
 
         if (!empty($info)) {
             $companyId = $data['company_id'] ?? 0;
-            $data_id = $repository->primaryKey;
+            $data_id = $info[$repository->primaryKey];
             $table = $repository->table;
             $module = $repository->module;
             $fieldLangue = $repository->langField;
-            $ns = new CommonLangModService();
             $langueData = $ns->getLangData($data, $fieldLangue);
             $ns->saveLang($companyId, $langueData['langBag'], $table, $data_id, $module);
         }
@@ -57,11 +66,17 @@ class LangueRepository
     public function updateOneByLangue($filter, $data)
     {
         $repository = $this->repository;
+        $ns = $this->commonLangModService ?? new CommonLangModService();
         $entity = $repository->findOneBy($filter);
         if (!$entity) {
             return [];
         }
-        $entity = $repository->setColumnNamesData($entity, $data);
+        if (!$ns->isDefaultLang()) {
+            $dataCopy = $ns->stripLangFieldsFromData($data, $repository->langField);
+            $entity = $repository->setColumnNamesData($entity, $dataCopy);
+        } else {
+            $entity = $repository->setColumnNamesData($entity, $data);
+        }
         $em = $repository->getEntityManager();
         $em->persist($entity);
         $em->flush();
@@ -72,7 +87,6 @@ class LangueRepository
             $table = $repository->table;
             $module = $repository->module;
             $fieldLangue = $repository->langField;
-            $ns = new CommonLangModService();
             $langueData = $ns->getLangData($data, $fieldLangue);
             $ns->updateLangData( $companyId,$langueData['langBag'], $table, $data_id, $module);
         }
@@ -83,14 +97,18 @@ class LangueRepository
     public function updateByLangue($filter, $data)
     {
         $repository = $this->repository;
+        $ns = $this->commonLangModService ?? new CommonLangModService();
         $entityList = $repository->findBy($filter);
         if (!$entityList) {
             throw new ResourceException("未查询到更新数据");
         }
+        $dataForMainTable = $ns->isDefaultLang()
+            ? $data
+            : $ns->stripLangFieldsFromData($data, $repository->langField);
         $em = $repository->getEntityManager();
         $result = [];
         foreach ($entityList as $entityProp) {
-            $entityProp = $repository->setColumnNamesData($entityProp, $data);
+            $entityProp = $repository->setColumnNamesData($entityProp, $dataForMainTable);
             $em->persist($entityProp);
             $em->flush();
             $info =  $repository->getColumnNamesData($entityProp);
@@ -101,7 +119,6 @@ class LangueRepository
                 $table = $repository->table;
                 $module = $repository->module;
                 $fieldLangue = $repository->langField;
-                $ns = new CommonLangModService();
                 $langueData = $ns->getLangData($data, $fieldLangue);
                 $ns->updateLangData( $companyId,$langueData['langBag'], $table, $data_id, $module);
             }
@@ -127,7 +144,7 @@ class LangueRepository
             $table = $repository->table;
             $module = $repository->module;
             $ns = new CommonLangModService();
-            $ns->deleteLang($companyId, $table, $data_id, $module);
+            $ns->deleteAllLang($companyId, $table, $data_id, $module);
         }
 
         return true;
@@ -151,7 +168,7 @@ class LangueRepository
                 $table = $repository->table;
                 $module = $repository->module;
                 $ns = new CommonLangModService();
-                $ns->deleteLang($companyId, $table, $data_id, $module);
+                $ns->deleteAllLang($companyId, $table, $data_id, $module);
             }
         }
 

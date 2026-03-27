@@ -23,6 +23,7 @@ use KaquanBundle\Services\MemberCardService;
 use PromotionsBundle\Services\MemberPriceService;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use GuzzleHttp\Client as Client;
+use OrdersBundle\Services\ShippingTemplatesService;
 
 class NormalGoodsUploadService
 {
@@ -94,7 +95,7 @@ class NormalGoodsUploadService
         '参数值' => ['size' => 255, 'remarks' => '例如：系列:生机展颜|功效:美白提亮', 'is_need' => false],
         '发货时间' => ['size' => 255, 'remarks' => '发货时间按天计算', 'is_need' => true],
         '是否支持分润' => ['size' => 255, 'remarks' => '是否支持: 0不支持分润 1支持分润', 'is_need' => false],
-        '分润类型' => ['size' => 255, 'remarks' => '分润类型:0,1或2, 0默认分润 1固定比例分润 2固定金额分润', 'is_need' => true],
+        '分润类型' => ['size' => 255, 'remarks' => '分润类型:0,1或2, 0默认分润 1固定比例分润 2固定金额分润', 'is_need' => false],
         '拉新分润' => ['size' => 255, 'remarks' => '1:按照比例分润 1-100, 2:按照固定金额分润(元)，最多两位小数', 'is_need' => false],
         '推广分润' => ['size' => 255, 'remarks' => '1:按照比例分润 1-100, 2:按照固定金额分润(元)，最多两位小数', 'is_need' => false],
         '商品状态' => ['size' => 30, 'remarks' => '前台可销售，前端不展示，不可销售, 前台仅展示', 'is_need' => false],
@@ -294,6 +295,19 @@ class NormalGoodsUploadService
         $this->createGoods($companyId, $row);
     }
 
+    /**
+     * 导入合并用：goods_id / default_item_id 须为正整数。
+     * 库内或 ORM 返回 0 时不能用 empty/隐式布尔判断，否则会漏传 addItems 的 goods_id。
+     */
+    private function isValidImportGoodsGroupId($id): bool
+    {
+        if ($id === null || $id === false || $id === '') {
+            return false;
+        }
+
+        return (int) $id > 0;
+    }
+
     private function createGoods($companyId, $row)
     {
         $itemsService = new ItemsService();
@@ -319,29 +333,34 @@ class NormalGoodsUploadService
 
         $nospec = $row['item_spec'] ? false : true;
         //表示为多规格，并且已经存储了默认商品，所以只需要新增当前商品数据，通用关联数据不需要更新，例如：商品关联的分类，关联的品牌等
-        if (($nospec === false || $nospec === 'false') && $this->itemName && trim($row['item_name']) == $this->itemName) {
+        $mergeByItemName = ($nospec === false || $nospec === 'false')
+            && $this->itemName
+            && trim($row['item_name']) == $this->itemName;
+        if ($mergeByItemName) {
             $isCreateRelData = false;
             $defaultItemId = $this->defaultItemId;
+            if ($this->isValidImportGoodsGroupId($this->defaultItemId)) {
+                $row['goods_id'] = $this->defaultItemId;
+            }
         } else {
             $isCreateRelData = true;
             $defaultItemId = null;
         }
-        // search items by goods_bn
+        // search items by goods_bn（仅当 goods_id/default_item_id 为有效正整数时才采用，避免 0 覆盖续行）
         $filter = [
             'goods_bn' => $row['goods_bn'],
             'company_id' => $companyId,
             'is_default' => 1,
         ];
-        app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($filter));
         $items = $itemsService->getInfo($filter);
-        app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($items));
         if ($items) {
-            $defaultItemId = $items['default_item_id'];
-            $row['goods_id'] = $items['goods_id'];
-            $isCreateRelData = false;
-            app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($defaultItemId));
-            app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($row['goods_id']));
-            app('log')->debug('debug:'.__FUNCTION__.':'.__LINE__.':'.json_encode($isCreateRelData));
+            $gid = $items['goods_id'] ?? null;
+            $did = $items['default_item_id'] ?? null;
+            if ($this->isValidImportGoodsGroupId($gid) && $this->isValidImportGoodsGroupId($did)) {
+                $defaultItemId = $did;
+                $row['goods_id'] = $gid;
+                $isCreateRelData = false;
+            }
         }
         $row['default_item_id'] = $defaultItemId;
         $itemsProfitService = new ItemsProfitService();
@@ -351,6 +370,7 @@ class NormalGoodsUploadService
         if (!in_array(intval($row['is_profit']), [0, 1])) {
             throw new BadRequestHttpException('是否支持分润参数错误');
         }
+        $row['profit_type'] ??= 0;
         $row['profit_type'] = intval($row['profit_type']);
         if ($row['profit_type'] >= 0) {
             if (!in_array($row['profit_type'], [$itemsProfitService::STATUS_PROFIT_DEFAULT, $itemsProfitService::STATUS_PROFIT_SCALE, $itemsProfitService::STATUS_PROFIT_FEE])) {
@@ -436,15 +456,15 @@ class NormalGoodsUploadService
             }
         }
 
-        if (isset($row['goods_id']) && $row['goods_id']) {
-            $itemInfo['goods_id'] = $row['goods_id'];
+        if (isset($row['goods_id']) && $row['goods_id'] !== false && $this->isValidImportGoodsGroupId($row['goods_id'])) {
+            $itemInfo['goods_id'] = (int) $row['goods_id'];
         }
 
         if (isset($row['item_id']) && $row['item_id']) {
             $itemInfo['item_id'] = $row['item_id'];
         }
 
-        if ($defaultItemId) {
+        if ($this->isValidImportGoodsGroupId($defaultItemId)) {
             $itemInfo['default_item_id'] = $defaultItemId;
         }
 
@@ -791,8 +811,8 @@ class NormalGoodsUploadService
             throw new BadRequestHttpException('请填写商品运费模版');
         }
 
-        $shippingTemplatesRepository = app('registry')->getManager('default')->getRepository(ShippingTemplates::class);
-        $data = $shippingTemplatesRepository->getInfo(['name' => $row['templates_id'], 'company_id' => $companyId, 'distributor_id' => $row['distributor_id']]);
+        $shippingTemplatesService = new ShippingTemplatesService();
+        $data = $shippingTemplatesService->getShippingTemplateInfo(['name' => $row['templates_id'], 'company_id' => $companyId, 'distributor_id' => $row['distributor_id']]);
         if (!$data) {
             throw new BadRequestHttpException('填写的运费模版不存在');
         }
@@ -983,10 +1003,16 @@ class NormalGoodsUploadService
         $category = $row['item_category'];
         $catNames = explode('|', $category);
 
+        // 过滤掉数据元素空格
+        $catNames = array_map('trim', $catNames);
+
         $catNamesArr = array();
         foreach ($catNames as $catNameRow) {
             $catNamesArr = array_merge($catNamesArr, explode('->', $catNameRow));
         }
+
+        // 过滤掉数据元素空格
+        $catNamesArr = array_map('trim', $catNamesArr);
 
         $itemsCategoryService = new ItemsCategoryService();
         // 数据结构买办法判断获取的分类ID是否最子级分类，三级分类改造后在优化
@@ -1105,10 +1131,12 @@ class NormalGoodsUploadService
                 if (empty($itemRow[1])) {
                     throw new BadRequestHttpException('商品规格值解析错误');
                 }
-                $attributeNames[] = $itemRow[0];
-                $attributeValues[] = $itemRow[1];
+                $attributeNames[$itemRow[0]] = 1;
+                $attributeValues[$itemRow[1]] = 1;
             }
-
+            // 对attributeNames和attributeValues进行去重
+            $attributeNames = array_keys($attributeNames);
+            $attributeValues = array_keys($attributeValues);
             // $goodsSpecIds 只查询当前主类目关联的规格
             $filter = [
                 'company_id' => $companyId, 'attribute_name' => $attributeNames,
@@ -1237,32 +1265,220 @@ class NormalGoodsUploadService
                 'price' => '0.01',
                 'market_price' => '0',
                 'cost_price' => '0',
+                'start_num' => '',
                 'member_price' => '',
-                // 'audit_status' => '待提交',
                 'store' => '99',
                 'pics' => '',
+                'intro' => '',
+                'item_spec_pics' => '',
                 'videos' => '',
-                'intro' => '这是详情内容',
-                'goods_brand' => '云店',
-                'item_category' => '食品副食->咸味食品->屏幕故障',
+                'goods_brand' => 'ECshopX',
                 'templates_id' => '全国包邮',
+                'item_category' => '食品副食->咸味食品->屏幕故障',
                 'weight' => '0',
                 'barcode' => '',
                 'item_unit' => '',
                 'item_spec' => '',
                 'item_params' => '',
-                'is_profit' => '1',
+                'delivery_time' => '',
+                'is_profit' => '-1',
                 'profit_type' => '0',
                 'profit' => '',
                 'popularize_profit' => '',
                 'approve_status' => '不可销售'
+            ],
+            [
+                'item_main_category' => '运动户外->品类->软壳',
+                'item_name' => '林间漫步轻便冲锋衣外套',
+                'goods_bn' => 'PC26011700000025',
+                'item_bn' => 'KC26011700000029',
+                'brief' => '',
+                'price' => '2300',
+                'market_price' => '0',
+                'cost_price' => '0',
+                'start_num' => '',
+                'member_price' => '',
+                'store' => '100',
+                'pics' => '',
+                'intro' => '',
+                'item_spec_pics' => '',
+                'videos' => '',
+                'goods_brand' => 'ECshopX',
+                'templates_id' => '全国包邮',
+                'item_category' => '运动户外->系列->城市休闲|运动户外->系列->徒步&穿越|运动户外->系列->野外跑步|运动户外->系列->登山&攀岩|运动户外->系列->商务系列|运动户外->系列->单双板滑雪',
+                'weight' => '0',
+                'barcode' => '',
+                'item_unit' => '',
+                'item_spec' => '尺码:XXL|颜色:黄色1',
+                'item_params' => '',
+                'delivery_time' => '0',
+                'is_profit' => '0',
+                'profit_type' => '0',
+                'profit' => '',
+                'popularize_profit' => '',
+                'approve_status' => '前台可销售'
+            ],
+            [
+                'item_main_category' => '运动户外->品类->软壳',
+                'item_name' => '林间漫步轻便冲锋衣外套',
+                'goods_bn' => 'PC26011700000025',
+                'item_bn' => 'KC26011700000028',
+                'brief' => '',
+                'price' => '2300',
+                'market_price' => '0',
+                'cost_price' => '0',
+                'start_num' => '',
+                'member_price' => '',
+                'store' => '101',
+                'pics' => '',
+                'intro' => '',
+                'item_spec_pics' => '',
+                'videos' => '',
+                'goods_brand' => 'ECshopX',
+                'templates_id' => '全国包邮',
+                'item_category' => '运动户外->系列->城市休闲|运动户外->系列->徒步&穿越|运动户外->系列->野外跑步|运动户外->系列->登山&攀岩|运动户外->系列->商务系列|运动户外->系列->单双板滑雪',
+                'weight' => '0',
+                'barcode' => '',
+                'item_unit' => '',
+                'item_spec' => '尺码:XL|颜色:黄色1',
+                'item_params' => '',
+                'delivery_time' => '0',
+                'is_profit' => '0',
+                'profit_type' => '0',
+                'profit' => '',
+                'popularize_profit' => '',
+                'approve_status' => '前台可销售'
+            ],
+            [
+                'item_main_category' => '运动户外->品类->软壳',
+                'item_name' => '林间漫步轻便冲锋衣外套',
+                'goods_bn' => 'PC26011700000025',
+                'item_bn' => 'KC26011700000027',
+                'brief' => '',
+                'price' => '2300',
+                'market_price' => '0',
+                'cost_price' => '0',
+                'start_num' => '',
+                'member_price' => '',
+                'store' => '102',
+                'pics' => '',
+                'intro' => '',
+                'item_spec_pics' => '',
+                'videos' => '',
+                'goods_brand' => 'ECshopX',
+                'templates_id' => '全国包邮',
+                'item_category' => '运动户外->系列->城市休闲|运动户外->系列->徒步&穿越|运动户外->系列->野外跑步|运动户外->系列->登山&攀岩|运动户外->系列->商务系列|运动户外->系列->单双板滑雪',
+                'weight' => '0',
+                'barcode' => '',
+                'item_unit' => '',
+                'item_spec' => '尺码:L|颜色:黄色1',
+                'item_params' => '',
+                'delivery_time' => '0',
+                'is_profit' => '0',
+                'profit_type' => '0',
+                'profit' => '',
+                'popularize_profit' => '',
+                'approve_status' => '前台可销售'
+            ],
+            [
+                'item_main_category' => '运动户外->品类->软壳',
+                'item_name' => '林间漫步轻便冲锋衣外套',
+                'goods_bn' => 'PC26011700000025',
+                'item_bn' => 'KC26011700000026',
+                'brief' => '',
+                'price' => '2300',
+                'market_price' => '0',
+                'cost_price' => '0',
+                'start_num' => '',
+                'member_price' => '',
+                'store' => '103',
+                'pics' => '',
+                'intro' => '',
+                'item_spec_pics' => '',
+                'videos' => '',
+                'goods_brand' => 'ECshopX',
+                'templates_id' => '全国包邮',
+                'item_category' => '运动户外->系列->城市休闲|运动户外->系列->徒步&穿越|运动户外->系列->野外跑步|运动户外->系列->登山&攀岩|运动户外->系列->商务系列|运动户外->系列->单双板滑雪',
+                'weight' => '0',
+                'barcode' => '',
+                'item_unit' => '',
+                'item_spec' => '尺码:M|颜色:黄色1',
+                'item_params' => '',
+                'delivery_time' => '0',
+                'is_profit' => '0',
+                'profit_type' => '0',
+                'profit' => '',
+                'popularize_profit' => '',
+                'approve_status' => '前台可销售'
+            ],
+            [
+                'item_main_category' => '运动户外->品类->软壳',
+                'item_name' => '林间漫步轻便冲锋衣外套',
+                'goods_bn' => 'PC26011700000025',
+                'item_bn' => 'KC26011700000025',
+                'brief' => '',
+                'price' => '2300',
+                'market_price' => '0',
+                'cost_price' => '0',
+                'start_num' => '',
+                'member_price' => '',
+                'store' => '104',
+                'pics' => '',
+                'intro' => '',
+                'item_spec_pics' => '',
+                'videos' => '',
+                'goods_brand' => 'ECshopX',
+                'templates_id' => '全国包邮',
+                'item_category' => '运动户外->系列->城市休闲|运动户外->系列->徒步&穿越|运动户外->系列->野外跑步|运动户外->系列->登山&攀岩|运动户外->系列->商务系列|运动户外->系列->单双板滑雪',
+                'weight' => '0',
+                'barcode' => '',
+                'item_unit' => '',
+                'item_spec' => '尺码:S1|颜色:黄色1',
+                'item_params' => '',
+                'delivery_time' => '0',
+                'is_profit' => '0',
+                'profit_type' => '0',
+                'profit' => '',
+                'popularize_profit' => '',
+                'approve_status' => '前台可销售'
+            ],
+            [
+                'item_main_category' => '运动户外->品类->软壳',
+                'item_name' => '林间漫步轻便冲锋衣外套',
+                'goods_bn' => 'PC26011700000025',
+                'item_bn' => 'KC26011700000024',
+                'brief' => '',
+                'price' => '2300',
+                'market_price' => '0',
+                'cost_price' => '0',
+                'start_num' => '',
+                'member_price' => '',
+                'store' => '105',
+                'pics' => '',
+                'intro' => '',
+                'item_spec_pics' => '',
+                'videos' => '',
+                'goods_brand' => 'ECshopX',
+                'templates_id' => '全国包邮',
+                'item_category' => '运动户外->系列->城市休闲|运动户外->系列->徒步&穿越|运动户外->系列->野外跑步|运动户外->系列->登山&攀岩|运动户外->系列->商务系列|运动户外->系列->单双板滑雪',
+                'weight' => '0',
+                'barcode' => '',
+                'item_unit' => '',
+                'item_spec' => '尺码:S|颜色:黄色1',
+                'item_params' => '',
+                'delivery_time' => '0',
+                'is_profit' => '0',
+                'profit_type' => '0',
+                'profit' => '',
+                'popularize_profit' => '',
+                'approve_status' => '前台可销售'
             ],
             [],
             [
                 'item_main_category' => '',
                 'item_name' => '',
                 'item_bn' => '',
-                'brief' => '2为一条单规格商品，3-8为一条多规格商品  此文件为DOEM模拟数据，使用该模板请删除本句，重新修改数据。'
+                'brief' => '2为一条单规格商品，3-8为一条多规格商品  此文件数据仅作为参考，使用该模板请删除本句，重新修改数据。'
             ]
         ];
         $header = array_flip($this->header);

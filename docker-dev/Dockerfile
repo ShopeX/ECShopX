@@ -1,7 +1,13 @@
-FROM registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-7.4.32-fpm-alpine3.16
+FROM registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.29-fpm-alpine3.22
+
+# Node 16：Alpine 3.22 的 apk 不再提供 nodejs 16。
+# 使用 Node 官方 glibc 预编译包 + libc6-compat（gcompat），避免依赖 apk 版本线。
+# 默认从 nodejs.org 下载；中国大陆可加: --build-arg NODE_DIST_BASE=https://npmmirror.com/mirrors/node
+ARG NODE_VERSION=16.20.2
+ARG NODE_DIST_BASE=https://nodejs.org/dist
 
 # 安装 MySQL、Redis、Nginx、Supervisor 和 Node.js
-# 基础镜像已包含 PHP 7.4.32 和 FPM，只需安装其他服务
+# 基础镜像已包含 PHP 8.2 和 FPM，只需安装其他服务
 RUN apk add --no-cache \
     # MySQL (MariaDB)
     mariadb \
@@ -12,18 +18,25 @@ RUN apk add --no-cache \
     nginx \
     # Supervisor
     supervisor \
-    # Node.js 16.x（从 Alpine 官方源安装）
-    nodejs=16.20.2-r0 \
-    npm \
     # 其他工具
     bash \
     curl \
     tzdata \
     ca-certificates \
-    # Node.js 编译依赖
     python3 \
     make \
     g++ \
+    xz \
+    libstdc++ \
+    libc6-compat \
+    && ARCH="$(uname -m)" \
+    && case "$ARCH" in \
+         x86_64) NODE_ARCH=x64 ;; \
+         aarch64) NODE_ARCH=arm64 ;; \
+         *) echo "unsupported architecture: $ARCH (need x86_64 or aarch64)" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL "${NODE_DIST_BASE}/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
+      | tar -xJ -C /usr/local --strip-components=1 \
     && rm -rf /var/cache/apk/* \
     && npm config set registry https://registry.npmmirror.com \
     && node --version && npm --version

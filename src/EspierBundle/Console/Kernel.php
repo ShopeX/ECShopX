@@ -82,7 +82,6 @@ use ThemeBundle\Services\PagesTemplateServices;
 use SuperAdminBundle\Console\UpdateAccountPasswordCommand;
 use SuperAdminBundle\Console\UploadMenuCommand;
 use SuperAdminBundle\Console\UploadDealerMenuCommand;
-use CompanysBundle\Ego\ExtendDemoLisensCommand;
 use CompanysBundle\Console\CreateAdminOperatorCommand;
 use CompanysBundle\Console\InitAdminPasswordCommand;
 use PointBundle\Services\PointMemberService;
@@ -121,6 +120,7 @@ use SystemLinkBundle\Console\WdtErp\SyncAfterSaleCommand as WdtErpSyncAfterSaleC
 use EspierBundle\Commands\KafkaConsumerCommand;
 use KujialeBundle\Commands\UpdateDesignerWorksCommand;
 use TbItemsBundle\Commands\SyncTbitemsCommand;
+use DistributionBundle\Console\FillDistributorLatLngCommand;
 class Kernel extends ConsoleKernel
 {
     public function getArtisan()
@@ -148,7 +148,6 @@ class Kernel extends ConsoleKernel
         UploadMerchantMenuCommand::class,
         OrderTipCommand::class,
         UpdateAccountPasswordCommand::class,
-        ExtendDemoLisensCommand::class,
         CreateAdminOperatorCommand::class,
         InitAdminPasswordCommand::class,
         CreateSystemTagCommand::class,
@@ -187,7 +186,8 @@ class Kernel extends ConsoleKernel
         KafkaConsumerCommand::class,
         SyncTbitemsCommand::class,
         InitMultiLangCommand::class,
-        UpdateDesignerWorksCommand::class
+        UpdateDesignerWorksCommand::class,
+        FillDistributorLatLngCommand::class,
     ];
 
     /**

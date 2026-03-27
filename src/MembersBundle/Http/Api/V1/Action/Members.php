@@ -50,9 +50,8 @@ use PopularizeBundle\Services\PromoterService;
 use MembersBundle\Events\CreateMemberSuccessEvent;
 use KaquanBundle\Services\UserDiscountService;
 use MembersBundle\Entities\MembersDeleteRecord;
-use MembersBundle\Services\MemberSalespersonNotifyService;
-
 use EspierBundle\Services\Config\ConfigRequestFieldsService;
+use MembersBundle\Services\MemberSalespersonNotifyService;
 
 class Members extends Controller
 {
@@ -560,6 +559,63 @@ class Members extends Controller
                 }
             }
 
+            // 批量查询会员的绑定导购和绑定门店
+            $this->memberService->batchGetBindSalesperson($companyId, $result['list']);
+
+            // 批量查询注册分销商名称
+            $regDistributorIds = array_filter(array_unique(array_column($result['list'], 'reg_distributor')), function($id) {
+                return $id > 0;
+            });
+            $regDistributorNames = [];
+            if (!empty($regDistributorIds)) {
+                $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
+                $distributorFilter = [
+                    'distributor_id' => $regDistributorIds,
+                    'company_id' => $companyId,
+                ];
+                $distributorList = $distributorRepository->getLists($distributorFilter, 'distributor_id,name');
+
+                if (!empty($distributorList)) {
+                    foreach ($distributorList as $distributor) {
+                        $regDistributorNames[$distributor['distributor_id']] = $distributor['name'] ?? '';
+                    }
+                }
+            }
+
+            // 将分销商名称添加到会员列表中
+            foreach ($result['list'] as &$member) {
+                $regDistributorId = $member['reg_distributor'] ?? 0;
+                $member['reg_distributor_name'] = $regDistributorNames[$regDistributorId] ?? '';
+            }
+            unset($member);
+
+            // 批量查询分配的店铺（op_distributor）对应的门店名称
+            $opDistributorIds = array_filter(array_unique(array_column($result['list'], 'op_distributor')), function($id) {
+                return $id > 0;
+            });
+            $opDistributorNames = [];
+            if (!empty($opDistributorIds)) {
+                $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
+                $distributorFilter = [
+                    'distributor_id' => $opDistributorIds,
+                    'company_id' => $companyId,
+                ];
+                $distributorList = $distributorRepository->getLists($distributorFilter, 'distributor_id,name');
+
+                if (!empty($distributorList)) {
+                    foreach ($distributorList as $distributor) {
+                        $opDistributorNames[$distributor['distributor_id']] = $distributor['name'] ?? '';
+                    }
+                }
+            }
+
+            // 将门店名称添加到会员列表中，字段名为 maintain_store
+            foreach ($result['list'] as &$member) {
+                $opDistributorId = $member['op_distributor'] ?? 0;
+                $member['maintain_store'] = $opDistributorNames[$opDistributorId] ?? '';
+            }
+            unset($member);
+
             // 为每个成员添加 requestFields
             if ($result['list']) {
                 $userIds = array_column($result['list'], 'user_id');
@@ -625,64 +681,6 @@ class Members extends Controller
                     $member['datapassRequestFields'] = $datapassRequestFields;
                 }
             }
-
-
-            // 批量查询会员的绑定导购和绑定门店
-            $this->memberService->batchGetBindSalesperson($companyId, $result['list']);
-
-            // 批量查询注册分销商名称
-            $regDistributorIds = array_filter(array_unique(array_column($result['list'], 'reg_distributor')), function($id) {
-                return $id > 0;
-            });
-            $regDistributorNames = [];
-            if (!empty($regDistributorIds)) {
-                $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
-                $distributorFilter = [
-                    'distributor_id' => $regDistributorIds,
-                    'company_id' => $companyId,
-                ];
-                $distributorList = $distributorRepository->getLists($distributorFilter, 'distributor_id,name');
-
-                if (!empty($distributorList)) {
-                    foreach ($distributorList as $distributor) {
-                        $regDistributorNames[$distributor['distributor_id']] = $distributor['name'] ?? '';
-                    }
-                }
-            }
-
-            // 将分销商名称添加到会员列表中
-            foreach ($result['list'] as &$member) {
-                $regDistributorId = $member['reg_distributor'] ?? 0;
-                $member['reg_distributor_name'] = $regDistributorNames[$regDistributorId] ?? '';
-            }
-            unset($member);
-
-            // 批量查询分配的店铺（op_distributor）对应的门店名称
-            $opDistributorIds = array_filter(array_unique(array_column($result['list'], 'op_distributor')), function($id) {
-                return $id > 0;
-            });
-            $opDistributorNames = [];
-            if (!empty($opDistributorIds)) {
-                $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
-                $distributorFilter = [
-                    'distributor_id' => $opDistributorIds,
-                    'company_id' => $companyId,
-                ];
-                $distributorList = $distributorRepository->getLists($distributorFilter, 'distributor_id,name');
-
-                if (!empty($distributorList)) {
-                    foreach ($distributorList as $distributor) {
-                        $opDistributorNames[$distributor['distributor_id']] = $distributor['name'] ?? '';
-                    }
-                }
-            }
-
-            // 将门店名称添加到会员列表中，字段名为 maintain_store
-            foreach ($result['list'] as &$member) {
-                $opDistributorId = $member['op_distributor'] ?? 0;
-                $member['maintain_store'] = $opDistributorNames[$opDistributorId] ?? '';
-            }
-            unset($member);
 
         }
         return $this->response->array($result);
@@ -775,7 +773,7 @@ class Members extends Controller
             // 绑定导购和绑定门店信息（通过 unionid 查询）
             if($unionid){
                 $requestSalesperson = new MarketingCenterRequest();
-                $resultSalesperson = $requestSalesperson->call($companyId, 'basics.member.getBindSalesperson', ['external_member_id' => $result['user_id']]);
+                $resultSalesperson = $requestSalesperson->call($companyId, 'basics.member.getBindSalesperson', ['unionid' => $unionid]);
                 // [2025-08-01 17:09:24] production.DEBUG: MarketingCenter:result===>{"status":"success","code":"200","message":"success","data":{"salesperson_id":8,"work_userid":"18964058319","member_id":"8","external_member_type":1,"external_userid":"wmZ_c_cQAAZ8RAXTS1EZbpCv0TASdw1A","suite_external_userid":"","unionid":"oFvDQ69HXH8Wcbw19tE9h0RM4MvY","member_status":1,"bind_status":1,"bind_time":1753949254,"bind_cancel_time":1754063999,"friend_status":1,"become_friend_time":1753949070,"employee_number":"18964058319","store_bn":"09876555","store_name":"桂林路店"}}
                 $salespersonData = $resultSalesperson['data'] ?? [];
                 $result['salesperson_info'] = $salespersonData;
@@ -1634,7 +1632,7 @@ class Members extends Controller
      *     @SWG\Parameter(
      *         name="user_id",
      *         in="query",
-     *         description="会员ID数组，支持数组格式或JSON字符串格式，如：[1,2,3] 或 \"[1,2,3]\"",
+     *         description="会员ID数组，支持数组或JSON字符串格式，如 1,2,3",
      *         required=true,
      *         type="array",
      *         @SWG\Items(type="integer")
@@ -1650,13 +1648,9 @@ class Members extends Controller
      *         response=200,
      *         description="成功返回结构",
      *         @SWG\Schema(
-     *             @SWG\Property(
-     *                 property="data",
-     *                 type="object",
-     *                 @SWG\Property(property="status", type="boolean", example=true, description="操作状态"),
-     *                 @SWG\Property(property="message", type="string", example="更新成功", description="提示信息"),
-     *                 @SWG\Property(property="affected_rows", type="integer", example=5, description="受影响的行数"),
-     *             ),
+     *             @SWG\Property(property="status", type="boolean", example=true, description="操作状态"),
+     *             @SWG\Property(property="message", type="string", example="更新成功", description="提示信息"),
+     *             @SWG\Property(property="affected_rows", type="integer", example=5, description="受影响的行数"),
      *          ),
      *     ),
      *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/MembersErrorRespones") ) )

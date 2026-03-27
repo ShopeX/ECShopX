@@ -662,7 +662,8 @@ class DiscountCard extends BaseController
             $filter['or']['distributor_id|like'] = '%,%';
         } else {
             if ($request->get('distributor_id')) {
-                $filter['distributor_id|like'] = ',' . $request->get('distributor_id') . ',';
+                $filter['or']['distributor_id|like'] = ',' . $request->get('distributor_id') . ',';
+                $filter['or']['distributor_id|like'] = '%,%';
             }
         }
 

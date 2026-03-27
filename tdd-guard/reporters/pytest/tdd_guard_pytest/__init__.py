@@ -1,0 +1,1 @@
+"""TDD Guard pytest plugin for capturing test results."""

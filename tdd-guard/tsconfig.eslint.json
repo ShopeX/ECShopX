@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "packages/*/src/**/*",
+    "reporters/*/src/**/*",
+    "reporters/*/test/**/*",
+    "reporters/test/**/*",
+    "vitest.config.ts",
+    "eslint.config.mjs"
+  ],
+  "exclude": ["**/dist", "**/node_modules"]
+}

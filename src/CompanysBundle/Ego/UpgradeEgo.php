@@ -175,34 +175,34 @@ class UpgradeEgo
      * @return boolean
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function getActive(string $passportUid)
-    {
-        // 非免费版不做验证
-        $license = $this->getSwooleLicense();
-        if (!isset($license['Product_type']) || ($license['Product_type'] != 'ECSHOPX2_FREE')) {
-            return true;
-        }
-        if (!$passportUid) {
-            return true;
-        }
-        $params = [
-            'shopexid' => $passportUid,
-            'product_type' => $license['Product_type'],
-            'version' => $this->getSelfVersion() ?? '-',
-            'source' => $_SERVER['HTTP_HOST'],
-            'ip' => get_client_ip(),
-            'timestamp' => time(),
-        ];
-        $params['sign'] = $this->getSign($params, $this->secret);
-        $client = new Client(['base_uri' => self::BASE_URI]);
-        $response = $client->post(self::ECX_ACTIVE_API_URL, ['verify'=>false, 'form_params' => $params]);
-        $result = $response->getBody()->getContents();
-        $result = json_decode($result, true);
-        if (isset($result['data']['agreement_flag']) && !$result['data']['agreement_flag']) {
-            throw new \Exception('您还没有同意安装协议！', 400401);
-        }
-        return true;
-    }
+    // public function getActive(string $passportUid)
+    // {
+    //     // 非免费版不做验证
+    //     $license = $this->getSwooleLicense();
+    //     if (!isset($license['Product_type']) || ($license['Product_type'] != 'ECSHOPX2_FREE')) {
+    //         return true;
+    //     }
+    //     if (!$passportUid) {
+    //         return true;
+    //     }
+    //     $params = [
+    //         'shopexid' => $passportUid,
+    //         'product_type' => $license['Product_type'],
+    //         'version' => $this->getSelfVersion() ?? '-',
+    //         'source' => $_SERVER['HTTP_HOST'],
+    //         'ip' => get_client_ip(),
+    //         'timestamp' => time(),
+    //     ];
+    //     $params['sign'] = $this->getSign($params, $this->secret);
+    //     $client = new Client(['base_uri' => self::BASE_URI]);
+    //     $response = $client->post(self::ECX_ACTIVE_API_URL, ['verify'=>false, 'form_params' => $params]);
+    //     $result = $response->getBody()->getContents();
+    //     $result = json_decode($result, true);
+    //     if (isset($result['data']['agreement_flag']) && !$result['data']['agreement_flag']) {
+    //         throw new \Exception('您还没有同意安装协议！', 400401);
+    //     }
+    //     return true;
+    // }
 
     /**
      * 获取更新日志列表
@@ -255,32 +255,32 @@ class UpgradeEgo
      * @return boolean
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function confirmAgreement(string $passportUid, $agreement_id)
-    {
-        // 非免费版不做验证
-        $license = $this->getSwooleLicense();
-        if (!isset($license['Product_type']) || ($license['Product_type'] != 'ECSHOPX2_FREE')) {
-            return true;
-        }
-        if (!$passportUid || !$agreement_id) {
-            return true;
-        }
-        $params = [
-            'timestamp' => time(),
-            'shopexid' => $passportUid,
-            'agreement_id' => $agreement_id,
-        ];
-        $params['sign'] = $this->getSign($params, $this->secret);
-        $client = new Client(['base_uri' => self::BASE_URI]);
-        $response = $client->post(self::ECX_AGREEMENT_CONFIRM_API_URL, ['verify'=>false, 'form_params' => $params]);
-        $result = $response->getBody()->getContents();
-        $result = json_decode($result, true);
-        $return = false;
-        if (isset($result['status']) && $result['status'] == 'success') {
-            $return = true;
-        }
-        return $return;
-    }
+    // public function confirmAgreement(string $passportUid, $agreement_id)
+    // {
+    //     // 非免费版不做验证
+    //     $license = $this->getSwooleLicense();
+    //     if (!isset($license['Product_type']) || ($license['Product_type'] != 'ECSHOPX2_FREE')) {
+    //         return true;
+    //     }
+    //     if (!$passportUid || !$agreement_id) {
+    //         return true;
+    //     }
+    //     $params = [
+    //         'timestamp' => time(),
+    //         'shopexid' => $passportUid,
+    //         'agreement_id' => $agreement_id,
+    //     ];
+    //     $params['sign'] = $this->getSign($params, $this->secret);
+    //     $client = new Client(['base_uri' => self::BASE_URI]);
+    //     $response = $client->post(self::ECX_AGREEMENT_CONFIRM_API_URL, ['verify'=>false, 'form_params' => $params]);
+    //     $result = $response->getBody()->getContents();
+    //     $result = json_decode($result, true);
+    //     $return = false;
+    //     if (isset($result['status']) && $result['status'] == 'success') {
+    //         $return = true;
+    //     }
+    //     return $return;
+    // }
 
     /**
      * 获取下载文件

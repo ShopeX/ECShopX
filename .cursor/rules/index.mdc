@@ -1,0 +1,27 @@
+---
+name: Agent System Rules
+description: Agent 系统触发条件和使用规则
+alwaysApply: true
+priority: 1
+---
+
+# Agent 系统触发条件约定
+
+本文档定义了各个 Agent 的触发条件和使用规则。当用户输入匹配以下条件时，AI 应该自动切换到相应的 Agent 模式。
+
+## 核心原则
+
+1. **自动识别**：当用户输入匹配触发条件时，AI 应该自动切换到相应的 Agent 模式
+2. **明确指定优先**：如果用户使用 `@<Agent名>`（如 `@planner`、`@orchestrator`、`@developer`）明确指定，优先使用指定的 Agent
+3. **职责分离**：严格遵守各 Agent 的职责边界，不能越界
+4. **流程完整**：确保规划阶段和执行阶段的流程完整，不跳过任何步骤
+
+## 强制规划原则
+
+见 **workflow.mdc** 的「强制规划原则」：所有任务须经规划阶段、规划与执行分离。
+
+## 相关规则文件
+
+- `agent-triggers.mdc` - Agent 触发条件详细说明
+- `workflow.mdc` - 工作流程规则
+- `tdd-guard.mdc` - TDD 与 tdd-guard 约束（强制，Edit/Write 时须遵守）

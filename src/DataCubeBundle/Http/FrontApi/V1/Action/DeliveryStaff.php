@@ -63,7 +63,7 @@ class DeliveryStaff extends BaseController
      *                  ),
      *          ),
      *     )),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/DatasourcesErrorRespones") ) )
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( @SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer") ) )
      * )
      */
     public function getDeliveryStaffData(request $request)
@@ -126,6 +126,8 @@ class DeliveryStaff extends BaseController
      * @SWG\Get(
      *     path="/datacube/DeliverystaffdataDetail",
      *     summary="获取配送员统计详情",
+     *     @SWG\Response(response=200, description="成功"),
+     * )
      */
     public function getDeliveryStaffDataDetail(request $request)
     {

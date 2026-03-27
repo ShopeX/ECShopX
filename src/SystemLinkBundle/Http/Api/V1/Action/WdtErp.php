@@ -36,7 +36,7 @@ class WdtErp extends Controller
      *     description="旺店通ERP配置信息保存",
      *     operationId="setSetting",
      *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
-     *     @SWG\Parameter( name="sid", in="query", description="sid required=true, type="string"),
+     *     @SWG\Parameter( name="sid", in="query", description="sid", required=true, type="string"),
      *     @SWG\Parameter( name="app_key", in="query", description="app_key", required=true, type="string"),
      *     @SWG\Parameter( name="app_secret", in="query", description="app_secret", required=true, type="string"),
      *     @SWG\Response(
@@ -48,12 +48,12 @@ class WdtErp extends Controller
      *                 type="array",
      *                 @SWG\Items(
      *                     type="object",
-     *                     @SWG\Property(property="status", type="stirng"),
+     *                     @SWG\Property(property="status", type="string"),
      *                 )
      *             ),
      *          ),
      *     ),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/OrdersErrorRespones") ) )
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( @SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer") ) )
      * )
      */
     public function setSetting(Request $request)
@@ -116,7 +116,7 @@ class WdtErp extends Controller
      *             ),
      *          ),
      *     ),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/OrdersErrorRespones") ) )
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( @SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer") ) )
      * )
      */
     public function getSetting(Request $request)

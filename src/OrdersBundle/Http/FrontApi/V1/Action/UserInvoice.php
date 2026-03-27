@@ -74,7 +74,7 @@ class UserInvoice extends Controller
 
         $errorMessage = validator_params($data, $rules);
         if ($errorMessage) {
-            throw new ResourceException(trans('OrdersBundle/Order.invoice_apply_error', ['errorMessage' => $errorMessage]));
+            throw new ResourceException(trans('OrdersBundle/Order.invoice_apply_error', ['$errorMessage' => $errorMessage]));
         }
 
         $data['user_id'] = $authInfo['user_id'];

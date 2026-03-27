@@ -77,8 +77,9 @@ class ItemsTagsRepository extends EntityRepository
         $em->persist($entity);
         $em->flush();
 
+        $companyId = $entity->getCompanyId();
         $service = new MultiLangService();
-        $service->updateLangData($data,$this->table,$filter[$this->prk]);
+        $service->updateLangData($data, $this->table, $filter[$this->prk], $companyId);
         return $this->getColumnNamesData($entity);
     }
 

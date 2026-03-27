@@ -1,4 +1,4 @@
-FROM shopexhub/php:ecx-7.4.32-fpm-alpine3.16 as builder
+FROM ecshopex-php:ecx-8.2.29-fpm-alpine3.22 as builder
 
 WORKDIR /app
 COPY . /app
@@ -8,7 +8,7 @@ RUN php composer.phar config repo.packagist composer https://mirrors.aliyun.com/
     && php composer.phar install -o \
     && find . -name '\.git' | xargs rm -rf
 
-FROM shopexhub/php:ecx-7.4.32-fpm-alpine3.16
+FROM ecshopex-php:ecx-8.2.29-fpm-alpine3.22
 
 WORKDIR /data/httpd
 COPY ./docker-new/entrypoint.sh /usr/bin/entrypoint.sh

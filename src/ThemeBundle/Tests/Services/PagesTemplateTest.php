@@ -66,4 +66,65 @@ class PagesTemplateTest extends TestBaseService
         $result = (new PagesTemplateServices())->getItemsInfo($this->getCompanyId(), "goodsGridTab", [5887], $data);
         dd($result);
     }
+
+    /**
+     * getWidgetItems(data_type=pointsmall_items)：空 data_value 时返回空列表，不报错
+     */
+    public function testGetWidgetItemsPointsmallItemsEmptyDataValue()
+    {
+        $params = [
+            'company_id' => $this->getCompanyId(),
+            'data_type' => 'pointsmall_items',
+            'data_value' => '',
+            'num' => 10,
+        ];
+        $result = (new PagesTemplateServices())->getWidgetItems($params);
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertArrayHasKey('filter', $result);
+        $this->assertArrayHasKey('goodsSort', $result);
+        $this->assertSame([], $result['data']);
+        $this->assertSame([], $result['filter']);
+        $this->assertNull($result['goodsSort']);
+    }
+
+    /**
+     * getWidgetItems(data_type=pointsmall_items)：无效 data_value（0、-1）解析后为空，返回空列表
+     */
+    public function testGetWidgetItemsPointsmallItemsInvalidDataValue()
+    {
+        $params = [
+            'company_id' => $this->getCompanyId(),
+            'data_type' => 'pointsmall_items',
+            'data_value' => '0,-1,abc',
+            'num' => 10,
+        ];
+        $result = (new PagesTemplateServices())->getWidgetItems($params);
+        $this->assertIsArray($result);
+        $this->assertSame([], $result['data']);
+        $this->assertSame([], $result['filter']);
+    }
+
+    /**
+     * getWidgetItems(data_type=pointsmall_items)：返回结构包含 data、filter（含 pointsmall_item_id）、goodsSort
+     */
+    public function testGetWidgetItemsPointsmallItemsReturnsStructure()
+    {
+        $params = [
+            'company_id' => $this->getCompanyId(),
+            'data_type' => 'pointsmall_items',
+            'data_value' => '1,2,3',
+            'num' => 10,
+            'page' => 1,
+        ];
+        $result = (new PagesTemplateServices())->getWidgetItems($params);
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('data', $result);
+        $this->assertArrayHasKey('filter', $result);
+        $this->assertArrayHasKey('goodsSort', $result);
+        $this->assertIsArray($result['data']);
+        $this->assertArrayHasKey('pointsmall_item_id', $result['filter']);
+        $this->assertSame([1, 2, 3], $result['filter']['pointsmall_item_id']);
+        $this->assertNull($result['goodsSort']);
+    }
 }

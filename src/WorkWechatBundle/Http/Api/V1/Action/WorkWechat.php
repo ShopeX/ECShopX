@@ -46,6 +46,9 @@ class WorkWechat extends Controller
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *                  @SWG\Property( property="show", type="string", example="1"),
+     *                  @SWG\Property( property="show_float", type="string", example="1", description="是否展示浮层：0关闭，1打开"),
+     *                  @SWG\Property( property="avatar_url", type="string", example="https://example.com/avatar.png"),
+     *                  @SWG\Property( property="bg_avatar_url", type="string", example="https://example.com/bg_avatar.png"),
      *                  @SWG\Property( property="corpid", type="string", example="ww21a77804a566228f"),
      *                  @SWG\Property( property="company_id", type="string", example="1"),
      *                  @SWG\Property( property="agents", type="object",
@@ -110,6 +113,27 @@ class WorkWechat extends Controller
      *         in="formData",
      *         description="是否开启企业微信",
      *         required=true,
+     *         type="string"
+     *     ),
+     *     @SWG\Parameter(
+     *         name="avatar_url",
+     *         in="formData",
+     *         description="头像地址",
+     *         required=false,
+     *         type="string"
+     *     ),
+     *     @SWG\Parameter(
+     *         name="bg_avatar_url",
+     *         in="formData",
+     *         description="背景头像地址",
+     *         required=false,
+     *         type="string"
+     *     ),
+     *     @SWG\Parameter(
+     *         name="show_float",
+     *         in="formData",
+     *         description="是否展示浮层：0关闭，1打开",
+     *         required=false,
      *         type="string"
      *     ),
      *     @SWG\Parameter(
@@ -213,6 +237,8 @@ class WorkWechat extends Controller
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *                  @SWG\Property( property="show", type="string", example="1"),
+     *                  @SWG\Property( property="avatar_url", type="string", example="https://example.com/avatar.png"),
+     *                  @SWG\Property( property="bg_avatar_url", type="string", example="https://example.com/bg_avatar.png"),
      *                  @SWG\Property( property="corpid", type="string", example="ww21a77804a566228f"),
      *                  @SWG\Property( property="company_id", type="string", example="1"),
      *                  @SWG\Property( property="agents", type="object",
@@ -248,7 +274,7 @@ class WorkWechat extends Controller
      */
     public function setConfig(Request $request)
     {
-        $params = $request->all('show', 'corpid', 'agents.app', 'agents.customer', 'agents.report', 'agents.dianwu');
+        $params = $request->all('show', 'show_float', 'avatar_url', 'bg_avatar_url', 'corpid', 'agents.app', 'agents.customer', 'agents.report', 'agents.dianwu');
         $workWechatService = new WorkWechatService();
 
         $companyId = app('auth')->user()->get('company_id');

@@ -54,14 +54,14 @@ class PagesTemplate extends Controller
      *     @SWG\Parameter(
      *         name="data_type",
      *         in="query",
-     *         description="数据类型 main_category-主类目 category-分类 seckill-限时特惠 group-拼团 sales-按销量 items-指定商品 distributor-指定店铺",
+     *         description="数据类型 main_category-主类目 category-分类 seckill-限时特惠 group-拼团 sales-按销量 items-指定商品 pointsmall_items-指定积分商品 distributor-指定店铺",
      *         required=true,
      *         type="string",
      *     ),
      *     @SWG\Parameter(
      *         name="data_value",
      *         in="query",
-     *         description="数据值",
+     *         description="数据值；当 data_type=pointsmall_items 时为积分商品 item_id，多个逗号分隔",
      *         required=true,
      *         type="string",
      *     ),
@@ -107,21 +107,24 @@ class PagesTemplate extends Controller
         $pages_template_services = new PagesTemplateServices();
         $result = $pages_template_services->getWidgetItems($params);
 
-        $itemsService = new ItemsService();
-        // 如果是推广员不需要计算会员价
-        if ($result['data']) {
-            // 计算会员价
-            $result['data'] = $itemsService->getItemsListMemberPrice($result['data'], $authInfo['user_id'], $params['company_id']);
+        // 积分商品不计算会员价、不走普通商品营销标签
+        if (!isset($params['data_type']) || $params['data_type'] !== 'pointsmall_items') {
+            $itemsService = new ItemsService();
+            if ($result['data']) {
+                $result['data'] = $itemsService->applyMultiSpecTotalStoreForItemList($result['data']);
+            }
+            if ($result['data']) {
+                $result['data'] = $itemsService->getItemsListMemberPrice($result['data'], $authInfo['user_id'], $params['company_id']);
+            }
+            if ($params['data_type'] == 'seckill') {
+                $promotionId = intval($params['data_value']);
+                $promotionType = 'limited_time_sale';
+            } else {
+                $promotionId = 0;
+                $promotionType = '';
+            }
+            $result['data'] = $itemsService->getItemsListActityTag($result['data'], $params['company_id'], $params['regionauth_id'], $params['user_id'], $promotionId, $promotionType, 'include_not_start');
         }
-        //营销标签
-        if ($params['data_type'] == 'seckill') {
-            $promotionId = intval($params['data_value']);
-            $promotionType = 'limited_time_sale';
-        } else {
-            $promotionId = 0;
-            $promotionType = '';
-        }
-        $result['data'] = $itemsService->getItemsListActityTag($result['data'], $params['company_id'], $params['regionauth_id'], $params['user_id'], $promotionId, $promotionType, 'include_not_start');
 
         //优惠券标签
         /** @var DiscountCardService $kaquanService */

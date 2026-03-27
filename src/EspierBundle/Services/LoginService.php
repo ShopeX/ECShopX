@@ -293,17 +293,10 @@ class LoginService
                 $params['source_from'] = $wechatUser['source_from'] ?? 'default';
             }
 
-            // 记录注册时的分销商和导购信息
-            if (isset($params['distributor_id']) && !empty($params['distributor_id'])) {
-                // 如果是字符串（门店编号），转换为门店ID
-                $distributorService = new DistributorService();
-                $distributorId = $distributorService->getShopIdByShopCode($params['distributor_id']);
-                if ($distributorId !== false) {
-                    $params['reg_distributor'] = (int)$distributorId;
-                } else {
-                    $params['reg_distributor'] = 0;
-                }
-            }else {
+            // 记录注册时的分销商和导购信息（直接使用传入的 distributor_id 作为门店ID）
+            if (isset($params['distributor_id']) && $params['distributor_id'] !== '' && $params['distributor_id'] !== null) {
+                $params['reg_distributor'] = (int)$params['distributor_id'];
+            } else {
                 $params['reg_distributor'] = 0;
             }
 

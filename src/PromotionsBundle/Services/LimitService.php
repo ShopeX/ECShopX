@@ -705,6 +705,9 @@ class LimitService
         $criteria = $conn->createQueryBuilder();
         $criteria->select('limit_id,item_id,item_type,limit_num')->from('promotions_limit_item');
         foreach ($filters as $filter) {
+            if($filter['item_type'] == 'brand'){
+                continue;
+            }
             $criteria = $criteria->orWhere(
                 $criteria->expr()->andX(
                     $criteria->expr()->in('item_id', $filter['item_id']),

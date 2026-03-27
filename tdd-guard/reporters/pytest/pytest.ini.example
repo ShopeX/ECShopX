@@ -1,0 +1,7 @@
+# Example pytest configuration for TDD Guard development
+# Copy this file to pytest.ini and adjust the path to your project root
+
+[pytest]
+# Set this to the absolute path of your tdd-guard project root
+# This ensures test results are saved to the correct location
+tdd_guard_project_root = /path/to/tdd-guard

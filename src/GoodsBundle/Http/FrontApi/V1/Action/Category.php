@@ -133,11 +133,14 @@ class Category extends BaseController
         $company_id = $authInfo['company_id'];
         $filter['company_id'] = $company_id;
 
-        if ($request->input('distributor_id')) {
-            $filter['distributor_id'] = $request->input('distributor_id');
-        }
-
         $filter['is_main_category'] = $request->input('is_main_category', false);
+
+        // 小程序端仅返回前台展示的分类
+        $filter['is_show_front'] = 1;
+
+        if ($request->input('distributor_id')) {
+            // $filter['distributor_id'] = $request->input('distributor_id');
+        }
 
         $onlyTop = $request->input('only_top', false);
         if ($onlyTop) {
@@ -175,6 +178,11 @@ class Category extends BaseController
                     }
                 }
             }
+        }
+
+        $distributorId = (int)$request->input('distributor_id', 0);
+        if ($distributorId > 0 && $itemsCategoryService->isSaleableCategoryFilterEnabled($company_id)) {
+            $result = $itemsCategoryService->filterCategoryTreeBySaleableItems($company_id, $distributorId, $result);
         }
 
         return $this->response->array($result);

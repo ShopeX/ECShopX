@@ -1,12 +1,12 @@
 {
     "name": "laravel/lumen",
-    "version": "4.3.0",
+    "version": "4.4.0",
     "description": "The Laravel Lumen Framework.",
     "keywords": ["framework", "laravel", "lumen"],
     "license": "MIT",
     "type": "project",
     "require": {
-        "php": "^7.4|^8.0",
+        "php": "^8.2",
         "ext-zip": "*",
         "alibabacloud/client": "^1.5",
         "alibabacloud/dysmsapi-20170525": "^3.1",
@@ -58,6 +58,7 @@
         "phpstan/phpstan": "^1.6",
         "phpunit/phpunit": "^9.3",
         "symfony/var-dumper": "^5.4",
+        "tdd-guard/phpunit": "^0.1.3",
         "vimeo/psalm": "^5.0"
     },
     "autoload": {

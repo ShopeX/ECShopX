@@ -161,6 +161,7 @@ class ShopMenu extends Controller
             $filter['version'] = $request->input('version', 1);
         }
         $data = $shopMenuService->getShopMenu($filter);
+        $data['list'] = $shopMenuService->enrichListForExport($data['list']);
 
         $jsonData = json_encode($data['list']);
 

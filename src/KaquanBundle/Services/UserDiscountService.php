@@ -1234,7 +1234,7 @@ class UserDiscountService implements UserDiscountInterface
                     );
                 }
             } else {
-                $criteria->andWhere($criteria->expr()->eq('rel_distributor_ids', $criteria->expr()->literal('all')));
+                // $criteria->andWhere($criteria->expr()->eq('rel_distributor_ids', $criteria->expr()->literal('all')));
             }
         }
 
@@ -1319,6 +1319,7 @@ class UserDiscountService implements UserDiscountInterface
 
         $criteria->orderby('kudc.end_date', 'ASC');
         $criteria->orderby('kudc.id', 'DESC');
+
         $res['list'] = $criteria->select('DISTINCT kudc.*,kdc.description,kdc.source_type,kdc.source_id')->execute()->fetchAll();
         $res['total_count'] = $count['count'];
         return $res;

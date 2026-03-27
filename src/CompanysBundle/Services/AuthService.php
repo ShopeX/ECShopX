@@ -128,7 +128,7 @@ class AuthService
         case 'merchant':
             $operator = $this->credentialsByMerchantAccount($params);
             break;
-        case 'admin': // 商派shopexid管理员账号。商派的shopexid账号
+        case 'admin': // 与 default 相同：走本地商家管理员账号（credentialsByLocalAdminAccount）；Shopex 账号密码见 POST /operator/shopex-bind
         default:
             // 默认也使用本地账号登录
             $operator = $this->credentialsByLocalAdminAccount($params);
@@ -141,6 +141,26 @@ class AuthService
         // $company = (new CompanysActivationEgo())->check($operator['company_id']);
         $newOperator['menu_type'] = $operator['menu_type'] ?? config('common.product_model');
         return $newOperator;
+    }
+
+    /**
+     * 将 Prism 密码模式 oauth 结果写入 Redis（access/refresh）并拉取 SaaS 证书；与历史 credentialsByShopexAdminAccount 行为一致。
+     *
+     * @param int|string $companyId
+     * @param string     $shopexUid Prism passport_uid
+     * @param array      $prismResult getPrismAuth 返回值（含 access_token、refresh_*、expires_*）
+     */
+    public function persistShopexPasswordOAuthTokensAndCert($companyId, string $shopexUid, array $prismResult): void
+    {
+        $accessToken = $prismResult['access_token'];
+        $expiresIn = $prismResult['expires_in'];
+        $refreshToken = $prismResult['refresh_token'];
+        $refreshExpires = $prismResult['refresh_expires'];
+        $shopexSmsClient = new ShopexSmsClient($companyId, $shopexUid);
+        $shopexSmsClient->setAccessToken($accessToken, $expiresIn);
+        $shopexSmsClient->setRefreshToken($refreshToken, $refreshExpires);
+        $certService = new CertService(new CertClient($companyId, $shopexUid));
+        $certService->getAouthCert();
     }
 
     // 通过 shopex账号 进行后台管理员认证信息获取
@@ -179,19 +199,8 @@ class AuthService
             $operator['operator_type'] = 'admin';
         }
 
-        //保存 access_token 和 refresh_token
         $shopexUid = $prismResult['data']['passport_uid'];
-        $accessToken = $prismResult['access_token'];
-        $expiresIn = $prismResult['expires_in'];
-        $refreshToken = $prismResult['refresh_token'];
-        $refreshExpires = $prismResult['refresh_expires'];
-        $shopexSmsClient = new ShopexSmsClient($operator['company_id'], $shopexUid);
-        $shopexSmsClient->setAccessToken($accessToken, $expiresIn);
-        $shopexSmsClient->setRefreshToken($refreshToken, $refreshExpires);
-
-        // 获取shopex证书
-        $certService = new CertService(new CertClient($operator['company_id'], $shopexUid));
-        $certService->getAouthCert();
+        $this->persistShopexPasswordOAuthTokensAndCert($operator['company_id'], $shopexUid, $prismResult);
 
         app('redis')->del($key);
         

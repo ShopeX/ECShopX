@@ -32,15 +32,50 @@ class CommonLangModService
 
     public $totalLang = [];
 
+    /** @var string */
+    private $defaultLang = 'zh-CN';
+
     public function __construct()
     {
         $config = config('langue');
         if (empty($config)) {
             throw new ResourceException("不存在的多语言配置,请去config/langue.php配置");
         }
-        $this->totalLang = $config;
+        if (isset($config['list']) && is_array($config['list'])) {
+            $this->totalLang = $config['list'];
+            $this->defaultLang = $config['default'] ?? ($config['list'][0] ?? 'zh-CN');
+        } else {
+            $this->totalLang = $config;
+            $this->defaultLang = $config[0] ?? 'zh-CN';
+        }
     }
-        
+
+    public function getDefaultLang(): string
+    {
+        return $this->defaultLang;
+    }
+
+    public function isDefaultLang(?string $lang = null): bool
+    {
+        $compare = $lang !== null ? $lang : $this->getLang();
+        return $compare === $this->getDefaultLang();
+    }
+
+    /**
+     * 从 data 中按 langField 主键名剔除，返回新数组（不修改原数组）。主键名：explode('|', $v)[0]。
+     */
+    public function stripLangFieldsFromData(array $data, array $langField): array
+    {
+        $copy = $data;
+        foreach ($langField as $v) {
+            $key = explode('|', $v)[0] ?? '';
+            if ($key !== '') {
+                unset($copy[$key]);
+            }
+        }
+        return $copy;
+    }
+
     public function getLangMapRepository($langue = 'zh')
     {
         $service = new MultiLangItem($langue, 'other');
@@ -145,7 +180,9 @@ class CommonLangModService
                 $value = json_encode($value);
                 break;
             case 'serialize':
-                $value = serialize($value);
+                if ( is_array($value) ) {
+                    $value = serialize($value);
+                }
                 break;
         }
 
@@ -261,9 +298,9 @@ class CommonLangModService
         return true;
     }
 
-    public function deleteLang(int $companyId, string $tableName, int $dataId, string $module)
+    public function deleteLang(int $companyId, string $tableName, int $dataId, string $module, $langue = null)
     {
-        $lang = $this->getLang();
+        $lang = $langue !== null ? $langue : $this->getLang();
         $repository = $this->getLangMapRepository($lang);
         $filter = [
             'company_id' => $companyId,
@@ -273,6 +310,18 @@ class CommonLangModService
         ];
         $repository->deleteBy($filter);
         
+        return true;
+    }
+
+    /**
+     * 删除指定业务记录在所有语种下的多语言数据。
+     * 用于删除主表记录时，确保所有语种的翻译数据一并清除。
+     */
+    public function deleteAllLang(int $companyId, string $tableName, int $dataId, string $module)
+    {
+        foreach ($this->totalLang as $langue) {
+            $this->deleteLang($companyId, $tableName, $dataId, $module, $langue);
+        }
         return true;
     }
 

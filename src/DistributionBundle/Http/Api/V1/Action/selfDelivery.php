@@ -41,11 +41,11 @@ class selfDelivery extends Controller
      *             @SWG\Property(
      *                 property="data",
      *                 type="object",
-     *                    @SWG\Property(property="status", type="stirng"),
+     *                    @SWG\Property(property="status", type="string"),
      *             ),
      *          ),
      *     ),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/OrdersErrorRespones") ) )
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( @SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer") ) )
      * )
      */
     public function setSelfDeliverySetting(Request $request)
@@ -76,12 +76,12 @@ class selfDelivery extends Controller
      *             @SWG\Property(
      *                 property="data",
      *                 type="object",
-     *                     @SWG\Property(property="merchant_id", type="stirng", description="商户ID"),
-     *                     @SWG\Property(property="key", type="stirng", description="密钥"),
+     *                     @SWG\Property(property="merchant_id", type="string", description="商户ID"),
+     *                     @SWG\Property(property="key", type="string", description="密钥"),
      *             ),
      *          ),
      *     ),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/OrdersErrorRespones") ) )
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( @SWG\Property(property="message", type="string"), @SWG\Property(property="status_code", type="integer") ) )
      * )
      */
     public function getSelfDeliverySetting(Request $request)
