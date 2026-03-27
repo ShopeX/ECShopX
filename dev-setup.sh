@@ -40,6 +40,9 @@ SELECTED_PLATFORM=""
 # 默认语言（全局变量，在第一个编译的项目中设置，后续项目复用）
 SELECTED_LANG=""
 
+# 语言/业务模式等交互必须从 /dev/tty 读取：若仅从 stdin 读，在「管道、重定向、部分 IDE 集成终端」下会立即 EOF，
+# 空变量会触发 ${VAR:-1}，表现为未确认就选用默认项 1。
+
 # 跟踪已安装的前端项目
 INSTALLED_ADMIN=false
 INSTALLED_VSHOP=false
@@ -1356,7 +1359,7 @@ build_admin() {
         log_info "  2) 英文 (en)"
         echo ""
         while true; do
-            read -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE
+            read -r -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE < /dev/tty
             LANG_CHOICE=${LANG_CHOICE:-1}
             if [ "$LANG_CHOICE" = "1" ] || [ "$LANG_CHOICE" = "zhcn" ] || [ "$LANG_CHOICE" = "zh" ]; then
                 SELECTED_LANG="zhcn"
@@ -1422,7 +1425,7 @@ build_admin() {
     log_info "  2) B2C (线上商城、O2O云店、内购商城、供应链线上商城等模式)"
     echo ""
     while true; do
-        read -p "请输入选项 (1 或 2，默认: 1): " BUILD_MODE
+        read -r -p "请输入选项 (1 或 2，默认: 1): " BUILD_MODE < /dev/tty
         BUILD_MODE=${BUILD_MODE:-1}
         if [ "$BUILD_MODE" = "1" ] || [ "$BUILD_MODE" = "bbc" ]; then
             BUILD_CMD="build:bbc"
@@ -1568,7 +1571,7 @@ build_pc() {
             log_info "  2) 英文 (en)"
             echo ""
             while true; do
-                read -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE
+                read -r -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE < /dev/tty
                 LANG_CHOICE=${LANG_CHOICE:-1}
                 if [ "$LANG_CHOICE" = "1" ] || [ "$LANG_CHOICE" = "zhcn" ] || [ "$LANG_CHOICE" = "zh" ]; then
                     SELECTED_LANG="zhcn"
@@ -1794,7 +1797,7 @@ build_vshop() {
         log_info "  2) B2C (线上商城、O2O云店、内购商城、供应链线上商城等模式)"
         echo ""
         while true; do
-            read -p "请输入选项 (1 或 2，默认: 1): " BUILD_MODE
+            read -r -p "请输入选项 (1 或 2，默认: 1): " BUILD_MODE < /dev/tty
             BUILD_MODE=${BUILD_MODE:-1}
             if [ "$BUILD_MODE" = "1" ] || [ "$BUILD_MODE" = "bbc" ]; then
                 SELECTED_PLATFORM="platform"
@@ -1829,7 +1832,7 @@ build_vshop() {
         log_info "  2) 英文 (en)"
         echo ""
         while true; do
-            read -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE
+            read -r -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE < /dev/tty
             LANG_CHOICE=${LANG_CHOICE:-1}
             if [ "$LANG_CHOICE" = "1" ] || [ "$LANG_CHOICE" = "zhcn" ] || [ "$LANG_CHOICE" = "zh" ]; then
                 SELECTED_LANG="zhcn"
