@@ -117,6 +117,9 @@ class MapService extends BaseService
 
         // 获取默认的配置项
         $defaultInfo = self::$instance->getDefaultConfig($companyId);
+        if (empty($defaultInfo)) {
+            throw new \Exception("请前往设置/系统设置/地图配置中配置地图信息");
+        }
         // 注册配置信息
         self::$instance->setConfigInfo($defaultInfo);
 
