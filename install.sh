@@ -335,16 +335,32 @@ ensure_docker_compose() {
   install_docker_compose
 }
 
+# macOS：/usr/bin/git 有时是 Xcode 占位，会弹窗或要求装 CLT；真正可用的 git 可直接跳过 brew install
+macos_git_usable() {
+  command -v git &>/dev/null || return 1
+  local ver
+  ver="$(git --version 2>&1)" || return 1
+  case "$ver" in
+    *xcode-select*|*xcrun:*error*|*"command line tools"*|*"开发者工具"*) return 1 ;;
+  esac
+  [[ "$ver" == git\ version* ]] || return 1
+  return 0
+}
+
 ensure_git() {
-  # macOS 上系统自带的 git 可能是占位符，会触发 Xcode 安装；只有通过 Homebrew 安装的 git 才可靠用于 git clone
   if [[ "$OS" == "macos" ]]; then
+    if macos_git_usable; then
+      ui_success "已检测到 Git: $(git --version 2>&1 | head -n1)"
+      return 0
+    fi
     if command -v brew &>/dev/null; then
-      if brew list git &>/dev/null; then
+      eval "$(brew shellenv)" 2>/dev/null || true
+      if brew list git &>/dev/null 2>&1; then
         ui_success "已检测到 Git（Homebrew）"
         return 0
       fi
     fi
-    # 无 brew 或 brew 下未安装 git：先确保 Homebrew 再安装 git
+    # 无可用 git 或 brew 下未安装 git：通过 Homebrew 安装（避免依赖 Xcode）
     install_git
     return 0
   fi

@@ -1,10 +1,8 @@
 FROM registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.29-fpm-alpine3.22
 
-# Node 16：Alpine 3.22 的 apk 不再提供 nodejs 16。
-# 使用 Node 官方 glibc 预编译包 + libc6-compat（gcompat），避免依赖 apk 版本线。
-# 默认从 nodejs.org 下载；中国大陆可加: --build-arg NODE_DIST_BASE=https://npmmirror.com/mirrors/node
 ARG NODE_VERSION=16.20.2
 ARG NODE_DIST_BASE=https://nodejs.org/dist
+ARG NODE_MUSL_DIST_BASE=https://unofficial-builds.nodejs.org/download/release
 
 # 安装 MySQL、Redis、Nginx、Supervisor 和 Node.js
 # 基础镜像已包含 PHP 8.2 和 FPM，只需安装其他服务
@@ -35,7 +33,13 @@ RUN apk add --no-cache \
          aarch64) NODE_ARCH=arm64 ;; \
          *) echo "unsupported architecture: $ARCH (need x86_64 or aarch64)" >&2; exit 1 ;; \
        esac \
-    && curl -fsSL "${NODE_DIST_BASE}/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
+    && if [ "$NODE_ARCH" = "x64" ]; then \
+         NODE_TARBALL_URL="${NODE_MUSL_DIST_BASE}/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64-musl.tar.xz"; \
+       else \
+         NODE_TARBALL_URL="${NODE_DIST_BASE}/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz"; \
+       fi \
+    && echo "Installing Node from ${NODE_TARBALL_URL}" \
+    && curl -fsSL "${NODE_TARBALL_URL}" \
       | tar -xJ -C /usr/local --strip-components=1 \
     && rm -rf /var/cache/apk/* \
     && npm config set registry https://registry.npmmirror.com \
