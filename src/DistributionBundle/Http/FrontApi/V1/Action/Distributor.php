@@ -795,7 +795,7 @@ class Distributor extends BaseController
 
         $filter = [];
 
-        $filter['is_valid'] = 'true';
+        // $filter['is_valid'] = 'true';
 
         $type = $request->input('type', 0); // 过滤条件
         $noHaving = false; // 是否过滤离用户的经纬度比较远的店铺 【true 不过滤】【false 过滤】
@@ -928,7 +928,12 @@ class Distributor extends BaseController
         $filter['distributor_self'] = 0;
 
         // $filter['is_valid'] = 'true';
-        $filter['is_valid'] = ['true', 'false'];
+        if ($request->input('is_valid')) {
+            $filter['is_valid'] = $request->input('is_valid');
+        } else {
+            $filter['is_valid'] = ['true', 'false'];
+        }
+        
         if ($request->input('get_shop')) {
             $filter['shop_id|neq'] = '';
         }

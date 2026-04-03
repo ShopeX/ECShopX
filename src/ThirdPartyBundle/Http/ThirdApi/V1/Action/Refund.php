@@ -25,7 +25,7 @@ use OrdersBundle\Traits\GetOrderServiceTrait;
 
 use AftersalesBundle\Services\AftersalesService;
 
-use ThirdPartyBundle\Services\SaasErpCentre\OrderAftersalesService;
+// use ThirdPartyBundle\Services\SaasErpCentre\OrderAftersalesService;
 use ThirdPartyBundle\Services\SaasErpCentre\OrderRefundService;
 use ThirdPartyBundle\Services\SaasErpCentre\OrderService as SaasErpOrderService;
 use ThirdPartyBundle\Services\SaasErpCentre\Request as SaasErpRequest;
@@ -68,13 +68,18 @@ class Refund extends Controller
         }
 
         $orderRefundSerrvice = new OrderRefundService();
-        // 售后仅退款获取售后单号
+        // 售后单号为空时，通过$params['refund_bn']获取售后单号
+        if (!$aftersales_bn && isset($params['refund_bn'])) {
+            $aftersalesRefundInfo = $orderRefundSerrvice->getAftersalesRefundInfoByRefundBn($params['refund_bn']);
+            $aftersales_bn = $aftersalesRefundInfo['aftersales_bn'] ?? '';
+        }
+        // 售后单号为空时，通过$params['refund_id']获取售后单号
         if (!$aftersales_bn) {
             $aftersalesRefundInfo = $orderRefundSerrvice->getAftersalesRefundInfoByRefundBn($params['refund_id']);
             $aftersales_bn = $aftersalesRefundInfo['aftersales_bn'] ?? '';
         }
 
-        $orderAftersalesService = new OrderAftersalesService();
+        // $orderAftersalesService = new OrderAftersalesService();
 
         try {
             // 无售后单 直接全额退款  未发货，取消订单，直接退款

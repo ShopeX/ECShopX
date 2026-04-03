@@ -2614,12 +2614,11 @@ class Items extends BaseController
         $filter['audit_status'] = 'approved';
         $filter['item_type'] = 'normal';
 
-        if (isset($params['keywords']) && $params['keywords']) {
-            $filter['or'] = [
-                'item_name|contains' => $params['keywords'],
-                'item_bn' => $params['keywords'],
-                'barcode' => $params['keywords'],
-            ];
+        if (isset($params['keywords'])) {
+            $kw = trim((string) $params['keywords']);
+            if ($kw !== '') {
+                $filter['keywords'] = $kw;
+            }
         }
 
         if (isset($params['item_name']) && $params['item_name']) {
@@ -2638,6 +2637,7 @@ class Items extends BaseController
         $pageSize = intval($params['pageSize']);
 
         $itemsService = new ItemsService();
+        $filter = $itemsService->_filter($filter);
         $company = (new CompanysActivationEgo())->check($filter['company_id']);
         if ($filter['distributor_id'] == 0 || $company['product_model'] == 'platform') {
             $result = $itemsService->getSkuItemsList($filter, $page, $pageSize);

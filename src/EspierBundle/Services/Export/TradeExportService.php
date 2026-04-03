@@ -177,13 +177,12 @@ class TradeExportService implements ExportFileInterface
                             $orderList[$key][$k] = $value[$k] / 100;
                         }
                     } elseif ($k == 'payPoint') {
-                        // 新增：处理订单实付积分
-                        if (isset($value['payType']) && $value['payType'] == 'point') {
-                            // 积分支付时，订单实付积分 = payFee 的值（积分无需除以100）
-                            $orderList[$key][$k] = isset($value['payFee']) ? $value['payFee'] : 0;
+                        // 现金/混合支付时，订单实付积分取订单主表 point_use
+                        if (isset($value['payType']) && $value['payType'] != 'point') {
+                            $orderList[$key][$k] = $value['pointUse'] ?? $value['point_use'] ?? 0;
                         } else {
-                            // 非积分支付时，订单实付积分为0
-                            $orderList[$key][$k] = 0;
+                            // 纯积分支付时，兼容使用交易单 payFee 作为积分值
+                            $orderList[$key][$k] = isset($value['payFee']) ? $value['payFee'] : 0;
                         }
                     } elseif (in_array($k, ['timeStart', 'timeExpire']) && isset($value[$k]) && $value[$k]) {
                         $orderList[$key][$k] = date('Y-m-d H:i:s', $value[$k]);

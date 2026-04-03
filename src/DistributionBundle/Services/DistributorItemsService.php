@@ -429,6 +429,115 @@ class DistributorItemsService
         return $result;
     }
 
+    /**
+     * 店铺关联商品列表：多规格（nospec=false）时汇总同一 goods 下全部子规格的「有效库存」。
+     * 与 GoodsBundle\Services\ItemsService::applyMultiSpecTotalStoreForItemList 对齐思路，
+     * 并按 distribution_distributor_items.is_total_store 区分总部库存（items.store）与店铺库存（关联表 store）。
+     *
+     * @param array $list getDistributorRelItemList 等返回的行（须含 company_id、goods_id、distributor_id、nospec、store）
+     * @return array
+     */
+    public function applyMultiSpecTotalStoreForDistributorRelItemList(array $list)
+    {
+        if (!$list) {
+            return $list;
+        }
+        $companyId = $list[0]['company_id'] ?? null;
+        if ($companyId === null || $companyId === '') {
+            return $list;
+        }
+        $distributorId = (int) ($list[0]['distributor_id'] ?? 0);
+
+        $multiGoodsIds = [];
+        foreach ($list as $row) {
+            if (!$this->isMultiSpecNospecForStore($row['nospec'] ?? null)) {
+                continue;
+            }
+            $gid = $row['goods_id'] ?? null;
+            if ($gid !== null && $gid !== '') {
+                $multiGoodsIds[$gid] = true;
+            }
+        }
+        if (!$multiGoodsIds) {
+            return $list;
+        }
+
+        $goodsIdList = array_keys($multiGoodsIds);
+        $rsGoods = $this->itemsRepository->getLists(
+            ['company_id' => $companyId, 'goods_id' => $goodsIdList],
+            'goods_id, item_id, store'
+        );
+        if (!$rsGoods) {
+            return $list;
+        }
+
+        $itemsByGoods = [];
+        foreach ($rsGoods as $g) {
+            $itemsByGoods[$g['goods_id']][] = $g;
+        }
+
+        $allItemIds = array_unique(array_column($rsGoods, 'item_id'));
+        $dRel = $this->entityRepository->lists(
+            [
+                'company_id' => $companyId,
+                'distributor_id' => $distributorId,
+                'item_id' => $allItemIds,
+            ],
+            [],
+            -1,
+            1
+        );
+        $dByItemId = array_column($dRel['list'] ?? [], null, 'item_id');
+
+        $totalByGoodsId = [];
+        foreach ($itemsByGoods as $goodsId => $skuRows) {
+            $sum = 0;
+            foreach ($skuRows as $sku) {
+                $iid = $sku['item_id'];
+                if (!isset($dByItemId[$iid])) {
+                    continue;
+                }
+                $di = $dByItemId[$iid];
+                if ($this->isDistributorRowUsingTotalStore($di)) {
+                    $sum += (int) ($sku['store'] ?? 0);
+                } else {
+                    $sum += (int) ($di['store'] ?? 0);
+                }
+            }
+            $totalByGoodsId[$goodsId] = $sum;
+        }
+
+        foreach ($list as $k => $v) {
+            if (!$this->isMultiSpecNospecForStore($v['nospec'] ?? null)) {
+                continue;
+            }
+            $gid = $v['goods_id'] ?? null;
+            if ($gid === null || $gid === '') {
+                continue;
+            }
+            if (array_key_exists($gid, $totalByGoodsId)) {
+                $list[$k]['store'] = $totalByGoodsId[$gid];
+            }
+        }
+
+        return $list;
+    }
+
+    /**
+     * @param mixed $nospec 与 Items 一致：true 为单规格，false/0/'false' 为多规格
+     */
+    private function isMultiSpecNospecForStore($nospec): bool
+    {
+        return $nospec === false || $nospec === 'false' || $nospec === 0 || $nospec === '0';
+    }
+
+    private function isDistributorRowUsingTotalStore(array $distributorItemRow): bool
+    {
+        $v = $distributorItemRow['is_total_store'] ?? false;
+
+        return $v === true || $v === 'true' || $v === 1 || $v === '1';
+    }
+
     // 获取产地国信息
     private function getorigincountry($list, $company_id)
     {
@@ -790,6 +899,9 @@ class DistributorItemsService
 
             $result['list'] = $em->select('i.*')->execute()->fetchAll();
             $result['list'] = $this->getDistributorSkuReplace($companyId, $distributorId, $result['list'], true);
+            // 多语言
+            $service = new MultiLangService();
+            $result['list'] = $service->getListAddLang($result['list'],['item_name'],'items',$this->getLang(),'item_id');
         } else {
             $result['list'] = [];
         }

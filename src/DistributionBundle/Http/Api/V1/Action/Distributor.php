@@ -1769,6 +1769,15 @@ class Distributor extends Controller
         $pageSize = $request->get('pageSize') ?: -1;
         $page = $request->get('page') ?: 1;
         $data = $distributorItemsService->getDistributorRelItemList($filter, $pageSize, $page, ['item_id' => 'desc'], false);
+        if (!empty($data['list'])) {
+            $company = (new CompanysActivationEgo())->check($companyId);
+            if (($company['product_model'] ?? '') === 'standard') {
+                $data['list'] = $distributorItemsService->applyMultiSpecTotalStoreForDistributorRelItemList($data['list']);
+            } else {
+                $itemsService = new ItemsService();
+                $data['list'] = $itemsService->applyMultiSpecTotalStoreForItemList($data['list']);
+            }
+        }
         $data['warning_store'] = $warningStore;
         $data['filter'] = $filter;
 

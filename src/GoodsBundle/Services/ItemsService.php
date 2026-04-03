@@ -2504,6 +2504,7 @@ class ItemsService
             $or = [
                 'or'=>[
                     'item_bn|contains'=> $filter['keywords'],
+                    'barcode'=> $filter['keywords'],
                     // ['item_name|contains'=> $filter['keywords']],
                 ]
             ];

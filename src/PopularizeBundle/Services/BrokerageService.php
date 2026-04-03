@@ -348,12 +348,13 @@ class BrokerageService
             if (!$promoterInfo || $promoterInfo['disabled']) {
                 continue;
             }
-            app('log')->info(':export brokerage:'.__FUNCTION__.__LINE__.': promoterInfo :' . json_encode($promoterInfo));
+            // 推广员生成业绩，应不需要验证门店导购是否绑定店铺
+            // app('log')->info(':export brokerage:'.__FUNCTION__.__LINE__.': promoterInfo :' . json_encode($promoterInfo));
 
-            if($this->orderInfo['orderInfo']['distributor_id'] > 0 && !$this->checkSalespersonShop($promoterInfo['user_id'])){
-                continue;
-            }
-            app('log')->info(':export brokerage:'.__FUNCTION__.__LINE__.': promoterInfo-userid OK :' . $promoterInfo['user_id']);
+            // if($this->orderInfo['orderInfo']['distributor_id'] > 0 && !$this->checkSalespersonShop($promoterInfo['user_id'])){
+            //     continue;
+            // }
+            // app('log')->info(':export brokerage:'.__FUNCTION__.__LINE__.': promoterInfo-userid OK :' . $promoterInfo['user_id']);
 
             //通用返佣比例
             $ratio = $config['popularize_ratio'][$this->ratioType][$name]['ratio'];

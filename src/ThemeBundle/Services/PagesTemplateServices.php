@@ -730,6 +730,9 @@ class PagesTemplateServices
         }
 
         if ($pages_template_id) {
+            if ($distributor_id > 0 && $weapp_pages == 'index') {
+                $weapp_pages = 'distributor_index';
+            }
             $filter = [
                 'company_id' => $params['company_id'],
                 'pages_template_id' => $pages_template_id,

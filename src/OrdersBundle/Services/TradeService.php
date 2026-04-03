@@ -347,6 +347,8 @@ class TradeService implements InterfacesTrade
                 $value['receipt_type'] = $orderListData[$value['orderId']]['receipt_type'];
                 $value['order_holder'] = $orderListData[$value['orderId']]['order_holder'];
                 $value['self_delivery_fee'] = $orderListData[$value['orderId']]['self_delivery_fee'] ?? 0;
+                $value['point_use'] = $orderListData[$value['orderId']]['point_use'] ?? 0;
+                $value['pointUse'] = $orderListData[$value['orderId']]['point_use'] ?? 0;
                 if (isset($selfDeliveryOperatorIds[$value['orderId']]) && $selfDeliveryOperatorIds[$value['orderId']] > 0) {
                     $value['self_delivery_operator_id'] = $selfDeliveryOperatorIds[$value['orderId']] ?? 0;
                     $value['self_delivery_operator_mobile'] = $selfDeliveryOperator[$value['self_delivery_operator_id']]['mobile'] ?? '';
