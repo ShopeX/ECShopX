@@ -20,6 +20,9 @@ namespace EmployeePurchaseBundle\Repositories;
 use Doctrine\ORM\EntityRepository;
 use EmployeePurchaseBundle\Entities\ActivityGoods;
 use Dingo\Api\Exception\ResourceException;
+use GoodsBundle\Entities\Items;
+use GoodsBundle\Repositories\ItemsRepository;
+use GoodsBundle\Services\MultiLang\MultiLangService;
 
 class ActivityGoodsRepository extends EntityRepository
 {
@@ -340,15 +343,38 @@ class ActivityGoodsRepository extends EntityRepository
             $qb = $qb->andWhere($qb->expr()->eq('g.activity_id', $filter['activity_id']));
         }
 
-        if (isset($filter['keywords']) && $filter['keywords']) {
-            $qb = $qb->andWhere($qb->expr()->orX(
-                $qb->expr()->like('i.item_name', $qb->expr()->literal('%'.$filter['keywords'].'%')),
-                $qb->expr()->like('i.item_bn', $qb->expr()->literal('%'.$filter['keywords'].'%'))
-            ));
+        // 商品名称 / 关键字：与 GoodsBundle\Services\ItemsService::_filter 一致（多语言 item_name + 编号/条码）
+        $nameSearch = null;
+        if (isset($filter['item_name']) && $filter['item_name'] !== '') {
+            $nameSearch = trim((string) $filter['item_name']);
+        } elseif (isset($filter['keywords']) && $filter['keywords'] !== '') {
+            $nameSearch = trim((string) $filter['keywords']);
         }
-
-        if (isset($filter['item_name']) && $filter['item_name']) {
-            $qb = $qb->andWhere($qb->expr()->like('i.item_name', $qb->expr()->literal('%'.$filter['item_name'].'%')));
+        if ($nameSearch !== null && $nameSearch !== '') {
+            /** @var ItemsRepository $itemsRepository */
+            $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
+            $multiLangService = new MultiLangService();
+            $lang = $itemsRepository->getLang();
+            $langIds = $multiLangService->filterByLang($lang, 'item_name', $nameSearch, 'items');
+            $or = [
+                'or' => [
+                    'item_bn|contains' => $nameSearch,
+                    'barcode' => $nameSearch,
+                ],
+            ];
+            if (!empty($langIds)) {
+                $or['or']['item_id'] = $langIds;
+            }
+            $listBn = $itemsRepository->getItemsLists($or);
+            $idsBn = array_column($listBn, 'default_item_id');
+            $totalIds = array_unique(array_merge($idsBn, $langIds));
+            $totalIds = array_values(array_filter($totalIds, static function ($id) {
+                return $id !== null && $id !== '';
+            }));
+            if ($totalIds === []) {
+                return ['total_count' => 0, 'list' => []];
+            }
+            $qb = $qb->andWhere($qb->expr()->in('i.item_id', $totalIds));
         }
 
         if (isset($filter['item_bn']) && $filter['item_bn']) {
@@ -363,11 +389,13 @@ class ActivityGoodsRepository extends EntityRepository
             }
         }
 
-        if (isset($filter['category']) && $filter['category']) {
-            if (is_array($filter['category'])) {
-                $qb = $qb->andWhere($qb->expr()->in('c.category_id', $filter['category']));
+        // Api 使用 category；FrontApi 使用 cat_id（与 ItemsCategory 解析结果一致）
+        $saleCategoryIds = $filter['category'] ?? $filter['cat_id'] ?? null;
+        if ($saleCategoryIds) {
+            if (is_array($saleCategoryIds)) {
+                $qb = $qb->andWhere($qb->expr()->in('c.category_id', $saleCategoryIds));
             } else {
-                $qb = $qb->andWhere($qb->expr()->eq('c.category_id', $filter['category']));
+                $qb = $qb->andWhere($qb->expr()->eq('c.category_id', $saleCategoryIds));
             }
         }
 

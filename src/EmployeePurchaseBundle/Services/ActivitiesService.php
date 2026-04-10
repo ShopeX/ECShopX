@@ -22,9 +22,12 @@ use EmployeePurchaseBundle\Entities\Activities;
 use EmployeePurchaseBundle\Entities\ActivityItems;
 use EmployeePurchaseBundle\Entities\ActivityGoods;
 use EmployeePurchaseBundle\Entities\ActivityEnterprises;
+use GoodsBundle\Entities\Items;
+use GoodsBundle\Repositories\ItemsRepository;
 use GoodsBundle\Services\ItemsService;
 use GoodsBundle\Services\ItemsCategoryService;
 use GoodsBundle\Services\ItemsRelCatsService;
+use GoodsBundle\Services\MultiLang\MultiLangService;
 use DistributionBundle\Services\DistributorService;
 use DistributionBundle\Services\DistributorItemsService;
 use EmployeePurchaseBundle\Services\ActivityItemsService;
@@ -196,6 +199,38 @@ class ActivitiesService
         return $result;
     }
 
+    /**
+     * 活动商品列表行多语言（与 GoodsBundle\Repositories\ItemsRepository::list 一致）
+     *
+     * 前端展示名使用 itemName：仅当行上已存在 itemName 时，用多语言后的 item_name 覆盖。
+     *
+     * @param array $list getActivityItemsList 返回的列表（可含 spec_items 子项）
+     * @return array
+     */
+    public function applyMultiLangToActivityItemList(array $list)
+    {
+        if ($list === []) {
+            return $list;
+        }
+        /** @var ItemsRepository $itemsRepository */
+        $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
+        $multiLangField = ['item_name', 'brief', 'intro'];
+        $table = 'items';
+        $lang = $itemsRepository->getLang();
+        $service = new MultiLangService();
+        $list = $service->getListAddLang($list, $multiLangField, $table, $lang, 'item_id');
+        foreach ($list as $k => $row) {
+            if ( isset($row['itemName']) ) {
+                $list[$k]['itemName'] = $list[$k]['item_name'] ?? '';
+            }
+            if (!empty($row['spec_items']) && is_array($row['spec_items'])) {
+                $list[$k]['spec_items'] = $service->getListAddLang($row['spec_items'], $multiLangField, $table, $lang, 'item_id');
+            }
+        }
+
+        return $list;
+    }
+
     public function getActivityItemList($filter, $page, $pageSize, $itemSpec = false, $isDefault = false, $orderBy = ['item_id' => 'desc'])
     {
         $distributorId = $filter['distributor_id'] ?? 0;
@@ -223,6 +258,8 @@ class ActivitiesService
                     $row['store'] = $distributorItemsList[$row['item_id']]['store'] ?? 0;
                 }
             }
+            unset($row);
+            $result['list'] = $this->applyMultiLangToActivityItemList($result['list']);
         }
         return $result;
     }

@@ -1009,6 +1009,7 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="distribution_type", in="query", description="店铺类型:0自营;1加盟", required=false, type="string"),
      *     @SWG\Parameter( name="merchant_id", in="query", description="所属商家", required=false, type="string"),
      *     @SWG\Parameter( name="distributor_category_id", in="query", description="店铺分类id", required=false, type="string"),
+     *     @SWG\Parameter( name="show_distributor_self", in="query", description="是否展示虚拟门店(distributor_self=1)，传1或true时列表不过滤虚拟门店；默认0不展示", required=false, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *                  @SWG\Property( property="total_count", type="string", example="36", description=""),
@@ -1196,8 +1197,11 @@ class Distributor extends Controller
                 $filter['distributor_id'] = $staffRegionAuthDistributorIds;
             }
         }
-        // 虚拟门店不在列表做展示
-        $filter['distributor_self'] = 0;
+        // 虚拟门店（distributor_self=1）默认不在列表展示；show_distributor_self=1/true 时允许展示
+        $showDistributorSelf = $request->input('show_distributor_self', 0);
+        if ($showDistributorSelf == 0) {
+            $filter['distributor_self'] = 0;
+        }
         $distributorService = new DistributorService();
         $data = $distributorService->getListByLang($filter, ["created" => "DESC"], $pageSize, $page);
         $data['tagList'] = [];

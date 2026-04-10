@@ -21,6 +21,7 @@ use AftersalesBundle\Services\AftersalesRefundService;
 use App\Http\Controllers\Controller as Controller;
 use Dingo\Api\Exception\ResourceException;
 use EspierBundle\Jobs\ExportFileJob;
+use EspierBundle\Services\OfflineBankAccountService;
 use Illuminate\Http\Request;
 use MembersBundle\Services\MemberService;
 use OrdersBundle\Services\DeliveryProcessLogServices;
@@ -92,6 +93,10 @@ class OfflinePayment extends Controller
         $this->__getFilter($params, $filter);
         $offlinePaymentService = new OfflinePaymentService();
         $result = $offlinePaymentService->repository->lists($filter, '*', $page, $pageSize, $orderBy);
+        if (!empty($result['list'])) {
+            $bankAccountService = new OfflineBankAccountService();
+            $result['list'] = $bankAccountService->applyLocalizedBankNameToOfflinePaymentRows($company_id, $result['list']);
+        }
         return $this->response->array($result);
     }
 
@@ -118,6 +123,11 @@ class OfflinePayment extends Controller
         $params['company_id'] = app('auth')->user()->get('company_id');
         $offlinePaymentService = new OfflinePaymentService();
         $result = $offlinePaymentService->getDetail($params);
+        if (is_array($result) && $result !== []) {
+            $bankAccountService = new OfflineBankAccountService();
+            $localized = $bankAccountService->applyLocalizedBankNameToOfflinePaymentRows($params['company_id'], [$result]);
+            $result = $localized[0];
+        }
         return $this->response->array($result);
     }
 

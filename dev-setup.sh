@@ -1928,6 +1928,114 @@ build_vshop() {
 }
 
 # ===========================================
+# 导入 Demo 数据
+# ===========================================
+
+import_demo_data() {
+    if [ -z "$SELECTED_PLATFORM" ]; then
+        log_info "未选择业务模式，跳过 Demo 数据导入"
+        return 0
+    fi
+
+    local demo_dir="/data/httpd/ECShopX/docker-dev/demo"
+
+    # 检查数据库中 items 表是否已有数据
+    local item_count
+    item_count=$(docker exec "$CONTAINER_NAME" sh -c \
+        "mysql -u$MYSQL_USER -p'$MYSQL_PASSWORD' -h127.0.0.1 $MYSQL_DATABASE -sN -e 'SELECT COUNT(*) FROM items;'" 2>/dev/null)
+
+    if [ -n "$item_count" ] && [ "$item_count" -gt 0 ] 2>/dev/null; then
+        log_info "数据库中已存在商品数据（items 表有 ${item_count} 条记录），跳过 Demo 数据导入"
+        return 0
+    fi
+
+    local sql_file=""
+
+    if [ "$SELECTED_PLATFORM" = "platform" ]; then
+        # BBC 模式，只有一个 bbc.sql
+        sql_file="bbc.sql"
+        echo ""
+        echo -n "是否导入 BBC Demo 数据？ [Y/n]: "
+        read -r import_answer < /dev/tty
+        if [ -n "$import_answer" ] && [ "$import_answer" != "Y" ] && [ "$import_answer" != "y" ] && [ "$import_answer" != "yes" ] && [ "$import_answer" != "YES" ]; then
+            log_info "跳过 Demo 数据导入"
+            return 0
+        fi
+    elif [ "$SELECTED_PLATFORM" = "standard" ]; then
+        # B2C 模式，让用户选择行业
+        echo ""
+        log_info "请选择要导入的 B2C Demo 数据（行业）："
+        log_info "  1) 美妆"
+        log_info "  2) 运动"
+        log_info "  3) 包袋"
+        log_info "  0) 跳过，不导入"
+        echo ""
+        while true; do
+            read -r -p "请输入选项 (0-3，默认: 0): " DEMO_CHOICE < /dev/tty
+            DEMO_CHOICE=${DEMO_CHOICE:-0}
+            case "$DEMO_CHOICE" in
+                0)
+                    log_info "跳过 Demo 数据导入"
+                    return 0
+                    ;;
+                1)
+                    sql_file="bc_beauty.sql"
+                    break
+                    ;;
+                2)
+                    sql_file="b2c_sports.sql"
+                    break
+                    ;;
+                3)
+                    sql_file="b2c_bags.sql"
+                    break
+                    ;;
+                *)
+                    log_error "无效的选项，请输入 0-3"
+                    ;;
+            esac
+        done
+    fi
+
+    if [ -z "$sql_file" ]; then
+        return 0
+    fi
+
+    # 检查容器内 SQL 文件是否存在
+    if ! docker exec "$CONTAINER_NAME" sh -c "test -f '$demo_dir/$sql_file'" 2>/dev/null; then
+        log_error "Demo 数据文件不存在: $demo_dir/$sql_file"
+        return 1
+    fi
+
+    log_info "正在导入 Demo 数据: $sql_file ..."
+    docker exec "$CONTAINER_NAME" sh -c \
+        "mysql -u$MYSQL_USER -p'$MYSQL_PASSWORD' -h127.0.0.1 $MYSQL_DATABASE < '$demo_dir/$sql_file'" > /tmp/demo_import.log 2>&1 &
+    local import_pid=$!
+
+    local spinstr='|/-\'
+    while kill -0 $import_pid 2>/dev/null; do
+        local temp=${spinstr#?}
+        printf "\r${CYAN}[INFO]${NC} 导入 Demo 数据中 ${spinstr:0:1}"
+        spinstr=$temp${spinstr%"$temp"}
+        sleep 0.2
+    done
+    wait $import_pid
+    local import_exit=$?
+
+    if [ $import_exit -ne 0 ]; then
+        printf "\r${RED}[ERROR]${NC} Demo 数据导入失败"
+        printf "%50s" ""
+        echo ""
+        cat /tmp/demo_import.log 2>/dev/null | tail -20
+        return 1
+    else
+        printf "\r${GREEN}[SUCCESS]${NC} Demo 数据导入完成（$sql_file）"
+        printf "%50s" ""
+        echo ""
+    fi
+}
+
+# ===========================================
 # 显示完成信息
 # ===========================================
 
@@ -2031,6 +2139,9 @@ main() {
     build_admin || log_warning "管理后台（ECShopX_admin-frontend）编译未完成"
     build_vshop || log_warning "移动商城（ECShopX_mobile-frontend）编译未完成"
     build_pc || log_warning "PC商城（ECShopX_desktop-frontend）编译未完成"
+    
+    # 导入 Demo 数据
+    import_demo_data || log_warning "Demo 数据导入未完成"
     
     # Show success info
     show_success_info

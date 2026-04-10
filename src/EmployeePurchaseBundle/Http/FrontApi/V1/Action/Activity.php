@@ -385,6 +385,10 @@ class Activity extends BaseController
         $result['store_setting'] = $itemSettingService->getItemStoreSetting($companyId)['item_store_status'];
         $result['distributor_id'] = $activity['distributor_id'];
 
+        // 与 Api Activity::getActivityItemList -> getActivityItemList 一致：主商品 + 规格行多语言
+        $localized = $activitiesService->applyMultiLangToActivityItemList([$result]);
+        $result = $localized[0];
+
         return $this->response->array($result);
     }
 

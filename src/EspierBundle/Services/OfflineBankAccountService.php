@@ -21,12 +21,49 @@ use EspierBundle\Entities\OfflineBankAccount;
 
 class OfflineBankAccountService
 {
-
-    public $subdistrictRepository;
+    /** @var \EspierBundle\Repositories\OfflineBankAccountRepository */
+    public $offlineBankAccountRepository;
 
     public function __construct()
     {
         $this->offlineBankAccountRepository = app('registry')->getManager('default')->getRepository(OfflineBankAccount::class);
+    }
+
+    /**
+     * 线下转账列表中的 bank_name 为历史快照；按 bank_account_id 从收款账户取当前语言银行名（与 getLists 多语言一致）并覆盖。
+     *
+     * @param int   $companyId
+     * @param array $rows      offline_payment 列表行（引用 bank_account_id、bank_name）
+     * @return array
+     */
+    public function applyLocalizedBankNameToOfflinePaymentRows(int $companyId, array $rows): array
+    {
+        if ($rows === []) {
+            return $rows;
+        }
+        $bankAccountIds = array_unique(array_filter(array_map('intval', array_column($rows, 'bank_account_id'))));
+        if (!$bankAccountIds) {
+            return $rows;
+        }
+        $banks = $this->offlineBankAccountRepository->getLists(
+            ['company_id' => $companyId, 'id' => $bankAccountIds],
+            'id,bank_name',
+            1,
+            -1,
+            []
+        );
+        $bankNameById = [];
+        foreach ($banks as $bankRow) {
+            $bankNameById[(int) $bankRow['id']] = $bankRow['bank_name'] ?? '';
+        }
+        foreach ($rows as $k => $row) {
+            $bid = isset($row['bank_account_id']) ? (int) $row['bank_account_id'] : 0;
+            if ($bid && array_key_exists($bid, $bankNameById)) {
+                $rows[$k]['bank_name'] = $bankNameById[$bid];
+            }
+        }
+
+        return $rows;
     }
 
     public function createData($params)
