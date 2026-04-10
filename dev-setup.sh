@@ -724,6 +724,31 @@ wait_for_services() {
 }
 
 # ===========================================
+# 从 ECShopX .env 读取 PRODUCT_MODEL 并设置 SELECTED_PLATFORM
+# ===========================================
+
+read_product_model_from_env() {
+    if [ -n "$SELECTED_PLATFORM" ]; then
+        return 0
+    fi
+
+    local product_model=""
+    product_model=$(docker exec "$CONTAINER_NAME" sh -c \
+        "cd /data/httpd/ECShopX && grep '^PRODUCT_MODEL=' .env 2>/dev/null | cut -d'=' -f2" 2>/dev/null)
+
+    if [ "$product_model" = "standard" ]; then
+        SELECTED_PLATFORM="standard"
+        log_info "从 ECShopX 配置文件读取业务模式: B2C (PRODUCT_MODEL=standard)"
+    elif [ "$product_model" = "platform" ]; then
+        SELECTED_PLATFORM="platform"
+        log_info "从 ECShopX 配置文件读取业务模式: BBC (PRODUCT_MODEL=platform)"
+    else
+        log_warning "未能从 ECShopX 配置文件读取 PRODUCT_MODEL，将使用默认值 platform"
+        SELECTED_PLATFORM="platform"
+    fi
+}
+
+# ===========================================
 # 配置 PHP 应用
 # ===========================================
 
@@ -756,6 +781,38 @@ configure_application() {
         sed -i 's/^REDIS_DATABASE=.*/REDIS_DATABASE=0/' .env && \
         (grep -q '^DISK_DRIVER=' .env && sed -i 's/^DISK_DRIVER=.*/DISK_DRIVER=local/' .env || echo 'DISK_DRIVER=local' >> .env) && \
         (grep -q '^APP_URL=' .env && sed -i 's|^APP_URL=.*|APP_URL=http://localhost:8080|' .env || echo 'APP_URL=http://localhost:8080' >> .env)" 2>/dev/null || true
+    
+    # 选择业务模式并写入 PRODUCT_MODEL
+    echo ""
+    log_info "请选择业务模式："
+    log_info "  1) BBC (多商户入驻电商平台模式)"
+    log_info "  2) B2C (线上商城、O2O云店、内购商城、供应链线上商城等模式)"
+    echo ""
+    while true; do
+        read -r -p "请输入选项 (1 或 2，默认: 1): " BIZ_MODE_CHOICE < /dev/tty
+        BIZ_MODE_CHOICE=${BIZ_MODE_CHOICE:-1}
+        if [ "$BIZ_MODE_CHOICE" = "1" ] || [ "$BIZ_MODE_CHOICE" = "bbc" ]; then
+            SELECTED_PLATFORM="platform"
+            log_info "已选择业务模式: BBC (B2B2C)"
+            break
+        elif [ "$BIZ_MODE_CHOICE" = "2" ] || [ "$BIZ_MODE_CHOICE" = "b2c" ]; then
+            SELECTED_PLATFORM="standard"
+            log_info "已选择业务模式: B2C"
+            break
+        else
+            log_error "无效的选项，请输入 1 或 2"
+        fi
+    done
+    echo ""
+
+    # 将 PRODUCT_MODEL 写入 ECShopX 的 .env
+    docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX && \
+        if grep -q '^PRODUCT_MODEL=' .env 2>/dev/null; then \
+            sed -i 's/^PRODUCT_MODEL=.*/PRODUCT_MODEL=$SELECTED_PLATFORM/' .env; \
+        else \
+            echo 'PRODUCT_MODEL=$SELECTED_PLATFORM' >> .env; \
+        fi" 2>/dev/null || true
+    log_success "已将 PRODUCT_MODEL=$SELECTED_PLATFORM 写入 ECShopX .env"
     
     # 安装 Composer 依赖
     log_info "检查并安装 Composer 依赖..."
@@ -1418,31 +1475,17 @@ build_admin() {
         echo ""
     fi
     
-    # 提示用户选择业务模式
-    echo ""
-    log_info "请选择业务模式："
-    log_info "  1) BBC (多商户入驻电商平台模式)"
-    log_info "  2) B2C (线上商城、O2O云店、内购商城、供应链线上商城等模式)"
-    echo ""
-    while true; do
-        read -r -p "请输入选项 (1 或 2，默认: 1): " BUILD_MODE < /dev/tty
-        BUILD_MODE=${BUILD_MODE:-1}
-        if [ "$BUILD_MODE" = "1" ] || [ "$BUILD_MODE" = "bbc" ]; then
-            BUILD_CMD="build:bbc"
-            BUILD_MODE_NAME="BBC (B2B2C)"
-            SELECTED_PLATFORM="platform"
-            break
-        elif [ "$BUILD_MODE" = "2" ] || [ "$BUILD_MODE" = "b2c" ]; then
-            BUILD_CMD="build:b2c"
-            BUILD_MODE_NAME="B2C"
-            SELECTED_PLATFORM="standard"
-            break
-        else
-            log_error "无效的选项，请输入 1 或 2"
-        fi
-    done
-    echo ""
-    log_info "已选择业务模式: $BUILD_MODE_NAME"
+    # 从 ECShopX 配置文件读取业务模式
+    read_product_model_from_env
+
+    if [ "$SELECTED_PLATFORM" = "standard" ]; then
+        BUILD_CMD="build:b2c"
+        BUILD_MODE_NAME="B2C"
+    else
+        BUILD_CMD="build:bbc"
+        BUILD_MODE_NAME="BBC (B2B2C)"
+    fi
+    log_info "使用业务模式: $BUILD_MODE_NAME"
     echo ""
 
     log_info "开始前端环境编译"
@@ -1789,40 +1832,15 @@ build_vshop() {
         return 1
     fi
     
-    # 确认业务模式（如果 ECShopX_admin-frontend 中已经确认过，则复用；否则重新确认）
-    if [ -z "$SELECTED_PLATFORM" ]; then
-        echo ""
-        log_info "请选择业务模式："
-        log_info "  1) BBC (多商户入驻电商平台模式)"
-        log_info "  2) B2C (线上商城、O2O云店、内购商城、供应链线上商城等模式)"
-        echo ""
-        while true; do
-            read -r -p "请输入选项 (1 或 2，默认: 1): " BUILD_MODE < /dev/tty
-            BUILD_MODE=${BUILD_MODE:-1}
-            if [ "$BUILD_MODE" = "1" ] || [ "$BUILD_MODE" = "bbc" ]; then
-                SELECTED_PLATFORM="platform"
-                BUILD_MODE_NAME="BBC (B2B2C)"
-                break
-            elif [ "$BUILD_MODE" = "2" ] || [ "$BUILD_MODE" = "b2c" ]; then
-                SELECTED_PLATFORM="standard"
-                BUILD_MODE_NAME="B2C"
-                break
-            else
-                log_error "无效的选项，请输入 1 或 2"
-            fi
-        done
-        echo ""
-        log_info "已选择业务模式: $BUILD_MODE_NAME"
-        echo ""
+    # 从 ECShopX 配置文件读取业务模式
+    read_product_model_from_env
+
+    if [ "$SELECTED_PLATFORM" = "standard" ]; then
+        BUILD_MODE_NAME="B2C"
     else
-        # 复用已选择的业务模式
-        if [ "$SELECTED_PLATFORM" = "platform" ]; then
-            BUILD_MODE_NAME="BBC (B2B2C)"
-        else
-            BUILD_MODE_NAME="B2C"
-        fi
-        log_info "复用已选择的业务模式: $BUILD_MODE_NAME"
+        BUILD_MODE_NAME="BBC (B2B2C)"
     fi
+    log_info "使用业务模式: $BUILD_MODE_NAME"
     
     # 确认默认语言（如果还未选择）
     if [ -z "$SELECTED_LANG" ]; then
@@ -1932,6 +1950,9 @@ build_vshop() {
 # ===========================================
 
 import_demo_data() {
+    # 如果全局变量为空，尝试从 ECShopX 配置文件读取
+    read_product_model_from_env
+
     if [ -z "$SELECTED_PLATFORM" ]; then
         log_info "未选择业务模式，跳过 Demo 数据导入"
         return 0
