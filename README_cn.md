@@ -281,6 +281,10 @@ php -S 127.0.0.1:9058 -t public
 * 文档：请首先查阅[官方文档](https://doc.shopex.cn/ecshopx/docs/readme.html)
 * 🐛 问题反馈：请在 [Issues] 中提交。
 
+## 💬 开源社群
+欢迎扫码加入 ECShopX 开源交流社群，获取更新动态、使用交流与问题互助。
+<p align="center"><img width="300" height="auto" alt="workwechat" src="workwechat_cn.png" /></p>
+
 ## 致谢
 感谢所有为 ECShopX 做出贡献的开发者、用户以及商派背后的全球品牌客户们！
 
