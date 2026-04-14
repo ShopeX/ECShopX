@@ -268,5 +268,9 @@ We welcome contributions in all forms! Please read [CONTRIBUTING.md](CONTRIBUTIN
 * Documentation: Please refer to the [official documentation](https://doc.shopex.cn/ecshopx/docs/readme.html) first.
 * 🐛 Issue Reporting: Submit via [Issues].
 
+## 💬 Open Source Community
+Welcome to scan the code to join the ECShopX open-source community for updates, user discussions, and mutual support.
+<p align="center"><img width="300" height="auto" alt="workwechat" src="workwechat_en.png" /></p>
+
 ## Acknowledgments
 Thank you to all developers and users who have contributed to ECShopX!
