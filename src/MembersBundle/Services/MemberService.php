@@ -17,6 +17,10 @@
 
 namespace MembersBundle\Services;
 
+use CompanysBundle\Services\MailSettingActivationBaseUrlResolver;
+use CompanysBundle\Services\MailSettingEmailRegistrationValidator;
+use Illuminate\Contracts\Bus\Dispatcher;
+use MembersBundle\Jobs\SendMemberEmailActivationJob;
 use CompanysBundle\Services\Shops\ProtocolService;
 use EspierBundle\Services\Config\ConfigRequestFieldsService;
 use KaquanBundle\Services\PackageSetService;
@@ -58,6 +62,7 @@ use MembersBundle\Jobs\BindSalseperson;
 use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use MembersBundle\Services\MembersProtocolLogService;
+use MembersBundle\Services\MembersWhitelistService;
 use KaquanBundle\Entities\VipGradeRelUser;
 use MembersBundle\Services\ShopRelMemberService;
 use ShuyunBundle\Services\MembersService as ShuyunMembersService;
@@ -152,6 +157,14 @@ class MemberService
             'reg_salesperson' => $params['reg_salesperson'] ?? '',
             'op_distributor' => isset($params['op_distributor']) ? (int)$params['op_distributor'] : 0,
         ];
+
+        if (!empty($params['login_email'])) {
+            $memberInfo['login_email'] = $params['login_email'];
+            $memberInfo['email_verified_at'] = $params['email_verified_at'] ?? null;
+            if (!isset($memberInfo['email']) || $memberInfo['email'] === null || $memberInfo['email'] === '') {
+                $memberInfo['email'] = $params['login_email'];
+            }
+        }
 
         if ($isUpdatePassword) {
             $memberInfo['password'] = password_hash($params['password'], PASSWORD_DEFAULT);
@@ -369,6 +382,87 @@ class MemberService
         return $result;
     }
 
+    /**
+     * 邮箱注册：密码策略、占位手机号、写入 login_email；**不**校验邮箱验证码。
+     * 创建时 email_verified_at 为空，注册成功后发送 **激活链接** 邮件。
+     *
+     * @return array 含 createMember 结果字段 + activation_email_queued(bool)
+     */
+    public function registerMemberWithEmail(array $params): array
+    {
+        $emailSvc = new MemberEmailVerificationService();
+        $email = $emailSvc->normalizeEmail($params['email']);
+        (new MemberPasswordPolicyService())->validateOrFail($params['password']);
+        MailSettingEmailRegistrationValidator::assertReadyForMemberEmailRegistration((int) $params['company_id']);
+        $mobile = (new MemberSyntheticMobileService())->allocateUnique((int) $params['company_id']);
+        $dup = $this->membersRepository->findOneBy(['company_id' => $params['company_id'], 'login_email' => $email]);
+        if ($dup) {
+            throw new ResourceException(trans('MembersBundle/Members.login_email_already_exists'));
+        }
+        $createParams = [
+            'mobile' => $mobile,
+            'region_mobile' => $mobile,
+            'mobile_country_code' => '86',
+            'company_id' => $params['company_id'],
+            'wxa_appid' => $params['wxa_appid'] ?? '',
+            'authorizer_appid' => $params['authorizer_appid'] ?? '',
+            'sex' => $params['sex'] ?? 0,
+            'username' => $params['username'] ?? randValue(8),
+            'avatar' => $params['avatar'] ?? '',
+            'email' => $email,
+            'login_email' => $email,
+            'email_verified_at' => null,
+            'password' => $params['password'],
+            'api_from' => $params['api_from'] ?? 'h5app',
+            'auth_type' => 'local',
+            'user_type' => 'local',
+            'unionid' => $params['unionid'] ?? '',
+            'open_id' => $params['open_id'] ?? '',
+            'inviter_id' => $params['inviter_id'] ?? 0,
+            'source_from' => $params['source_from'] ?? 'default',
+            'source_id' => $params['source_id'] ?? 0,
+            'monitor_id' => $params['monitor_id'] ?? 0,
+        ];
+        $tips = '';
+        if (!(new MembersWhitelistService())->checkWhitelistValid($params['company_id'], $mobile, $tips)) {
+            throw new ResourceException($tips);
+        }
+
+        $result = $this->createMember($createParams, true);
+
+        $baseUrl = (new MailSettingActivationBaseUrlResolver())->getH5ActivationBaseUrl((int) $params['company_id']);
+        if ($baseUrl === '') {
+            $baseUrl = trim((string) (config('common.h5_base_url') ?? ''));
+        }
+        if ($baseUrl === '') {
+            $baseUrl = trim((string) ($params['activation_base_url'] ?? ''));
+        }
+        if ($baseUrl === '') {
+            throw new ResourceException(trans('MembersBundle/Members.email_activation_base_url_required'));
+        }
+
+        try {
+            $job = new SendMemberEmailActivationJob(
+                (int) $params['company_id'],
+                $email,
+                (string) ($params['client_ip'] ?? ''),
+                isset($params['device_id']) && (string) $params['device_id'] !== '' ? (string) $params['device_id'] : null,
+                $baseUrl
+            );
+            app(Dispatcher::class)->dispatch($job->onQueue('default'));
+        } catch (\Throwable $e) {
+            app('log')->error('activation email queue dispatch failed after register', [
+                'company_id' => $params['company_id'] ?? null,
+                'email' => $email,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+            throw new ResourceException(trans('MembersBundle/Members.email_activation_queue_dispatch_failed'));
+        }
+
+        return array_merge($result, ['activation_email_queued' => true]);
+    }
+
     public function dmCreateMember($params, $isUpdatePassword = false)
     {
         // 查询达摩CRM会员
@@ -422,6 +516,14 @@ class MemberService
             'user_card_code' => $dmMemberInfo['cardNo'] ?? '',
             'dm_card_no' => $dmMemberInfo['cardNo'] ?? '',
         ];
+
+        if (!empty($params['login_email'])) {
+            $memberInfo['login_email'] = $params['login_email'];
+            $memberInfo['email_verified_at'] = $params['email_verified_at'] ?? null;
+            if (!isset($memberInfo['email']) || $memberInfo['email'] === null || $memberInfo['email'] === '') {
+                $memberInfo['email'] = $params['login_email'];
+            }
+        }
 
         if ($isUpdatePassword) {
             $memberInfo['password'] = password_hash($params['password'], PASSWORD_DEFAULT);
@@ -910,6 +1012,9 @@ class MemberService
 //            $result = array_merge($member, $info);
 //            $result["requestFields"] = $requestFields;
         }
+        if (is_array($result)) {
+            MemberSyntheticMobileService::stripPlaceholderMobileForEmailRegisteredMember($result);
+        }
         return $result;
     }
 
@@ -1202,7 +1307,7 @@ class MemberService
 
         $conn = app('registry')->getConnection('default');
 
-        $mFields = "DISTINCT m.user_id,m.company_id,m.grade_id,m.mobile,m.user_card_code,m.authorizer_appid,m.wxa_appid,m.source_id,m.monitor_id,m.latest_source_id,m.latest_monitor_id,m.created,m.updated,m.created_year,m.created_month,m.created_day,m.offline_card_code,m.inviter_id,m.source_from,m.password,m.disabled,m.use_point,m.remarks,m.third_data,m.region_mobile,m.mobile_country_code,m.reg_distributor,m.reg_salesperson,m.fp_salesperson,m.has_fp,m.op_distributor,";
+        $mFields = "DISTINCT m.user_id,m.company_id,m.grade_id,m.mobile,m.user_card_code,m.authorizer_appid,m.wxa_appid,m.source_id,m.monitor_id,m.latest_source_id,m.latest_monitor_id,m.created,m.updated,m.created_year,m.created_month,m.created_day,m.offline_card_code,m.inviter_id,m.source_from,m.password,m.disabled,m.use_point,m.remarks,m.third_data,m.region_mobile,m.mobile_country_code,m.reg_distributor,m.reg_salesperson,m.fp_salesperson,m.has_fp,m.op_distributor,m.login_email,m.email_verified_at,";
         $row = $mFields . 'info.username,info.name,info.sex,info.birthday,info.address,info.email,info.industry,info.income,info.edu_background,info.habbit,info.avatar';
 
         $criteria = $conn->createQueryBuilder();
@@ -1262,6 +1367,7 @@ class MemberService
                 isset($value['mobile']) and $result[$key]['mobile'] = fixeddecrypt($value['mobile']);
                 isset($value['username']) and $result[$key]['username'] = fixeddecrypt($value['username']);
                 isset($value['nickname']) and $result[$key]['nickname'] = fixeddecrypt($value['nickname']);
+                MemberSyntheticMobileService::stripPlaceholderMobileForEmailRegisteredMember($result[$key]);
             }
         }
         return $result;
@@ -1522,7 +1628,7 @@ class MemberService
         //$criteria->andWhere($criteria->expr()->isNotNull('m.user_card_code'));
 
         if ($filter) {
-            $commonKey = ['company_id', 'user_id', 'created', 'updated', 'created_month', 'created_day', 'created_year', 'remarks', 'mobile', 'birthday', 'fp_salesperson', 'has_fp', 'grade_id', 'op_distributor'];
+            $commonKey = ['company_id', 'user_id', 'created', 'updated', 'created_month', 'created_day', 'created_year', 'remarks', 'mobile', 'birthday', 'fp_salesperson', 'has_fp', 'grade_id', 'op_distributor', 'login_email'];
             foreach ($filter as $field => $value) {
                 $list = explode('|', $field);
                 if (count($list) > 1) {
@@ -1939,6 +2045,11 @@ class MemberService
             $row = $col;
         }
         $result['list'] = $criteria->select($row)->execute()->fetchAll();
+        foreach ($result['list'] as &$listRow) {
+            MemberSyntheticMobileService::stripPlaceholderMobileForEmailRegisteredMember($listRow);
+        }
+        unset($listRow);
+
         return $result;
     }
 

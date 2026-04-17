@@ -17,6 +17,7 @@
 
 namespace OrdersBundle\Jobs;
 
+use CompanysBundle\Services\MailSettingStoredPasswordResolver;
 use CompanysBundle\Services\MailerService;
 use EspierBundle\Jobs\Job;
 use CompanysBundle\Services\EmailService;
@@ -61,14 +62,17 @@ class SendInvoiceEmailJob extends Job
 
         // 发送邮件
         $config = app('redis')->connection('companys')->get('mailSetting:' . $this->data['company_id']);
-        $config = json_decode($config, true);
-        app('log')->info('SendInvoiceEmailJob: 邮件配置:'.json_encode($config));
+        $config = json_decode((string) $config, true);
+        if (!is_array($config)) {
+            $config = [];
+        }
+        app('log')->info('SendInvoiceEmailJob: 邮件配置:'.json_encode(MailSettingStoredPasswordResolver::redactForLog($config)));
         $configMail = [
-            'email_smtp_port' => $config['EMAIL_SMTP_PORT'],
-            'email_relay_host' => $config['EMAIL_RELAY_HOST'],
-            'email_user' => $config['EMAIL_USER'],
-            'email_password' => $config['EMAIL_PASSWORD'],
-            'email_sender' => $config['EMAIL_SENDER'],
+            'email_smtp_port' => $config['EMAIL_SMTP_PORT'] ?? '',
+            'email_relay_host' => $config['EMAIL_RELAY_HOST'] ?? '',
+            'email_user' => $config['EMAIL_USER'] ?? '',
+            'email_password' => (string) ($config['EMAIL_PASSWORD'] ?? ''),
+            'email_sender' => $config['EMAIL_SENDER'] ?? '',
         ];
         $emailService = new MailerService($configMail);
         app('log')->info('SendInvoiceEmailJob: 发送邮件开始:to:'.$to.',subject:'.$subject.',body:'.$body);

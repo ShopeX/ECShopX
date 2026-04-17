@@ -20,6 +20,7 @@ namespace CompanysBundle\Http\Api\V1\Action;
 use App\Http\Controllers\Controller as BaseController;
 
 use CompanysBundle\Services\CommonLangModService;
+use CompanysBundle\Services\MailSettingActivationBaseUrlResolver;
 use CompanysBundle\Services\SettingService;
 use OrdersBundle\Services\TradeSetting\CancelService;
 use OrdersBundle\Services\TradeSettingService;
@@ -2050,8 +2051,22 @@ class Setting extends BaseController
      *     @SWG\Parameter(
      *         name="EMAIL_PASSWORD",
      *         in="query",
-     *         description="SMTP密码",
-     *         required=true,
+     *         description="SMTP密码；留空保留原密码；可回传 GET /mail/setting 返回的密文",
+     *         required=false,
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="EMAIL_ACTIVATION_H5_DOMAIN",
+     *         in="query",
+     *         description="H5邮箱激活根地址（选填，建议无末尾/）；不传则保留原值；传空字符串可清空",
+     *         required=false,
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="EMAIL_ACTIVATION_PC_DOMAIN",
+     *         in="query",
+     *         description="PC邮箱激活根地址（选填）；不传则保留原值；传空字符串可清空",
+     *         required=false,
      *         type="string",
      *     ),
      *     @SWG\Response(
@@ -2072,31 +2087,50 @@ class Setting extends BaseController
     {
         $companyId = app('auth')->user()->get('company_id');
         $key = 'mailSetting:' . $companyId;
-        
+
         $inputdata = $request->all();
         $rules = [
             'EMAIL_SMTP_PORT' => ['required', 'SMTP端口不能为空'],
             'EMAIL_RELAY_HOST' => ['required', 'SMTP服务器地址不能为空'],
             'EMAIL_SENDER' => ['required|email', '发件人邮箱不能为空且格式正确'],
             'EMAIL_USER' => ['required', 'SMTP用户名不能为空'],
-            'EMAIL_PASSWORD' => ['required', 'SMTP密码不能为空'],
         ];
-        
+
         $errorMessage = validator_params($inputdata, $rules);
         if ($errorMessage) {
             throw new ResourceException($errorMessage);
         }
-        
+
+        $existingRaw = app('redis')->connection('companys')->get($key);
+        $existing = $existingRaw ? json_decode((string) $existingRaw, true) : [];
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        $existingPlain = (string) ($existing['EMAIL_PASSWORD'] ?? '');
+        $passwordInput = array_key_exists('EMAIL_PASSWORD', $inputdata) ? (string) $inputdata['EMAIL_PASSWORD'] : '';
+        $resolvedPassword = $this->resolveMailPasswordFromSaveInput($passwordInput, $existingPlain);
+        if ($resolvedPassword === '') {
+            throw new ResourceException('SMTP密码不能为空');
+        }
+
         $mailConfig = [
             'EMAIL_SMTP_PORT' => $inputdata['EMAIL_SMTP_PORT'],
             'EMAIL_RELAY_HOST' => $inputdata['EMAIL_RELAY_HOST'],
             'EMAIL_SENDER' => $inputdata['EMAIL_SENDER'],
             'EMAIL_USER' => $inputdata['EMAIL_USER'],
-            'EMAIL_PASSWORD' => $inputdata['EMAIL_PASSWORD'],
+            'EMAIL_PASSWORD' => $resolvedPassword,
         ];
-        
+        foreach ([MailSettingActivationBaseUrlResolver::KEY_H5, MailSettingActivationBaseUrlResolver::KEY_PC] as $optKey) {
+            if (array_key_exists($optKey, $inputdata)) {
+                $mailConfig[$optKey] = MailSettingActivationBaseUrlResolver::sanitizeStoredDomain((string) $inputdata[$optKey]);
+            } else {
+                $prev = isset($existing[$optKey]) ? (string) $existing[$optKey] : '';
+                $mailConfig[$optKey] = MailSettingActivationBaseUrlResolver::sanitizeStoredDomain($prev);
+            }
+        }
+
         app('redis')->connection('companys')->set($key, json_encode($mailConfig));
-        
+
         return $this->response->array(['status' => true]);
     }
 
@@ -2125,7 +2159,9 @@ class Setting extends BaseController
      *                 @SWG\Property(property="EMAIL_RELAY_HOST", type="string", description="SMTP服务器地址"),
      *                 @SWG\Property(property="EMAIL_SENDER", type="string", description="发件人邮箱"),
      *                 @SWG\Property(property="EMAIL_USER", type="string", description="SMTP用户名"),
-     *                 @SWG\Property(property="EMAIL_PASSWORD", type="string", description="SMTP密码"),
+     *                 @SWG\Property(property="EMAIL_PASSWORD", type="string", description="SMTP密码（密文，基于 APP_KEY 加密，非明文）"),
+     *                 @SWG\Property(property="EMAIL_ACTIVATION_H5_DOMAIN", type="string", description="H5邮箱激活根地址（选填）"),
+     *                 @SWG\Property(property="EMAIL_ACTIVATION_PC_DOMAIN", type="string", description="PC邮箱激活根地址（选填）"),
      *             ),
      *          ),
      *     ),
@@ -2138,15 +2174,60 @@ class Setting extends BaseController
         $key = 'mailSetting:' . $companyId;
         
         $data = app('redis')->connection('companys')->get($key);
-        $result = $data ? json_decode($data, true) : [
+        $result = $data ? json_decode((string) $data, true) : [
             'EMAIL_SMTP_PORT' => '',
             'EMAIL_RELAY_HOST' => '',
             'EMAIL_SENDER' => '',
             'EMAIL_USER' => '',
             'EMAIL_PASSWORD' => '',
+            MailSettingActivationBaseUrlResolver::KEY_H5 => '',
+            MailSettingActivationBaseUrlResolver::KEY_PC => '',
         ];
-        
+        if (!is_array($result)) {
+            $result = [
+                'EMAIL_SMTP_PORT' => '',
+                'EMAIL_RELAY_HOST' => '',
+                'EMAIL_SENDER' => '',
+                'EMAIL_USER' => '',
+                'EMAIL_PASSWORD' => '',
+                MailSettingActivationBaseUrlResolver::KEY_H5 => '',
+                MailSettingActivationBaseUrlResolver::KEY_PC => '',
+            ];
+        }
+        $result[MailSettingActivationBaseUrlResolver::KEY_H5] = (string) ($result[MailSettingActivationBaseUrlResolver::KEY_H5] ?? '');
+        $result[MailSettingActivationBaseUrlResolver::KEY_PC] = (string) ($result[MailSettingActivationBaseUrlResolver::KEY_PC] ?? '');
+        if (!empty($result['EMAIL_PASSWORD'])) {
+            $result['EMAIL_PASSWORD'] = $this->encryptMailPasswordForApiResponse((string) $result['EMAIL_PASSWORD']);
+        }
+
         return $this->response->array($result);
+    }
+
+    /**
+     * GET /mail/setting：不向客户端暴露明文 SMTP 密码。
+     */
+    private function encryptMailPasswordForApiResponse(string $plain): string
+    {
+        if ($plain === '') {
+            return '';
+        }
+
+        return app('fixedencrypt')->default()->encrypt($plain, false);
+    }
+
+    /**
+     * POST /mail/setting：空字符串表示沿用 Redis 中已存明文；非空则尝试按密文解密，失败则视为明文新密码。
+     */
+    private function resolveMailPasswordFromSaveInput(string $input, string $existingPlain): string
+    {
+        if ($input === '') {
+            return $existingPlain;
+        }
+        try {
+            return app('fixedencrypt')->default()->decrypt($input, false);
+        } catch (\Throwable $e) {
+            return $input;
+        }
     }
 
     /**

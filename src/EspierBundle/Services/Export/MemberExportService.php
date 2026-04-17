@@ -51,6 +51,7 @@ class MemberExportService implements ExportFileInterface
     private $title = [
             'user_card_code' => '会员卡编号',
             'mobile' => '会员手机号',
+            'login_email' => '登录邮箱',
             'name' => '用户名',
             'sex' => ' 性别',
             'username' => '姓名',
@@ -116,6 +117,12 @@ class MemberExportService implements ExportFileInterface
                         $value['username'] = data_masking('truename', (string) $value['username']);
                         $value['birthday'] = data_masking('birthday', (string) $value['birthday']);
                         $value['address'] = data_masking('detailedaddress', (string) $value['address']);
+                        if (!empty($value['login_email'])) {
+                            $value['login_email'] = data_masking('email', (string) $value['login_email']);
+                        }
+                        if (!empty($value['email'])) {
+                            $value['email'] = data_masking('email', (string) $value['email']);
+                        }
                     }
                     //会员注册时间组装
                     $created_date = $value['created_year'].'-'.$value['created_month'].'-'.$value['created_day'];

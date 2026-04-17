@@ -40,6 +40,12 @@ trait MemberSearchFilter
         if (isset($postdata['username']) && $postdata['username']) {
             $filter['username'] = $postdata['username'];
         }
+        if (isset($postdata['login_email']) && $postdata['login_email'] !== null) {
+            $loginEmailFragment = mb_strtolower(trim((string) $postdata['login_email']));
+            if ($loginEmailFragment !== '') {
+                $filter['login_email|like'] = $loginEmailFragment;
+            }
+        }
         if (isset($postdata['name']) && $postdata['name']) {
             $filter['name'] = $postdata['name'];
         }

@@ -45,6 +45,16 @@ class MembersRepository extends EntityRepository
             throw new StoreResourceFailedException("手机号为{$params['mobile']}的会员已存在！");
         }
 
+        if (!empty($params['login_email'])) {
+            $existsEmail = $this->findOneBy([
+                'company_id' => $params['company_id'],
+                'login_email' => $params['login_email'],
+            ]);
+            if ($existsEmail) {
+                throw new StoreResourceFailedException(trans('MembersBundle/Members.login_email_already_exists'));
+            }
+        }
+
         $userEntity = new Members();
         $user = $this->setUserData($userEntity, $params);
 
@@ -243,6 +253,8 @@ class MembersRepository extends EntityRepository
             'has_fp' => $userEntity->getHasFp(),
             'is_become_friend' => $userEntity->getIsBecomeFriend(),
             'op_distributor' => $userEntity->getOpDistributor(),
+            'login_email' => $userEntity->getLoginEmail(),
+            'email_verified_at' => $userEntity->getEmailVerifiedAt(),
         ];
 
         return $result;
@@ -270,6 +282,12 @@ class MembersRepository extends EntityRepository
         }
         if (isset($userData['password'])) {
             $userEntity->setPassword($userData['password']);
+        }
+        if (array_key_exists('login_email', $userData)) {
+            $userEntity->setLoginEmail($userData['login_email']);
+        }
+        if (array_key_exists('email_verified_at', $userData)) {
+            $userEntity->setEmailVerifiedAt($userData['email_verified_at']);
         }
         if (isset($userData['user_card_code'])) {
             $userEntity->setUserCardCode($userData['user_card_code']);

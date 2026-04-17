@@ -37,13 +37,8 @@ class MailerService
     {
         $this->debug = false;
         if (!empty($config)) {
-            // [2025-09-16 14:42:08] production.INFO: MailerService: 邮件配置:{
-            //     "email_smtp_port":"465",
-            //     "email_relay_host":"ssl:\/\/smtp.exmail.qq.com",
-            //     "email_user":"test@shopex.cn",
-            //     "email_password":"123456"
-            // }  
-            app('log')->info('MailerService: 邮件配置:'.json_encode($config));
+            $config = MailSettingStoredPasswordResolver::withResolvedPassword($config);
+            app('log')->info('MailerService: 邮件配置:'.json_encode(MailSettingStoredPasswordResolver::redactForLog($config)));
             $this->smtp_port = $config['email_smtp_port'];
             $this->relay_host = $config['email_relay_host'];
             $this->user = $config['email_user'];
@@ -83,8 +78,21 @@ class MailerService
             ->setCc($cc)
             ->setBody($body, 'text/html');
 
-        $result = $mailer->send($message);
-        return $result;
+        try {
+            return $mailer->send($message);
+        } catch (\Throwable $e) {
+            $msg = $e->getMessage();
+            if (stripos($msg, '535') !== false || stripos($msg, 'authentication failed') !== false || stripos($msg, 'Failed to authenticate') !== false) {
+                app('log')->error('MailerService: SMTP error (check password / client secret / Tencent exmail SMTP switch)', [
+                    'exception' => get_class($e),
+                    'message' => $msg,
+                    'relay_host' => $this->relay_host,
+                    'smtp_port' => $this->smtp_port,
+                    'username' => $this->user,
+                ]);
+            }
+            throw $e;
+        }
     }
 
     //获取邮件模板

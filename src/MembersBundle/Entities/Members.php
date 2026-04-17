@@ -30,6 +30,7 @@ use Gedmo\Mapping\Annotation as Gedmo;
  *    @ORM\Index(name="idx_company_id_user_card_code",  columns={"company_id", "user_card_code"})
  * },uniqueConstraints={
  *    @ORM\UniqueConstraint(name="mobile_company", columns={"mobile", "company_id"}),
+ *    @ORM\UniqueConstraint(name="login_email_company", columns={"login_email", "company_id"}),
  * }),
  * @ORM\Entity(repositoryClass="MembersBundle\Repositories\MembersRepository")
  */
@@ -85,6 +86,20 @@ class Members
      * @ORM\Column(name="password", type="string", length=255, options={"comment":"密码"})
      */
     private $password;
+
+    /**
+     * @var string|null
+     *
+     * @ORM\Column(name="login_email", type="string", length=255, nullable=true, options={"comment":"登录邮箱(小写)"})
+     */
+    private $login_email;
+
+    /**
+     * @var int|null
+     *
+     * @ORM\Column(name="email_verified_at", type="integer", nullable=true, options={"comment":"邮箱验证时间戳"})
+     */
+    private $email_verified_at;
 
     /**
      * @var string
@@ -735,6 +750,42 @@ class Members
     public function getPassword()
     {
         return $this->password;
+    }
+
+    /**
+     * @return Members
+     */
+    public function setLoginEmail(?string $loginEmail)
+    {
+        $this->login_email = $loginEmail;
+
+        return $this;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getLoginEmail()
+    {
+        return $this->login_email;
+    }
+
+    /**
+     * @return Members
+     */
+    public function setEmailVerifiedAt(?int $ts)
+    {
+        $this->email_verified_at = $ts;
+
+        return $this;
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getEmailVerifiedAt()
+    {
+        return $this->email_verified_at;
     }
 
     /**

@@ -2042,7 +2042,7 @@ class AftersalesService
             ->from('aftersales_detail', 'ad')
             ->leftJoin('ad', 'aftersales', 'a', 'ad.aftersales_bn = a.aftersales_bn');
 
-        $row = 'a.aftersales_bn,a.order_id,ad.item_bn,ad.item_name,ad.num,a.aftersales_type,a.aftersales_status,a.create_time,ad.refund_fee,a.progress,a.description,a.reason,a.refuse_reason,a.memo,ad.distributor_id,ad.company_id';
+        $row = 'a.aftersales_bn,a.order_id,ad.item_bn,ad.item_name,ad.num,a.aftersales_type,a.aftersales_status,a.create_time,ad.refund_fee,a.progress,a.description,a.reason,a.refuse_reason,a.memo,ad.distributor_id,ad.company_id,a.memo,a.distributor_remark';
 
         $criteria = $this->getFilter($filter, $criteria);
 

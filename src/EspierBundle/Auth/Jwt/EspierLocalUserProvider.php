@@ -35,6 +35,7 @@ use MembersBundle\Entities\MembersAssociations;
 use MembersBundle\Entities\MembersInfo;
 use MembersBundle\Services\UserService;
 use MembersBundle\Services\WechatUserService;
+use MembersBundle\Services\MemberEmailVerificationService;
 use MembersBundle\Services\MemberRegSettingService;
 use WechatBundle\Services\OfficialAccountService;
 use WechatBundle\Services\OpenPlatform;
@@ -827,16 +828,41 @@ class EspierLocalUserProvider implements UserProvider
     private function checkUser($company_id, $mobile, $password, $check_type = 'password', $vcode = '', bool $autoRegister = false, bool $silent = false)
     {
         $membersRepository = app('registry')->getManager('default')->getRepository(Members::class);
-        $userEntity = $membersRepository->findOneBy(['company_id' => $company_id, 'mobile' => fixedencrypt($mobile)]);
+        $isEmail = (bool) filter_var($mobile, FILTER_VALIDATE_EMAIL);
+        if ($isEmail) {
+            $userEntity = $membersRepository->findOneBy(['company_id' => $company_id, 'login_email' => strtolower(trim($mobile))]);
+        } else {
+            $userEntity = $membersRepository->findOneBy(['company_id' => $company_id, 'mobile' => fixedencrypt($mobile)]);
+        }
 
         // 表单验证最优先
         switch ($check_type) {
             case "mobile":
+                if ($isEmail) {
+                    throw new ResourceException('验证类型有误！');
+                }
                 if (!(new MemberRegSettingService())->checkSmsVcode($mobile, $company_id, $vcode, 'login')) {
                     throw new ResourceException('短信验证码错误');
                 }
                 break;
+            case "email_otp":
+                if (!$isEmail) {
+                    throw new ResourceException('验证类型有误！');
+                }
+                if (!$userEntity) {
+                    throw new ResourceException(trans('MembersBundle/Members.email_not_registered'));
+                }
+                if (!$userEntity->getEmailVerifiedAt()) {
+                    throw new ResourceException(trans('MembersBundle/Members.email_not_verified'));
+                }
+                if (!(new MemberEmailVerificationService())->consumeCode((int) $company_id, $mobile, MemberEmailVerificationService::PURPOSE_LOGIN, $vcode)) {
+                    throw new ResourceException(trans('MembersBundle/Members.email_code_error'));
+                }
+                break;
             case "password":
+                if ($userEntity && $isEmail && !$userEntity->getEmailVerifiedAt()) {
+                    throw new ResourceException(trans('MembersBundle/Members.email_not_verified'));
+                }
                 if ($userEntity && !$this->checkPassword($password, $userEntity->getPassword())) {
                     throw new ResourceException('用户名或密码错误');
                 }

@@ -534,6 +534,10 @@ class UserData extends Controller
             }
         }
 
+        if ($loginEmail = trim((string) $request->input('login_email', ''))) {
+            $memFilter['login_email|like'] = mb_strtolower($loginEmail);
+        }
+
         $memberService = new MemberService();
         $result['list'] = $memberService->getMemberList($memFilter, $page, $limit);
         $result['total_count'] = $memberService->getMemberCount($memFilter);
@@ -758,7 +762,10 @@ class UserData extends Controller
         if (!$userIds) {
             return $this->response->array($result);
         }
-        $col = "m.user_id,m.grade_id,m.mobile,m.user_card_code,m.remarks,info.username,info.sex,info.avatar";
+        if ($loginEmail = trim((string) $request->get('login_email', ''))) {
+            $memFilter['login_email|like'] = mb_strtolower($loginEmail);
+        }
+        $col = "m.user_id,m.grade_id,m.mobile,m.user_card_code,m.remarks,m.login_email,m.email_verified_at,info.username,info.sex,info.avatar";
         $result = $memberService->getMemberDataLists($memFilter, $col, 1, $limit);
         if ($result['list'] && $result['total_count']) {
             $member = array_column($result['list'], null, 'user_id');

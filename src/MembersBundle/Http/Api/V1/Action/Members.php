@@ -47,6 +47,7 @@ use CommunityBundle\Services\CommunityChiefService;
 use CommunityBundle\Services\CommunityChiefDistributorService;
 use MembersBundle\Traits\GetCodeTrait;
 use PopularizeBundle\Services\PromoterService;
+use MembersBundle\Services\ShopRelMemberService;
 use MembersBundle\Events\CreateMemberSuccessEvent;
 use KaquanBundle\Services\UserDiscountService;
 use MembersBundle\Entities\MembersDeleteRecord;
@@ -331,6 +332,7 @@ class Members extends Controller
             // 'mobile' => ['sometimes|regex:/^1[3456789][0-9]{9}$/', '请填写正确的手机号'],
             'remarks' => ['sometimes|string|max:255', '最多输入255字'],
             'username' => ['sometimes|string|max:50', '最多输入50字'],
+            'login_email' => ['sometimes|string|max:255', '登录邮箱筛选参数过长'],
             'name' => ['sometimes|string|max:50', '最多输入50字'],
             'time_start_begin' => ['sometimes|integer', '请填写正确的开始日期'],
             'time_start_end' => ['sometimes|integer', '请填写正确的结束日期'],
@@ -533,6 +535,12 @@ class Members extends Controller
                     $value['mobile'] = data_masking('mobile', (string) $value['mobile']);
                     $value['username'] = data_masking('truename', (string) $value['username']);
                     $value['inviter'] = $value['inviter'] == '-' ? $value['inviter'] : data_masking('mobile', (string) $value['inviter']);
+                    if (!empty($value['login_email'])) {
+                        $value['login_email'] = data_masking('email', (string) $value['login_email']);
+                    }
+                    if (!empty($value['email'])) {
+                        $value['email'] = data_masking('email', (string) $value['email']);
+                    }
                     // $value['sex'] = $value['sex'] == '0' ? '-' : data_masking('sex', (string) $value['sex']);
                 }
 
@@ -834,6 +842,12 @@ class Members extends Controller
                 $result['birthday'] = data_masking('birthday', (string) ($result['birthday'] ?? ''));
                 $result['address'] = data_masking('detailedaddress', (string) ($result['address'] ?? ''));
                 $result['sex'] = (($result['sex'] ?? '') == '0') ? '-' : data_masking('sex', (string) ($result['sex'] ?? ''));
+                if (!empty($result['login_email'])) {
+                    $result['login_email'] = data_masking('email', (string) $result['login_email']);
+                }
+                if (!empty($result['email'])) {
+                    $result['email'] = data_masking('email', (string) $result['email']);
+                }
             }
 
             $filter = [
@@ -1483,14 +1497,15 @@ class Members extends Controller
         $companyId = app('auth')->user()->get('company_id');
 
         $mobile = $request->input('mobile');
-        if (!$mobile && preg_match("/^1\d{10}$/", $mobile)) {
+        $mobile = $mobile !== null && $mobile !== '' ? (string) $mobile : '';
+        if ($mobile === '' || !preg_match('/^1[3456789]\d{9}$/', $mobile)) {
             throw new ResourceException(trans('MembersBundle/Members.mobile_error'));
         }
         $type = $request->input('type', 'sign');
 
-        // 校验手机号是否注册
+        // 校验手机号是否注册（空数组 [] 在 PHP 中为 truthy，须用 user_id 判断）
         $memberInfo = $this->memberService->getMemberInfo(['mobile' => $mobile, 'company_id' => $companyId]);
-        if ($memberInfo && $type == 'sign') {
+        if (!empty($memberInfo['user_id']) && $type == 'sign') {
             throw new ResourceException(trans('MembersBundle/Members.mobile_already_registered'));
         }
 
@@ -1535,6 +1550,12 @@ class Members extends Controller
             throw new ResourceException(trans('MembersBundle/Members.missing_default_level'));
         }
 
+        // 与小程序 wxapp/new_login 注册一致：distributor_id → reg_distributor / op_distributor
+        $distributorId = 0;
+        if (isset($postData['distributor_id']) && $postData['distributor_id'] !== '' && $postData['distributor_id'] !== null) {
+            $distributorId = (int) $postData['distributor_id'];
+        }
+
         //新增-会员信息
         $memberInfo = [
             'company_id' => $companyId,
@@ -1542,6 +1563,8 @@ class Members extends Controller
             'mobile' => $postData['mobile'],
             'grade_id' => $defaultGradeInfo['grade_id'],
             'password' => substr(str_shuffle('QWERTYUIOPASDFGHJKLZXCVBNM1234567890qwertyuiopasdfghjklzxcvbnm'), 5, 10),
+            'reg_distributor' => $distributorId,
+            'op_distributor' => $distributorId,
         ];
         $memberInfo['user_card_code'] = $this->getCode();
         $memberInfo['region_mobile'] = $memberInfo['mobile'];
@@ -1570,7 +1593,7 @@ class Members extends Controller
 
             //记录新会员和店铺的关系
             $dataParams = [
-                'distributor_id' => $postData['distributor_id'] ?? 0,
+                'distributor_id' => $distributorId,
                 'user_id' => $result['user_id'],
                 'company_id' => $companyId,
                 'salesperson_id' => 0,
@@ -1578,6 +1601,16 @@ class Members extends Controller
             ];
             $distributorUserService = new DistributorUserService();
             $distributorUserService->createData($dataParams);
+
+            if ($distributorId > 0) {
+                $shopRelMemberService = new ShopRelMemberService();
+                $shopRelMemberService->create([
+                    'user_id' => $result['user_id'],
+                    'company_id' => $companyId,
+                    'shop_id' => $distributorId,
+                    'shop_type' => 'distributor',
+                ]);
+            }
 
             $date = date('Ymd');
             $redisKey = 'Member:' . $companyId . ':' . $date;
@@ -1599,7 +1632,7 @@ class Members extends Controller
             'monitor_id' => 0,
             'inviter_id' => 0,
             'salesperson_id' => 0,
-            'distributor_id' => $postData['distributor_id'] ?? 0,
+            'distributor_id' => $distributorId,
             'if_register_promotion' => $ifRegisterPromotion,
         ];
         event(new CreateMemberSuccessEvent($eventData));

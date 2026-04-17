@@ -101,6 +101,13 @@ $api->version('v1', function ($api) {
         $api->get('/wxapp/member/image/code', ['as' => 'front.h5app.member.image.code',      'uses' => 'Members@getImageVcode']);
         // 重置用户密码
         $api->post('/wxapp/member/reset/password', ['as' => 'front.h5app.member.reset.password',      'uses' => 'Members@resetMemberPassword']);
+        // 邮箱注册/登录通道：验证码、注册、找回密码
+        $api->post('/wxapp/member/email/code', ['as' => 'front.h5app.member.email.code', 'uses' => 'Members@sendMemberEmailCode']);
+        $api->post('/wxapp/member/email/activation/resend', ['as' => 'front.h5app.member.email.activation.resend', 'uses' => 'Members@resendActivationEmail']);
+        $api->post('/wxapp/member/email/register', ['as' => 'front.h5app.member.email.register', 'uses' => 'Members@registerMemberByEmail']);
+        $api->post('/wxapp/member/email/activate', ['as' => 'front.h5app.member.email.activate', 'uses' => 'Members@activateMemberByEmail']);
+        $api->post('/wxapp/member/email/password/reset-request', ['as' => 'front.h5app.member.email.password.reset_request', 'uses' => 'Members@requestMemberPasswordResetEmail']);
+        $api->post('/wxapp/member/email/password/reset', ['as' => 'front.h5app.member.email.password.reset', 'uses' => 'Members@resetMemberPasswordByEmailToken']);
 
         // 获取白名单设置
         $api->get('/wxapp/whitelist/status', ['as' => 'front.h5app.member.whitelist.status',      'uses' => 'Members@getWhitelistStatus']);

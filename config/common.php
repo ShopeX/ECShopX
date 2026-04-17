@@ -8,7 +8,8 @@ return [
     'system_open_online' => env('SYSTEM_OPEN_ONLINE', false), // 在线开通
     'system_companys_id' => env('SYSTEM_COMPANYS_ID', 1), // 指定默认company_id,独立部署,不可修改
     'qqmap_key' => env('QQMAP_KEY'), // 腾讯地图key
-    'h5_base_url' => env('H5_BASE_URL'), // H5基础域名
+    // H5 根地址：优先 H5_BASE_URL（trim 后非空）；否则回退 APP_URL
+    'h5_base_url' => rtrim(trim((string) env('H5_BASE_URL', '')) ?: trim((string) env('APP_URL', '')), '/'),
     'h5_domain_suffix' => env('H5_DOMAIN_SUFFIX', '.yuanyuanke.cn'),//H5域名后缀
     'pc_domain_suffix' => env('PC_DOMAIN_SUFFIX', '.yuanyuanke.cn'),//PC域名后缀
     'del_operator_logs_date' => env('DEL_OPERATOR_LOGS_DATE'), // 日志删除时间，默认保存三个月
@@ -125,4 +126,12 @@ return [
     'shuyun_is_online' => env('SHUYUN_IS_ONLINE', false),// 数云是否为线上
     'wangdian_api_url' => env('WANGDIAN_API_URL', ''), // 旺店通接口地址
     'oem-shuyun' => env('OEM_SHUYUN', false),// 是否为oem数云
+
+    'member_email_vcode_ttl' => env('MEMBER_EMAIL_VCODE_TTL', 600),
+    /** 激活链接邮件（含 purpose=activate 与专用重发接口）发送成功后的 Redis 冷却秒数 */
+    'member_email_activation_cooldown_seconds' => env('MEMBER_EMAIL_ACTIVATION_COOLDOWN_SECONDS', 90),
+    'member_email_reset_token_ttl' => env('MEMBER_EMAIL_RESET_TOKEN_TTL', 1200),
+    'member_email_send_limit_per_day' => env('MEMBER_EMAIL_SEND_LIMIT_PER_DAY', 5),
+    'member_email_ip_limit_per_day' => env('MEMBER_EMAIL_IP_LIMIT_PER_DAY', 200),
+    'member_email_device_limit_per_day' => env('MEMBER_EMAIL_DEVICE_LIMIT_PER_DAY', 200),
 ];

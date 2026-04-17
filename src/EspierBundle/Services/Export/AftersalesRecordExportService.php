@@ -56,7 +56,8 @@ class AftersalesRecordExportService implements ExportFileInterface
         'salesman_name' => '导购',
         'order_holder' => '订单分类',
         'supplier_name' => '来源供应商',
-        'self_delivery_operator_name' => '配送员'
+        'self_delivery_operator_name' => '配送员',
+        'distributor_remark' => '商家备注'
     ];
 
     public function exportData($filter)

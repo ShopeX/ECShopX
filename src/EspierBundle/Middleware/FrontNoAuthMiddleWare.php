@@ -47,6 +47,11 @@ class FrontNoAuthMiddleWare
                 $auth = app('auth')->user();
                 $mid_params['auth'] = $auth->attributes;
                 $mid_params['auth']['api_from'] = 'h5app';
+                // attributes 未必含 company_id；后续接口（如邮箱激活）读 auth.company_id，须与 JWT 主体一致
+                $jwtCompanyId = (int) $auth->get('company_id');
+                if ($jwtCompanyId > 0) {
+                    $mid_params['auth']['company_id'] = $jwtCompanyId;
+                }
                 $companyId = $request->input('company_id');
                 if (!$companyId) {
                     $mid_params['company_id'] = $auth->get('company_id');

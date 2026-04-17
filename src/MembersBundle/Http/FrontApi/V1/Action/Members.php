@@ -29,6 +29,7 @@ use DepositBundle\Services\DepositTrade;
 use MembersBundle\Services\MemberService;
 use Dingo\Api\Exception\ResourceException;
 use CompanysBundle\Services\EmployeeService;
+use CompanysBundle\Services\MailSettingActivationBaseUrlResolver;
 use KaquanBundle\Services\MemberCardService;
 use MembersBundle\Services\SubscribeService;
 use PointBundle\Services\PointMemberService;
@@ -52,6 +53,11 @@ use SalespersonBundle\Services\SalespersonService;
 use DistributionBundle\Services\DistributorService;
 use MembersBundle\Services\MemberArticleFavService;
 use MembersBundle\Services\MemberOperateLogService;
+use MembersBundle\Services\MemberEmailActivationService;
+use MembersBundle\Services\MemberEmailVerificationService;
+use MembersBundle\Services\MemberPasswordPolicyService;
+use MembersBundle\Services\MemberPasswordResetService;
+use MembersBundle\Services\MemberSyntheticMobileService;
 use MembersBundle\Services\MemberRegSettingService;
 use MembersBundle\Services\MembersWhitelistService;
 use Dingo\Api\Exception\StoreResourceFailedException;
@@ -79,6 +85,36 @@ class Members extends Controller
     public function __construct()
     {
         $this->memberService = new MemberService();
+    }
+
+    /**
+     * FrontNoAuth 邮箱等多租户接口：优先使用请求 body/query 的 company_id（与邮件链接、跨域 H5 一致），
+     * 否则使用 JWT/中间件写入的 auth.company_id。
+     */
+    protected function resolveFrontNoAuthTenantCompanyId(Request $request): int
+    {
+        $authInfo = $request->get('auth');
+        if (!is_array($authInfo)) {
+            $authInfo = [];
+        }
+        $authCompanyId = (int) ($authInfo['company_id'] ?? 0);
+        if ($authCompanyId <= 0) {
+            $authCompanyId = (int) ($request->attributes->get('company_id') ?? 0);
+        }
+        $bodyRaw = $request->input('company_id');
+        $bodyCompanyId = ($bodyRaw !== null && $bodyRaw !== '') ? (int) $bodyRaw : 0;
+        if ($bodyCompanyId <= 0) {
+            $qCompany = $request->query('company_id');
+            if ($qCompany !== null && $qCompany !== '') {
+                $bodyCompanyId = (int) $qCompany;
+            }
+        }
+        $companyId = $bodyCompanyId > 0 ? $bodyCompanyId : $authCompanyId;
+        if ($companyId <= 0) {
+            throw new ResourceException(trans('MembersBundle/Members.email_activate_company_id_missing'));
+        }
+
+        return $companyId;
     }
 
     /**
@@ -288,7 +324,8 @@ class Members extends Controller
             ];
             $memberInfo = $this->memberService->getMemberInfo($filter, true);
             unset($memberInfo['region_mobile']);
-            $mobile = $memberInfo['mobile'];
+            $mobile = (string) ($memberInfo['mobile'] ?? '');
+            MemberSyntheticMobileService::stripSyntheticMobileForFrontApi($memberInfo);
             if ($memberInfo) {
                 $filter['disabled'] = 0;
                 //是否员工
@@ -345,6 +382,12 @@ class Members extends Controller
                 $memberInfo['open_id'] = $authInfo['open_id'] ?? '';
                 // 数据脱敏
                 $memberInfo['mobile'] = data_masking('mobile', (string) $memberInfo['mobile']);
+                if (!empty($memberInfo['login_email'])) {
+                    $memberInfo['login_email'] = data_masking('email', (string) $memberInfo['login_email']);
+                }
+                if (!empty($memberInfo['email'])) {
+                    $memberInfo['email'] = data_masking('email', (string) $memberInfo['email']);
+                }
                 if (isset($memberInfo['requestFields']['birthday'])) {
                     $memberInfo['requestFields']['birthday'] = data_masking('birthday', (string) $memberInfo['requestFields']['birthday']);
                 }
@@ -789,6 +832,7 @@ class Members extends Controller
             $this->memberService->shuyunModify($companyId, $authInfo['user_id'], $postData);
         }
         $result = $this->memberService->getMemberInfo($filter);
+        MemberSyntheticMobileService::stripSyntheticMobileForFrontApi($result);
         event(new UpdateMemberSuccessEvent($result));
         $dmMemberService = new DmMemberService($companyId);
         if ($dmMemberService->isOpen) {
@@ -891,6 +935,7 @@ class Members extends Controller
             ]);
         }
         $result = $this->memberService->getMemberInfo($filter);
+        MemberSyntheticMobileService::stripSyntheticMobileForFrontApi($result);
         return $this->response->array($result);
     }
 
@@ -1157,7 +1202,8 @@ class Members extends Controller
         $authInfo = $request->get('auth');
         $companyId = $authInfo['company_id'];
         $phone = $request->input('mobile');
-        if (!$phone && preg_match("/^1\d{10}$/", $phone)) {
+        $phone = $phone !== null && $phone !== '' ? (string) $phone : '';
+        if ($phone === '' || !preg_match('/^1[3456789]\d{9}$/', $phone)) {
             throw new ResourceException(trans('MembersBundle/Members.mobile_error'));
         }
         $type = $request->input('type', 'sign');
@@ -1165,7 +1211,7 @@ class Members extends Controller
         if (!in_array($type, $this->code_type)) {
             throw new ResourceException(trans('MembersBundle/Members.mobile_verification_type_error'));
         }
-        // 校验手机号是否注册
+        // 校验手机号是否注册（注意：getMemberInfo 无记录时返回空数组 []，在 PHP 中空数组为 truthy，必须用 user_id 判断是否存在会员）
         $memberService = new MemberService();
         if (($authInfo['user_id'] ?? 0) && $type == 'forgot_password') {
             $memberInfo = $memberService->getMemberInfo(['user_id' => $authInfo['user_id'], 'company_id' => $authInfo['company_id']]);
@@ -1173,11 +1219,11 @@ class Members extends Controller
         } else {
             $memberInfo = $memberService->getMemberInfo(['mobile' => $phone, 'company_id' => $authInfo['company_id']]);
         }
-        if ($memberInfo && $type == 'sign') {
+        if (!empty($memberInfo['user_id']) && $type == 'sign') {
             if (!isset($memberInfo['other_params']['is_upload_member']) || $memberInfo['other_params']['is_upload_member'] != true) {
                 throw new ResourceException(trans('MembersBundle/Members.mobile_already_registered'));
             }
-        } elseif (!$memberInfo && $type == 'forgot_password') {
+        } elseif (empty($memberInfo['user_id']) && $type == 'forgot_password') {
             throw new ResourceException(trans('MembersBundle/Members.mobile_not_registered_yet'));
         }
 
@@ -1196,13 +1242,248 @@ class Members extends Controller
 
             $exist = $membersAssociationsRepository->get(['user_id' => $authInfo['user_id'], 'unionid' => $authInfo['unionid'], 'company_id' => $authInfo['company_id'], 'user_type' => 'baidu']);
             if ($exist) {
-                if (!isset($memberInfo['other_params']['is_upload_member']) || $memberInfo['other_params']['is_upload_member'] != true) {
+                if (!empty($memberInfo['user_id']) && (!isset($memberInfo['other_params']['is_upload_member']) || $memberInfo['other_params']['is_upload_member'] != true)) {
                     throw new ResourceException(trans('MembersBundle/Members.account_already_bound_mobile'));
                 }
             }
         }
         $memberRegSettingService->generateSmsVcode($phone, $companyId, $type);
         return $this->response->array(['message' => "短信发送成功"]);
+    }
+
+    /**
+     * 发送会员邮箱邮件：purpose=activate 为激活链接；purpose=login 为 6 位登录验证码。
+     */
+    public function sendMemberEmailCode(Request $request)
+    {
+        $companyId = $this->resolveFrontNoAuthTenantCompanyId($request);
+        $purpose = $request->input('purpose');
+        if (!in_array($purpose, [MemberEmailVerificationService::PURPOSE_ACTIVATE, MemberEmailVerificationService::PURPOSE_LOGIN], true)) {
+            throw new ResourceException(trans('MembersBundle/Members.email_code_purpose_invalid'));
+        }
+        if ($purpose === MemberEmailVerificationService::PURPOSE_ACTIVATE) {
+            $emailSvc = new MemberEmailVerificationService();
+            $email = $emailSvc->normalizeEmail((string) $request->input('email'));
+            $repo = app('registry')->getManager('default')->getRepository(\MembersBundle\Entities\Members::class);
+            $member = $repo->findOneBy(['company_id' => $companyId, 'login_email' => $email]);
+            if (!$member || $member->getEmailVerifiedAt()) {
+                throw new ResourceException(trans('MembersBundle/Members.email_activation_send_not_allowed'));
+            }
+        }
+        $imgType = $purpose === MemberEmailVerificationService::PURPOSE_ACTIVATE ? 'sign' : 'login';
+        $memberRegSettingService = new MemberRegSettingService();
+        $token = $request->input('token');
+        $yzmcode = $request->input('yzm');
+        try {
+            if (!$memberRegSettingService->checkImageVcode($token, $companyId, $yzmcode, $imgType)) {
+                throw new ResourceException(trans('MembersBundle/Members.image_captcha_error'));
+            }
+        } catch (ResourceException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new ResourceException($e->getMessage());
+        }
+        if ($purpose === MemberEmailVerificationService::PURPOSE_ACTIVATE) {
+            $base = trim((string) $request->input('activation_base_url', ''));
+            if ($base === '') {
+                $base = (new MailSettingActivationBaseUrlResolver())->getH5ActivationBaseUrl($companyId);
+            }
+            if ($base === '') {
+                $base = trim((string) config('common.h5_base_url'));
+            }
+            (new MemberEmailActivationService())->sendActivationLinkEmail(
+                $companyId,
+                (string) $request->input('email'),
+                (string) $request->ip(),
+                $request->header('X-Client-Device-Id'),
+                $base
+            );
+
+            return $this->response->array(['message' => trans('MembersBundle/Members.email_activation_link_sent')]);
+        }
+        (new MemberEmailVerificationService())->sendVerificationCode(
+            $companyId,
+            (string) $request->input('email'),
+            $purpose,
+            (string) $request->ip(),
+            $request->header('X-Client-Device-Id')
+        );
+
+        return $this->response->array(['message' => trans('MembersBundle/Members.email_code_sent')]);
+    }
+
+    /**
+     * 仅重发激活链接邮件（注册未收到等场景）；图形码 sign；频控与 purpose=activate 共用 Redis 冷却键，冷却秒数见 member_email_activation_cooldown_seconds。
+     */
+    public function resendActivationEmail(Request $request)
+    {
+        $companyId = $this->resolveFrontNoAuthTenantCompanyId($request);
+        $emailSvc = new MemberEmailVerificationService();
+        $email = $emailSvc->normalizeEmail((string) $request->input('email'));
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new ResourceException(trans('MembersBundle/Members.invalid_email'));
+        }
+        $repo = app('registry')->getManager('default')->getRepository(\MembersBundle\Entities\Members::class);
+        $member = $repo->findOneBy(['company_id' => $companyId, 'login_email' => $email]);
+        if (!$member || $member->getEmailVerifiedAt()) {
+            throw new ResourceException(trans('MembersBundle/Members.email_activation_send_not_allowed'));
+        }
+        $memberRegSettingService = new MemberRegSettingService();
+        $token = $request->input('token');
+        $yzmcode = $request->input('yzm');
+        try {
+            if (!$memberRegSettingService->checkImageVcode($token, $companyId, $yzmcode, 'sign')) {
+                throw new ResourceException(trans('MembersBundle/Members.image_captcha_error'));
+            }
+        } catch (ResourceException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new ResourceException($e->getMessage());
+        }
+        $base = trim((string) $request->input('activation_base_url', ''));
+        if ($base === '') {
+            $base = (new MailSettingActivationBaseUrlResolver())->getH5ActivationBaseUrl($companyId);
+        }
+        if ($base === '') {
+            $base = trim((string) config('common.h5_base_url'));
+        }
+        try {
+            (new MemberEmailActivationService())->sendActivationLinkEmail(
+                $companyId,
+                $email,
+                (string) $request->ip(),
+                $request->header('X-Client-Device-Id'),
+                $base
+            );
+        } catch (ResourceException $e) {
+            if ($e->getMessage() === trans('MembersBundle/Members.email_code_resend_too_fast')) {
+                throw new ResourceException(trans('MembersBundle/Members.email_activation_resend_too_frequent'));
+            }
+            throw $e;
+        }
+
+        return $this->response->array(['message' => trans('MembersBundle/Members.email_activation_link_sent')]);
+    }
+
+    /**
+     * 邮箱注册（无需邮箱验证码）；注册成功后将激活邮件 **异步入队**，用户打开链接后由前端调用 activate 完成激活。
+     */
+    public function registerMemberByEmail(Request $request)
+    {
+        $authInfo = $request->get('auth');
+        if (!is_array($authInfo)) {
+            $authInfo = [];
+        }
+        $companyId = $this->resolveFrontNoAuthTenantCompanyId($request);
+        $postData = $request->all();
+        if (empty($postData['email']) || empty($postData['password'])) {
+            throw new ResourceException(trans('MembersBundle/Members.email_register_params_missing'));
+        }
+        $passwordConfirm = $postData['password_confirmation'] ?? $postData['password_confirm'] ?? null;
+        if ($passwordConfirm === null || $passwordConfirm === '') {
+            throw new ResourceException(trans('MembersBundle/Members.email_register_password_confirm_required'));
+        }
+        if ((string) $postData['password'] !== (string) $passwordConfirm) {
+            throw new ResourceException(trans('MembersBundle/Members.email_register_password_mismatch'));
+        }
+        $memberRegSettingService = new MemberRegSettingService();
+        try {
+            if (!$memberRegSettingService->checkImageVcode($request->input('token'), $companyId, $request->input('yzm'), 'sign')) {
+                throw new ResourceException(trans('MembersBundle/Members.image_captcha_error'));
+            }
+        } catch (ResourceException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new ResourceException($e->getMessage());
+        }
+        $postData['company_id'] = $companyId;
+        $postData['api_from'] = $authInfo['api_from'] ?? 'h5app';
+        $postData['unionid'] = $authInfo['unionid'] ?? '';
+        $postData['open_id'] = $authInfo['open_id'] ?? '';
+        $postData['client_ip'] = (string) $request->ip();
+        $postData['device_id'] = $request->header('X-Client-Device-Id');
+        $result = $this->memberService->registerMemberWithEmail($postData);
+
+        return $this->response->array([
+            'message' => trans('MembersBundle/Members.email_register_success_check_mail'),
+            'activation_email_queued' => (bool) ($result['activation_email_queued'] ?? false),
+        ]);
+    }
+
+    /**
+     * 邮箱激活：校验邮件链接中的 token，写入 email_verified_at。
+     */
+    public function activateMemberByEmail(Request $request)
+    {
+        // JSON body / form / query（部分 H5 把 token 挂在 URL query）
+        $plainToken = trim((string) ($request->input('token') ?: $request->query('token', '')));
+        if ($plainToken === '') {
+            throw new ResourceException(trans('MembersBundle/Members.email_activate_params_missing'));
+        }
+        $companyId = $this->resolveFrontNoAuthTenantCompanyId($request);
+        $activationSvc = new MemberEmailActivationService();
+        $validated = $activationSvc->validateToken($companyId, $plainToken);
+        if (!$validated) {
+            throw new ResourceException(trans('MembersBundle/Members.email_activation_token_invalid'));
+        }
+        $repo = app('registry')->getManager('default')->getRepository(\MembersBundle\Entities\Members::class);
+        $member = $repo->findOneBy(['company_id' => $companyId, 'user_id' => $validated['user_id']]);
+        if (!$member) {
+            throw new ResourceException(trans('MembersBundle/Members.email_not_registered'));
+        }
+        if ($member->getEmailVerifiedAt()) {
+            throw new ResourceException(trans('MembersBundle/Members.email_already_verified'));
+        }
+        $activationSvc->consumeToken($companyId, $plainToken);
+        $this->memberService->updateMemberInfo(
+            ['email_verified_at' => time()],
+            ['user_id' => (int) $member->getUserId(), 'company_id' => $companyId]
+        );
+
+        return $this->response->array([
+            'message' => trans('MembersBundle/Members.email_activate_success'),
+        ]);
+    }
+
+    /**
+     * 邮箱找回密码：发送带 token 的链接（防枚举统一文案）
+     */
+    public function requestMemberPasswordResetEmail(Request $request)
+    {
+        $companyId = $this->resolveFrontNoAuthTenantCompanyId($request);
+        $emailSvc = new MemberEmailVerificationService();
+        $email = $emailSvc->normalizeEmail((string) $request->input('email'));
+        $resetBase = (string) $request->input('reset_base_url', (string) config('common.h5_base_url'));
+        $repo = app('registry')->getManager('default')->getRepository(\MembersBundle\Entities\Members::class);
+        $member = $repo->findOneBy(['company_id' => $companyId, 'login_email' => $email]);
+        if ($member) {
+            $plain = (new MemberPasswordResetService())->createToken($companyId, (int) $member->getUserId());
+            $url = rtrim($resetBase, '/') . '/reset-password?token=' . rawurlencode($plain) . '&company_id=' . $companyId;
+            (new MemberPasswordResetService())->sendResetEmail($companyId, $email, $url);
+        }
+
+        return $this->response->array(['message' => trans('MembersBundle/Members.password_reset_email_sent_if_exists')]);
+    }
+
+    /**
+     * 使用邮件中的 token 设置新密码
+     */
+    public function resetMemberPasswordByEmailToken(Request $request)
+    {
+        $companyId = $this->resolveFrontNoAuthTenantCompanyId($request);
+        $token = (string) $request->input('token');
+        $password = (string) $request->input('password');
+        (new MemberPasswordPolicyService())->validateOrFail($password);
+        $svc = new MemberPasswordResetService();
+        $row = $svc->validateToken($companyId, $token);
+        if (!$row) {
+            throw new ResourceException(trans('MembersBundle/Members.password_reset_token_invalid'));
+        }
+        $svc->consumeToken($companyId, $token);
+        $hash = password_hash($password, PASSWORD_DEFAULT);
+        $this->memberService->updateMemberInfo(['password' => $hash], ['user_id' => $row['user_id'], 'company_id' => $companyId]);
+
+        return $this->response->array(['message' => 'ok']);
     }
 
 

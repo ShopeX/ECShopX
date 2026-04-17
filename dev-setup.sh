@@ -51,6 +51,9 @@ INSTALLED_PC=false
 # 记录开始时间
 START_TIME=$(date +%s)
 
+# 开源安装统计（可选）：安装成功时上报，需同时配置 OPEN_SOURCE_STAT_GATEWAY（网关根 URL，无尾部斜杠）
+# 与 OPEN_SOURCE_STAT_SECRET_ECHOPX（验签密钥，勿提交到仓库）
+
 # Docker Compose 命令（兼容新旧版本）
 DOCKER_COMPOSE_CMD=""
 
@@ -956,6 +959,83 @@ init_admin_password() {
         log_warning "管理员密码初始化失败"
     }
     log_success "管理员密码初始化完成"
+}
+
+# ===========================================
+# Crontab 与队列（Supervisor）
+# ===========================================
+
+configure_cron_and_supervisor_queues() {
+    log_info "=========================================="
+    log_info "配置 Crontab 定时任务与队列（Supervisor）..."
+    log_info "=========================================="
+
+    if ! is_container_running; then
+        log_warning "容器未运行，跳过 Crontab 与队列配置"
+        return 0
+    fi
+
+    local cron_dir="$PROJECT_ROOT/docker-dev/cron"
+    local sup_dir="$PROJECT_ROOT/docker-dev/supervisor"
+
+    if [ -d "$cron_dir" ]; then
+        local has_cron=false
+        for f in "$cron_dir"/*; do
+            [ -e "$f" ] || continue
+            [ -f "$f" ] || continue
+            has_cron=true
+            local user
+            user=$(basename "$f")
+            log_info "安装 crontab（用户: $user）: $f"
+            docker cp "$f" "$CONTAINER_NAME:/tmp/crontab.install.$user"
+            if docker exec "$CONTAINER_NAME" sh -c "crontab -u "$user" "/tmp/crontab.install.$user"" 2>/dev/null; then
+                log_success "crontab 已安装: $user"
+            else
+                log_warning "crontab 安装失败（用户: $user）。请确认镜像已包含 dcron 且 supervisord 已配置 [program:crond]，必要时执行: $0 --rebuild"
+            fi
+        done
+        if [ "$has_cron" = false ]; then
+            log_warning "目录 $cron_dir 下无 crontab 文件"
+        else
+            if docker exec "$CONTAINER_NAME" supervisorctl status crond &>/dev/null; then
+                docker exec "$CONTAINER_NAME" supervisorctl restart crond 2>/dev/null || true
+            fi
+        fi
+    else
+        log_warning "未找到目录: $cron_dir，跳过 Crontab"
+    fi
+
+    if [ ! -d "$sup_dir" ]; then
+        log_warning "未找到目录: $sup_dir，跳过队列配置"
+        return 0
+    fi
+
+    local has_sup=false
+    for ini in "$sup_dir"/*.ini; do
+        [ -f "$ini" ] || continue
+        has_sup=true
+        local base
+        base=$(basename "$ini" .ini)
+        log_info "安装 Supervisor 片段: ${base}.conf"
+        docker cp "$ini" "$CONTAINER_NAME:/etc/supervisor/conf.d/${base}.conf"
+    done
+
+    if [ "$has_sup" = false ]; then
+        log_warning "目录 $sup_dir 下无 .ini 配置"
+        return 0
+    fi
+
+    log_info "重新加载 Supervisor 并应用队列配置..."
+    if docker exec "$CONTAINER_NAME" supervisorctl reread 2>/dev/null && \
+       docker exec "$CONTAINER_NAME" supervisorctl update 2>/dev/null; then
+        log_success "Supervisor 已重新加载，队列进程应已启动"
+    else
+        log_warning "supervisorctl reread/update 未完全成功，尝试 reload..."
+        docker exec "$CONTAINER_NAME" supervisorctl reload 2>/dev/null || {
+            log_warning "Supervisor 重载失败，请重启容器: docker restart $CONTAINER_NAME"
+        }
+    fi
+    log_success "Crontab 与队列配置步骤完成"
 }
 
 # ===========================================
@@ -2056,6 +2136,113 @@ import_demo_data() {
     fi
 }
 
+
+# ===========================================
+# 开源安装统计上报（可选）
+# ===========================================
+
+# 计算 MD5（大写十六进制），入参为原始字符串
+open_source_stat_md5_upper() {
+    local data="$1"
+    if command -v md5sum &>/dev/null; then
+        printf '%s' "$data" | md5sum | awk '{print toupper($1)}'
+    elif command -v md5 &>/dev/null; then
+        printf '%s' "$data" | md5 -q | tr '[:lower:]' '[:upper:]'
+    else
+        echo ""
+    fi
+}
+
+# 按文档：除 sign 外键名升序，拼接 k + serialize(v)，MD5(secret + 拼接 + secret) 大写
+open_source_stat_sign() {
+    local secret="$1"
+    local product="$2"
+    local instance_id="$3"
+    local version="$4"
+    local timestamp="$5"
+    local s="instance_id${instance_id}product${product}timestamp${timestamp}version${version}"
+    open_source_stat_md5_upper "${secret}${s}${secret}"
+}
+
+escape_json_string() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    printf '%s' "$s"
+}
+
+# 从 ECShopX 项目根目录 composer.json 读取 "version" 字段（用于开源安装统计）
+get_ecshopx_version_from_composer() {
+    local f="${PROJECT_ROOT}/composer.json"
+    local v=""
+    [ -r "$f" ] || {
+        echo "0.0.0"
+        return 0
+    }
+    if command -v php &>/dev/null; then
+        v=$(php -r '$j=json_decode(file_get_contents($argv[1]),true);echo isset($j["version"])?(string)$j["version"]:"";' "$f" 2>/dev/null || true)
+    fi
+    if [ -z "$v" ]; then
+        v=$(sed -n '1,40s/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -1)
+    fi
+    [ -n "$v" ] || v="0.0.0"
+    echo "$v"
+}
+
+get_open_source_instance_id() {
+    local mac=""
+    if [ "${OS:-}" = "macos" ]; then
+        mac=$(ifconfig 2>/dev/null | awk '/ether/ {print tolower($2); exit}' || true)
+    elif [ "${OS:-}" = "linux" ]; then
+        local f
+        for f in /sys/class/net/*/address; do
+            [ ! -f "$f" ] && continue
+            case "$f" in
+                */lo/address) continue ;;
+            esac
+            mac=$(tr '[:upper:]' '[:lower:]' < "$f" || true)
+            [ -n "$mac" ] && [ "$mac" != "00:00:00:00:00:00" ] && break
+        done
+    fi
+    if [ -z "$mac" ]; then
+        mac=$(hostname 2>/dev/null || echo "unknown")
+    fi
+    echo "${mac:0:64}"
+}
+
+report_open_source_install_stat() {
+    local gateway="https://gwnextapi.shopex.cn"
+    local secret="aF3dG6hJ1kL9zXcV4bN2mQ"
+    ([ -z "$gateway" ] || [ -z "$secret" ]) && return 0
+    command -v curl &>/dev/null || return 0
+
+    local product="echopx"
+    local instance_id
+    instance_id=$(get_open_source_instance_id)
+    local version
+    version=$(get_ecshopx_version_from_composer)
+    local timestamp
+    timestamp=$(date +%s)
+    local sign
+    sign=$(open_source_stat_sign "$secret" "$product" "$instance_id" "$version" "$timestamp")
+    [ -z "$sign" ] && return 0
+
+    local base="${gateway%/}"
+    local url="${base}/usercenter/open_source/stat/report"
+    local inst_esc ver_esc
+    inst_esc=$(escape_json_string "$instance_id")
+    ver_esc=$(escape_json_string "$version")
+
+    local body
+    body=$(printf '{"product":"%s","instance_id":"%s","version":"%s","timestamp":%s,"sign":"%s"}' \
+        "$product" "$inst_esc" "$ver_esc" "$timestamp" "$sign")
+
+    curl -sS --max-time 15 -o /dev/null -X POST "$url" \
+        -H 'Content-Type: application/json' \
+        -d "$body" 2>/dev/null || true
+    return 0
+}
+
 # ===========================================
 # 显示完成信息
 # ===========================================
@@ -2124,6 +2311,7 @@ show_success_info() {
     log_info "  重新构建:     $0 --rebuild"
     echo ""
     log_info "执行时间: ${MINUTES}分${SECONDS}秒"
+    report_open_source_install_stat
     log_success "=========================================="
 }
 
@@ -2155,6 +2343,7 @@ main() {
     # 配置 PHP 应用
     configure_env
     configure_application
+    configure_cron_and_supervisor_queues
     
     # 编译前端项目
     build_admin || log_warning "管理后台（ECShopX_admin-frontend）编译未完成"
