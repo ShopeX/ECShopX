@@ -65,6 +65,15 @@ class MemberCardService
     }
 
     /**
+     * 按等级名称解析 grade_id（主表默认语言 + 多语言表），逻辑见 MembercardGradeRepository::getListByGradeName。
+     */
+    public function getGradeIdByNameWithMultiLang($companyId, $gradeName): ?int
+    {
+        $grade = $this->memberCardGradeRepository->getByGradeNameWithMultiLang($companyId, $gradeName);
+        return $grade ? $grade->getGradeId() : null;
+    }
+
+    /**
      * 创建会员卡默认等级
      */
     public function setDefaultGrade($gradeInfo)

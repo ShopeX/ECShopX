@@ -54,6 +54,7 @@ use CompanysBundle\Services\ArticleService;
 use CompanysBundle\Services\SettingService as CompanysSettingService;
 
 use WechatBundle\Services\Material as MaterialService;
+use PromotionsBundle\Services\PromotionSeckillActivityService;
 use PromotionsBundle\Services\MemberPriceService;
 use MembersBundle\Services\MemberService;
 use KaquanBundle\Services\VipGradeService;
@@ -2889,6 +2890,8 @@ class ItemsService
             ];
 
             $marketingService = new MarketingActivityService();
+            $seckillActivityService = new PromotionSeckillActivityService();
+            $seckillActivityCache = [];
             foreach ($itemList as &$items) {
                 if (!isset($items['goods_id'])) {
                     continue;
@@ -2897,6 +2900,7 @@ class ItemsService
                 if (isset($newTags['all']) && $newTags['all']) {
                     $promotion_activity = array_merge($promotion_activity, $newTags['all']);
                 }
+                $promotionSeckillActivityService = new PromotionSeckillActivityService();
                 foreach ($promotion_activity as $data) {
                     $itemDistributorId = $items['distributor_id'] ?? 0;//商品所属的店铺
                     if (in_array($data['tag_type'], $allTagType)) {
@@ -2931,7 +2935,50 @@ class ItemsService
                                 continue;
                             }
                         }
+                    } elseif ($data['tag_type'] == 'limited_time_sale') {
+                        if (!isset($seckillActivityCache[$data['promotion_id']])) {
+                            $seckillActivityCache[$data['promotion_id']] = $seckillActivityService->getInfo([
+                                'company_id' => $companyId,
+                                'seckill_id' => $data['promotion_id'],
+                                'disabled' => 0,
+                            ]);
+                        }
+                        $seckillActivity = $seckillActivityCache[$data['promotion_id']];
+                        if (!$seckillActivity) {
+                            continue;
+                        }
+
+                        // 平台活动和店铺活动互斥展示，和详情页活动校验保持一致。
+                        $activitySourceId = (int)($seckillActivity['source_id'] ?? 0);
+                        if ($activitySourceId !== (int)$itemDistributorId) {
+                            continue;
+                        }
+
+                        $activityDistributorIds = $seckillActivity['distributor_id'] ?? [];
+                        if (!is_array($activityDistributorIds)) {
+                            $activityDistributorIds = explode(',', trim($activityDistributorIds, ','));
+                        }
+                        $activityDistributorIds = array_values(array_filter(array_map('intval', $activityDistributorIds), function ($id) {
+                            return $id >= 0;
+                        }));
+
+                        if ($activityDistributorIds && !in_array((int)$itemDistributorId, $activityDistributorIds, true)) {
+                            continue;
+                        }
                     }
+
+                    /* if ($data['tag_type'] == 'limited_time_sale') {
+                        $limitActivity = $promotionSeckillActivityService->getInfoById($data['promotion_id']);
+                        if ($itemDistributorId > 0) {
+                            if (!$limitActivity) {
+                                continue;
+                            }
+                            // 店铺和平台的限时特惠各自独立
+                            if (($limitActivity['source_id'] ?? 0) != $itemDistributorId) {
+                                continue;
+                            }
+                        }
+                    } */
 
                     $items['promotion_activity'][] = $data;
                     if (in_array($data['tag_type'], ['single_group', 'normal', 'limited_time_sale'])) {

@@ -17,6 +17,8 @@
 
 namespace KaquanBundle\Repositories;
 
+use CompanysBundle\MultiLang\MultiLangItem;
+use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityRepository;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use GoodsBundle\Services\MultiLang\MultiLangService;
@@ -168,6 +170,110 @@ class MembercardGradeRepository extends EntityRepository
     public function get($filter)
     {
         return $this->findOneBy($filter);
+    }
+
+    /**
+     * 按等级名称查询列表（参考 GoodsBundle\Repositories\ItemsAttributesRepository::listsByAttributeName）
+     * 若 filter 含 grade_name，先查多语言表得到 grade_id，再交给 getList；多语言未命中时保留 grade_name 由主表默认语言匹配。
+     *
+     * @param array $filter 查询条件
+     * @param int $offset
+     * @param int $limit
+     * @param mixed $OrderBy
+     * @return array
+     */
+    public function getListByGradeName($filter = [], $offset = 0, $limit = -1, $OrderBy = null)
+    {
+        if (isset($filter['grade_name']) && $filter['grade_name'] !== '' && $filter['grade_name'] !== null) {
+            $gradeNames = is_array($filter['grade_name']) ? $filter['grade_name'] : [$filter['grade_name']];
+            $gradeIds = $this->getGradeIdsByNames($gradeNames, $filter);
+            if (!empty($gradeIds)) {
+                if (isset($filter['grade_id'])) {
+                    $existingIds = is_array($filter['grade_id']) ? $filter['grade_id'] : [$filter['grade_id']];
+                    $gradeIds = array_values(array_intersect($existingIds, $gradeIds));
+                }
+                if (!empty($gradeIds)) {
+                    unset($filter['grade_name']);
+                    $filter['grade_id'] = $gradeIds;
+                }
+            }
+        }
+
+        return $this->getList('*', $filter, $offset, $limit, $OrderBy);
+    }
+
+    /**
+     * 按等级名称解析单条等级（主表 + 多语言），用于导入等场景。
+     */
+    public function getByGradeNameWithMultiLang($companyId, $gradeName): ?MemberCardGrade
+    {
+        if ($gradeName === null || $gradeName === '') {
+            return null;
+        }
+        $rows = $this->getListByGradeName(['company_id' => $companyId, 'grade_name' => $gradeName], 0, 1);
+        if (empty($rows)) {
+            return null;
+        }
+        $gradeId = $rows[0]['grade_id'] ?? null;
+        if ($gradeId === null) {
+            return null;
+        }
+
+        return $this->findOneBy(['company_id' => $companyId, 'grade_id' => $gradeId]);
+    }
+
+    /**
+     * 根据等级名称（多语言 attribute_value）解析 grade_id，并在主表按 company_id 校验。
+     *
+     * @param string[] $gradeNames
+     * @param array $filter 须含 company_id 等主表条件
+     * @return int[]
+     */
+    private function getGradeIdsByNames(array $gradeNames, array $filter = []): array
+    {
+        if (empty($gradeNames)) {
+            return [];
+        }
+        $lang = $this->getLang();
+        $multiLangItem = new MultiLangItem($lang);
+        $langFilter = [
+            'table_name' => $this->table,
+            'field' => 'grade_name',
+            'attribute_value|in' => $gradeNames,
+        ];
+        $langList = $multiLangItem->getListByFilter($langFilter, -1);
+        if (empty($langList)) {
+            return [];
+        }
+        $gradeIds = array_column($langList, 'data_id');
+        $gradeIds = array_unique($gradeIds);
+        if (empty($gradeIds)) {
+            return [];
+        }
+        $verifyFilter = ['grade_id' => $gradeIds];
+        foreach (['company_id'] as $key) {
+            if (isset($filter[$key])) {
+                $verifyFilter[$key] = $filter[$key];
+            }
+        }
+        if (count($verifyFilter) === 1) {
+            return array_values(array_map('intval', $gradeIds));
+        }
+        $criteria = Criteria::create();
+        foreach ($verifyFilter as $field => $value) {
+            if (is_array($value)) {
+                $criteria = $criteria->andWhere(Criteria::expr()->in($field, $value));
+            } else {
+                $criteria = $criteria->andWhere(Criteria::expr()->eq($field, $value));
+            }
+        }
+        $entityList = $this->matching($criteria);
+        $verifiedIds = [];
+        foreach ($entityList as $entity) {
+            $verifiedIds[] = (int) $entity->getGradeId();
+        }
+
+        return $verifiedIds;
     }
 
     public function getList($cols = '*', $filter = array(), $offset = 0, $limit = -1, $OrderBy = null)

@@ -234,7 +234,7 @@ class MemberUploadUpdateService
     private function getGradeIdByName($companyId, $gradeName)
     {
         $memberCardService = new MemberCardService();
-        $gradeId = $memberCardService->getGradeIdByName($companyId, $gradeName);
+        $gradeId = $memberCardService->getGradeIdByNameWithMultiLang($companyId, $gradeName);
         if (!$gradeId) {
             throw new BadRequestHttpException(trans('MembersBundle/Members.member_level_not_exists', ['{0}' => $gradeName]));
         }

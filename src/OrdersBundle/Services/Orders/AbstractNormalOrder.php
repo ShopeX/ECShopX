@@ -4025,7 +4025,7 @@ class AbstractNormalOrder implements OrderInterface
             if ($item == end($orderInfo['items'])) {
                 $newItemTotalFee = $leftTotalFee;
             } else {
-                $newItemTotalFee = bcmul($totalFee, $item['total_fee'] / $oldTotalFee);
+                $newItemTotalFee = $this->multiplyByRatio($totalFee, $item['total_fee'], $oldTotalFee);
             }
             if ($newItemTotalFee != $item['total_fee']) {
                 $itemMarkDownFee = bcsub($item['total_fee'], $newItemTotalFee);
@@ -4068,7 +4068,7 @@ class AbstractNormalOrder implements OrderInterface
         foreach ($orderInfo['items'] as $key => $item) {
             if (isset($items[$item['item_id']])) {
                 if (isset($items[$item['item_id']]['discount'])) {
-                    $newItemTotalFee = bcmul($item['total_fee'], $items[$item['item_id']]['discount'] / 100);
+                    $newItemTotalFee = $this->multiplyByRatio($item['total_fee'], $items[$item['item_id']]['discount'], 100);
                 } else {
                     $newItemTotalFee = $items[$item['item_id']]['total_fee'];
                 }
@@ -4108,6 +4108,17 @@ class AbstractNormalOrder implements OrderInterface
 
         $orderInfo['total_fee'] = $totalFee + $freightFee;
         return $orderInfo;
+    }
+
+    private function multiplyByRatio($amount, $numerator, $denominator, int $ratioScale = 10, int $resultScale = 0)
+    {
+        if ((string) $denominator === '0' || (string) $denominator === '') {
+            return '0';
+        }
+
+        $ratio = bcdiv((string) $numerator, (string) $denominator, $ratioScale);
+
+        return bcmul((string) $amount, $ratio, $resultScale);
     }
 
     public function saveMarkDown($orderInfo, $params) {

@@ -24,6 +24,7 @@ use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Events\ItemCategoryAddEvent;
 use GoodsBundle\Services\ItemsAttributesService;
 use GoodsBundle\Services\ItemsRelCatsService;
+use Doctrine\DBAL\Connection;
 
 class ItemsCategoryService
 {
@@ -319,6 +320,11 @@ class ItemsCategoryService
                     throw new ResourceException('分类下存在商品');
                 }
             }
+            // 校验供应商商品销售分类关联
+            $supplierSaleCategoryTotal = $this->countSupplierItemsBySaleCategoryTree((int)$filter['company_id'], (int)$filter['category_id']);
+            if ($supplierSaleCategoryTotal > 0) {
+                throw new ResourceException('分类下存在供应商商品');
+            }
 
             $mainCatIds = $this->getMainCatChildIdsBy($filter['category_id'], $filter['company_id']);
             $mainCatIds[] = $filter['category_id'];
@@ -326,6 +332,11 @@ class ItemsCategoryService
             $itemTotalCount = $itemsService->count(['company_id' => $filter['company_id'], 'item_category' => $mainCatIds]);
             if ($itemTotalCount > 0) {
                 throw new ResourceException('类目下存在商品');
+            }
+            // 校验供应商商品管理分类关联
+            $supplierMainCategoryTotal = $this->countSupplierItemsByMainCategory((int)$filter['company_id'], $mainCatIds);
+            if ($supplierMainCategoryTotal > 0) {
+                throw new ResourceException('类目下存在供应商商品');
             }
 
             if ($ids) {
@@ -359,6 +370,83 @@ class ItemsCategoryService
             $conn->rollback();
             throw $e;
         }
+    }
+
+    /**
+     * 统计供应商商品在销售分类树中的关联数量（一级/二级/三级）
+     */
+    private function countSupplierItemsBySaleCategoryTree(int $companyId, int $categoryId): int
+    {
+        $categoryIds = $this->getItemsCategoryIds($categoryId, $companyId);
+        $categoryIds = array_values(array_unique(array_map('intval', (array)$categoryIds)));
+        if (!$categoryIds) {
+            return 0;
+        }
+
+        $conn = app('registry')->getConnection('default');
+        $targetCategoryIds = array_fill_keys($categoryIds, true);
+
+        // 分批扫描，命中即返回，避免一次性拉取全量数据。
+        $lastId = 0;
+        $batchSize = 500;
+        while (true) {
+            $qb = $conn->createQueryBuilder();
+            $qb->select('sa.id, sa.attr_data')
+                ->from('supplier_items_attr', 'sa')
+                ->innerJoin('sa', 'supplier_items', 'si', 'sa.item_id = si.item_id AND si.company_id = :company_id')
+                ->where('sa.company_id = :company_id')
+                ->andWhere('sa.attribute_type = :attribute_type')
+                ->andWhere('sa.id > :last_id')
+                ->orderBy('sa.id', 'ASC')
+                ->setMaxResults($batchSize)
+                ->setParameter('company_id', $companyId)
+                ->setParameter('attribute_type', 'category')
+                ->setParameter('last_id', $lastId);
+            $rows = $qb->execute()->fetchAll();
+            if (!$rows) {
+                return 0;
+            }
+
+            foreach ($rows as $row) {
+                $lastId = (int)$row['id'];
+                if (empty($row['attr_data'])) {
+                    continue;
+                }
+                $attrData = json_decode($row['attr_data'], true);
+                $saleCategoryIds = $attrData['category'] ?? [];
+                if (!is_array($saleCategoryIds) || !$saleCategoryIds) {
+                    continue;
+                }
+                foreach ($saleCategoryIds as $saleCategoryId) {
+                    if (isset($targetCategoryIds[(int)$saleCategoryId])) {
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 统计供应商商品在管理分类树中的关联数量（一级/二级/三级）
+     */
+    private function countSupplierItemsByMainCategory(int $companyId, array $mainCategoryIds): int
+    {
+        $mainCategoryIds = array_values(array_unique(array_map('intval', (array)$mainCategoryIds)));
+        if (!$mainCategoryIds) {
+            return 0;
+        }
+
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('si.item_id')
+            ->from('supplier_items', 'si')
+            ->where('si.company_id = :company_id')
+            ->andWhere('si.item_category IN (:item_category)')
+            ->setMaxResults(1)
+            ->setParameter('company_id', $companyId)
+            ->setParameter('item_category', $mainCategoryIds, Connection::PARAM_INT_ARRAY);
+        $row = $qb->execute()->fetch();
+        return $row ? 1 : 0;
     }
 
     /**

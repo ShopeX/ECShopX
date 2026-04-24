@@ -249,12 +249,14 @@ class PickupLocation extends Controller
         $filter['distributor_id'] = 0;
         if ($operatorType == 'distributor') { //店铺端
             $filter['distributor_id'] = $request->get('distributor_id');
+        }else{
+            unset($filter['distributor_id']);
         }
 
-        if (isset($params['rel_distributor_id']) && $params['rel_distributor_id']) {
-            $filter['rel_distributor_id'] = $params['rel_distributor_id'];
-            unset($filter['distributor_id']); //总部
-        }
+        // if (isset($params['rel_distributor_id']) && $params['rel_distributor_id']) {
+        //     $filter['rel_distributor_id'] = $params['rel_distributor_id'];
+        //     unset($filter['distributor_id']); //总部
+        // }
 
         if (isset($params['name']) && $params['name']) {
             $filter['name|contains'] = $params['name'];
@@ -327,6 +329,8 @@ class PickupLocation extends Controller
         $filter['distributor_id'] = 0;
         if ($operatorType == 'distributor') { //店铺端
             $filter['distributor_id'] = $request->get('distributor_id');
+        }else{
+            unset($filter['distributor_id']);
         }
         $pickupLocationService = new PickupLocationService();
         $pickupLocationService->deleteBy($filter);

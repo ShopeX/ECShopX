@@ -232,7 +232,7 @@ class MemberRegSettingService
         //保存验证码
         $this->saveSmsVcode($phone, $companyId, $vcode, $type);
         //发送短信
-        $this->sendSmsVcode($companyId, $phone, $vcode);
+        $this->sendSmsVcode($companyId, $phone, $vcode, $type);
         return true;
     }
 
@@ -272,11 +272,11 @@ class MemberRegSettingService
     }
 
     //短信验证码的发送动作
-    private function sendSmsVcode($companyId, $phone, $code)
+    private function sendSmsVcode($companyId, $phone, $code, $type)
     {
         $data = ['code' => $code];
         $smsManagerService = new SmsManagerService($companyId);
-        $smsManagerService->send($phone, $companyId, 'verification_code', $data);
+        $smsManagerService->send($phone, $companyId, $type, $data); // verification_code
         return true;
     }
 }

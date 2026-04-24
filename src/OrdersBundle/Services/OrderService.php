@@ -992,59 +992,7 @@ class OrderService
                 $orderData = $specificCrowdDiscountService->getUserOrientationDiscount($params['company_id'], $params['user_id'], $orderData);
             }
 
-            // 赠品金额分摊
-            if ($orderData['order_type'] == 'normal' && isset($orderData['items_promotion'])) {
-                $giftActivitys = [];
-                foreach ($orderData['items_promotion'] as $itemPromotion) {
-                    if ($itemPromotion['activity_type'] == 'full_gift') {
-                        if (!isset($giftActivitys[$itemPromotion['activity_id']])) {
-                            $giftActivitys[$itemPromotion['activity_id']] = $itemPromotion['activity_desc'];
-                        }
-                    }
-                }
-                foreach ($giftActivitys as $activityId => $giftActivity) {
-                    $itemsTotalFee = [];
-                    $totalGiftFee = 0;
-                    foreach ($orderData['items'] as $key => $item) {
-                        if ($item['order_item_type'] == 'normal' && in_array($item['item_id'], $giftActivity['activity_item_ids'])) {
-                            $itemsTotalFee[$key] = $item['total_fee'];
-                        }
-                        if ($item['order_item_type'] == 'gift' && $item['activity_id'] == $activityId) {
-                            $itemsTotalFee[$key] = $item['item_fee'];
-                            $totalGiftFee += $item['item_fee'];
-                        }
-                    }
-                    asort($itemsTotalFee);
-
-                    $percent = bcdiv($totalGiftFee, array_sum($itemsTotalFee), 5);
-                    $i = 1;
-                    foreach ($itemsTotalFee as $key => $itemTotalFee) {
-                        if ($i++ == count($itemsTotalFee)) {
-                            $discountFee = $totalGiftFee;
-                        } else {
-                            $discountFee = bcmul($itemTotalFee, $percent);
-                            $totalGiftFee -= $discountFee;
-                        }
-
-                        if ($orderData['items'][$key]['order_item_type'] == 'normal') {
-                            $orderData['items'][$key]['discount_fee'] += $discountFee;
-                            $orderData['items'][$key]['total_fee'] -= $discountFee;
-                        }
-
-                        if ($orderData['items'][$key]['order_item_type'] == 'gift') {
-                            $orderData['items'][$key]['discount_fee'] = $discountFee;
-                            $orderData['items'][$key]['total_fee'] = $orderData['items'][$key]['item_fee'] - $discountFee;
-                        }
-
-                        $itemDiscountInfo = $giftActivity['discount_desc'];
-                        $itemDiscountInfo['discount_fee'] = $discountFee;
-                        if (!isset($orderData['items'][$key]['discount_info'])) {
-                            $orderData['items'][$key]['discount_info'] = [];
-                        }
-                        array_push($orderData['items'][$key]['discount_info'], $itemDiscountInfo);
-                    }
-                }
-            }
+            $orderData = $this->allocateFullGiftDiscounts($orderData);
 
             //余额支付
             if ('deposit' == $params['pay_type']) {
@@ -1080,6 +1028,82 @@ class OrderService
         }
         if (method_exists($this->orderInterface, 'formatOrderData')) {
             $orderData = $this->orderInterface->formatOrderData($orderData, $params, $isCheck);
+        }
+
+        return $orderData;
+    }
+
+    protected function allocateFullGiftDiscounts(array $orderData): array
+    {
+        if (($orderData['order_type'] ?? '') !== 'normal' || !isset($orderData['items_promotion'])) {
+            return $orderData;
+        }
+
+        $giftActivitys = [];
+        foreach ($orderData['items_promotion'] as $itemPromotion) {
+            if (($itemPromotion['activity_type'] ?? '') !== 'full_gift') {
+                continue;
+            }
+
+            $activityId = $itemPromotion['activity_id'] ?? 0;
+            if (!$activityId || isset($giftActivitys[$activityId])) {
+                continue;
+            }
+
+            $giftActivitys[$activityId] = $itemPromotion['activity_desc'] ?? [];
+        }
+
+        foreach ($giftActivitys as $activityId => $giftActivity) {
+            $activityItemIds = $giftActivity['activity_item_ids'] ?? [];
+            $itemsTotalFee = [];
+            $totalGiftFee = 0;
+            foreach ($orderData['items'] as $key => $item) {
+                if (($item['order_item_type'] ?? '') == 'normal' && in_array($item['item_id'], $activityItemIds)) {
+                    $itemsTotalFee[$key] = $item['total_fee'];
+                }
+                if (($item['order_item_type'] ?? '') == 'gift' && (($item['activity_id'] ?? 0) == $activityId)) {
+                    $itemsTotalFee[$key] = $item['item_fee'];
+                    $totalGiftFee += $item['item_fee'];
+                }
+            }
+
+            if (!$itemsTotalFee || $totalGiftFee <= 0) {
+                continue;
+            }
+
+            asort($itemsTotalFee);
+            $sumItemTotalFee = array_sum($itemsTotalFee);
+            if ($sumItemTotalFee <= 0) {
+                continue;
+            }
+
+            $percent = bcdiv($totalGiftFee, $sumItemTotalFee, 5);
+            $i = 1;
+            foreach ($itemsTotalFee as $key => $itemTotalFee) {
+                if ($i++ == count($itemsTotalFee)) {
+                    $discountFee = $totalGiftFee;
+                } else {
+                    $discountFee = bcmul($itemTotalFee, $percent);
+                    $totalGiftFee -= $discountFee;
+                }
+
+                if ($orderData['items'][$key]['order_item_type'] == 'normal') {
+                    $orderData['items'][$key]['discount_fee'] += $discountFee;
+                    $orderData['items'][$key]['total_fee'] -= $discountFee;
+                }
+
+                if ($orderData['items'][$key]['order_item_type'] == 'gift') {
+                    $orderData['items'][$key]['discount_fee'] = $discountFee;
+                    $orderData['items'][$key]['total_fee'] = $orderData['items'][$key]['item_fee'] - $discountFee;
+                }
+
+                $itemDiscountInfo = $giftActivity['discount_desc'] ?? [];
+                $itemDiscountInfo['discount_fee'] = $discountFee;
+                if (!isset($orderData['items'][$key]['discount_info'])) {
+                    $orderData['items'][$key]['discount_info'] = [];
+                }
+                array_push($orderData['items'][$key]['discount_info'], $itemDiscountInfo);
+            }
         }
 
         return $orderData;

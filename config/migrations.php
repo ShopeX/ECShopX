@@ -76,7 +76,7 @@ return [
         |
         */
         'schema'    => [
-            'filter' => '/^(?!password_resets|failed_jobs|.*_lang_enCN|.*_lang_zhCN|.*_lang_encn|.*_lang_zhcn|.*_lang_[a-z]{2}[A-Z]{2}).*$/'
+            'filter' => '/^(?!password_resets|failed_jobs|.*_lang_enCN|.*_lang_zhCN|.*_lang_encn|.*_lang_zhcn|.*_lang_[a-z]{2}[A-Z]{2}|outside_item_multi_lang_mod_lang_.*|item_multi_lang_mod_lang_.*).*$/'
         ],
         /*
         |--------------------------------------------------------------------------

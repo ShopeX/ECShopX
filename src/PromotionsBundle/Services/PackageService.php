@@ -50,6 +50,11 @@ class PackageService
         $this->packageItemRepository = app('registry')->getManager('default')->getRepository(PackageItemPromotions::class);
     }
 
+    protected function makeItemsService(): ItemsService
+    {
+        return new ItemsService();
+    }
+
     /**
      * 获取组合商品信息
      * @param int $companyId 公司id
@@ -79,7 +84,7 @@ class PackageService
             $info['new_price'][$v['item_id']] = (int)$v['package_price'];
         }
         //获取组合活动包含的商品的所有明细
-        $itemService = new ItemsService();
+        $itemService = $this->makeItemsService();
         $filter = ['company_id' => $companyId, 'item_id' => $itemIds];
         $itemsList = $itemService->getSkuItemsList($filter);
         foreach ($itemsList['list'] as $key => &$items) {
@@ -98,9 +103,14 @@ class PackageService
                 $relItems[] = $itemdata[$value['item_id']];
             }
         }
-        $itemdata[$info['main_item_id']]['price'] = (int)$info['main_item_price'];
+        if (isset($itemdata[$info['main_item_id']])) {
+            $itemdata[$info['main_item_id']]['price'] = (int)$info['main_item_price'];
+        }
         $info['items'] = $itemsList['list'];
-        $info['mainItem'][] = $itemdata[$info['main_item_id']];
+        $info['mainItem'] = [];
+        if (isset($itemdata[$info['main_item_id']])) {
+            $info['mainItem'][] = $itemdata[$info['main_item_id']];
+        }
         $info['itemTreeLists'] = $relItems ?? [];
         if ($info['itemTreeLists']) {
             $info['itemTreeLists'] = $this->formatItemsList($info['itemTreeLists']);
@@ -171,7 +181,7 @@ class PackageService
         if (!$info) {
             throw new ResourceException(trans('PromotionsBundle.package_product_not_found'));
         }
-        $itemService = new ItemsService();
+        $itemService = $this->makeItemsService();
         // 查询主商品的skuList start
         $packageMainItemParams = [
             'package_id' => $packageId,
@@ -186,14 +196,15 @@ class PackageService
         $mainRelItems = [];
 
         foreach ($main_item_list['list'] as $value) {
-            if (!($mainItemdata[$value['main_item_id']] ?? [])) {
+            $mainItem = $mainItemdata[$value['main_item_id']] ?? null;
+            if (!$mainItem) {
                 $value['status'] = 'invalid';
             } else {
                 $value['status'] = 'valid';
-                $mainRelItems[] = $mainItemdata[$value['main_item_id']];
+                $mainRelItems[] = $mainItem;
+                $mainPackagePrice[$value['main_item_id']]['market_price'] = (int) $mainItem['price'];// 组合的原价
+                $mainPackagePrice[$value['main_item_id']]['price'] = (int) $value['main_item_price'];// 组合的销售价
             }
-            $mainPackagePrice[$value['main_item_id']]['market_price'] = (int)$mainItemdata[$value['main_item_id']]['price'];// 组合的原价
-            $mainPackagePrice[$value['main_item_id']]['price'] = (int)$value['main_item_price'];// 组合的销售价
         }
         $mainItemTreeLists = $mainRelItems ?? [];
         $mainItemInfo = [];
@@ -209,13 +220,17 @@ class PackageService
             }
         }
         // 最低的原价
-        $_mainPackageMarketPrice = array_column($mainPackagePrice, 'market_price');
-        $mainItemInfo['price'] = min($_mainPackageMarketPrice);
+        $_mainPackageMarketPrice = array_column($mainPackagePrice ?? [], 'market_price');
+        if ($_mainPackageMarketPrice) {
+            $mainItemInfo['price'] = min($_mainPackageMarketPrice);
+        }
         // 最低销售价
-        $_mainPackagePrice = array_column($mainPackagePrice, 'price');
-        $mainItemInfo['package_price'] = min($_mainPackagePrice);
+        $_mainPackagePrice = array_column($mainPackagePrice ?? [], 'price');
+        if ($_mainPackagePrice) {
+            $mainItemInfo['package_price'] = min($_mainPackagePrice);
+        }
         $info['mainItem'] = $mainItemInfo;
-        $info['main_package_price'] = $mainPackagePrice;
+        $info['main_package_price'] = $mainPackagePrice ?? [];
         // 查询主商品的skuList end
 
         $packageItemParams = [
@@ -231,19 +246,19 @@ class PackageService
         $relItems = [];
         $package_markte_price = $package_price = [];
         foreach ($relLists['list'] as $value) {
-            if (!($itemdata[$value['item_id']] ?? [])) {
+            $item = $itemdata[$value['item_id']] ?? null;
+            if (!$item) {
                 $value['status'] = 'invalid';
             } else {
                 $value['status'] = 'valid';
-                $relItems[] = $itemdata[$value['item_id']];
+                $relItems[] = $item;
+                // 原价
+                $info['package_price'][$value['item_id']]['market_price'] = (int) $value['price'];
+                $default_item_id = $item['default_item_id'];
+                $package_markte_price[$default_item_id][] = (int) $value['price'];
+                $info['package_price'][$value['item_id']]['price'] = (int) $value['package_price'];
+                $package_price[$default_item_id][] = (int) $value['package_price'];
             }
-            // 原价
-            $info['package_price'][$value['item_id']]['market_price'] = (int)$value['price'];
-
-            $default_item_id = $itemdata[$value['item_id']]['default_item_id'];
-            $package_markte_price[$default_item_id][] = (int)$value['price'];
-            $info['package_price'][$value['item_id']]['price'] = (int)$value['package_price'];
-            $package_price[$default_item_id][] = (int)$value['package_price'];
         }
         $info['itemLists'] = [];
         $itemTreeLists = $relItems ?? [];
@@ -254,8 +269,10 @@ class PackageService
                     $limitItemIds = array_column($v['spec_items'], 'item_id');
                     unset($v['spec_items']);
                     $itemInfo = $itemService->getItemsDetail($v['itemId'], $authorizerAppId, $limitItemIds, $companyId);
+                    $itemInfo['itemName'] = $itemInfo['item_name'];
                 } else {
                     $itemInfo = $itemService->getItemsDetail($v['itemId'], $authorizerAppId);
+                    $itemInfo['itemName'] = $itemInfo['item_name'];
                 }
                 $itemInfo['price'] = min($package_markte_price[$itemInfo['default_item_id']]);
                 $itemInfo['package_price'] = min($package_price[$itemInfo['default_item_id']]);
