@@ -270,7 +270,7 @@ We welcome contributions in all forms! Please read [CONTRIBUTING.md](CONTRIBUTIN
 
 ## 💬 Open Source Community
 Welcome to scan the code to join the ECShopX open-source community for updates, user discussions, and mutual support.
-<p align="center"><img width="300" height="auto" alt="workwechat" src="workwechat_en.png" /></p>
+<p align="center"><img width="300" height="auto" alt="workwechat" src="workwechat.png" /></p>
 
 ## Acknowledgments
 Thank you to all developers and users who have contributed to ECShopX!
