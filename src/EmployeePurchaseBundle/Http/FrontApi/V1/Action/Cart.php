@@ -235,7 +235,7 @@ class Cart extends BaseController
      *     path="/wxapp/employeepurchase/cart",
      *     summary="获取内购购物车",
      *     tags={"内购"},
-     *     description="获取内购购物车",
+     *     description="获取内购购物车；data.valid_cart[0].list 每行含 limit_num、limit_fee（分，0 表示不限额）、aggregate_num、aggregate_fee（分，无聚合记录为 0）",
      *     operationId="getCartDataList",
      *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
      *     @SWG\Parameter( name="enterprise_id", in="query", description="企业ID", required=true, type="integer"),

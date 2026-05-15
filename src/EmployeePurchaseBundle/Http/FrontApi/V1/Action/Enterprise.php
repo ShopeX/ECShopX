@@ -77,7 +77,10 @@ class Enterprise extends BaseController
         if ($request->get('enterprise_sn')) {
             $filter['enterprise_sn'] = $request->get('enterprise_sn');
         }
-
+        $enterprise_id = intval($request->get('enterprise_id', 0));
+        if ( $enterprise_id > 0) {
+            $filter['id'] = $enterprise_id;
+        }
         $orderBy = ['sort' => 'ASC', 'created' => 'DESC'];
         $enterprisesService = new EnterprisesService();
         $result = $enterprisesService->getEnterprisesList($filter, $page, $pageSize, $orderBy);
@@ -92,13 +95,15 @@ class Enterprise extends BaseController
      *     description="获取用户所在企业列表",
      *     operationId="getUserEnterprisesList",
      *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
-     *     @SWG\Parameter( name="disabled", in="query", description="是否有效身份", required=false, type="integer"),
+     *     @SWG\Parameter( name="disabled", in="query", description="按员工/家属身份行的失效状态筛选（非企业禁用）；与响应字段 disabled 含义不同", required=false, type="integer"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *              @SWG\Property( property="company_id", type="string", example="1", description="公司id"),
      *              @SWG\Property( property="name", type="string", example="test", description="企业名称"),
      *              @SWG\Property( property="enterprise_sn", type="string", example="xxx", description="企业编码"),
      *              @SWG\Property( property="login_account", type="string", example="111", description="登录账号"),
+     *              @SWG\Property( property="disabled", type="integer", example="0", description="企业是否禁用（employee_purchase_enterprises.disabled，0 否 1 是）"),
+     *              @SWG\Property( property="identity_disabled", type="integer", example="0", description="当前条员工/家属身份行的失效状态（employee 行或 relatives 行的 disabled；同企业多身份时以后写入的一条为准）"),
      *              @SWG\Property( property="is_employee", type="integer", example="1", description="是否员工"),
      *              @SWG\Property( property="is_relative", type="integer", example="0", description="是否家属"),
      *          ),
@@ -148,23 +153,26 @@ class Enterprise extends BaseController
         $enterprisesService = new EnterprisesService();
         $enterprises = $enterprisesService->getLists(['company_id' => $authInfo['company_id'], 'id' => $enterpriseIds]);
         $enterprises = array_column($enterprises, null, 'id');
+
         $result = [];
         foreach ($employees as $row) {
             if (!isset($enterprises[$row['enterprise_id']])) {
                 continue;
             }
-            $authType = $enterprises[$row['enterprise_id']]['auth_type'];
+            $ent = $enterprises[$row['enterprise_id']];
+            $authType = $ent['auth_type'];
             if ($authType == 'qr_code') {
                 $authType = 'mobile';
             }
             $result[] = [
                 'company_id' => $row['company_id'],
-                'name' => $enterprises[$row['enterprise_id']]['name'],
+                'name' => $ent['name'],
                 'enterprise_id' => $row['enterprise_id'],
-                'enterprise_sn' => $enterprises[$row['enterprise_id']]['enterprise_sn'],
-                'logo' => $enterprises[$row['enterprise_id']]['logo'],
+                'enterprise_sn' => $ent['enterprise_sn'],
+                'logo' => $ent['logo'],
                 'login_account' => $row[$authType],
-                'disabled' => $row['disabled'],
+                'disabled' => (int) ($ent['disabled'] ?? 0),
+                'identity_disabled' => (int) ($row['disabled'] ?? 0),
                 'is_employee' => 1,
                 'is_relative' => 0,
             ];
@@ -174,26 +182,26 @@ class Enterprise extends BaseController
             if (!isset($enterprises[$row['enterprise_id']])) {
                 continue;
             }
+            $ent = $enterprises[$row['enterprise_id']];
             $result[] = [
                 'company_id' => $row['company_id'],
-                'name' => $enterprises[$row['enterprise_id']]['name'],
+                'name' => $ent['name'],
                 'enterprise_id' => $row['enterprise_id'],
-                'enterprise_sn' => $enterprises[$row['enterprise_id']]['enterprise_sn'],
-                'logo' => $enterprises[$row['enterprise_id']]['logo'],
+                'enterprise_sn' => $ent['enterprise_sn'],
+                'logo' => $ent['logo'],
                 'login_account' => $row['member_mobile'],
-                'disabled' => $row['disabled'],
+                'disabled' => (int) ($ent['disabled'] ?? 0),
+                'identity_disabled' => (int) ($row['disabled'] ?? 0),
                 'is_employee' => 0,
                 'is_relative' => 1,
             ];
         }
-        //去重
         $unique = [];
 
         foreach ($result as $item) {
             $unique[$item['enterprise_id']] = $item;
         }
 
-// 如果你希望最后的结果是索引数组：
         $result = array_values($unique);
 
         return $this->response->array($result);

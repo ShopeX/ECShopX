@@ -1677,7 +1677,7 @@ class WxappOrder extends Controller
         if (isset($params['order_class']) && $params['order_class'] == 'employee_purchase') {
             $filter['order_class'] = $params['order_class'];
         } elseif (!in_array($filter['order_type'], ['bargain'])) {
-            $filter['order_class|in'] = ['normal', 'groups', 'seckill', 'shopguide', 'shopadmin', 'bargain', 'pointsmall', ExcardNormalOrderService::CLASS_NAME, 'drug'];
+            $filter['order_class|in'] = ['normal', 'groups', 'seckill', 'shopguide', 'shopadmin', 'bargain', 'pointsmall', ExcardNormalOrderService::CLASS_NAME, 'drug', 'employee_purchase'];
         }
 
         if (isset($params['order_status']) && $filter['order_type'] != 'service') {

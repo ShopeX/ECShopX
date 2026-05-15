@@ -24,6 +24,9 @@ use EmployeePurchaseBundle\Services\EnterprisesService;
 
 class EmployeesUploadService
 {
+    /** 单次导入最大数据行数（不含表头） */
+    public const MAX_IMPORT_DATA_ROWS = 5000;
+
     public $header = [
         '企业编码' => 'enterprise_sn',
         '姓名' => 'name',
@@ -88,6 +91,19 @@ class EmployeesUploadService
     public function getFileSystem()
     {
         return app('filesystem')->disk('import-file');
+    }
+
+    /**
+     * 去表头后的数据行数上限校验（与商品批量导入一致：先 unset 表头再 count，超限抛 BadRequestHttpException，文案「每次最多上传…...请减少后再提交」）
+     */
+    public static function assertImportDataRowsWithinLimit(int $dataRowCount): void
+    {
+        $maxRows = self::MAX_IMPORT_DATA_ROWS;
+        if ($dataRowCount > $maxRows) {
+            throw new BadRequestHttpException(
+                "每次最多上传{$maxRows}条员工数据（不含表头）...请减少后再提交"
+            );
+        }
     }
 
     /**

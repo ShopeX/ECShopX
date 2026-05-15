@@ -32,6 +32,8 @@ use OrdersBundle\Services\ShippingTemplatesService;
 use OrdersBundle\Services\TradeSetting\CancelService;
 use OrdersBundle\Services\TradeSettingService;
 use DistributionBundle\Services\DistributorService;
+use EmployeePurchaseBundle\Entities\OrdersRelActivity;
+use EmployeePurchaseBundle\Entities\ActivityEnterpriseParticipateUser;
 
 class NormalOrderService extends AbstractNormalOrder
 {
@@ -61,6 +63,9 @@ class NormalOrderService extends AbstractNormalOrder
 
     private $activityInfo = [];
     private $orderRelData = [];
+
+    /** @var bool 本单在 commit 前扣减过口令参与名额时，在 afterCreateOrder 写入豁免用户表 */
+    private $participateQuotaRecordUserAfterOrderCommit = false;
 
     public function __construct()
     {
@@ -140,6 +145,13 @@ class NormalOrderService extends AbstractNormalOrder
         }
 
         $employeesService = new EmployeesService();
+        $employeesService->ensurePassphraseEmployeeFromVerifiedActivity(
+            (int) $params['company_id'],
+            (int) $params['enterprise_id'],
+            (int) $params['activity_id'],
+            (int) $params['user_id']
+        );
+
         $employee = $employeesService->check($params['company_id'], $params['enterprise_id'], $params['user_id']);
         if ($employee) {
             if ($activity['employee_begin_time'] > time() || $activity['employee_end_time'] < time()) {
@@ -177,34 +189,22 @@ class NormalOrderService extends AbstractNormalOrder
         $memberActivityItemsAggregateService = new MemberActivityItemsAggregateService();
         $memberActivityItemsAggregateList = $memberActivityItemsAggregateService->getLists(['company_id' => $params['company_id'], 'enterprise_id' => $params['enterprise_id'], 'user_id' => $params['user_id'], 'activity_id' => $params['activity_id'], 'item_id' => $itemIds]);
         $memberActivityItemsAggregateList = array_column($memberActivityItemsAggregateList, null, 'item_id');
-        foreach ($orderData['items'] as $item) {
-            if ($activityItemList[$item['item_id']]['limit_num'] > 0) {
-                $itemAggregateNum = 0;
-                if (isset($memberActivityItemsAggregateList[$item['item_id']])) {
-                    $itemAggregateNum = $memberActivityItemsAggregateList[$item['item_id']]['aggregate_num'];
-                }
-                if ($itemAggregateNum + $item['num'] > $activityItemList[$item['item_id']]['limit_num']) {
-                    if ($isCheck) {
-                        throw new ResourceException($item['item_name'].'超过限购数量');
-                    } else {
-                        $orderData['extraTips'] = $item['item_name'].'超过限购数量';
-                    }
-                }
-            }
 
-            if ($activityItemList[$item['item_id']]['limit_fee'] > 0) {
-                $itemAggregateFee = 0;
-                if (isset($memberActivityItemsAggregateList[$item['item_id']])) {
-                    $itemAggregateFee = $memberActivityItemsAggregateList[$item['item_id']]['aggregate_fee'];
-                }
-                if ($itemAggregateFee + $item['item_fee'] > $activityItemList[$item['item_id']]['limit_fee']) {
-                    if ($isCheck) {
-                        throw new ResourceException($item['item_name'].'超过限额');
-                    } else {
-                        $orderData['extraTips'] = $item['item_name'].'超过限额';
-                    }
-                }
+        $limitLines = [];
+        foreach ($orderData['items'] as $item) {
+            $limitLines[] = [
+                'item_id' => $item['item_id'],
+                'num' => (int) $item['num'],
+                'item_fee' => (int) $item['item_fee'],
+            ];
+        }
+        try {
+            EmployeePurchaseItemLimitValidator::assertWithPreloadedData($activityItemList, $memberActivityItemsAggregateList, $limitLines);
+        } catch (ResourceException $e) {
+            if ($isCheck) {
+                throw $e;
             }
+            $orderData['extraTips'] = $e->getMessage();
         }
 
         $memberActivityAggregateService = new MemberActivityAggregateService();
@@ -219,9 +219,9 @@ class NormalOrderService extends AbstractNormalOrder
 
         if ($this->activityInfo['minimum_amount'] > 0 && $orderData['item_fee'] < $this->activityInfo['minimum_amount']) {
             if ($isCheck) {
-                throw new ResourceException('订单商品定额不能少于'.bcdiv($this->activityInfo['minimum_amount'], 100, 2).'元');
+                throw new ResourceException('订单商品金额不能少于'.bcdiv($this->activityInfo['minimum_amount'], 100, 2).'元');
             } else {
-                $orderData['extraTips'] = '订单商品定额不能少于'.bcdiv($this->activityInfo['minimum_amount'], 100, 2).'元';
+                $orderData['extraTips'] = '订单商品金额不能少于'.bcdiv($this->activityInfo['minimum_amount'], 100, 2).'元';
             }
         }
 
@@ -272,6 +272,68 @@ class NormalOrderService extends AbstractNormalOrder
         foreach ($orderData['items'] as $item) {
             $memberActivityItemsAggregateService->addItemAggregate($orderData['company_id'], $this->orderRelData['enterprise_id'], $this->activityInfo['id'], $orderData['user_id'], $item['item_id'], $item['item_fee'], $item['num']);
         }
+    }
+
+    /**
+     * 订单事务提交前扣减口令企业参与名额（与 {@see PassphraseParticipateQuotaRedisService} 一致；失败则整单回滚）。
+     *
+     * @param array<string,mixed> $orderData
+     * @param array<string,mixed> $params
+     */
+    public function beforeOrderCreateCommit($orderData, $params)
+    {
+        $this->participateQuotaRecordUserAfterOrderCommit = false;
+        $companyId = (int) ($orderData['company_id'] ?? 0);
+        $activityId = (int) ($this->activityInfo['id'] ?? $params['activity_id'] ?? 0);
+        $enterpriseId = (int) ($this->orderRelData['enterprise_id'] ?? $params['enterprise_id'] ?? 0);
+        $userId = (int) ($orderData['user_id'] ?? 0);
+        if ($companyId <= 0 || $activityId <= 0 || $enterpriseId <= 0 || $userId <= 0) {
+            return;
+        }
+        $quotaSvc = new PassphraseParticipateQuotaRedisService();
+        if (!$quotaSvc->isApplicable($companyId, $activityId, $enterpriseId)) {
+            return;
+        }
+        $em = app('registry')->getManager('default');
+        /** @var \EmployeePurchaseBundle\Repositories\ActivityEnterpriseParticipateUserRepository $exemptRepo */
+        $exemptRepo = $em->getRepository(ActivityEnterpriseParticipateUser::class);
+        if ($exemptRepo->existsForUser($companyId, $activityId, $enterpriseId, $userId)) {
+            return;
+        }
+        if (!$quotaSvc->tryConsumeSlot($companyId, $activityId, $enterpriseId)) {
+            throw new ResourceException('该企业在本活动下的参与名额已满');
+        }
+        /** @var \EmployeePurchaseBundle\Repositories\OrdersRelActivityRepository $relRepo */
+        $relRepo = $em->getRepository(OrdersRelActivity::class);
+        $relRepo->updateOneBy(
+            ['order_id' => $orderData['order_id'], 'company_id' => $companyId],
+            ['participate_quota_order_consumed' => 1]
+        );
+        $this->participateQuotaRecordUserAfterOrderCommit = true;
+    }
+
+    /**
+     * 订单已提交后写入「已占用名额用户」，后续同活动+企业不再校验/扣减名额。
+     *
+     * @param array<string,mixed> $orderData
+     */
+    public function afterCreateOrder(array $orderData): void
+    {
+        if (!$this->participateQuotaRecordUserAfterOrderCommit) {
+            return;
+        }
+        $this->participateQuotaRecordUserAfterOrderCommit = false;
+        $companyId = (int) ($orderData['company_id'] ?? 0);
+        $activityId = (int) ($this->activityInfo['id'] ?? $orderData['act_id'] ?? 0);
+        $enterpriseId = (int) ($this->orderRelData['enterprise_id'] ?? 0);
+        $userId = (int) ($orderData['user_id'] ?? 0);
+        if ($companyId <= 0 || $activityId <= 0 || $enterpriseId <= 0 || $userId <= 0) {
+            return;
+        }
+        $em = app('registry')->getManager('default');
+        /** @var \EmployeePurchaseBundle\Repositories\ActivityEnterpriseParticipateUserRepository $exemptRepo */
+        $exemptRepo = $em->getRepository(ActivityEnterpriseParticipateUser::class);
+        $exemptRepo->insertIgnore($companyId, $activityId, $enterpriseId, $userId);
     }
 
     public function emptyCart($params)
@@ -485,6 +547,16 @@ class NormalOrderService extends AbstractNormalOrder
         $memberActivityItemsAggregateService = new MemberActivityItemsAggregateService();
         foreach ($orderData['items'] as $item) {
             $memberActivityItemsAggregateService->minusItemAggregate($orderData['company_id'], $orderData['enterprise_id'], $orderData['act_id'], $orderData['user_id'], $item['item_id'], $item['item_fee'], $item['num']);
+        }
+
+        if (!empty($orderData['participate_quota_order_consumed'])) {
+            $quotaSvc = new PassphraseParticipateQuotaRedisService();
+            $relActivityId = (int) ($orderData['act_id'] ?? $orderData['activity_id'] ?? 0);
+            $quotaSvc->releaseOneSlot(
+                (int) $orderData['company_id'],
+                $relActivityId,
+                (int) ($orderData['enterprise_id'] ?? 0)
+            );
         }
     }
 

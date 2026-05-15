@@ -60,6 +60,8 @@ class CartService
         if ($cartType == 'fastbuy') {
             $params['is_checked'] = true;
             $params = array_merge($filter, $params);
+            $this->assertFastBuyIntentWithinItemLimits($filter, $params);
+
             return $this->setFastBuyCart($filter['company_id'], $filter['enterprise_id'], $filter['activity_id'], $filter['user_id'], $params);
         }
 
@@ -73,10 +75,17 @@ class CartService
         }
         if ($cartInfo) {
             //$isAccumulate=true 累增; =false 覆盖
-            $params['num'] = (!$isAccumulate || $isAccumulate === 'false') ? $params['num'] : ($params['num'] + $cartInfo['num']) ;
+            $finalNum = (!$isAccumulate || $isAccumulate === 'false') ? (int) $params['num'] : ((int) $params['num'] + (int) $cartInfo['num']);
+            $willCheck = array_key_exists('is_checked', $params) ? (bool) $params['is_checked'] : (bool) $cartInfo['is_checked'];
+            $this->assertDbCartIntentWithinItemLimits($filter, (string) $filter['item_id'], $finalNum, $willCheck);
+            $params['num'] = $finalNum;
+
             return $this->entityRepository->updateOneBy($filter, $params);
         }
         $params = array_merge($filter, $params);
+        $willCheckNew = array_key_exists('is_checked', $params) ? (bool) $params['is_checked'] : true;
+        $this->assertDbCartIntentWithinItemLimits($filter, (string) $filter['item_id'], (int) ($params['num'] ?? 0), $willCheckNew);
+
         return $this->entityRepository->create($params);
     }
 
@@ -94,6 +103,9 @@ class CartService
             $this->entityRepository->deleteBy($filter);
             return [];
         }
+        $willCheck = array_key_exists('is_checked', $params) ? (bool) $params['is_checked'] : (bool) $cartInfo['is_checked'];
+        $this->assertDbCartIntentWithinItemLimits($filter, (string) $cartInfo['item_id'], (int) ($params['num'] ?? 0), $willCheck);
+
         return $this->entityRepository->updateOneBy($filter, $params);
     }
 
@@ -149,6 +161,13 @@ class CartService
         }
 
         $employeesService = new EmployeesService();
+        $employeesService->ensurePassphraseEmployeeFromVerifiedActivity(
+            (int) $filter['company_id'],
+            (int) $filter['enterprise_id'],
+            (int) $filter['activity_id'],
+            (int) $filter['user_id']
+        );
+
         $employee = $employeesService->check($filter['company_id'], $filter['enterprise_id'], $filter['user_id']);
         if ($employee) {
             if ($activity['employee_begin_time'] > time() || $activity['employee_end_time'] < time()) {
@@ -285,6 +304,19 @@ class CartService
         $activityItemList = $activityItemsService->getLists(['company_id' => $filter['company_id'], 'activity_id' => $filter['activity_id'], 'item_id' => $itemIds]);
         $activityItemList = array_column($activityItemList, null, 'item_id');
 
+        $aggregateByItemId = [];
+        if ($itemIds !== []) {
+            $memberActivityItemsAggregateService = new MemberActivityItemsAggregateService();
+            $aggregateList = $memberActivityItemsAggregateService->getLists([
+                'company_id' => $filter['company_id'],
+                'enterprise_id' => $filter['enterprise_id'],
+                'user_id' => $filter['user_id'],
+                'activity_id' => $filter['activity_id'],
+                'item_id' => $itemIds,
+            ]) ?: [];
+            $aggregateByItemId = array_column($aggregateList, null, 'item_id');
+        }
+
         foreach ($itemList as $key => $item) {
             if (isset($activityItemList[$item['item_id']])) {
                 $itemList[$key]['sale_price'] = $item['price'];
@@ -339,6 +371,18 @@ class CartService
         $validCart['cart_total_count'] = $cartTotalCount;
         $validCart['total_fee'] = $cartTotalPrice;
         $validCart['list'] = $cartData['valid_cart'];
+        foreach ($validCart['list'] as $idx => $cartRow) {
+            $iid = $cartRow['item_id'] ?? null;
+            if ($iid === null || $iid === '') {
+                continue;
+            }
+            $actRow = $activityItemList[$iid] ?? null;
+            $aggRow = $aggregateByItemId[$iid] ?? null;
+            $validCart['list'][$idx]['limit_num'] = $actRow ? (int) ($actRow['limit_num'] ?? 0) : 0;
+            $validCart['list'][$idx]['limit_fee'] = $actRow ? (int) ($actRow['limit_fee'] ?? 0) : 0;
+            $validCart['list'][$idx]['aggregate_num'] = $aggRow ? (int) ($aggRow['aggregate_num'] ?? 0) : 0;
+            $validCart['list'][$idx]['aggregate_fee'] = $aggRow ? (int) ($aggRow['aggregate_fee'] ?? 0) : 0;
+        }
 
         if ($cartData['invalid_cart']) {
             $cartIds = array_column($cartData['invalid_cart'], 'cart_id');
@@ -346,6 +390,99 @@ class CartService
         }
 
         return ['invalid_cart' => $cartData['invalid_cart'], 'valid_cart' => [$validCart]];
+    }
+
+    private function assertFastBuyIntentWithinItemLimits(array $filter, array $mergedParams): void
+    {
+        $activityItemsService = new ActivityItemsService();
+        $activityItem = $activityItemsService->getInfo([
+            'company_id' => $filter['company_id'],
+            'activity_id' => $filter['activity_id'],
+            'item_id' => $mergedParams['item_id'],
+        ]);
+        if (!$activityItem) {
+            throw new ResourceException('商品未参加内购活动');
+        }
+        $num = (int) ($mergedParams['num'] ?? 0);
+        $fee = (int) $activityItem['activity_price'] * $num;
+        $lines = [['item_id' => $mergedParams['item_id'], 'num' => $num, 'item_fee' => $fee]];
+        EmployeePurchaseItemLimitValidator::assertFromContextAndLines([
+            'company_id' => $filter['company_id'],
+            'enterprise_id' => $filter['enterprise_id'],
+            'activity_id' => $filter['activity_id'],
+            'user_id' => $filter['user_id'],
+        ], $lines);
+    }
+
+    private function assertDbCartIntentWithinItemLimits(array $filter, string $targetItemId, int $targetFinalNum, bool $targetWillBeChecked): void
+    {
+        if ($targetFinalNum <= 0 || !$targetWillBeChecked) {
+            return;
+        }
+        $listFilter = [
+            'company_id' => $filter['company_id'],
+            'enterprise_id' => $filter['enterprise_id'],
+            'activity_id' => $filter['activity_id'],
+            'user_id' => $filter['user_id'],
+        ];
+        $rows = $this->entityRepository->getLists($listFilter) ?: [];
+        usort($rows, static function ($a, $b) {
+            return ((int) ($a['cart_id'] ?? 0)) <=> ((int) ($b['cart_id'] ?? 0));
+        });
+        $rawLines = [];
+        $hasCheckedTarget = false;
+        foreach ($rows as $row) {
+            if (empty($row['is_checked'])) {
+                continue;
+            }
+            $iid = (string) $row['item_id'];
+            $num = ($iid === $targetItemId) ? $targetFinalNum : (int) $row['num'];
+            if ($iid === $targetItemId) {
+                $hasCheckedTarget = true;
+            }
+            if ($num <= 0) {
+                continue;
+            }
+            $rawLines[] = ['item_id' => $iid, 'num' => $num, '_cart_id' => (int) ($row['cart_id'] ?? 0)];
+        }
+        if (!$hasCheckedTarget) {
+            $rawLines[] = ['item_id' => $targetItemId, 'num' => $targetFinalNum, '_cart_id' => PHP_INT_MAX];
+        }
+        usort($rawLines, static function ($a, $b) {
+            return $a['_cart_id'] <=> $b['_cart_id'];
+        });
+        $itemIds = array_values(array_unique(array_column($rawLines, 'item_id')));
+        $activityItemsService = new ActivityItemsService();
+        $activityItemList = $activityItemsService->getLists([
+            'company_id' => $filter['company_id'],
+            'activity_id' => $filter['activity_id'],
+            'item_id' => $itemIds,
+        ]);
+        $activityItemByItemId = array_column($activityItemList, null, 'item_id');
+        $lines = [];
+        foreach ($rawLines as $row) {
+            $iid = $row['item_id'];
+            if (!isset($activityItemByItemId[$iid])) {
+                throw new ResourceException('商品未参加内购活动');
+            }
+            $price = (int) $activityItemByItemId[$iid]['activity_price'];
+            $lines[] = [
+                'item_id' => $iid,
+                'num' => (int) $row['num'],
+                'item_fee' => $price * (int) $row['num'],
+            ];
+        }
+        $memberActivityItemsAggregateService = new MemberActivityItemsAggregateService();
+        $aggregateList = $memberActivityItemsAggregateService->getLists([
+            'company_id' => $filter['company_id'],
+            'enterprise_id' => $filter['enterprise_id'],
+            'user_id' => $filter['user_id'],
+            'activity_id' => $filter['activity_id'],
+            'item_id' => $itemIds,
+        ]);
+        $aggregateByItemId = array_column($aggregateList, null, 'item_id');
+
+        EmployeePurchaseItemLimitValidator::assertWithPreloadedData($activityItemByItemId, $aggregateByItemId, $lines);
     }
 
     public function setFastBuyCart($companyId, $enterpriseId, $activityId, $userId, $params)

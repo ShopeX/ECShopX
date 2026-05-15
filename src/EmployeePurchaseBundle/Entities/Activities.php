@@ -223,6 +223,13 @@ class Activities
     private $discount_description;
 
     /**
+     * @var boolean
+     *
+     * @ORM\Column(name="is_passphrase_enabled", type="boolean", options={"comment":"是否开启口令通道", "default":false})
+     */
+    private $is_passphrase_enabled = false;
+
+    /**
      * @var \DateTime $created
      *
      * @Gedmo\Timestampable(on="create")
@@ -918,5 +925,25 @@ class Activities
     public function getDiscountDescription()
     {
         return $this->discount_description;
+    }
+
+    /**
+     * @param bool $isPassphraseEnabled
+     *
+     * @return Activities
+     */
+    public function setIsPassphraseEnabled($isPassphraseEnabled)
+    {
+        $this->is_passphrase_enabled = $isPassphraseEnabled;
+
+        return $this;
+    }
+
+    /**
+     * @return bool
+     */
+    public function getIsPassphraseEnabled()
+    {
+        return $this->is_passphrase_enabled;
     }
 }

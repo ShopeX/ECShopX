@@ -70,6 +70,10 @@ class EventServiceProvider extends ServiceProvider
             'OrdersBundle\Listeners\OrderFinishInvoiceListener', // 订单完成时更新发票结束时间
         ],
 
+        'OrdersBundle\Events\NormalOrderPaySuccessEvent' => [
+            'EmployeePurchaseBundle\Listeners\EmployeePurchaseOrderPaySuccessListener',
+        ],
+
         // 'OrdersBundle\Events\TestEvent' => [
         //     'SystemLinkBundle\Listeners\TradeFinishSendOme', // 订单发送到ome
         //     'SystemLinkBundle\Listeners\TradeRefundSendOme', // 退款申请发送到ome

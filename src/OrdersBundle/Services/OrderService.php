@@ -291,6 +291,9 @@ class OrderService
                 'params' => $params,
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
+            if (method_exists($this->orderInterface, 'beforeOrderCreateCommit')) {
+                $this->orderInterface->beforeOrderCreateCommit($orderData, $params);
+            }
             $conn->commit();
         } catch (\Exception $e) {
             $conn->rollback();

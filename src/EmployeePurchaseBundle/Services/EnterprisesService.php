@@ -210,7 +210,81 @@ class EnterprisesService
         $data['is_employee_check_enabled'] = $data['is_employee_check_enabled'] == true ? 'true' : 'false';
         return $data;
     }
-    
+
+    /**
+     * 批量获取与 {@see getEnterpriseInfo} 一致的企业详情结构，并补充列表中的 distributor_name（活动详情口令行等场景）
+     *
+     * @param int   $companyId
+     * @param int[] $enterpriseIds
+     * @return array<int,array<string,mixed>> enterprise_id => 企业数据
+     */
+    public function getEnterpriseInfoBatchMap($companyId, array $enterpriseIds)
+    {
+        $companyId = (int) $companyId;
+        $enterpriseIds = array_values(array_unique(array_filter(array_map('intval', $enterpriseIds))));
+        if ($companyId <= 0 || empty($enterpriseIds)) {
+            return [];
+        }
+
+        $list = $this->enterprisesRepository->getLists([
+            'company_id' => $companyId,
+            'id' => $enterpriseIds,
+        ], '*', 1, -1, ['id' => 'ASC']);
+        if (!$list) {
+            return [];
+        }
+
+        $relList = $this->enterpriseEmailBoxRepository->getLists([
+            'company_id' => $companyId,
+            'enterprise_id' => $enterpriseIds,
+        ], '*', 1, -1, []);
+        $relByEid = [];
+        foreach ($relList as $rel) {
+            if (isset($rel['enterprise_id'])) {
+                $relByEid[(int) $rel['enterprise_id']] = $rel;
+            }
+        }
+
+        $storeIds = array_filter(array_unique(array_column($list, 'distributor_id')), function ($distributorId) {
+            return is_numeric($distributorId) && $distributorId >= 0;
+        });
+        $storeData = [];
+        if ($storeIds) {
+            $distributorService = new DistributorService();
+            $pageSize = max(count($storeIds), 1);
+            $storeList = $distributorService->getDistributorOriginalList([
+                'company_id' => $companyId,
+                'distributor_id' => $storeIds,
+            ], 1, $pageSize);
+            $rows = $storeList['list'] ?? [];
+            $storeData = array_column($rows, null, 'distributor_id');
+            $storeData[0] = $distributorService->getDistributorSelfSimpleInfo($companyId);
+        }
+
+        $map = [];
+        foreach ($list as $data) {
+            $id = (int) ($data['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            if (($data['auth_type'] ?? '') == 'email') {
+                $relData = $relByEid[$id] ?? [];
+                if ($relData) {
+                    $data['relay_host'] = $relData['relay_host'];
+                    $data['smtp_port'] = $relData['smtp_port'];
+                    $data['email_user'] = $relData['user'];
+                    $data['email_password'] = $relData['password'];
+                    $data['email_suffix'] = $relData['suffix'];
+                }
+            }
+            $data['distributor_name'] = isset($data['distributor_id']) ? ($storeData[$data['distributor_id']]['name'] ?? '') : '';
+            $data['is_employee_check_enabled'] = ($data['is_employee_check_enabled'] ?? false) == true ? 'true' : 'false';
+            $map[$id] = $data;
+        }
+
+        return $map;
+    }
+
     public function delete($filter)
     {
         $data = $this->enterprisesRepository->getInfo($filter);

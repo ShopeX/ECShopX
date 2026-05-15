@@ -61,8 +61,18 @@ $api->version('v1', function($api) {
         $api->get('/employeepurchase/activities', ['name'=> '获取员工内购活动列表','middleware'=>'activated', 'as' => 'employeepurchase.activity.list', 'uses' =>'Activity@getActivityList']);
         // 内购活动亲友数据
         $api->get('/employeepurchase/activity/users', ['name'=> '获取员工内购活动亲友列表','middleware'=>'activated', 'as' => 'employeepurchase.activity.users', 'uses' =>'Activity@getActivityUsers']);
+        // 活动各企业行为流水实时聚合（须写在 /activity/{activityId} 之前，避免路径被误匹配）
+        $api->get('/employeepurchase/activity/{activityId}/enterprise-behavior-stats', ['name'=> '活动企业行为统计','middleware'=>'activated', 'as' => 'employeepurchase.activity.enterprise_behavior_stats', 'uses' =>'Activity@getActivityEnterpriseBehaviorStats']);
+        // 下载活动企业行为统计（Excel）
+        $api->get('/employeepurchase/activity/{activityId}/enterprise-behavior-stats/download', ['name'=> '下载活动企业行为统计','middleware'=>'activated', 'as' => 'employeepurchase.activity.enterprise_behavior_stats.download', 'uses' =>'Activity@downloadActivityEnterpriseBehaviorStats']);
+        // 下载活动参与企业扫码小程序码（Excel）
+        $api->get('/employeepurchase/activity/{activityId}/download-qrcode', ['name'=> '下载活动企业小程序码','middleware'=>'activated', 'as' => 'employeepurchase.activity.download_qrcode', 'uses' =>'Activity@downloadActivityQrcode']);
         // 获取员工内购活动详情
         $api->get('/employeepurchase/activity/{activityId}', ['name'=> '获取员工内购活动详情','middleware'=>'activated', 'as' => 'employeepurchase.activity.info', 'uses' =>'Activity@getActivityInfo']);
+        // 批量生成口令编码：activity_id 可选（新建活动可不传）；传则按活动内去重，不传则按公司下去重
+        $api->post('/employeepurchase/passphrase-codes/generate', ['name'=> '批量生成口令码','middleware'=>'activated', 'as' => 'employeepurchase.passphrase_codes.generate', 'uses' =>'Activity@generatePassphraseCodes']);
+        // 兼容：活动已存在时仍可用路径传 activity_id
+        $api->post('/employeepurchase/activity/{activityId}/passphrase-codes/generate', ['name'=> '批量生成活动口令码(路径)','middleware'=>'activated', 'as' => 'employeepurchase.activity.passphrase_codes.generate', 'uses' =>'Activity@generatePassphraseCodesByActivity']);
         // 创建员工内购活动
         $api->post('/employeepurchase/activity', ['name'=> '创建员工内购活动','middleware'=>'activated', 'as' => 'employeepurchase.activity.create', 'uses' =>'Activity@createActivity']);
         // 更新员工内购活动
@@ -79,5 +89,12 @@ $api->version('v1', function($api) {
         $api->post('/employeepurchase/activity/end/{activityId}', ['name'=> '结束内购活动','middleware'=>'activated', 'as' => 'employeepurchase.activity.end', 'uses' =>'Activity@endActivity']);
         // 提前开始内购活动
         $api->post('/employeepurchase/activity/ahead/{activityId}', ['name'=> '提前开始内购活动','middleware'=>'activated', 'as' => 'employeepurchase.activity.ahead', 'uses' =>'Activity@aheadActivity']);
+
+        // 企业购门店首页（按 distributor_id；经销商仅本店）
+        $api->get('/employeepurchase/store-home-page', ['name' => '内购模版列表', 'middleware' => 'activated', 'as' => 'employeepurchase.store_home_page.list', 'uses' => 'StoreHomePage@getList']);
+        $api->post('/employeepurchase/store-home-page', ['name' => '创建内购模版', 'middleware' => 'activated', 'as' => 'employeepurchase.store_home_page.create', 'uses' => 'StoreHomePage@create']);
+        $api->get('/employeepurchase/store-home-page/{id}', ['name' => '内购模版详情', 'middleware' => 'activated', 'as' => 'employeepurchase.store_home_page.info', 'uses' => 'StoreHomePage@getInfo']);
+        $api->put('/employeepurchase/store-home-page/{id}', ['name' => '更新内购模版', 'middleware' => 'activated', 'as' => 'employeepurchase.store_home_page.update', 'uses' => 'StoreHomePage@update']);
+        $api->delete('/employeepurchase/store-home-page/{id}', ['name' => '删除内购模版', 'middleware' => 'activated', 'as' => 'employeepurchase.store_home_page.delete', 'uses' => 'StoreHomePage@delete']);
     });
 });

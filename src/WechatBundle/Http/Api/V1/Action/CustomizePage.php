@@ -77,7 +77,7 @@ class CustomizePage extends Controller
             'template_name' => ['required', '模版名称不能为空'],
             'page_name' => ['required', '自定义页面名称不能为空'],
             'page_description' => ['required', '页面描述不能为空'],
-            'page_type' => ['in:normal,salesperson,category,my,task_share', '页面类型不能为空'],
+            'page_type' => ['in:normal,salesperson,category,my,task_share,enterprise_store_home', '页面类型不能为空'],
         ];
         $error = validator_params($params, $rules);
         if ($error) {

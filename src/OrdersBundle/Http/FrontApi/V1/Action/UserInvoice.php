@@ -145,7 +145,7 @@ class UserInvoice extends Controller
         $data = $request->all();
         if(isset($data['invoice_id']) && isset($data['invoice_status']) && $data['invoice_status'] == "cancel"){
             $data['invoice_status'] = "cancel";
-            $invoiceDetail = $this->invoiceService->getInvoiceDetail($data['invoice_id'],$authInfo);
+            $invoiceDetail = $this->invoiceService->getInvoiceDetail($data['invoice_id'],$authInfo['company_id']);
             if($invoiceDetail['invoice_status'] == "cancel" ){
                 throw new ResourceException('发票已取消');
             }

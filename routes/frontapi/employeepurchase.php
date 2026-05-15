@@ -19,6 +19,13 @@ $api->version('v1', function($api) {
         $api->get('/wxapp/employee/email/vcode', ['name'=> '获取邮箱验证码', 'as' => 'front.wxapp.employeepurchase.email.vcode.get', 'uses' =>'Employee@sendEmailVcode']);
         // 验证员工的白名单，返回白名单下的企业
         $api->post('/wxapp/employee/check', ['name'=> '员工验证', 'as' => 'front.wxapp.employeepurchase.employee.check', 'uses' =>'Employee@employeeCheck']);
+        // 内购活动行为流水统一上报：扫码(scan) / 口令校验(passphrase_verify)；带有效 JWT 时 company_id、user_id 来自登录态
+        $api->post('/wxapp/employeepurchase/activity/behavior-report', ['name'=> '内购活动行为流水上报', 'as' => 'front.wxapp.employeepurchase.activity.behavior_report', 'uses' =>'Activity@reportActivityBehavior']);
+        
+        
+        // 获取活动详情 基础信息 无需授权
+        $api->get('/wxapp/employeepurchase/activity/detail', ['name'=> '获取活动详情', 'as' => 'front.wxapp.employeepurchase.activity.detail', 'uses' =>'Activity@getActivityDetail']);
+        
     });
     $api->group(['prefix' => 'h5app', 'namespace' => 'EmployeePurchaseBundle\Http\FrontApi\V1\Action', 'middleware' => ['dingoguard:h5app', 'api.auth'], 'providers' => 'jwt'], function($api) {
         // 获取用户所在企业列表
@@ -42,13 +49,19 @@ $api->version('v1', function($api) {
         $api->get('/wxapp/employeepurchase/is_open', ['name'=> '是否开启内购', 'as' => 'front.wxapp.employeepurchase.is_open', 'uses' =>'Activity@isOpen']);
         // 获取可参与的活动列表
         $api->get('/wxapp/employeepurchase/activities', ['name'=> '获取可参与的活动列表', 'as' => 'front.wxapp.employeepurchase.activity.list', 'uses' =>'Activity@getActivityList']);
+        // 当前登录用户在某活动+企业下是否具备有效内购资格（白名单/家属）；列表、详情、加购等节点按需调用
+        $api->get('/wxapp/employeepurchase/internal-sale-eligibility', ['name'=> '内购资格校验', 'as' => 'front.wxapp.employeepurchase.internal_sale_eligibility', 'uses' =>'Activity@getInternalSaleEligibility']);
 
+        // 内购模版详情（含 resolved_pages_template_id）；字面路径较长者居前
+        $api->get('/wxapp/employeepurchase/store-home-page/{id}', ['name'=> '内购模版详情ToC', 'as' => 'front.wxapp.employeepurchase.store_home_page.detail', 'uses' =>'StoreHomePage@getDetail']);
+
+        // 字面路径须在 /activity/{activity_id}（若未来新增）之前；较长路径先于较短路径更安全。
+        // 获取活动商品关联的分类
+        $api->get('/wxapp/employeepurchase/activity/items/category', ['name'=> '获取活动商品关联的分类', 'as' => 'front.wxapp.employeepurchase.activity.item.category', 'uses' =>'Activity@getActivityItemCategory']);
         // 获取活动商品列表
         $api->get('/wxapp/employeepurchase/activity/items', ['name'=> '获取活动商品列表', 'as' => 'front.wxapp.employeepurchase.activity.item.list', 'uses' =>'Activity@getActivityItemList']);
         // 获取活动商品详情
         $api->get('/wxapp/employeepurchase/activity/item/{item_id}', ['name'=> '获取活动商品详情', 'as' => 'front.wxapp.employeepurchase.activity.item.detail', 'uses' =>'Activity@getActivityItemDetail']);
-        // 获取活动商品关联的分类
-        $api->get('/wxapp/employeepurchase/activity/items/category', ['name'=> '获取活动商品关联的分类', 'as' => 'front.wxapp.employeepurchase.activity.item.category', 'uses' =>'Activity@getActivityItemCategory']);
 
         // 内购购物车新增
         $api->post('/wxapp/employeepurchase/cart', ['name'=> '内购购物车新增', 'as' => 'front.wxapp.employeepurchase.cart.add', 'uses' =>'Cart@cartDataAdd']);

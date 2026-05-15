@@ -25,7 +25,7 @@ use MembersBundle\Services\MemberService;
 class ActivitiesRepository extends EntityRepository
 {
     public $table = 'employee_purchase_activities';
-    public $cols = ['id', 'company_id', 'distributor_id', 'operator_id', 'name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'status', 'if_share_store', 'price_display_config', 'is_discount_description_enabled', 'discount_description', 'created', 'updated'];
+    public $cols = ['id', 'company_id', 'distributor_id', 'operator_id', 'name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'status', 'if_share_store', 'price_display_config', 'is_discount_description_enabled', 'discount_description', 'is_passphrase_enabled', 'created', 'updated'];
 
     /**
      * 新增
@@ -150,27 +150,35 @@ class ActivitiesRepository extends EntityRepository
     }
 
     /**
-     * 筛选条件格式化
+     * 内购活动列表「展示态」单条 SQL 条件（与 Api Activity::getActivityList 语义一致）.
      *
-     * @param $filter
-     * @param $qb
+     * @param \Doctrine\DBAL\Query\QueryBuilder $qb
+     * @param int                               $now
+     * @param string                            $slug not_started|warm_up|ongoing|pending|cancel|over
+     *
+     * @return \Doctrine\DBAL\Query\Expression\CompositeExpression|null null 表示非展示态，走库字段 status 等值
      */
-    private function _filter($filter, $qb)
+    private function buildActivityListStatusCondition($qb, $now, $slug)
     {
-        foreach ($filter as $field => $value) {
-            $now = time();
-            if ($field == 'status' && $value == 'warm_up') {
-                $qb = $qb->andWhere(
+        switch ($slug) {
+            case 'not_started':
+                return $qb->expr()->andX(
+                    $qb->expr()->gt('display_time', $now),
+                    $qb->expr()->eq('status', $qb->expr()->literal('active'))
+                );
+            case 'warm_up':
+                return $qb->expr()->andX(
                     $qb->expr()->lt('display_time', $now),
                     $qb->expr()->gt('employee_begin_time', $now),
                     $qb->expr()->orX(
+                        $qb->expr()->isNull('relative_begin_time'),
                         $qb->expr()->eq('relative_begin_time', 0),
                         $qb->expr()->gt('relative_begin_time', $now)
                     ),
                     $qb->expr()->eq('status', $qb->expr()->literal('active'))
                 );
-            } elseif ($field == 'status' && $value == 'ongoing') {
-                $qb = $qb->andWhere(
+            case 'ongoing':
+                return $qb->expr()->andX(
                     $qb->expr()->orX(
                         $qb->expr()->lt('employee_begin_time', $now),
                         $qb->expr()->andX(
@@ -184,8 +192,8 @@ class ActivitiesRepository extends EntityRepository
                     ),
                     $qb->expr()->eq('status', $qb->expr()->literal('active'))
                 );
-            } elseif ($field == 'status' && $value == 'pending') {
-                $qb = $qb->andWhere(
+            case 'pending':
+                return $qb->expr()->andX(
                     $qb->expr()->orX(
                         $qb->expr()->lt('employee_begin_time', $now),
                         $qb->expr()->lt('relative_begin_time', $now),
@@ -196,17 +204,59 @@ class ActivitiesRepository extends EntityRepository
                     ),
                     $qb->expr()->eq('status', $qb->expr()->literal('pending'))
                 );
-            } elseif ($field == 'status' && $value == 'over') {
-                $qb = $qb->andWhere(
-                    $qb->expr()->orX(
-                        $qb->expr()->andX(
-                            $qb->expr()->lt('employee_end_time', $now),
-                            $qb->expr()->lt('relative_end_time', $now),
-                        ),
-                        $qb->expr()->eq('status', $qb->expr()->literal('over'))
-                    )
+            case 'over':
+                return $qb->expr()->orX(
+                    $qb->expr()->andX(
+                        $qb->expr()->lt('employee_end_time', $now),
+                        $qb->expr()->lt('relative_end_time', $now),
+                    ),
+                    $qb->expr()->eq('status', $qb->expr()->literal('over'))
                 );
-            } elseif ($field == 'buy_time') {
+            case 'cancel':
+                return $qb->expr()->eq('status', $qb->expr()->literal('cancel'));
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * 筛选条件格式化
+     *
+     * @param $filter
+     * @param $qb
+     */
+    private function _filter($filter, $qb)
+    {
+        foreach ($filter as $field => $value) {
+            $now = time();
+            if ($field === 'status|or' && is_array($value) && $value !== []) {
+                $parts = [];
+                foreach (array_unique($value) as $slug) {
+                    $slug = is_string($slug) ? trim($slug) : '';
+                    if ($slug === '') {
+                        continue;
+                    }
+                    $expr = $this->buildActivityListStatusCondition($qb, $now, $slug);
+                    if ($expr === null) {
+                        throw new ResourceException('status 参数不合法');
+                    }
+                    $parts[] = $expr;
+                }
+                if ($parts !== []) {
+                    $qb = $qb->andWhere(count($parts) === 1 ? $parts[0] : $qb->expr()->orX(...$parts));
+                }
+                continue;
+            }
+            if ($field == 'status' && is_string($value)) {
+                $expr = $this->buildActivityListStatusCondition($qb, $now, $value);
+                if ($expr !== null) {
+                    $qb = $qb->andWhere($expr);
+                    continue;
+                }
+                $qb = $qb->andWhere($qb->expr()->eq('status', $qb->expr()->literal($value)));
+                continue;
+            }
+            if ($field == 'buy_time') {
                 if (isset($value['begin']) && isset($value['end'])) {
                     $qb = $qb->andWhere(
                         $qb->expr()->orX(
@@ -259,26 +309,27 @@ class ActivitiesRepository extends EntityRepository
                         )
                     );
                 }
-            } else {
-                $list = explode('|', $field);
-                if (count($list) > 1) {
-                    list($v, $k) = $list;
-                    if ($k == 'contains') {
-                        $k = 'like';
-                    }
-                    if ($k == 'like') {
-                        $value = '%'.$value.'%';
-                    }
-                    $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
-                    continue;
-                } elseif (is_array($value)) {
-                    array_walk($value, function (&$colVal) use ($qb) {
-                        $colVal = $qb->expr()->literal($colVal);
-                    });
-                    $qb = $qb->andWhere($qb->expr()->in($field, $value));
-                } else {
-                    $qb = $qb->andWhere($qb->expr()->eq($field, $qb->expr()->literal($value)));
+                continue;
+            }
+            $list = explode('|', $field);
+            if (count($list) > 1) {
+                list($v, $k) = $list;
+                if ($k == 'contains') {
+                    $k = 'like';
                 }
+                if ($k == 'like') {
+                    $value = '%'.$value.'%';
+                }
+                $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
+                continue;
+            }
+            if (is_array($value)) {
+                array_walk($value, function (&$colVal) use ($qb) {
+                    $colVal = $qb->expr()->literal($colVal);
+                });
+                $qb = $qb->andWhere($qb->expr()->in($field, $value));
+            } else {
+                $qb = $qb->andWhere($qb->expr()->eq($field, $qb->expr()->literal($value)));
             }
         }
         return $qb;
@@ -387,7 +438,7 @@ class ActivitiesRepository extends EntityRepository
         $companyId = $filter['company_id'];
         $userId = $filter['user_id'];
         $now = time();
-        $subQuery = "SELECT ac.id,ac.company_id,ac.pic,ac.name,ac.title,ac.pages_template_id,ac.display_time,ac.employee_begin_time,ac.employee_end_time,ac.employee_limitfee,ac.if_relative_join,ac.invite_limit,ac.relative_begin_time,ac.relative_end_time,ac.if_share_limitfee,ac.relative_limitfee,ac.minimum_amount,ac.status,ac.if_share_store,ac.created,ac.updated,ac.price_display_config,ac.is_discount_description_enabled,ac.discount_description,ep.enterprise_id,ep.user_id,1 AS is_employee,0 AS is_relative,et.name AS rel_enterprise FROM employee_purchase_activities ac LEFT JOIN employee_purchase_activity_enterprises ae ON ac.id=ae.activity_id LEFT JOIN employee_purchase_employees ep ON ae.enterprise_id=ep.enterprise_id LEFT JOIN employee_purchase_enterprises et ON ae.enterprise_id=et.id WHERE ac.company_id={$companyId} AND ep.user_id={$userId} AND ac.status IN ('active', 'pending') AND et.disabled=0 AND ac.display_time<{$now} AND (ac.employee_end_time>{$now} OR ac.relative_end_time>{$now}) UNION SELECT ac.id,ac.company_id,ac.pic,ac.name,ac.title,ac.pages_template_id,ac.display_time,ac.employee_begin_time,ac.employee_end_time,ac.employee_limitfee,ac.if_relative_join,ac.invite_limit,ac.relative_begin_time,ac.relative_end_time,ac.if_share_limitfee,ac.relative_limitfee,ac.minimum_amount,ac.status,ac.if_share_store,ac.created,ac.updated,ac.price_display_config,ac.is_discount_description_enabled,ac.discount_description,re.enterprise_id,re.user_id,0 AS is_employee,1 AS is_relative,et.name AS rel_enterprise FROM employee_purchase_activities ac LEFT JOIN employee_purchase_relatives re ON ac.id=re.activity_id LEFT JOIN employee_purchase_enterprises et ON re.enterprise_id=et.id WHERE ac.company_id={$companyId} AND re.user_id={$userId} AND ac.status IN ('active', 'pending') AND et.disabled=0 AND ac.display_time<{$now} AND ac.relative_end_time>{$now}";
+        $subQuery = "SELECT ac.id,ac.company_id,ac.pic,ac.name,ac.title,ac.pages_template_id,ac.display_time,ac.employee_begin_time,ac.employee_end_time,ac.employee_limitfee,ac.if_relative_join,ac.invite_limit,ac.relative_begin_time,ac.relative_end_time,ac.if_share_limitfee,ac.relative_limitfee,ac.minimum_amount,ac.status,ac.if_share_store,ac.created,ac.updated,ac.price_display_config,ac.is_discount_description_enabled,ac.discount_description,ac.is_passphrase_enabled,et.auth_type AS auth_type,ep.enterprise_id,ep.user_id,1 AS is_employee,0 AS is_relative,et.name AS rel_enterprise FROM employee_purchase_activities ac LEFT JOIN employee_purchase_activity_enterprises ae ON ac.id=ae.activity_id LEFT JOIN employee_purchase_employees ep ON ae.enterprise_id=ep.enterprise_id LEFT JOIN employee_purchase_enterprises et ON ae.enterprise_id=et.id WHERE ac.company_id={$companyId} AND ep.user_id={$userId} AND ac.status IN ('active', 'pending') AND et.disabled=0 AND ac.display_time<{$now} AND (ac.employee_end_time>{$now} OR ac.relative_end_time>{$now}) UNION SELECT ac.id,ac.company_id,ac.pic,ac.name,ac.title,ac.pages_template_id,ac.display_time,ac.employee_begin_time,ac.employee_end_time,ac.employee_limitfee,ac.if_relative_join,ac.invite_limit,ac.relative_begin_time,ac.relative_end_time,ac.if_share_limitfee,ac.relative_limitfee,ac.minimum_amount,ac.status,ac.if_share_store,ac.created,ac.updated,ac.price_display_config,ac.is_discount_description_enabled,ac.discount_description,ac.is_passphrase_enabled,et.auth_type AS auth_type,re.enterprise_id,re.user_id,0 AS is_employee,1 AS is_relative,et.name AS rel_enterprise FROM employee_purchase_activities ac LEFT JOIN employee_purchase_relatives re ON ac.id=re.activity_id LEFT JOIN employee_purchase_enterprises et ON re.enterprise_id=et.id WHERE ac.company_id={$companyId} AND re.user_id={$userId} AND ac.status IN ('active', 'pending') AND et.disabled=0 AND ac.display_time<{$now} AND ac.relative_end_time>{$now}";
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder();
         $qb = $qb->select('count(*) as _count')->from('('.$subQuery.')', 't');

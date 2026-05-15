@@ -240,9 +240,10 @@ class CertService
             }
             //保存绑定关系
             $this->saveShopNode($bindData);
-            if ($node_type == 'ecos.ome') {
+            // 不限制node_type
+            // if ($node_type == 'ecos.ome') {
                 app('redis')->set($this->genErpBindReidsId(), $bindData['node_id']);
-            }
+            // }
             $msg = 'succ';
             return true;
         } elseif ($data['status'] == 'unbind') {

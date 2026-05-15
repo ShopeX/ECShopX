@@ -221,6 +221,19 @@ class UploadFileService
             app('log')->error('handleUploadFile => ' . json_encode($errorData, 256));
         }
 
+        if ($headerSuccess && isset($data['file_type']) && $data['file_type'] === 'employee_purchase_employees') {
+            try {
+                \EmployeePurchaseBundle\Services\EmployeesUploadService::assertImportDataRowsWithinLimit(count($results));
+            } catch (BadRequestHttpException $e) {
+                $headerSuccess = false;
+                $errorLine++;
+                $headerTitle = $this->uploadFile->getHeaderTitle($companyId);
+                $columnNum = count($headerTitle['all']);
+                $errorData[] = array_merge(array_fill(0, $columnNum, ''), ['数据行数', $e->getMessage()]);
+                app('log')->error('handleUploadFile => ' . json_encode($errorData, 256));
+            }
+        }
+
         // 如果头部是正确的，才会处理到下一步
         if ($headerSuccess) {
             $newAarray = array_chunk($results, 500, true);

@@ -35,6 +35,62 @@ class OrderService
     }
 
     /**
+     * 不推送 Saas OMS 的支付方式（黑名单）。
+     *
+     * @var string[]
+     */
+    private const OMS_PUSH_SKIP_PAY_TYPES = [
+        'localPay',
+    ];
+
+    /**
+     * @param string $payType 支付编码或空字符串
+     */
+    private function shouldSkipOmsPushForPayType(string $payType): bool
+    {
+        return $payType !== '' && in_array($payType, self::OMS_PUSH_SKIP_PAY_TYPES, true);
+    }
+
+    /**
+     * OMS 展示用支付方式文案；映射表未收录时使用原始 payType。
+     */
+    private function resolveOmsPaymentDisplayLabel(string $payType): string
+    {
+        if ($payType === '') {
+            return '';
+        }
+        $labels = $this->getOmsPaymentDisplayLabels();
+
+        return $labels[$payType] ?? $payType;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function getOmsPaymentDisplayLabels(): array
+    {
+        return [
+            'amorepay' => '微信支付(amorepay)',
+            'wxpay' => '微信支付',
+            'wxpayh5' => '微信支付',
+            'wxpayjs' => '微信支付',
+            'wxpayapp' => '微信支付',
+            'wxpaypos' => '微信条码支付',
+            'wxpaypc' => '微信PC支付',
+            'pos' => '刷卡',
+            'point' => '积分',
+            'dhpoint' => '积分',
+            'deposit' => '预存款支付',
+            'alipay' => '支付宝支付',
+            'alipayh5' => '支付宝支付',
+            'alipayapp' => '支付宝支付',
+            'alipaypos' => '支付宝条码支付',
+            'alipaymini' => '支付宝小程序',
+            'hfpay' => '汇付支付',
+        ];
+    }
+
+    /**
      * 订单结构体
      *
      */
@@ -66,6 +122,12 @@ class OrderService
 
         if (in_array($orderInfo['order_status'], ['NOTPAY'])) {
             app('log')->debug("saaserp ".__FUNCTION__.",".__LINE__.", order_status===>: ".var_export($orderInfo, true)."\n");
+            return false;
+        }
+
+        $effectivePayType = $tradeInfo['payType'] ?? $orderInfo['pay_type'] ?? '';
+        if ($this->shouldSkipOmsPushForPayType($effectivePayType)) {
+            app('log')->debug("saaserp ".__FUNCTION__.",".__LINE__.", skip OMS for pay_type===>: ".$effectivePayType."\n");
             return false;
         }
 
@@ -115,25 +177,7 @@ class OrderService
             $ship_status = 'SHIP_FINISH';
         }
 
-        $payment_type = [
-            'amorepay' => '微信支付(amorepay)',
-            'wxpay' => '微信支付',
-            'wxpayh5' => '微信支付',
-            'wxpayjs' => '微信支付',
-            'wxpayapp' => '微信支付',
-            'wxpaypos' => '微信条码支付',
-            'wxpaypc' => '微信PC支付',
-            'pos' => '刷卡',
-            'point' => '积分',
-            'dhpoint' => '积分',
-            'deposit' => '预存款支付',
-            'alipay' => '支付宝支付',
-            'alipayh5' => '支付宝支付',
-            'alipayapp' => '支付宝支付',
-            'alipaypos' => '支付宝条码支付',
-            'alipaymini' => '支付宝小程序',
-            'hfpay' => '汇付支付',
-        ];
+        $paymentDisplayLabel = $this->resolveOmsPaymentDisplayLabel($tradeInfo['payType'] ?? $orderInfo['pay_type'] ?? '');
 
         // 优惠信息
         $promotion_details = $this->__getPmtDetail($orderInfo);
@@ -175,7 +219,7 @@ class OrderService
             'discount_fee' => 0,
             'is_cod' => 'false',
             'payment_tid' => $tradeInfo['payType'] ?? $orderInfo['pay_type'],
-            'payment_type' => $payment_type[$tradeInfo['payType'] ?? $orderInfo['pay_type']] ?? '',
+            'payment_type' => $paymentDisplayLabel,
             'orders_number' => 1,// 子单商品总数量 暂定
             'buyer_uname' => $member_info['uname'],
             'buyer_name' => isset($member_info['name']) ? trim($member_info['name']) : $member_info['uname'],
@@ -334,36 +378,18 @@ class OrderService
             return [];
         }
 
-        $pay_type = [
-            'amorepay' => '微信支付(amorepay)',
-            'wxpay' => '微信支付',
-            'wxpayh5' => '微信支付',
-            'wxpayjs' => '微信支付',
-            'wxpayapp' => '微信支付',
-            'wxpaypos' => '微信条码支付',
-            'wxpaypc' => '微信PC支付',
-            'pos' => '刷卡',
-            'point' => '积分',
-            'dhpoint' => '积分',
-            'deposit' => '预存款支付',
-            'alipay' => '支付宝支付',
-            'alipayh5' => '支付宝支付',
-            'alipayapp' => '支付宝支付',
-            'alipaypos' => '支付宝条码支付',
-            'alipaymini' => '支付宝小程序',
-            'hfpay' => '汇付支付',
-        ];
+        $payLabel = $this->resolveOmsPaymentDisplayLabel($tradeInfo['payType'] ?? '');
 
         $payment_lists['payment_list'][] = [
             'tid' => $tradeInfo['orderId'],
             'payment_id' => $tradeInfo['tradeId'],
-            'seller_bank' => $pay_type[$tradeInfo['payType']],
+            'seller_bank' => $payLabel,
             'seller_account' => $tradeInfo['openId'],
             'buyer_account' => $tradeInfo['mchId'],
             'currency' => 'CNY',
             'paycost' => '0.000',
             'pay_type' => 'online',
-            'payment_name' => $pay_type[$tradeInfo['payType']],
+            'payment_name' => $payLabel,
             'payment_code' => $tradeInfo['payType'],
             't_begin' => date('Y-m-d H:i:s', $tradeInfo['timeStart']),
             't_end' => date('Y-m-d H:i:s', $tradeInfo['timeExpire']),
@@ -386,20 +412,11 @@ class OrderService
             return false;
         }
 
-        $pay_type = [
-            'amorepay' => '微信支付(amorepay)',
-            'wxpay' => '微信支付',
-            'deposit' => '预存款支付',
-            'pos' => '刷卡',
-            'point' => '积分',
-            'dhpoint' => '积分',
-        ];
-
         $order_payments[] = [
             'trade_no' => $payments['tradeId'],
             'account' => trim($payments['body']),
             'pay_account' => $payments['mchId'],
-            'paymethod' => $pay_type[$payments['payType']],
+            'paymethod' => $this->resolveOmsPaymentDisplayLabel($payments['payType'] ?? ''),
             'money' => bcdiv($payments['payFee'], 100, 2),
             'memo' => trim($payments['detail']),
             'paycost' => '0.00',
@@ -511,6 +528,12 @@ class OrderService
             return false;
         }
 
+        $effectivePayType = $tradeInfo['payType'] ?? $orderInfo['pay_type'] ?? '';
+        if ($this->shouldSkipOmsPushForPayType($effectivePayType)) {
+            app('log')->debug("saaserp ".__FUNCTION__.",".__LINE__.", skip OMS for pay_type===>: ".$effectivePayType."\n");
+            return false;
+        }
+
         // 获取买家信息
         $member_info = $this->__formatMemberInfo($orderInfo);
 
@@ -556,25 +579,7 @@ class OrderService
             $ship_status = 'SHIP_FINISH';
         }
 
-        $payment_type = [
-            'amorepay' => '微信支付(amorepay)',
-            'wxpay' => '微信支付',
-            'wxpayh5' => '微信支付',
-            'wxpayjs' => '微信支付',
-            'wxpayapp' => '微信支付',
-            'wxpaypos' => '微信条码支付',
-            'wxpaypc' => '微信PC支付',
-            'pos' => '刷卡',
-            'point' => '积分',
-            'dhpoint' => '积分',
-            'deposit' => '预存款支付',
-            'alipay' => '支付宝支付',
-            'alipayh5' => '支付宝支付',
-            'alipayapp' => '支付宝支付',
-            'alipaypos' => '支付宝条码支付',
-            'alipaymini' => '支付宝小程序',
-            'hfpay' => '汇付支付',
-        ];
+        $paymentDisplayLabel = $this->resolveOmsPaymentDisplayLabel($tradeInfo['payType'] ?? $orderInfo['pay_type'] ?? '');
 
         // 优惠信息
         $promotion_details = $this->__getPmtDetail($orderInfo);
@@ -616,7 +621,7 @@ class OrderService
             'discount_fee' => 0,
             'is_cod' => 'false',
             'payment_tid' => $tradeInfo['payType'] ?? $orderInfo['pay_type'],
-            'payment_type' => $payment_type[$tradeInfo['payType'] ?? $orderInfo['pay_type']] ?? '',
+            'payment_type' => $paymentDisplayLabel,
             'orders_number' => 1,// 子单商品总数量 暂定
             'buyer_uname' => $member_info['uname'],
             'buyer_name' => isset($member_info['name']) ? trim($member_info['name']) : $member_info['uname'],

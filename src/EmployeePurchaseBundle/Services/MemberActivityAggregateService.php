@@ -45,6 +45,31 @@ class MemberActivityAggregateService
             throw new ResourceException('企业不参与该活动');
         }
 
+        // 口令活动：额度来自口令企业表，按当前用户累加；参与者可为任意已登录会员，不要求员工/亲友身份
+        if (!empty($activity['is_passphrase_enabled'])) {
+            $pp = $activityService->getPassphraseClientSummary(
+                (int) $companyId,
+                (int) $activityId,
+                (int) $enterpriseId,
+                $activity
+            );
+            $limitFen = $pp['passphrase_limitfee'];
+            $limitFen = $limitFen === null ? 0 : (int) $limitFen;
+            $aggregateFee = (int) $this->entityRepository->sum([
+                'company_id' => $companyId,
+                'enterprise_id' => $enterpriseId,
+                'activity_id' => $activityId,
+                'user_id' => $userId,
+            ]);
+            $left = (int) bcsub((string) $limitFen, (string) $aggregateFee);
+
+            return [
+                'limit_fee' => $limitFen,
+                'aggregate_fee' => $aggregateFee,
+                'left_fee' => $left < 0 ? 0 : $left,
+            ];
+        }
+
         $employeesService = new EmployeesService();
         $relativesService = new RelativesService();
         $employee = $employeesService->check($companyId, $enterpriseId, $userId);
@@ -85,6 +110,67 @@ class MemberActivityAggregateService
 
         if (!in_array($enterpriseId, $activity['enterprise_id'])) {
             throw new ResourceException('企业不参与该活动');
+        }
+
+        if (!empty($activity['is_passphrase_enabled'])) {
+            try {
+                $key = 'addAggregateFee_passphrase_'.$companyId.'_'.$enterpriseId.'_'.$activityId.'_'.$userId;
+
+                $succ = app('redis')->setnx($key, 1);
+                while (!$succ) {
+                    usleep(rand(1000, 1000000));
+                    $succ = app('redis')->setnx($key, 1);
+                }
+
+                $pp = $activityService->getPassphraseClientSummary(
+                    (int) $companyId,
+                    (int) $activityId,
+                    (int) $enterpriseId,
+                    $activity
+                );
+                $limitFen = $pp['passphrase_limitfee'];
+                $limitFen = $limitFen === null ? 0 : (int) $limitFen;
+                $aggregateFee = (int) $this->entityRepository->sum([
+                    'company_id' => $companyId,
+                    'enterprise_id' => $enterpriseId,
+                    'activity_id' => $activityId,
+                    'user_id' => $userId,
+                ]);
+                if ($aggregateFee + $fee > $limitFen) {
+                    throw new ResourceException('超过个人口令通道额度');
+                }
+
+                $aggregateInfo = $this->entityRepository->getInfo(['company_id' => $companyId, 'enterprise_id' => $enterpriseId, 'activity_id' => $activityId, 'user_id' => $userId]);
+                if (!$aggregateInfo) {
+                    $data = [
+                        'company_id' => $companyId,
+                        'enterprise_id' => $enterpriseId,
+                        'activity_id' => $activityId,
+                        'user_id' => $userId,
+                        'aggregate_fee' => $fee,
+                    ];
+                    $this->entityRepository->create($data);
+                } else {
+                    $data = [
+                        'aggregate_fee' => $aggregateInfo['aggregate_fee'] + $fee,
+                    ];
+                    $filter = [
+                        'company_id' => $companyId,
+                        'enterprise_id' => $enterpriseId,
+                        'activity_id' => $activityId,
+                        'user_id' => $userId,
+                    ];
+                    $this->entityRepository->updateBy($filter, $data);
+                }
+                app('redis')->del($key);
+            } catch (\Exception $e) {
+                if (isset($key)) {
+                    app('redis')->del($key);
+                }
+                throw new ResourceException($e->getMessage());
+            }
+
+            return true;
         }
 
         $employeesService = new EmployeesService();

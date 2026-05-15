@@ -712,6 +712,12 @@ class PagesTemplateServices
      */
     public function content($params)
     {
+        $incomingWeappSettingPageName = $params['weapp_setting_page_name'] ?? null;
+        $incomingHasWeappSettingPagesTemplateId = array_key_exists('weapp_setting_pages_template_id', $params);
+        $incomingWeappSettingPagesTemplateId = $incomingHasWeappSettingPagesTemplateId
+            ? $params['weapp_setting_pages_template_id']
+            : null;
+
         $company_id = $params['company_id'];
         $user_id = $params['user_id'];
         $distributor_id = $params['distributor_id'];
@@ -779,7 +785,7 @@ class PagesTemplateServices
         }
 
         //模板内容数据
-        $params = [
+        $contentParams = [
             'company_id' => $company_id,
             'distributor_id' => $distributor_id,
             'pages_template_id' => $result['pages_template_id'],
@@ -792,8 +798,14 @@ class PagesTemplateServices
             'goods_grid_tab_id' => $params['goods_grid_tab_id'],
             'e_activity_id' => $params['e_activity_id'],
         ];
+        if ($incomingWeappSettingPageName !== null && $incomingWeappSettingPageName !== '') {
+            $contentParams['weapp_setting_page_name'] = $incomingWeappSettingPageName;
+        }
+        if ($incomingHasWeappSettingPagesTemplateId) {
+            $contentParams['weapp_setting_pages_template_id'] = (int) $incomingWeappSettingPagesTemplateId;
+        }
 
-        $list = $this->templateContentByPage($params);
+        $list = $this->templateContentByPage($contentParams);
 
         // 按会员标签过滤组件
         $list = $this->filterTemplateContentByMemberTags($company_id, $user_id, $list);
@@ -1209,11 +1221,15 @@ class PagesTemplateServices
         $page_size = $params['page_size'];
         $weapp_setting_id = $params['weapp_setting_id'];
         $goods_grid_tab_id = $params['goods_grid_tab_id'];
+        $pageNameForWeappSetting = $params['weapp_setting_page_name'] ?? 'index';
+        $settingPagesTemplateId = array_key_exists('weapp_setting_pages_template_id', $params)
+            ? (int) $params['weapp_setting_pages_template_id']
+            : (int) ($params['pages_template_id'] ?? 0);
         // 获取小程序模板装修表中的指定的那条数据
         $data = app('registry')
             ->getManager('default')
             ->getRepository(WeappSetting::class)
-            ->getParamByTempName($companyId, $params['template_name'], "index", "", $params['version'], $params['pages_template_id'], $weapp_setting_id);
+            ->getParamByTempName($companyId, $params['template_name'], $pageNameForWeappSetting, "", $params['version'], $settingPagesTemplateId, $weapp_setting_id);
         $list = [];
         if (!$data || !is_array($data)) {
             return $list;

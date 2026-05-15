@@ -83,6 +83,13 @@ class OrdersRelActivity
     private $close_modify_time;
 
     /**
+     * @var bool
+     *
+     * @ORM\Column(name="participate_quota_order_consumed", type="boolean", options={"comment":"创单是否因本单扣减口令参与名额", "default":false})
+     */
+    private $participate_quota_order_consumed = false;
+
+    /**
      * Set orderId
      *
      * @param integer $orderId
@@ -248,5 +255,25 @@ class OrdersRelActivity
     public function getCloseModifyTime()
     {
         return $this->close_modify_time;
+    }
+
+    /**
+     * @param bool|int $v
+     *
+     * @return OrdersRelActivity
+     */
+    public function setParticipateQuotaOrderConsumed($v)
+    {
+        $this->participate_quota_order_consumed = (bool) $v;
+
+        return $this;
+    }
+
+    /**
+     * @return bool
+     */
+    public function getParticipateQuotaOrderConsumed()
+    {
+        return (bool) $this->participate_quota_order_consumed;
     }
 }

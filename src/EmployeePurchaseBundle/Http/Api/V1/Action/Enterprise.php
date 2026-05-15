@@ -28,6 +28,46 @@ use WechatBundle\Services\OpenPlatform;
 
 class Enterprise extends Controller
 {
+    /** 内购企业登录类型（列表筛选白名单） */
+    private const AUTH_TYPES_FOR_LIST = ['mobile', 'account', 'email', 'qr_code', 'no_verify'];
+
+    /**
+     * 解析列表「登录类型」筛选：支持 query 参数 auth_type 或 auth_types；逗号分隔或数组多选（如 auth_type[]=no_verify）
+     *
+     * @return string[] 去重后的合法类型；空数组表示不按登录类型筛选
+     */
+    private function parseAuthTypeFilterForList(Request $request): array
+    {
+        $raw = $request->input('auth_type', $request->input('auth_types'));
+        if ($raw === null || $raw === '' || $raw === []) {
+            return [];
+        }
+        $tokens = [];
+        if (is_array($raw)) {
+            foreach ($raw as $v) {
+                if (!is_string($v) && !is_numeric($v)) {
+                    continue;
+                }
+                $s = trim((string) $v);
+                if ($s === '') {
+                    continue;
+                }
+                foreach (preg_split('/\s*,\s*/', $s, -1, PREG_SPLIT_NO_EMPTY) as $p) {
+                    $tokens[] = trim($p);
+                }
+            }
+        } else {
+            $s = trim((string) $raw);
+            if ($s !== '') {
+                foreach (preg_split('/\s*,\s*/', $s, -1, PREG_SPLIT_NO_EMPTY) as $p) {
+                    $tokens[] = trim($p);
+                }
+            }
+        }
+
+        return array_values(array_unique(array_intersect($tokens, self::AUTH_TYPES_FOR_LIST)));
+    }
+
     /**
      * @SWG\Post(
      *     path="/enterprise",
@@ -97,8 +137,8 @@ class Enterprise extends Controller
         if (in_array($params['auth_type'], ['mobile', 'account'])) {
             // 验证方式=手机号、账号时，is_employee_check_enabled='true'
             $params['is_employee_check_enabled'] = 'true';
-        } else if (in_array($params['auth_type'], ['email'])) {
-            // 验证方式=邮箱，is_employee_check_enabled='false'
+        } else if (in_array($params['auth_type'], ['email', 'no_verify'])) {
+            // 验证方式=邮箱、无需验证，is_employee_check_enabled='false'
             $params['is_employee_check_enabled'] = 'false';
         }
         $params['is_employee_check_enabled'] = $params['is_employee_check_enabled'] == 'true' ? true : false;
@@ -174,8 +214,8 @@ class Enterprise extends Controller
         if (in_array($params['auth_type'], ['mobile', 'account'])) {
             // 验证方式=手机号、账号时，is_employee_check_enabled='true'
             $params['is_employee_check_enabled'] = 'true';
-        } else if (in_array($params['auth_type'], ['email'])) {
-            // 验证方式=邮箱，is_employee_check_enabled='false'
+        } else if (in_array($params['auth_type'], ['email', 'no_verify'])) {
+            // 验证方式=邮箱、无需验证，is_employee_check_enabled='false'
             $params['is_employee_check_enabled'] = 'false';
         }
         $params['is_employee_check_enabled'] = $params['is_employee_check_enabled'] == 'true' ? true : false;
@@ -200,6 +240,10 @@ class Enterprise extends Controller
      *     @SWG\Parameter( name="name", in="query", description="供应商名称", required=false, type="string" ),
      *     @SWG\Parameter( name="disabled", in="query", description="禁用 0 否 1 是", required=false, type="string" ),
      *     @SWG\Parameter( name="distributorId", in="query", description="店铺ID,平台=0", required=false, type="string" ),
+     *     @SWG\Parameter( name="distributor_id", in="query", description="店铺ID,平台=0（与 distributorId 二选一）", required=false, type="string" ),
+     *     @SWG\Parameter( name="auth_type", in="query", description="登录类型筛选：mobile/account/email/qr_code/no_verify；多个用英文逗号分隔，或与 auth_types 数组同传", required=false, type="string" ),
+     *     @SWG\Parameter( name="auth_types", in="query", description="登录类型多选（数组），与 auth_type 等价", required=false, type="array", @SWG\Items(type="string") ),
+     *     @SWG\Parameter( name="finderId", in="query", description="前端 Finder 标识，服务端忽略", required=false, type="integer" ),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
      *                  @SWG\Property( property="total_count", type="string", example="2", description="自行更改字段描述"),
@@ -269,8 +313,11 @@ class Enterprise extends Controller
             $filter['id'] = $params['enterprise_id'];
         }
 
-        if (isset($params['auth_type']) && $params['auth_type']) {
-            $filter['auth_type'] = $params['auth_type'];
+        $authTypeFilter = $this->parseAuthTypeFilterForList($request);
+        if (count($authTypeFilter) === 1) {
+            $filter['auth_type'] = $authTypeFilter[0];
+        } elseif (count($authTypeFilter) > 1) {
+            $filter['auth_type'] = $authTypeFilter;
         }
 
         if (isset($params['is_employee_check_enabled'])) {

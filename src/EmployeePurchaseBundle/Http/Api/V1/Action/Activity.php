@@ -23,6 +23,9 @@ use App\Http\Controllers\Controller as Controller;
 use CompanysBundle\Ego\CompanysActivationEgo;
 
 use EmployeePurchaseBundle\Services\ActivitiesService;
+use EmployeePurchaseBundle\Services\ActivityEnterpriseBehaviorLogService;
+use EmployeePurchaseBundle\Support\ActivityListDisplayStatusQuery;
+use EspierBundle\Jobs\ExportFileJob;
 use GoodsBundle\Services\ItemsCategoryService;
 
 class Activity extends Controller
@@ -50,6 +53,8 @@ class Activity extends Controller
      *     @SWG\Property( property="relative_limitfee", type="integer", description="亲友可使用额度"),
      *     @SWG\Property( property="minimum_amount", type="integer", description="订单最低金额"),
      *     @SWG\Property( property="close_modify_hours_after_activity", type="integer", description="活动结束后多少小时内可以修改收货地址"),
+     *     @SWG\Property( property="is_passphrase_enabled", type="boolean", description="是否开启口令通道"),
+     *     @SWG\Property( property="passphrase_enterprises", type="array", description="口令绑定企业；每项含 participate_quota、passphrase_limitfee(分)、passphrase_code 等；额度在各行配置，活动上无总额字段。enterprise 与单条企业详情接口一致(含邮箱 SMTP 字段、distributor_name 等)", @SWG\Items(type="object")),
      *     @SWG\Property( property="created", type="integer", description="创建时间"),
      *     @SWG\Property( property="updated", type="integer", description="修改时间"),
      * )
@@ -80,6 +85,8 @@ class Activity extends Controller
      *     @SWG\Parameter( name="relative_limitfee", in="formData", description="亲友可使用额度", type="integer", required=false),
      *     @SWG\Parameter( name="minimum_amount", in="formData", description="订单最低金额", type="integer", required=true),
      *     @SWG\Parameter( name="close_modify_hours_after_activity", in="formData", description="活动结束后多少小时内可以修改收货地址", type="integer", required=true),
+     *     @SWG\Parameter( name="is_passphrase_enabled", in="formData", description="是否开启口令通道 0/1", type="integer", required=false),
+     *     @SWG\Parameter( name="passphrase_enterprises", in="formData", description="口令企业(JSON 数组)：每项 enterprise_id、participate_quota、passphrase_limitfee(分)、passphrase_code；别名 quota、code、limit_fee。开启口令时必填，校验通过后写入 employee_purchase_activity_passphrase_enterprises", type="string", required=false),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -98,12 +105,13 @@ class Activity extends Controller
         $companyId = $authInfo['company_id'];
         $distributor_id = $authInfo['distributor_id'];
         $operator_id = $authInfo['operator_id'];
-        $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description');
+        $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description', 'is_passphrase_enabled', 'passphrase_enterprises');
         $params['company_id'] = $companyId;
         // 处理布尔值参数：支持字符串 'true'/'1' 和整数 1/0
         $params['if_relative_join'] = isset($params['if_relative_join']) && ($params['if_relative_join'] === 'true' || $params['if_relative_join'] === '1' || $params['if_relative_join'] === 1 || $params['if_relative_join'] === true) ? 1 : 0;
         $params['if_share_limitfee'] = isset($params['if_share_limitfee']) && ($params['if_share_limitfee'] === 'true' || $params['if_share_limitfee'] === '1' || $params['if_share_limitfee'] === 1 || $params['if_share_limitfee'] === true) ? 1 : 0;
         $params['is_discount_description_enabled'] = isset($params['is_discount_description_enabled']) && ($params['is_discount_description_enabled'] === 'true' || $params['is_discount_description_enabled'] === '1' || $params['is_discount_description_enabled'] === 1 || $params['is_discount_description_enabled'] === true) ? 1 : 0;
+        $params['is_passphrase_enabled'] = isset($params['is_passphrase_enabled']) && ($params['is_passphrase_enabled'] === 'true' || $params['is_passphrase_enabled'] === '1' || $params['is_passphrase_enabled'] === 1 || $params['is_passphrase_enabled'] === true) ? 1 : 0;
         $rules = [
             'name' => ['required', '请输入活动名称'],
             'title' => ['required', '请输入活动标题'],
@@ -114,12 +122,12 @@ class Activity extends Controller
             'display_time' => ['required', '请选择活动预热时间'],
             'employee_begin_time' => ['required', '请选择员工购买开始时间'],
             'employee_end_time' => ['required', '请选择员工购买结束时间'],
-            'employee_limitfee' => ['required', '请输入员工可使用额度'],
+            'employee_limitfee' => ['exclude_if:is_passphrase_enabled,1|required|integer|min:1', '员工可使用额度须大于 0（单位：分）'],
             'invite_limit' => ['required_if:if_relative_join,1', '请输入员工可邀请亲友人数上限'],
             'relative_begin_time' => ['required_if:if_relative_join,1', '请选择亲友购买开始时间'],
             'relative_end_time' => ['required_if:if_relative_join,1', '请选择亲友购买结束时间'],
             'if_share_limitfee' => ['required_if:if_relative_join,1', '请选择亲友是否共享员工额度'],
-            'relative_limitfee' => ['required_if:if_share_limitfee,0', '请填写亲友可使用额度'],
+            'relative_limitfee' => ['exclude_if:is_passphrase_enabled,1|exclude_unless:if_relative_join,1|exclude_if:if_share_limitfee,1|required|integer|min:1', '亲友可使用额度须大于 0（单位：分）'],
             'minimum_amount' => ['required', '请填写订单最低金额'],
             'close_modify_hours_after_activity' => ['required', '请填写活动结束后多少小时内可以修改收货地址'],
             'price_display_config' => ['required', '请设置活动价格展示'],
@@ -157,6 +165,7 @@ class Activity extends Controller
      *     @SWG\Parameter( name="display_time_begin", in="query", description="预热时间", type="integer"),
      *     @SWG\Parameter( name="display_time_end", in="query", description="预热时间", type="integer"),
      *     @SWG\Parameter( name="enterprise_id", in="query", description="参与企业ID", type="integer"),
+     *     @SWG\Parameter( name="status", in="query", description="活动展示态筛选，支持单个或多项（逗号分隔或重复参数）。可选：not_started,warm_up,ongoing,pending,cancel,over；多项为 OR 关系", type="string"),
      *     @SWG\Parameter( name="page", in="query", description="页码，默认1", type="integer"),
      *     @SWG\Parameter( name="pageSize", in="query", description="每页数量，默认20", type="integer"),
      *     @SWG\Response(
@@ -178,7 +187,7 @@ class Activity extends Controller
      */
     public function getActivityList(Request $request)
     {
-        $params = $request->all('page', 'pageSize', 'name', 'display_time_begin', 'buy_time_begin', 'buy_time_end', 'enterprise_id', 'status', 'distributor_id');
+        $params = $request->all('page', 'pageSize', 'name', 'display_time_begin', 'buy_time_begin', 'buy_time_end', 'enterprise_id', 'distributor_id');
         $rules = [
             'page' => ['required|integer|min:1','分页参数错误'],
             'pageSize' => ['required|integer|min:1|max:100','每页显示数量最大100'],
@@ -216,37 +225,20 @@ class Activity extends Controller
             $filter['enterprise_id'] = $params['enterprise_id'];
         }
         $now = time();
-        if ($params['status']) {
-            switch ($params['status']) {
-                //未开始
-                case 'not_started':
-                    $filter['display_time|gt'] = $now;
-                    $filter['status'] = 'active';
-                    break;
-                //预热中
-                case 'warm_up':
-                    $filter['status'] = 'warm_up';
-                    break;
-                //进行中
-                case 'ongoing':
-                    $filter['status'] = 'ongoing';
-                    break;
-                //已暂停
-                case 'pending':
-                    $filter['status'] = 'pending';
-                    break;
-                //已取消
-                case 'cancel':
-                    $filter['status'] = 'cancel';
-                    break;
-                //已结束
-                case 'over':
-                    $filter['status'] = 'over';
-            }
+        $statusOr = ActivityListDisplayStatusQuery::statusSlugsForFilterOrNull($request->input('status'));
+        if ($statusOr !== null) {
+            $filter['status|or'] = $statusOr;
         }
 
         $activitiesService = new ActivitiesService();
         $result = $activitiesService->getActivityList($filter, '*', $page, $pageSize);
+
+        $statsMap = [];
+        if (!empty($result['list'])) {
+            $activityIdsForStats = array_map('intval', array_column($result['list'], 'id'));
+            $behaviorStatsService = new ActivityEnterpriseBehaviorLogService();
+            $statsMap = $behaviorStatsService->getAggregatedStatsTotalsByActivityIds($companyId, $activityIdsForStats);
+        }
 
         foreach ($result['list'] as $key => $row) {
             if ($row['display_time'] > $now && $row['status'] == 'active') {
@@ -273,9 +265,65 @@ class Activity extends Controller
                 $result['list'][$key]['status'] = 'over';
                 $result['list'][$key]['status_desc'] = '已结束';
             }
+
+            $aid = (int) ($result['list'][$key]['id'] ?? 0);
+            $st = $statsMap[$aid] ?? [
+                'scan_count' => 0,
+                'scan_user_count' => 0,
+                'passphrase_verify_user_count' => 0,
+                'bind_user_count' => 0,
+                'order_user_count' => 0,
+            ];
+            $result['list'][$key]['scan_count'] = $st['scan_count'];
+            $result['list'][$key]['scan_user_count'] = $st['scan_user_count'];
+            $result['list'][$key]['passphrase_verify_user_count'] = $st['passphrase_verify_user_count'];
+            $result['list'][$key]['bind_user_count'] = $st['bind_user_count'];
+            $result['list'][$key]['order_user_count'] = $st['order_user_count'];
         }
 
         return $this->response->array($result);
+    }
+
+    /**
+     * 导出活动下参与企业的扫码落地页小程序码链接（Excel）
+     *
+     * @param int $activityId
+     */
+    public function downloadActivityQrcode($activityId, Request $request)
+    {
+        $authInfo = app('auth')->user()->get();
+        $companyId = (int) $authInfo['company_id'];
+        $distributorScopeId = null;
+        if (($authInfo['operator_type'] ?? '') == 'distributor') {
+            $distributorScopeId = (int) $authInfo['distributor_id'];
+        }
+
+        $filter = [
+            'activity_id' => (int) $activityId,
+            'company_id' => $companyId,
+            'operator_id' => (int) ($authInfo['operator_id'] ?? 0),
+        ];
+        if ($distributorScopeId !== null) {
+            $filter['distributor_id'] = $distributorScopeId;
+        }
+
+        // 提前校验活动与权限，避免提交无效导出任务
+        $activitiesService = new ActivitiesService();
+        $activitiesService->buildActivityEnterpriseQrcodeExportRows(
+            $companyId,
+            (int) $activityId,
+            $distributorScopeId
+        );
+
+        $gotoJob = (new ExportFileJob(
+            'employee_purchase_activity_qrcode',
+            $companyId,
+            $filter,
+            $filter['operator_id']
+        ))->onQueue('slow');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+
+        return response()->json(['status' => true]);
     }
 
     /**
@@ -334,7 +382,105 @@ class Activity extends Controller
             $result['status_desc'] = '已结束';
         }
         $result['is_discount_description_enabled'] = $result['is_discount_description_enabled'] === true ? 'true' : 'false';
+        $result['is_passphrase_enabled'] = !empty($result['is_passphrase_enabled']) ? 'true' : 'false';
+        $result['passphrase_enterprises'] = $activitiesService->getPassphraseEnterpriseList($filter['company_id'], $activityId);
         return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Get(
+     *     path="/employeepurchase/activity/{activityId}/enterprise-behavior-stats",
+     *     summary="活动各企业行为流水聚合统计",
+     *     tags={"内购"},
+     *     description="基于 employee_purchase_activity_enterprise_behavior_log 实时聚合：扫码次数/人数、口令验证成功人数(UV，含 result_status=success；失败尝试不计入)、绑定人数、下单人数（order 行为 UV，内购支付成功写入，与绑定渠道无关）；行集合为活动参与企业",
+     *     operationId="getActivityEnterpriseBehaviorStats",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="activityId", in="path", description="活动ID", type="integer", required=true),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功",
+     *         @SWG\Schema(
+     *             @SWG\Property( property="data", type="object",
+     *                 @SWG\Property( property="list", type="array",
+     *                     @SWG\Items(
+     *                         type="object",
+     *                         @SWG\Property( property="enterprise_id", type="integer" ),
+     *                         @SWG\Property( property="enterprise_name", type="string" ),
+     *                         @SWG\Property( property="enterprise_sn", type="string" ),
+     *                         @SWG\Property( property="logo", type="string" ),
+     *                         @SWG\Property( property="scan_count", type="integer", description="扫码次数(PV)" ),
+     *                         @SWG\Property( property="scan_user_count", type="integer", description="扫码人数(UV)" ),
+     *                         @SWG\Property( property="passphrase_verify_user_count", type="integer", description="口令验证成功人数(UV)，失败流水不计入" ),
+     *                         @SWG\Property( property="bind_user_count", type="integer" ),
+     *                         @SWG\Property( property="order_user_count", type="integer", description="内购支付成功写入的 order 行为用户数(UV)" ),
+     *                     ),
+     *                 ),
+     *             ),
+     *         ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/EmployeePurchaseErrorRespones") ) )
+     * )
+     */
+    public function getActivityEnterpriseBehaviorStats($activityId, Request $request)
+    {
+        $authInfo = app('auth')->user()->get();
+        $companyId = (int) $authInfo['company_id'];
+        $distributorScopeId = null;
+        if (($authInfo['operator_type'] ?? '') == 'distributor') {
+            $distributorScopeId = (int) $authInfo['distributor_id'];
+        }
+
+        $service = new ActivityEnterpriseBehaviorLogService();
+        $result = $service->getAggregatedStatsForAdmin($companyId, (int) $activityId, $distributorScopeId);
+
+        return $this->response->array($result);
+    }
+
+    /**
+     * 下载活动企业行为统计（Excel）
+     *
+     * @param int $activityId
+     */
+    public function downloadActivityEnterpriseBehaviorStats($activityId, Request $request)
+    {
+        $authInfo = app('auth')->user()->get();
+        $companyId = (int) $authInfo['company_id'];
+        $distributorScopeId = null;
+        if (($authInfo['operator_type'] ?? '') == 'distributor') {
+            $distributorScopeId = (int) $authInfo['distributor_id'];
+        }
+
+        $filter = [
+            'activity_id' => (int) $activityId,
+            'company_id' => $companyId,
+            'operator_id' => (int) ($authInfo['operator_id'] ?? 0),
+        ];
+        if ($distributorScopeId !== null) {
+            $filter['distributor_id'] = $distributorScopeId;
+        }
+
+        // 提前校验活动与统计可访问性，避免提交无效导出任务
+        $activitiesService = new ActivitiesService();
+        $activityFilter = [
+            'company_id' => $companyId,
+            'id' => (int) $activityId,
+        ];
+        if ($distributorScopeId !== null) {
+            $activityFilter['distributor_id'] = $distributorScopeId;
+        }
+        $activitiesService->getInfo($activityFilter);
+        $service = new ActivityEnterpriseBehaviorLogService();
+        $service->getAggregatedStatsForAdmin($companyId, (int) $activityId, $distributorScopeId);
+
+        $gotoJob = (new ExportFileJob(
+            'employee_purchase_activity_scan_stats',
+            $companyId,
+            $filter,
+            $filter['operator_id']
+        ))->onQueue('slow');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+
+        return response()->json(['status' => true]);
     }
 
     /**
@@ -364,6 +510,8 @@ class Activity extends Controller
      *     @SWG\Parameter( name="relative_limitfee", in="formData", description="亲友可使用额度", type="integer", required=false),
      *     @SWG\Parameter( name="minimum_amount", in="formData", description="订单最低金额", type="integer", required=true),
      *     @SWG\Parameter( name="close_modify_hours_after_activity", in="formData", description="活动结束后多少小时内可以修改收货地址", type="integer", required=true),
+     *     @SWG\Parameter( name="is_passphrase_enabled", in="formData", description="是否开启口令通道 0/1", type="integer", required=false),
+     *     @SWG\Parameter( name="passphrase_enterprises", in="formData", description="传此字段则整表替换口令企业数据(JSON 数组)，结构同创建；关闭口令时会清空口令企业表", type="string", required=false),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -382,10 +530,25 @@ class Activity extends Controller
         $companyId = $authInfo['company_id'];
         $distributor_id = $authInfo['distributor_id'];
         $operator_id = $authInfo['operator_id'];
-        $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description',);
-        $params['if_relative_join'] = isset($params['if_relative_join']) && ($params['if_relative_join'] === 'true' || $params['if_relative_join'] === '1') ? 1 : 0;
-        $params['if_share_limitfee'] = isset($params['if_share_limitfee']) && ($params['if_share_limitfee'] === 'true' || $params['if_share_limitfee'] === '1') ? 1 : 0;
+        $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description', 'is_passphrase_enabled', 'passphrase_enterprises');
+        // 与 createActivity 一致：JSON 常传整数 1/0 或布尔，勿仅用 === '1'（否则 if_relative_join 恒为 0，亲友配置保存后不生效）
+        $params['if_relative_join'] = isset($params['if_relative_join']) && ($params['if_relative_join'] === 'true' || $params['if_relative_join'] === '1' || $params['if_relative_join'] === 1 || $params['if_relative_join'] === true) ? 1 : 0;
+        $params['if_share_limitfee'] = isset($params['if_share_limitfee']) && ($params['if_share_limitfee'] === 'true' || $params['if_share_limitfee'] === '1' || $params['if_share_limitfee'] === 1 || $params['if_share_limitfee'] === true) ? 1 : 0;
         $params['is_discount_description_enabled'] = isset($params['is_discount_description_enabled']) && ($params['is_discount_description_enabled'] === 'true' || $params['is_discount_description_enabled'] === '1' || $params['is_discount_description_enabled'] === 1 || $params['is_discount_description_enabled'] === true) ? 1 : 0;
+        $params['__passphrase_sync'] = 'none';
+        if (array_key_exists('passphrase_enterprises', $params)) {
+            $params['__passphrase_sync'] = 'replace';
+        }
+        if (array_key_exists('is_passphrase_enabled', $params)) {
+            $params['is_passphrase_enabled'] = isset($params['is_passphrase_enabled']) && ($params['is_passphrase_enabled'] === 'true' || $params['is_passphrase_enabled'] === '1' || $params['is_passphrase_enabled'] === 1 || $params['is_passphrase_enabled'] === true) ? 1 : 0;
+            if (!$params['is_passphrase_enabled']) {
+                $params['__passphrase_sync'] = 'clear';
+            }
+        }
+        if (!array_key_exists('is_passphrase_enabled', $params)) {
+            $existingActivity = (new ActivitiesService())->getInfo(['company_id' => $companyId, 'id' => (int) $activityId]);
+            $params['is_passphrase_enabled'] = !empty($existingActivity['is_passphrase_enabled']) ? 1 : 0;
+        }
         $rules = [
             'name' => ['required', '请输入活动名称'],
             'title' => ['required', '请输入活动标题'],
@@ -396,12 +559,12 @@ class Activity extends Controller
             'display_time' => ['required', '请选择活动预热时间'],
             'employee_begin_time' => ['required', '请选择员工购买开始时间'],
             'employee_end_time' => ['required', '请选择员工购买结束时间'],
-            'employee_limitfee' => ['required', '请输入员工可使用额度'],
+            'employee_limitfee' => ['exclude_if:is_passphrase_enabled,1|required|integer|min:1', '员工可使用额度须大于 0（单位：分）'],
             'invite_limit' => ['required_if:if_relative_join,1', '请输入员工可邀请亲友人数上限'],
             'relative_begin_time' => ['required_if:if_relative_join,1', '请选择亲友购买开始时间'],
             'relative_end_time' => ['required_if:if_relative_join,1', '请选择亲友购买结束时间'],
             'if_share_limitfee' => ['required_if:if_relative_join,1', '请选择亲友是否共享员工额度'],
-            'relative_limitfee' => ['required_if:if_share_limitfee,0', '请填写亲友可使用额度'],
+            'relative_limitfee' => ['exclude_if:is_passphrase_enabled,1|exclude_unless:if_relative_join,1|exclude_if:if_share_limitfee,1|required|integer|min:1', '亲友可使用额度须大于 0（单位：分）'],
             'minimum_amount' => ['required', '请填写订单最低金额'],
             'close_modify_hours_after_activity' => ['required', '请填写活动结束后多少小时内可以修改收货地址'],
         ];
@@ -1024,6 +1187,140 @@ class Activity extends Controller
 
         $activitiesService = new ActivitiesService();
         $result = $activitiesService->getActivityUsers($filter, $page, $pageSize);
+
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/employeepurchase/passphrase-codes/generate",
+     *     summary="批量生成口令编码",
+     *     tags={"内购"},
+     *     description="8 位数字+英文大小写。新建活动可不传 activity_id：与本公司下已有口令去重，企业须为本公司（及店铺可见）内购企业；编辑活动可传 activity_id：与该活动已保存口令去重，企业须为活动参与企业",
+     *     operationId="generatePassphraseCodes",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter(
+     *         name="body",
+     *         in="body",
+     *         required=true,
+     *         @SWG\Schema(
+     *             type="object",
+     *             required={"enterprise_ids"},
+     *             @SWG\Property( property="activity_id", type="integer", description="活动ID，新建可不传或传0；不传则按公司维度去重" ),
+     *             @SWG\Property( property="enterprise_ids", type="array", description="企业ID列表", @SWG\Items(type="integer") ),
+     *             @SWG\Property( property="count", type="integer", description="每个企业生成条数，默认1，最大50" ),
+     *         )
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功",
+     *         @SWG\Schema(
+     *             @SWG\Property( property="data", type="object",
+     *                 @SWG\Property( property="list", type="array",
+     *                     @SWG\Items(
+     *                         type="object",
+     *                         @SWG\Property( property="enterprise_id", type="integer" ),
+     *                         @SWG\Property( property="passphrase_codes", type="array", @SWG\Items(type="string") ),
+     *                     ),
+     *                 ),
+     *             ),
+     *         ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/EmployeePurchaseErrorRespones") ) )
+     * )
+     */
+    public function generatePassphraseCodes(Request $request)
+    {
+        return $this->doGeneratePassphraseCodes($request, 0);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/employeepurchase/activity/{activityId}/passphrase-codes/generate",
+     *     summary="批量生成口令编码（路径带活动ID，兼容旧调用）",
+     *     tags={"内购"},
+     *     description="与 POST /employeepurchase/passphrase-codes/generate 相同，activityId 以路径为准（忽略 body 内 activity_id）",
+     *     operationId="generatePassphraseCodesByActivity",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="activityId", in="path", description="活动ID", type="integer", required=true),
+     *     @SWG\Parameter(
+     *         name="body",
+     *         in="body",
+     *         required=true,
+     *         @SWG\Schema(
+     *             type="object",
+     *             required={"enterprise_ids"},
+     *             @SWG\Property( property="enterprise_ids", type="array", @SWG\Items(type="integer") ),
+     *             @SWG\Property( property="count", type="integer" ),
+     *         )
+     *     ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功",
+     *         @SWG\Schema(
+     *             @SWG\Property( property="data", type="object",
+     *                 @SWG\Property( property="list", type="array",
+     *                     @SWG\Items(
+     *                         type="object",
+     *                         @SWG\Property( property="enterprise_id", type="integer" ),
+     *                         @SWG\Property( property="passphrase_codes", type="array", @SWG\Items(type="string") ),
+     *                     ),
+     *                 ),
+     *             ),
+     *         ),
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/EmployeePurchaseErrorRespones") ) )
+     * )
+     */
+    public function generatePassphraseCodesByActivity($activityId, Request $request)
+    {
+        return $this->doGeneratePassphraseCodes($request, (int) $activityId);
+    }
+
+    /**
+     * @param int $activityIdFromPath 大于 0 时优先使用路径活动ID
+     */
+    private function doGeneratePassphraseCodes(Request $request, $activityIdFromPath)
+    {
+        $authInfo = app('auth')->user()->get();
+        $companyId = (int) $authInfo['company_id'];
+        $distributorScopeId = null;
+        if (($authInfo['operator_type'] ?? '') == 'distributor') {
+            $distributorScopeId = (int) $authInfo['distributor_id'];
+        }
+
+        $bodyActivity = $request->input('activity_id');
+        if ($bodyActivity === null || $bodyActivity === '') {
+            $bodyActivityId = 0;
+        } else {
+            $bodyActivityId = (int) $bodyActivity;
+        }
+        $activityId = $activityIdFromPath > 0 ? $activityIdFromPath : $bodyActivityId;
+
+        $rawIds = $request->input('enterprise_ids');
+        if (is_string($rawIds)) {
+            $decoded = json_decode($rawIds, true);
+            $enterpriseIds = is_array($decoded) ? $decoded : array_filter(explode(',', $rawIds));
+        } elseif (is_array($rawIds)) {
+            $enterpriseIds = $rawIds;
+        } else {
+            $enterpriseIds = [];
+        }
+
+        $count = $request->input('count', 1);
+        if ($count === null || $count === '') {
+            $count = 1;
+        }
+        $count = (int) $count;
+
+        $activitiesService = new ActivitiesService();
+        $result = $activitiesService->generatePassphraseCodesForEnterprises(
+            $companyId,
+            $enterpriseIds,
+            $count,
+            $activityId,
+            $distributorScopeId
+        );
 
         return $this->response->array($result);
     }

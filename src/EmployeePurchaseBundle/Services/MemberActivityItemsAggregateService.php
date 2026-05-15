@@ -50,12 +50,16 @@ class MemberActivityItemsAggregateService
 
             $aggregateInfo = $this->entityRepository->getInfo(['company_id' => $companyId, 'enterprise_id' => $enterpriseId, 'activity_id' => $activityId, 'user_id' => $userId, 'item_id' => $itemId]);
             if (!$aggregateInfo) {
-                if ($activityItem['limit_fee'] > 0 && $activityItem['limit_fee'] < $fee ) {
-                    throw new ResourceException('商品超过限额');
+                $qtyExceed = $activityItem['limit_num'] > 0 && $num > $activityItem['limit_num'];
+                $feeExceed = $activityItem['limit_fee'] > 0 && $fee > $activityItem['limit_fee'];
+                if ($qtyExceed && $feeExceed) {
+                    throw new ResourceException(EmployeePurchaseItemLimitValidator::MSG_FEE);
                 }
-
-                if ($activityItem['limit_num'] > 0 && $activityItem['limit_num'] < $num ) {
-                    throw new ResourceException('商品超过限购数量');
+                if ($feeExceed) {
+                    throw new ResourceException(EmployeePurchaseItemLimitValidator::MSG_FEE);
+                }
+                if ($qtyExceed) {
+                    throw new ResourceException(EmployeePurchaseItemLimitValidator::MSG_NUM);
                 }
 
                 $data = [
@@ -74,12 +78,16 @@ class MemberActivityItemsAggregateService
                     'aggregate_num' => $aggregateInfo['aggregate_num'] + $num,
                 ];
 
-                if ($activityItem['limit_fee'] > 0 && $activityItem['limit_fee'] < $data['aggregate_fee']) {
-                    throw new ResourceException('商品超过限额');
+                $qtyExceed = $activityItem['limit_num'] > 0 && $data['aggregate_num'] > $activityItem['limit_num'];
+                $feeExceed = $activityItem['limit_fee'] > 0 && $data['aggregate_fee'] > $activityItem['limit_fee'];
+                if ($qtyExceed && $feeExceed) {
+                    throw new ResourceException(EmployeePurchaseItemLimitValidator::MSG_FEE);
                 }
-
-                if ($activityItem['limit_num'] > 0 && $activityItem['limit_num'] < $data['aggregate_num']) {
-                    throw new ResourceException('商品超过限购数量');
+                if ($feeExceed) {
+                    throw new ResourceException(EmployeePurchaseItemLimitValidator::MSG_FEE);
+                }
+                if ($qtyExceed) {
+                    throw new ResourceException(EmployeePurchaseItemLimitValidator::MSG_NUM);
                 }
 
                 $filter = [

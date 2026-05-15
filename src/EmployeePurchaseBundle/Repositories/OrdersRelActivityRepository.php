@@ -25,7 +25,7 @@ use Dingo\Api\Exception\ResourceException;
 class OrdersRelActivityRepository extends EntityRepository
 {
     public $table = "employee_purchase_orders_rel_activity";
-    public $cols = ['order_id', 'company_id', 'enterprise_id', 'activity_id', 'user_id', 'if_share_store', 'close_modify_time'];
+    public $cols = ['order_id', 'company_id', 'enterprise_id', 'activity_id', 'user_id', 'if_share_store', 'close_modify_time', 'participate_quota_order_consumed'];
     /**
      * 新增
      *

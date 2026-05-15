@@ -24,6 +24,7 @@ use Dingo\Api\Exception\ResourceException;
 use EmployeePurchaseBundle\Services\EmployeesService;
 use EmployeePurchaseBundle\Services\MemberActivityAggregateService;
 use EmployeePurchaseBundle\Services\ActivitiesService;
+use EmployeePurchaseBundle\Services\PassphraseVerifiedRedisService;
 use EmployeePurchaseBundle\Services\RelativesService;
 use MembersBundle\Services\MemberService;
 
@@ -37,7 +38,8 @@ class Employee extends BaseController
      *     description="获取邮箱验证码",
      *     operationId="sendEmailVcode",
      *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
-     *     @SWG\Parameter( name="enterprise_id", in="query", description="enterprise_id", required=true, type="integer"),
+     *     @SWG\Parameter( name="enterprise_id", in="query", description="当前认证的内购企业 ID（推荐）；与收件邮箱后缀须一致。未传时须传 distributor_id 且该店铺下后缀唯一命中一家企业", required=false, type="integer"),
+     *     @SWG\Parameter( name="distributor_id", in="query", description="店铺 ID；无 enterprise_id 时用于解析企业（非扫码进店场景）", required=false, type="integer"),
      *     @SWG\Parameter( name="email", in="query", description="邮箱地址", required=true, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
@@ -53,7 +55,6 @@ class Employee extends BaseController
 
         $params = $request->all('email', 'distributor_id', 'enterprise_id');
         $rules = [
-            // 'enterprise_id' => ['required', '企业ID不能为空'],
             'email' => ['required|email', '收件邮箱格式不正确'],
         ];
         $error = validator_params($params, $rules);
@@ -122,6 +123,7 @@ class Employee extends BaseController
      *     operationId="authentication",
      *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
      *     @SWG\Parameter( name="enterprise_id", in="formData", description="enterprise_id", required=true, type="integer"),
+     *     @SWG\Parameter( name="activity_id", in="formData", description="当前内购活动ID；传入则绑定成功后写行为流水 bind，供管理端 bind_user_count 统计", required=false, type="integer"),
      *     @SWG\Parameter( name="employee_id", in="formData", description="员工ID", required=true, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
@@ -136,7 +138,7 @@ class Employee extends BaseController
         // ID: 53686f704578
         $authInfo = $request->get('auth');
 
-        $params = $request->all('enterprise_id', 'employee_id', 'auth_type', 'email', 'mobile');
+        $params = $request->all('enterprise_id', 'activity_id', 'employee_id', 'auth_type', 'email', 'mobile');
         $rules = [
             'enterprise_id' => ['required', '企业ID必填'],
             'employee_id' => ['required_if:auth_type,mobile,account', '员工ID必填'],
@@ -180,9 +182,13 @@ class Employee extends BaseController
      *               @SWG\Property( property="invited_num", type="integer", example="1"),
      *               @SWG\Property( property="is_employee", type="integer", example="1"),
      *               @SWG\Property( property="is_relative", type="integer", example="0"),
-     *               @SWG\Property( property="limit_fee", type="integer", example="100"),
-     *               @SWG\Property( property="aggregate_fee", type="integer", example="10"),
-     *               @SWG\Property( property="left_fee", type="integer", example="90"),
+     *               @SWG\Property( property="limit_fee", type="integer", example="100", description="分。未开口令=员工/亲友额度上限；开口令=口令表 passphrase_limitfee（每人上限），不要求员工/亲友身份" ),
+     *               @SWG\Property( property="aggregate_fee", type="integer", example="10", description="分。未开口令=用户(或共享池)已用；开口令=当前用户在活动+企业下已用" ),
+     *               @SWG\Property( property="left_fee", type="integer", example="90", description="分。开口令=当前用户剩余可买额度" ),
+     *               @SWG\Property( property="is_passphrase_enabled", type="integer", example="0", description="是否开启口令通道 0/1"),
+     *               @SWG\Property( property="passphrase_user_verified", type="integer", example="0", description="当前登录用户是否已在该活动+企业下口令校验成功（Redis 标记）；未开口令或未登录恒为 0" ),
+     *               @SWG\Property( property="passphrase_participate_quota", type="integer", description="口令通道可参与名额，无绑定时为 null" ),
+     *               @SWG\Property( property="passphrase_limitfee", type="integer", description="与 limit_fee 一致(分)；开口令时与口令表配置一致" ),
      *          ),
      *     )),
      *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/EmployeePurchaseErrorRespones") ) )
@@ -222,12 +228,45 @@ class Employee extends BaseController
         $result['name'] = $activity['name'];
         $result['title'] = $activity['title'];
         $result['share_pic'] = $activity['share_pic'];
+        $result['pic'] = $activity['pic'];
         $result['if_relative_join'] = $activity['if_relative_join'];
         $result['invite_limit'] = $activity['invite_limit'];
         $result['relative_begin_time'] = $activity['relative_begin_time'];
         $result['relative_end_time'] = $activity['relative_end_time'];
 
+        $ppSummary = $activityService->getPassphraseClientSummary(
+            $companyId,
+            (int) $params['activity_id'],
+            (int) $params['enterprise_id'],
+            $activity
+        );
+        $result['is_passphrase_enabled'] = $ppSummary['is_passphrase_enabled'];
+        $result['passphrase_participate_quota'] = $ppSummary['passphrase_participate_quota'];
+        if (!empty($ppSummary['is_passphrase_enabled'])) {
+            $result['passphrase_limitfee'] = $ppSummary['passphrase_limitfee'] !== null
+                ? (int) $ppSummary['passphrase_limitfee']
+                : (int) ($result['limit_fee'] ?? 0);
+        } else {
+            $result['passphrase_limitfee'] = $ppSummary['passphrase_limitfee'];
+        }
+
+        $result['passphrase_user_verified'] = !empty($ppSummary['is_passphrase_enabled']) && $userId > 0
+            ? ((new PassphraseVerifiedRedisService())->isVerified(
+                $companyId,
+                (int) $params['activity_id'],
+                (int) $params['enterprise_id'],
+                $userId
+            ) ? 1 : 0)
+            : 0;
+
         $employeesService = new EmployeesService();
+        $employeesService->ensurePassphraseEmployeeFromVerifiedActivity(
+            $companyId,
+            (int) $params['enterprise_id'],
+            (int) $params['activity_id'],
+            $userId
+        );
+
         $employee = $employeesService->check($companyId, $params['enterprise_id'], $userId);
         $result['is_employee'] = 0;
         $result['is_relative'] = 0;
@@ -321,6 +360,7 @@ class Employee extends BaseController
         $relativesService = new RelativesService();
         $memberService = new MemberService();
         $memberActivityAggregateService = new MemberActivityAggregateService();
+        // 管理端开启口令时隐藏亲友配置，口令活动下通常无邀请亲友数据；每行仍统一走 getAggregateFee（与非口令活动一致）
         // 包含已失效的用户
         $result = $relativesService->lists(['company_id' => $companyId, 'enterprise_id' => $params['enterprise_id'], 'employee_user_id' => $userId, 'activity_id' => $params['activity_id']], '*', $page, $pageSize, ['created' => 'DESC']);
         if ($result['list']) {
@@ -336,7 +376,7 @@ class Employee extends BaseController
                     $result['list'][$key]['limit_fee'] = $rowAggregate['limit_fee'] ?? 0;
                     $result['list'][$key]['used_limitfee'] = $rowAggregate['aggregate_fee'] ?? 0;
                     $result['list'][$key]['left_fee'] = $rowAggregate['left_fee'] ?? 0;
-                }catch (\Exception $e) {
+                } catch (\Exception $e) {
                     $result['list'][$key]['limit_fee'] = 0;
                     $result['list'][$key]['used_limitfee'] = 0;
                     $result['list'][$key]['left_fee'] = 0;

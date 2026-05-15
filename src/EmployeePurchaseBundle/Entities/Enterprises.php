@@ -102,7 +102,7 @@ class Enterprises
     /**
      * @var string
      *
-     * @ORM\Column(name="auth_type", type="string", length=20, options={"comment":"登录类型,mobile:手机号,account:账号,email:邮箱,qr_code:二维码"})
+     * @ORM\Column(name="auth_type", type="string", length=20, options={"comment":"登录类型,mobile:手机号,account:账号,email:邮箱,qr_code:二维码,no_verify:无需验证"})
      */
     private $auth_type = 'mobile';
 
