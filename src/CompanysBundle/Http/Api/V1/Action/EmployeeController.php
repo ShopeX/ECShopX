@@ -196,9 +196,12 @@ class EmployeeController extends BaseController
                 // }
                 if ($params['distributor_ids']) {
                     foreach($params['distributor_ids'] as $v) {
-                        $filter['distributor_ids|contains'] = '"distributor_id":"'.$v['distributor_id'].'"';
-                        $filter['is_distributor_main'] = 1;
-                        $operatorInfo = $operatorsService->lists($filter);
+                        $dupFilter = [
+                            'company_id' => $params['company_id'],
+                            'is_distributor_main' => 1,
+                            'distributor_ids' => $this->distributorIdsJsonContainsPatterns($v['distributor_id']),
+                        ];
+                        $operatorInfo = $operatorsService->lists($dupFilter);
                         if ($operatorInfo['total_count'] >= 1) {
                             throw new StoreResourceFailedException('店铺【'.$v['name'].'】已经有超级管理员！');
                         }
@@ -384,9 +387,11 @@ class EmployeeController extends BaseController
                 $operatorsService = new OperatorsService();
                 if ($params['distributor_ids']) {
                     foreach($params['distributor_ids'] as $v) {
-                        $checkFilter = [];
-                        $checkFilter['distributor_ids|contains'] = '"distributor_id":"'.$v['distributor_id'].'"';
-                        $checkFilter['is_distributor_main'] = 1;
+                        $checkFilter = [
+                            'company_id' => app('auth')->user()->get('company_id'),
+                            'is_distributor_main' => 1,
+                            'distributor_ids' => $this->distributorIdsJsonContainsPatterns($v['distributor_id']),
+                        ];
                         $operatorInfo = $operatorsService->lists($checkFilter);
                         if (($operatorInfo['total_count'] >= 1) && ($operator_id != $operatorInfo['list'][0]['operator_id'])) {
                             throw new StoreResourceFailedException('店铺【'.$v['name'].'】已经有超级管理员！');
@@ -669,7 +674,7 @@ class EmployeeController extends BaseController
         }
 
         if ($distributor_id) {
-            $filter['distributor_ids|contains'] = '"distributor_id":"'.$distributor_id.'"';
+            $filter['distributor_ids'] = $this->distributorIdsJsonContainsPatterns($distributor_id);
         }
 
         //配送员账号管理
@@ -678,8 +683,11 @@ class EmployeeController extends BaseController
             $distributorIds = $distributorRepository->getLists(['merchant_id'=>$merchantId,'company_id'=>$filter['company_id']],'distributor_id,merchant_id');
             $distributor_ids = [];
             foreach ($distributorIds as $d_id){
-                $distributor_ids[] = '"distributor_id":"'.$d_id['distributor_id'].'"';
+                foreach ($this->distributorIdsJsonContainsPatterns($d_id['distributor_id']) as $p) {
+                    $distributor_ids[] = $p;
+                }
             }
+            $distributor_ids = array_values(array_unique($distributor_ids));
             if($distributor_ids){
                 $filter['distributor_ids'] =$distributor_ids;
                 unset($filter['merchant_id']);
@@ -802,5 +810,25 @@ class EmployeeController extends BaseController
 
         $result = $this->employeeService->getInfoStaff($operator_id, $company_id);
         return $this->response->array($result);
+    }
+
+    /**
+     * operators.distributor_ids 为 json_encode 结果：数字 ID 常为 "distributor_id":123，
+     * 旧逻辑只匹配 "distributor_id":"123" 会漏数据。此处返回多段子串，由 OperatorsRepository::lists 做 OR contains。
+     * 使用 123} / 123, / 123] 等后缀，避免 "distributor_id":12 误匹配 129。
+     */
+    private function distributorIdsJsonContainsPatterns($distributorId): array
+    {
+        $id = (string) $distributorId;
+        if ($id === '') {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter([
+            '"distributor_id":"' . $id . '"',
+            '"distributor_id":' . $id . '}',
+            '"distributor_id":' . $id . ',',
+            '"distributor_id":' . $id . ']',
+        ])));
     }
 }

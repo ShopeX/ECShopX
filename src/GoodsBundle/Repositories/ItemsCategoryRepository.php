@@ -332,7 +332,7 @@ class ItemsCategoryRepository extends EntityRepository
                 }
             }
             $result['list'] = $criteria->select($columns)->execute()->fetchAll();
-            app('log')->debug("items_category lists sql =>:".$criteria->getSQL());
+            // app('log')->debug("items_category lists sql =>:".$criteria->getSQL());
         }
 
 
