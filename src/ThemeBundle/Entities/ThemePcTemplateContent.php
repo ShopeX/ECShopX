@@ -57,7 +57,7 @@ class ThemePcTemplateContent
     /**
      * @var string
      *
-     * @ORM\Column(name="name", type="string", length=20, options={"comment":"配置名称"})
+     * @ORM\Column(name="name", type="string", length=64, options={"comment":"配置名称"})
      */
     private $name;
 

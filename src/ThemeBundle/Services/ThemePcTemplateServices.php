@@ -40,13 +40,15 @@ class ThemePcTemplateServices
     public function lists($params)
     {
         $company_id = $params['company_id'];
+        $distributor_id = $params['distributor_id'] ?? 0;
         $page_type = $params['page_type'];
         $page_no = $params['page_no'];
         $page_size = $params['page_size'];
         $status = $params['status'];
 
         $filter = [
-            'company_id' => $company_id
+            'company_id' => $company_id,
+            'distributor_id' => (int)$distributor_id
         ];
         if (!empty($page_type)) {
             $filter['page_type'] = $page_type;
@@ -69,12 +71,13 @@ class ThemePcTemplateServices
      * @param int|null $exclude_template_id 排除的模板ID（编辑时使用）
      * @throws ResourceException
      */
-    private function checkIndexTemplateStatus($company_id, $page_type, $status, $exclude_template_id = null)
+    private function checkIndexTemplateStatus($company_id, $page_type, $status, $exclude_template_id = null, $distributor_id = 0)
     {
         // 只检查首页且启用状态的情况
         if ($page_type == 'index' && $status == 1) {
             $filter = [
                 'company_id' => $company_id,
+                'distributor_id' => (int)$distributor_id,
                 'page_type' => 'index',
                 'status' => 1,
             ];
@@ -100,8 +103,12 @@ class ThemePcTemplateServices
         $this->checkIndexTemplateStatus(
             $params['company_id'],
             $params['page_type'] ?? '',
-            $params['status'] ?? 2
+            $params['status'] ?? 2,
+            null,
+            $params['distributor_id'] ?? 0
         );
+
+        $params['distributor_id'] = $params['distributor_id'] ?? 0;
 
         $result = $this->themePcTemplateRepository->create($params);
 
@@ -130,6 +137,9 @@ class ThemePcTemplateServices
         // 确定 page_type：优先使用传入的值，否则使用数据库中的值
         $page_type = $params['page_type'] ?? $pc_template_info['page_type'];
         $status = $params['status'] ?? null;
+        $distributor_id = array_key_exists('distributor_id', $params)
+            ? (int)$params['distributor_id']
+            : (int)($pc_template_info['distributor_id'] ?? 0);
 
         // 检查首页模板启用状态
         if (!empty($status)) {
@@ -137,7 +147,8 @@ class ThemePcTemplateServices
                 $company_id,
                 $page_type,
                 $status,
-                $theme_pc_template_id
+                $theme_pc_template_id,
+                $distributor_id
             );
         }
 
@@ -159,6 +170,10 @@ class ThemePcTemplateServices
 
             if (!empty($params['page_type'])) {
                 $data['page_type'] = $params['page_type'];
+            }
+
+            if (array_key_exists('distributor_id', $params)) {
+                $data['distributor_id'] = (int)$params['distributor_id'];
             }
 
             $result = $this->themePcTemplateRepository->updateOneBy($filter, $data);

@@ -87,12 +87,100 @@ class ThemePcTemplateContentServices
     }
 
     /**
+     * 获取 PC 模板装修内容
+     */
+    public function decorationContent($params)
+    {
+        $page_type = $params['page_type'] ?? '';
+        if (in_array($page_type, ['header', 'footer'])) {
+            return $this->formatDecorationContent($this->detail([
+                'company_id' => $params['company_id'],
+                'page_name' => $page_type,
+            ]));
+        }
+
+        return $this->pageDecorationDetail($params);
+    }
+
+    private function pageDecorationDetail($params)
+    {
+        $company_id = $params['company_id'];
+        $theme_pc_template_id = $params['theme_pc_template_id'] ?? '';
+        $distributor_id = $params['distributor_id'] ?? 0;
+        $page_type = $params['page_type'] ?? 'index';
+        $page_id = $params['page_id'] ?? '';
+        $filter = [
+            'company_id' => $company_id,
+        ];
+
+        if (!empty($theme_pc_template_id)) {
+            $filter['theme_pc_template_id'] = $theme_pc_template_id;
+        } else if ($page_type == 'custom' && !empty($page_id)) {
+            $filter['theme_pc_template_id'] = $page_id;
+        } else {
+            $filter['page_type'] = $page_type == 'home' ? 'index' : $page_type;
+            $filter['status'] = 1;
+            $filter['distributor_id'] = (int)$distributor_id;
+        }
+
+        $theme_pc_template_info = $this->themePcTemplateRepository->getInfo($filter);
+        if (empty($theme_pc_template_info)) {
+            return $this->emptyDecorationContent();
+        }
+
+        $_filter = [
+            'theme_pc_template_id' => $theme_pc_template_info['theme_pc_template_id']
+        ];
+        $list = $this->themePcTemplateContentRepository->getLists($_filter, '*', 1, -1, ['theme_pc_template_content_id' => 'ASC']);
+        if (empty($list)) {
+            return $this->emptyDecorationContent();
+        }
+
+        $target = null;
+        foreach ($list as $value) {
+            if (strpos((string)($value['params'] ?? ''), 'ECX_SP_WEB_DECORATION_DSL_V1') !== false) {
+                $target = $value;
+                break;
+            }
+        }
+
+        if ($target === null) {
+            $target = $list[0];
+        }
+
+        return $this->formatDecorationContent($target);
+    }
+
+    private function formatDecorationContent($row)
+    {
+        if (empty($row) || !is_array($row)) {
+            return $this->emptyDecorationContent();
+        }
+
+        return [
+            'id' => $row['theme_pc_template_content_id'] ?? $row['id'] ?? 0,
+            'name' => $row['name'] ?? '',
+            'config' => $row['params'] ?? $row['config'] ?? '',
+        ];
+    }
+
+    private function emptyDecorationContent()
+    {
+        return [
+            'id' => 0,
+            'name' => '',
+            'config' => '',
+        ];
+    }
+
+    /**
      * 获取模版内容
      */
     public function templateContent($params)
     {
         $company_id = $params['company_id'];
         $theme_pc_template_id = $params['theme_pc_template_id'];
+        $distributor_id = $params['distributor_id'] ?? 0;
         $filter = [
             'company_id' => $company_id,
         ];
@@ -101,6 +189,7 @@ class ThemePcTemplateContentServices
         } else {
             $filter['page_type'] = $params['page_type'];
             $filter['status'] = 1;
+            $filter['distributor_id'] = (int)$distributor_id;
         }
 
         $data = [];

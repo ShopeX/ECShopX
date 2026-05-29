@@ -27,6 +27,7 @@ use LaravelDoctrine\Extensions\SoftDeletes\SoftDeletes;
  * @ORM\Table(name="theme_pc_template", options={"comment":"pc页面装修"},
  * indexes={
  *         @ORM\Index(name="idx_company_id", columns={"company_id"}),
+ *         @ORM\Index(name="idx_company_distributor", columns={"company_id", "distributor_id"}),
  *     },)
  * @ORM\Entity(repositoryClass="ThemeBundle\Repositories\ThemePcTemplateRepository")
  */
@@ -49,6 +50,13 @@ class ThemePcTemplate
      * @ORM\Column(name="company_id", type="bigint")
      */
     private $company_id;
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="distributor_id", type="integer", options={"comment":"店铺ID", "default":0})
+     */
+    private $distributor_id = 0;
 
     /**
      * @var string
@@ -134,6 +142,30 @@ class ThemePcTemplate
     public function getCompanyId()
     {
         return $this->company_id;
+    }
+
+    /**
+     * Set distributorId.
+     *
+     * @param int $distributorId
+     *
+     * @return ThemePcTemplate
+     */
+    public function setDistributorId($distributorId = 0)
+    {
+        $this->distributor_id = (int)$distributorId;
+
+        return $this;
+    }
+
+    /**
+     * Get distributorId.
+     *
+     * @return int
+     */
+    public function getDistributorId()
+    {
+        return $this->distributor_id;
     }
 
     /**

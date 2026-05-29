@@ -110,6 +110,8 @@ return [
     'sms_send_limit' => env("SMS_SEND_LIMIT", 5), // 一种短信验证码在一天里的发送上限
 
     'shop_admin_url' => env('SHOP_ADMIN_URL', ''),// 管理后台地址,结尾带斜杠
+    'appcenter_base_url' => env('APPCENTER_BASE_URL', env('TEST_MODE', false) ? 'https://account.uc.ex-sandbox.com' : 'https://account.shopex.cn'),
+    'appcenter_channel' => env('APPCENTER_CHANNEL', 'ecshopx'),
 
     'employee_purchanse_sharecode_expire' => env('EMPLOYEE_PURCHANSE_SHARECODE_EXPIRE', 86400),// 员工内购分享cocd过期时间（秒数）
     'employee_purchanse_buy_inactive' => env('EMPLOYEE_PURCHANSE_BUY_INACTIVE', true), // 没有开启的内购活动不能下单

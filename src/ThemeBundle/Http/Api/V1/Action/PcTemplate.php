@@ -47,6 +47,13 @@ class PcTemplate extends Controller
      *         type="string",
      *     ),
      *     @SWG\Parameter(
+     *         name="distributor_id",
+     *         in="query",
+     *         description="店铺ID，不传默认0",
+     *         required=false,
+     *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
      *         name="page_no",
      *         in="query",
      *         description="页号",
@@ -76,6 +83,7 @@ class PcTemplate extends Controller
      *                      @SWG\Items(
      *                          type="object",
      *                          @SWG\Property(property="company_id", type="int"),
+     *                          @SWG\Property(property="distributor_id", type="int"),
      *                          @SWG\Property(property="created", type="string"),
      *                          @SWG\Property(property="deleted_at", type="string"),
      *                          @SWG\Property(property="page_type", type="string"),
@@ -102,6 +110,7 @@ class PcTemplate extends Controller
         $page_no = $request->input('page_no', 1);
         $page_size = $request->input('page_size', 20);
         $status = $request->input('status');
+        $distributor_id = $request->input('distributor_id');
 
         $params = [
             'company_id' => $company_id,
@@ -110,6 +119,9 @@ class PcTemplate extends Controller
             'page_size' => $page_size,
             'status' => $status,
         ];
+        if ($distributor_id !== null) {
+            $params['distributor_id'] = (int)$distributor_id;
+        }
 
         $theme_pc_template_services = new ThemePcTemplateServices();
         $result = $theme_pc_template_services->lists($params);
@@ -160,6 +172,13 @@ class PcTemplate extends Controller
      *         type="string",
      *     ),
      *     @SWG\Parameter(
+     *         name="distributor_id",
+     *         in="formData",
+     *         description="店铺ID，不传默认0",
+     *         required=false,
+     *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
      *         name="status",
      *         in="formData",
      *         description="是否启用",
@@ -176,6 +195,7 @@ class PcTemplate extends Controller
      *                 @SWG\Items(
      *                     type="object",
      *                     @SWG\Property(property="company_id", type="int"),
+     *                     @SWG\Property(property="distributor_id", type="int"),
      *                     @SWG\Property(property="created", type="string"),
      *                     @SWG\Property(property="deleted_at", type="string"),
      *                     @SWG\Property(property="page_type", type="string"),
@@ -201,9 +221,11 @@ class PcTemplate extends Controller
         $page_type = $request->input('page_type');
         $version = $request->input('version', 'v1.0.1');
         $status = $request->input('status', 2);
+        $distributor_id = $request->input('distributor_id', 0);
 
         $params = [
             'company_id' => $company_id,
+            'distributor_id' => (int)$distributor_id,
             'template_title' => $template_title,
             'template_description' => $template_description,
             'page_type' => $page_type,
@@ -213,7 +235,7 @@ class PcTemplate extends Controller
         $rules = [
             'template_title' => ['required', '缺少页面名称'],
             'template_description' => ['required', '缺少页面描述'],
-            'page_type' => ['required|in:index,custom', '缺少页面类型'],
+            'page_type' => ['required|in:index,custom,product_list', '缺少页面类型'],
             'version' => ['required', '缺少版本号']
         ];
         $error = validator_params($params, $rules);
@@ -277,6 +299,13 @@ class PcTemplate extends Controller
      *         type="string",
      *     ),
      *     @SWG\Parameter(
+     *         name="distributor_id",
+     *         in="formData",
+     *         description="店铺ID，不传不更新",
+     *         required=false,
+     *         type="integer",
+     *     ),
+     *     @SWG\Parameter(
      *         name="status",
      *         in="formData",
      *         description="是否启用",
@@ -293,6 +322,7 @@ class PcTemplate extends Controller
      *                 @SWG\Items(
      *                     type="object",
      *                     @SWG\Property(property="company_id", type="int"),
+     *                     @SWG\Property(property="distributor_id", type="int"),
      *                     @SWG\Property(property="created", type="string"),
      *                     @SWG\Property(property="deleted_at", type="string"),
      *                     @SWG\Property(property="page_type", type="string"),
@@ -317,6 +347,7 @@ class PcTemplate extends Controller
         $template_description = $request->input('template_description');
         $page_type = $request->input('page_type');
         $status = $request->input('status');
+        $distributor_id = $request->input('distributor_id');
 
         $params = [
             'company_id' => $company_id,
@@ -326,6 +357,9 @@ class PcTemplate extends Controller
             'page_type' => $page_type,
             'status' => $status
         ];
+        if ($distributor_id !== null) {
+            $params['distributor_id'] = (int)$distributor_id;
+        }
         $rules = [
             'theme_pc_template_id' => ['required', '缺少theme_pc_template_id'],
         ];
@@ -582,6 +616,30 @@ class PcTemplate extends Controller
     }
 
     /**
+     * 获取 PC 模板装修内容
+     */
+    public function getDecorationContent(Request $request)
+    {
+        $company_id = app('auth')->user()->get('company_id');
+        $page_name = $request->input('page_name', 'page');
+        $theme_pc_template_id = $request->input('theme_pc_template_id');
+        $page_type = $request->input('page_type');
+        $distributor_id = (int)$request->input('distributor_id', 0);
+
+        $params = [
+            'company_id' => $company_id,
+            'page_name' => $page_name,
+            'theme_pc_template_id' => $theme_pc_template_id,
+            'page_type' => $page_type,
+            'distributor_id' => $distributor_id,
+        ];
+        $service = new ThemePcTemplateContentServices();
+        $result = $service->decorationContent($params);
+
+        return $this->response->array($result);
+    }
+
+    /**
      * @SWG\Post(
      *     path="/pctemplate/saveTemplateContent",
      *     summary="保存pc模版内容",
@@ -651,9 +709,15 @@ class PcTemplate extends Controller
         $result = app('redis')->connection('companys')->get('pc_login_page:'.$companyId);
         if (!$result) {
             $result['logo'] = '';
+            $result['logo_light'] = '';
+            $result['logo_dark'] = '';
             $result['background'] = '';
         } else {
             $result = json_decode($result, true);
+            $result['logo_light'] = $result['logo_light'] ?? ($result['logo'] ?? '');
+            $result['logo_dark'] = $result['logo_dark'] ?? ($result['logo'] ?? '');
+            $result['logo'] = $result['logo'] ?? ($result['logo_light'] ?? '');
+            $result['background'] = $result['background'] ?? '';
         }
         return $this->response->array($result);
     }
@@ -662,9 +726,13 @@ class PcTemplate extends Controller
     {
         $companyId = app('auth')->user()->get('company_id');
         // 整理参数
+        $logoLight = $request->input('logo_light', $request->input('logo', ''));
+        $logoDark = $request->input('logo_dark', $request->input('logo', ''));
         $params = [
-            'logo' => $request->input('logo'),
-            'background' => $request->input('background'),
+            'logo' => $request->input('logo', $logoLight),
+            'logo_light' => $logoLight,
+            'logo_dark' => $logoDark,
+            'background' => $request->input('background', ''),
         ];
         app('redis')->connection('companys')->set('pc_login_page:'.$companyId, json_encode($params));
         return $this->response->array(['status' => true]);

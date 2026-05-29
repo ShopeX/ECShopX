@@ -1533,6 +1533,18 @@ class PagesTemplateServices
 
     public function getWidgetItems($params)
     {
+        $eActivityId = (int) ($params['e_activity_id'] ?? 0);
+        if ($eActivityId > 0 && !empty($params['company_id'])) {
+            $activitiesService = new ActivitiesService();
+            $activityInfo = $activitiesService->entityRepository->getInfo([
+                'id' => $eActivityId,
+                'company_id' => $params['company_id'],
+            ]);
+            if (!empty($activityInfo['distributor_id'])) {
+                $params['distributor_id'] = (int) $activityInfo['distributor_id'];
+            }
+        }
+
         if ($params['data_type'] != 'sales') {
             if (!isset($params['data_value']) || !$params['data_value']) {
                 return [

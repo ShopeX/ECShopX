@@ -26,80 +26,6 @@ class PcTemplate extends Controller
 {
     /**
      * @SWG\Get(
-     *     path="/h5app/wxapp/pctemplate/getHeaderOrFooter",
-     *     summary="获取pc模板头尾部",
-     *     tags={"模板"},
-     *     description="获取pc模板头尾部",
-     *     operationId="getHeaderOrFooter",
-     *     @SWG\Parameter(
-     *         name="Authorization",
-     *         in="header",
-     *         description="JWT验证token",
-     *         required=true,
-     *         type="string",
-     *     ),
-     *     @SWG\Parameter(
-     *         name="page_name",
-     *         in="query",
-     *         description="页面名称",
-     *         required=true,
-     *         type="string",
-     *     ),
-     *     @SWG\Parameter(
-     *         name="company_id",
-     *         in="query",
-     *         description="公司编号",
-     *         required=true,
-     *         type="integer",
-     *     ),
-     *     @SWG\Response(
-     *         response=200,
-     *         description="成功返回结构",
-     *         @SWG\Schema(
-     *             @SWG\Property(
-     *                 property="data",
-     *                 type="array",
-     *                 @SWG\Items(
-     *                     type="object",
-     *                     @SWG\Property(property="company_id", type="int"),
-     *                     @SWG\Property(property="created", type="string"),
-     *                     @SWG\Property(property="name", type="string"),
-     *                     @SWG\Property(property="params", type="string"),
-     *                     @SWG\Property(property="theme_pc_template_content_id", type="int"),
-     *                     @SWG\Property(property="theme_pc_template_id", type="int"),
-     *                     @SWG\Property(property="updated", type="string"),
-     *                 )
-     *             ),
-     *          ),
-     *     ),
-     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/ThemeErrorRespones") ) )
-     * )
-     */
-    public function getHeaderOrFooter(Request $request)
-    {
-        $company_id = $request->get('company_id');
-        $page_name = $request->input('page_name');
-        $params = [
-            'company_id' => $company_id,
-            'page_name' => $page_name,
-        ];
-        $rules = [
-            'company_id' => ['required', '缺少company_id'],
-            'page_name' => ['required', '缺少page_name'],
-        ];
-        $error = validator_params($params, $rules);
-        if ($error) {
-            throw new ResourceException($error);
-        }
-
-        $service = new ThemePcTemplateContentServices();
-        $result = $service->detail($params);
-
-        return $this->response->array($result);
-    }
-
-    /**
-     * @SWG\Get(
      *     path="/h5app/wxapp/pctemplate/getTemplateContent",
      *     summary="获取pc模板页面内容",
      *     tags={"模板"},
@@ -113,11 +39,18 @@ class PcTemplate extends Controller
      *         type="string",
      *     ),
      *     @SWG\Parameter(
-     *         name="theme_pc_template_id",
+     *         name="page_type",
      *         in="query",
-     *         description="主题PC模板ID",
+     *         description="页面类型 home/header/footer/custom/product_list",
      *         required=true,
-     *         type="integer",
+     *         type="string",
+     *     ),
+     *     @SWG\Parameter(
+     *         name="page_id",
+     *         in="query",
+     *         description="页面ID，自定义页传模板ID",
+     *         required=false,
+     *         type="string",
      *     ),
      *     @SWG\Parameter(
      *         name="company_id",
@@ -132,16 +65,10 @@ class PcTemplate extends Controller
      *         @SWG\Schema(
      *             @SWG\Property(
      *                 property="data",
-     *                 type="array",
-     *                 @SWG\Items(
-     *                     type="array",
-     *                     @SWG\Items(
-     *                         type="object",
-     *                         @SWG\Property(property="config", type="string"),
-     *                         @SWG\Property(property="name", type="string"),
-     *                   )
-     *               ),
-     *            ),
+     *                 type="object",
+     *                 @SWG\Property(property="id", type="integer"),
+     *                 @SWG\Property(property="name", type="string"),
+     *                 @SWG\Property(property="config", type="string")
      *         ),
      *     ),
      *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/ThemeErrorRespones") ) )
@@ -151,17 +78,19 @@ class PcTemplate extends Controller
     {
         $authInfo = $request->get('auth');
         $company_id = $request->get('company_id');
-        $page_type = $request->get('page_type', 'index');
-        $theme_pc_template_id = $request->input('theme_pc_template_id', '');
+        $page_type = $request->get('page_type', 'home');
+        $page_id = $request->input('page_id', '');
 
         $params = [
             'company_id' => $company_id,
             'page_type' => $page_type,
+            'page_id' => $page_id,
             'user_id' => $authInfo['user_id'] ?? 0,
-            'theme_pc_template_id' => $theme_pc_template_id,
         ];
         $rules = [
             'company_id' => ['required', '缺少company_id'],
+            'page_type' => ['required|in:home,header,footer,custom,product_list', '缺少或错误的page_type'],
+            'page_id' => ['required_if:page_type,custom', '缺少page_id'],
         ];
         $error = validator_params($params, $rules);
         if ($error) {
@@ -169,7 +98,7 @@ class PcTemplate extends Controller
         }
 
         $service = new ThemePcTemplateContentServices();
-        $result = $service->templateContent($params);
+        $result = $service->decorationContent($params);
 
         return $this->response->array($result);
     }
@@ -181,9 +110,15 @@ class PcTemplate extends Controller
         $result = app('redis')->connection('companys')->get('pc_login_page:'.$companyId);
         if (!$result) {
             $result['logo'] = '';
+            $result['logo_light'] = '';
+            $result['logo_dark'] = '';
             $result['background'] = '';
         } else {
             $result = json_decode($result, true);
+            $result['logo_light'] = $result['logo_light'] ?? ($result['logo'] ?? '');
+            $result['logo_dark'] = $result['logo_dark'] ?? ($result['logo'] ?? '');
+            $result['logo'] = $result['logo'] ?? ($result['logo_light'] ?? '');
+            $result['background'] = $result['background'] ?? '';
         }
         return $this->response->array($result);
     }

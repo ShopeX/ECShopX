@@ -108,8 +108,8 @@ class OpenScreenAd extends Controller
             'show_time' => ['required|in:always,first', '请选择曝光时间'],
             'waiting_time' => ['required', '请设置秒数'],
             // 'app' => ['required', '请选择应用端'],
-            'start_time' => ['required', '请选择展示开始时间'],
-            'end_time' => ['required', '请选择展示结束时间'],
+            // 'start_time' => ['required', '请选择展示开始时间'],
+            // 'end_time' => ['required', '请选择展示结束时间'],
         ];
         $error = validator_params($params, $rules);
         if ($error) {

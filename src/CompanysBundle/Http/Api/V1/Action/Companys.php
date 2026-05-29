@@ -28,6 +28,11 @@ use SystemLinkBundle\Services\ThirdSettingService;
 use CompanysBundle\Services\ShopsService;
 use CompanysBundle\Services\Shops\WxShopsService;
 use DistributionBundle\Services\DistributorService;
+use PromotionsBundle\Services\SmsDriver\ShopexSmsClient;
+use ThirdPartyBundle\Services\SaasCertCentre\CertClient;
+use ThirdPartyBundle\Services\SaasCertCentre\CertService;
+use ThirdPartyBundle\Services\AppsCenter\AppsCenterService;
+use CompanysBundle\Ego\PrismEgo;
 
 class Companys extends BaseController
 {
@@ -635,5 +640,108 @@ class Companys extends BaseController
         return $this->response->array($result);
     }
 
-    
+    public function loginUsercenter(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+
+        $code = $request->get('code');
+        if (!$code) {
+            throw new ResourceException('缺少授权code');
+        }
+
+        $prismEgo = new PrismEgo();
+        $res = $prismEgo->getToken($code);
+        app('log')->debug($res);
+        $res['access_token'] = $res['access_token'] ?? '';
+        $res['data'] = $res['data'] ?? [];
+
+        if (!$res['access_token'] || !$res['data']) {
+            throw new ResourceException('登录失败');
+        }
+
+        //保存 access_token 和 refresh_token
+        $prismData = $res['data'];
+        $accessToken = $res['access_token'];
+        $expiresIn = $res['expires_in'];
+        $refreshToken = $res['refresh_token'];
+        $refreshExpires = $res['refresh_expires'];
+        $shopexSmsClient = new ShopexSmsClient($companyId, $prismData['passport_uid']);
+        $shopexSmsClient->setAccessToken($accessToken, $expiresIn);
+        $shopexSmsClient->setRefreshToken($refreshToken, $refreshExpires);
+
+        $this->companysService->updateInfo(['company_id' => $companyId], [
+            'passport_uid' => $prismData['passport_uid'],
+            'eid' => $prismData['eid'],
+        ]);
+
+        // 获取shopex证书
+        $certService = new CertService(new CertClient($companyId, $prismData['passport_uid']));
+        $certService->getAouthCert();
+
+        return $this->response->array(['status' => true]);
+    }
+
+    public function getUsercenterOuthorizeurl()
+    {
+        $callback = rtrim(config('common.shop_admin_url'), '/') . '/setting/ShangPai/usercenter';
+        $data = array(
+            'response_type' => 'code',
+            'client_id' => config('common.prism_key'),
+            'redirect_uri' => $callback,
+            'view' => 'oauth_usercenter'
+        );
+        $query = http_build_query($data);
+        $shopexUrl = config('common.openapi_shopex_url');
+        $url = "{$shopexUrl}/oauth/authorize?{$query}";
+        return $this->response->array(['url' => $url]);
+    }
+
+    public function getAppcenterGoods()
+    {
+        $appsCenterService = new AppsCenterService();
+        $data = $appsCenterService->fetchEmbedGoods();
+        $data['open_base_url'] = rtrim(config('common.appcenter_base_url'), '/');
+
+        return $this->response->array($data);
+    }
+
+    public function getAppcenterUrl()
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        $shopexUid = $this->companysService->getPassportUidByCompanyId($companyId);
+        if (!$shopexUid) {
+            throw new ResourceException('缺少 Shopex ID，请先完成用户中心登录');
+        }
+
+        $certService = new CertService(false, $companyId, $shopexUid);
+        $certSetting = $certService->getCertSetting();
+        $nodeId = trim((string) ($certSetting['node_id'] ?? ''));
+        $token = trim((string) ($certSetting['token'] ?? ''));
+        if (!$nodeId) {
+            throw new ResourceException('缺少节点号，请先完成证书绑定');
+        }
+        if (!$token) {
+            throw new ResourceException('缺少证书 token，请先完成证书绑定');
+        }
+
+        $appsCenterService = new AppsCenterService();
+        $callback = $appsCenterService->buildAppcenterUrl([
+            'channel' => config('common.appcenter_channel'),
+            'shopexid' => $shopexUid,
+            'sys_node_id' => $nodeId,
+            'callback' => rtrim(config('common.shop_admin_url'), '/'),
+        ], $token);
+
+        $data = array(
+            'response_type' => 'code',
+            'client_id' => config('common.prism_key'),
+            'redirect_uri' => $callback,
+            'view' => 'oauth_usercenter'
+        );
+        $query = http_build_query($data);
+        $shopexUrl = config('common.openapi_shopex_url');
+        $url = "{$shopexUrl}/oauth/authorize?{$query}";
+
+        return $this->response->array(['url' => $url]);
+    }
 }

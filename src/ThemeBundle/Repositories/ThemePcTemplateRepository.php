@@ -25,7 +25,7 @@ use Dingo\Api\Exception\ResourceException;
 class ThemePcTemplateRepository extends EntityRepository
 {
     public $table = "theme_pc_template";
-    public $cols = ['theme_pc_template_id','company_id','template_title','template_description','page_type','status','version','created','updated','deleted_at'];
+    public $cols = ['theme_pc_template_id','company_id','distributor_id','template_title','template_description','page_type','status','version','created','updated','deleted_at'];
     
     public $module = 'theme_pc_template'; // 多语言对应的模块
     public $primaryKey = 'theme_pc_template_id'; // 主键，对应data_id
@@ -159,7 +159,7 @@ class ThemePcTemplateRepository extends EntityRepository
     private function setColumnNamesData($entity, $params)
     {
         foreach ($this->cols as $col) {
-            if (isset($params[$col])) {
+            if (array_key_exists($col, $params)) {
                 $fun = "set". str_replace(" ", "", ucwords(str_replace("_", " ", $col)));
                 if (method_exists($entity, $fun)) {
                     $entity->$fun($params[$col]);

@@ -253,10 +253,12 @@ class PickupLocation extends Controller
             unset($filter['distributor_id']);
         }
 
-        // if (isset($params['rel_distributor_id']) && $params['rel_distributor_id']) {
-        //     $filter['rel_distributor_id'] = $params['rel_distributor_id'];
-        //     unset($filter['distributor_id']); //总部
-        // }
+        if (isset($params['rel_distributor_id']) && $params['rel_distributor_id']) {
+            $filter['rel_distributor_id'] = $params['rel_distributor_id'];
+            if ($operatorType != 'distributor') {
+                unset($filter['distributor_id']);
+            }
+        }
 
         if (isset($params['name']) && $params['name']) {
             $filter['name|contains'] = $params['name'];
@@ -436,17 +438,29 @@ class PickupLocation extends Controller
             throw new ResourceException($error);
         }
 
-        $filter['company_id'] = app('auth')->user()->get('company_id');
+        $companyId = app('auth')->user()->get('company_id');
         $operatorType = app('auth')->user()->get('operator_type');
-        $filter['distributor_id'] = 0;
+        $distributorId = 0;
         if ($operatorType == 'distributor') { //店铺端
-            $filter['distributor_id'] = $request->get('distributor_id');
+            $distributorId = $request->get('distributor_id');
         }
-        $filter['id'] = $params['id'];
-        $filter['rel_distributor_id'] = $params['rel_distributor_id'];
 
         $pickupLocationService = new PickupLocationService();
-        $pickupLocationService->updateBy($filter, ['rel_distributor_id' => 0]);
+        $ids = is_array($params['id']) ? $params['id'] : [$params['id']];
+        foreach ($ids as $id) {
+            $filter = [
+                'company_id' => $companyId,
+                'id' => $id,
+                'rel_distributor_id' => $params['rel_distributor_id'],
+            ];
+            if ($operatorType == 'distributor') {
+                $filter['distributor_id'] = $distributorId;
+            }
+            $affected = $pickupLocationService->updateBy($filter, ['rel_distributor_id' => 0]);
+            if (!$affected) {
+                throw new ResourceException(trans('DistributionBundle/Services/PickupLocationService.pickup_location_not_exist'));
+            }
+        }
 
         return $this->response->array(['status' => true]);
     }

@@ -21,8 +21,7 @@ $api->version('v1', function ($api) {
         $api->get('/wxapp/pagestemplate/gettdk', ['name' => '获取tdk配置信息', 'as' => 'front.pagestemplate.gettdk', 'uses' => 'PagesTemplate@getTdk']);
         $api->get('/wxapp/openscreenad', ['name' => '开屏广告', 'as' => 'front.pagestemplate.openscreenad', 'uses' => 'OpenScreenAd@getInfo']);
         //pc模板
-        $api->get('/wxapp/pctemplate/getHeaderOrFooter', ['name' => '获取pc模板头尾部', 'as' => 'front.pctemplate.getHeaderOrFooter', 'uses' => 'PcTemplate@getHeaderOrFooter']);
-        $api->get('/wxapp/pctemplate/getTemplateContent', ['name' => '获取pc模板页面内容', 'as' => 'front.pctemplate.getTemplateContent', 'uses' => 'PcTemplate@getTemplateContent']);
+        $api->get('/wxapp/pctemplate/getTemplateContent', ['name' => '获取pc模板装修内容', 'as' => 'front.pctemplate.getTemplateContent', 'uses' => 'PcTemplate@getTemplateContent']);
         $api->get('/wxapp/pctemplate/loginPage/setting', ['name' => '获取pc登录页设置', 'as' => 'front.pctemplate.getLoginPageSetting', 'uses' => 'PcTemplate@getLoginPageSetting']);
 
         //会员中心分享设置
@@ -33,6 +32,10 @@ $api->version('v1', function ($api) {
 
         // 广告列表
         $api->get('/wxapp/ad/list', ['name' => '获取广告列表', 'as' => 'front.ad.list', 'uses' => 'PagesAdPlace@getAdList']);
+
+        // Web 端商城导航菜单（前台只读）
+        $api->get('/web/menus/{key}', ['name' => 'Web导航菜单树', 'as' => 'front.webmenu.tree', 'uses' => 'WebMenuFrontAction@show']);
+        $api->get('/wxapp/web/menus/id/{id}', ['name' => '根据ID获取Web导航菜单树', 'as' => 'front.webmenu.tree.byId', 'uses' => 'WebMenuFrontAction@showById']);
     });
 });
 /* ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ taro小程序、h5、app端、pc端 ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ */

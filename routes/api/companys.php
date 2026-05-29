@@ -35,6 +35,11 @@ $api->version('v1', function($api) {
         $api->post('/company/activate', ['name' => '系统激活', 'as' => 'company.active', 'uses'=>'Companys@active']);
         $api->get('/company/activate', ['name' => '获取激活信息', 'as' => 'company.activate.info', 'uses'=>'Companys@getActivateInfo']);
         $api->get('/company/applications', ['name' => '获取授权应用', 'as' => 'company.application.list', 'uses'=>'Companys@getApplications']);
+
+        $api->get('/company/usercenter/authorizeurl', ['name' => '用户中心授权连接', 'as' => 'company.usercenter.authorizeurl.get', 'uses'=>'Companys@getUsercenterOuthorizeurl']);
+        $api->get('/company/usercenter/login', ['name' => '用户中心登录', 'as' => 'company.usercenter.login', 'uses'=>'Companys@loginUsercenter']);
+        $api->get('/company/appcenter/goods', ['name' => '获取应用中心商品', 'as' => 'company.appcenter.goods.get', 'uses'=>'Companys@getAppcenterGoods']);
+        $api->get('/company/appcenter/url', ['name' => '获取应用中心URL地址', 'as' => 'company.appcenter.url.get', 'uses'=>'Companys@getAppcenterUrl']);
     });
 
     $api->group(['namespace' => 'CompanysBundle\Http\Api\V1\Action', 'middleware' => ['api.auth', 'activated', 'shoplog'], 'providers' => 'jwt'], function($api) {

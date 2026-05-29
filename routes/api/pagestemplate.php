@@ -30,6 +30,7 @@ $api->version('v1', function ($api) {
         $api->get('/pctemplate/getHeaderOrFooter', ['name' => '获取头部尾部', 'as' => 'pctemplate.getHeaderOrFooter', 'uses' => 'PcTemplate@getHeaderOrFooter']);
         $api->post('/pctemplate/saveHeaderOrFooter', ['name' => '头尾部保存', 'as' => 'pctemplate.saveHeaderOrFooter', 'uses' => 'PcTemplate@saveHeaderOrFooter']);
         $api->get('/pctemplate/getTemplateContent', ['name' => '获取pc模板内容', 'as' => 'pctemplate.getTemplateContent', 'uses' => 'PcTemplate@getTemplateContent']);
+        $api->get('/pctemplate/getDecorationContent', ['name' => '获取pc模板装修内容', 'as' => 'pctemplate.getDecorationContent', 'uses' => 'PcTemplate@getDecorationContent']);
         $api->post('/pctemplate/saveTemplateContent', ['name' => '保存pc模板内容', 'as' => 'pctemplate.saveTemplateContent', 'uses' => 'PcTemplate@saveTemplateContent']);
 
         $api->get('/pctemplate/loginPage/setting', ['name' => '获取pc登录页设置', 'as' => 'pctemplate.getLoginPageSetting', 'uses' => 'PcTemplate@getLoginPageSetting']);
@@ -70,5 +71,19 @@ $api->version('v1', function ($api) {
         $api->post('/adplace/carousel/submit/{id}', ['name' => '提交审核广告位', 'as' => 'pages.adplace.carousel.submit', 'uses' => 'PagesAdPlace@submit']);
         $api->post('/adplace/carousel/audit/{id}', ['name' => '审核广告位', 'as' => 'pages.adplace.carousel.audit', 'uses' => 'PagesAdPlace@audit']);
         $api->post('/adplace/carousel/withdraw/{id}', ['name' => '撤回广告位审核申请', 'as' => 'pages.adplace.carousel.withdraw', 'uses' => 'PagesAdPlace@withdraw']);
+    });
+
+    // Web 端商城导航菜单（管理端）
+    $api->group(['namespace' => 'ThemeBundle\Http\Api\V1\Action', 'middleware' => ['api.auth', 'activated', 'shoplog'], 'providers' => 'jwt'], function ($api) {
+        $api->get('/web-menus', ['name' => 'Web菜单列表', 'as' => 'webmenu.lists', 'uses' => 'WebMenuAction@index']);
+        $api->post('/web-menus', ['name' => '新建Web菜单', 'as' => 'webmenu.create', 'uses' => 'WebMenuAction@store']);
+        $api->get('/web-menus/{id}', ['name' => 'Web菜单详情', 'as' => 'webmenu.detail', 'uses' => 'WebMenuAction@show']);
+        $api->put('/web-menus/{id}', ['name' => '编辑Web菜单', 'as' => 'webmenu.update', 'uses' => 'WebMenuAction@update']);
+        $api->delete('/web-menus/{id}', ['name' => '删除Web菜单', 'as' => 'webmenu.delete', 'uses' => 'WebMenuAction@destroy']);
+
+        $api->post('/web-menus/{id}/items', ['name' => '新增Web菜单项', 'as' => 'webmenu.items.create', 'uses' => 'WebMenuItemAction@store']);
+        $api->put('/web-menus/{id}/items/sort', ['name' => 'Web菜单项排序', 'as' => 'webmenu.items.sort', 'uses' => 'WebMenuItemAction@batchSort']);
+        $api->put('/web-menus/{id}/items/{itemId}', ['name' => '编辑Web菜单项', 'as' => 'webmenu.items.update', 'uses' => 'WebMenuItemAction@update']);
+        $api->delete('/web-menus/{id}/items/{itemId}', ['name' => '删除Web菜单项', 'as' => 'webmenu.items.delete', 'uses' => 'WebMenuItemAction@destroy']);
     });
 });

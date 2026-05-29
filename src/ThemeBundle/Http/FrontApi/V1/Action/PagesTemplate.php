@@ -27,6 +27,7 @@ use TdksetBundle\Services\TdkGlobalService;
 use ThemeBundle\Services\PagesTemplateServices;
 use ThemeBundle\Services\PagesTemplateSetServices;
 use DistributionBundle\Entities\Distributor;
+use EmployeePurchaseBundle\Services\ActivityItemsService;
 use GoodsBundle\Services\ItemsService;
 
 class PagesTemplate extends Controller
@@ -72,6 +73,13 @@ class PagesTemplate extends Controller
      *         required=true,
      *         type="integer",
      *     ),
+     *     @SWG\Parameter(
+     *         name="e_activity_id",
+     *         in="query",
+     *         description="内购活动 ID；传入时按活动店铺查商品并附加 employee_purchase_activity_items 活动价",
+     *         required=false,
+     *         type="integer",
+     *     ),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -101,9 +109,10 @@ class PagesTemplate extends Controller
     public function getWidgetItems(Request $request)
     {
         $authInfo = $request->get('auth');
-        $params = $request->all('regionauth_id', 'distributor_id', 'data_type', 'data_value', 'num', 'page', 'pageSize', 'sort_gte');
+        $params = $request->all('regionauth_id', 'distributor_id', 'data_type', 'data_value', 'num', 'page', 'pageSize', 'sort_gte', 'e_activity_id');
         $params['company_id'] = $authInfo['company_id'];
         $params['user_id'] = $authInfo['user_id'] ?? 0;
+        $eActivityId = (int) ($params['e_activity_id'] ?? 0);
         $pages_template_services = new PagesTemplateServices();
         $result = $pages_template_services->getWidgetItems($params);
 
@@ -112,6 +121,12 @@ class PagesTemplate extends Controller
             $itemsService = new ItemsService();
             if ($result['data']) {
                 $result['data'] = $itemsService->applyMultiSpecTotalStoreForItemList($result['data']);
+            }
+            if ($eActivityId > 0 && $result['data']) {
+                $activityItemsService = new ActivityItemsService();
+                $wrapped = ['list' => $result['data']];
+                $wrapped = $activityItemsService->getItemsListActityPrice($wrapped, $eActivityId, (int) $params['company_id']);
+                $result['data'] = $wrapped['list'];
             }
             if ($result['data']) {
                 $result['data'] = $itemsService->getItemsListMemberPrice($result['data'], $authInfo['user_id'], $params['company_id']);
