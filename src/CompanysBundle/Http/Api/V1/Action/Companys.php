@@ -681,14 +681,14 @@ class Companys extends BaseController
         return $this->response->array(['status' => true]);
     }
 
-    public function getUsercenterOuthorizeurl()
+    public function getUsercenterOuthorizeurl(Request $request)
     {
-        $callback = rtrim(config('common.shop_admin_url'), '/') . '/setting/ShangPai/usercenter';
+        $callback = rtrim(config('common.shop_admin_url'), '/') . '/applications/shopex/appcenter';
         $data = array(
             'response_type' => 'code',
             'client_id' => config('common.prism_key'),
             'redirect_uri' => $callback,
-            'view' => 'oauth_usercenter'
+            'view' => 'ydsaas_iframe_login',
         );
         $query = http_build_query($data);
         $shopexUrl = config('common.openapi_shopex_url');
@@ -705,7 +705,7 @@ class Companys extends BaseController
         return $this->response->array($data);
     }
 
-    public function getAppcenterUrl()
+    public function getAppcenterUrl(Request $request)
     {
         $companyId = app('auth')->user()->get('company_id');
         $shopexUid = $this->companysService->getPassportUidByCompanyId($companyId);
@@ -725,23 +725,19 @@ class Companys extends BaseController
         }
 
         $appsCenterService = new AppsCenterService();
-        $callback = $appsCenterService->buildAppcenterUrl([
+        $url = $appsCenterService->buildAppcenterUrl([
             'channel' => config('common.appcenter_channel'),
             'shopexid' => $shopexUid,
             'sys_node_id' => $nodeId,
-            'callback' => rtrim(config('common.shop_admin_url'), '/'),
+            'identity' => rtrim(config('common.certi_base_url'), '/') . '/api/company/appcenter/bind/'.$companyId,
         ], $token);
 
-        $data = array(
-            'response_type' => 'code',
-            'client_id' => config('common.prism_key'),
-            'redirect_uri' => $callback,
-            'view' => 'oauth_usercenter'
-        );
-        $query = http_build_query($data);
-        $shopexUrl = config('common.openapi_shopex_url');
-        $url = "{$shopexUrl}/oauth/authorize?{$query}";
-
         return $this->response->array(['url' => $url]);
+    }
+
+    public function bindAppcenter($company_id, Request $request)
+    {
+        // todo 绑定逻辑待确认
+        return $this->response->array(['status' => true]);
     }
 }

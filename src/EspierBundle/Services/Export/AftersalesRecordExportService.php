@@ -52,7 +52,7 @@ class AftersalesRecordExportService implements ExportFileInterface
         'description' => '申请描述',
         'reason' => '申请售后原因',
         'refuse_reason' => '拒绝原因',
-        'memo' => '售后备注',
+        // 'memo' => '售后备注',
         'salesman_name' => '导购',
         'order_holder' => '订单分类',
         'supplier_name' => '来源供应商',

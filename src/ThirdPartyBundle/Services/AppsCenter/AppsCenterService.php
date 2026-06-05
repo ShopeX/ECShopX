@@ -50,7 +50,7 @@ class AppsCenterService
         $query = [
             'shopexid' => (string) $params['shopexid'],
             'sys_node_id' => (string) $params['sys_node_id'],
-            'callback' => (string) $params['callback'],
+            'identity' => (string) $params['identity'],
             'embed' => '1',
             'nonce' => bin2hex(random_bytes(8)),
             'timestamp' => (string) time(),

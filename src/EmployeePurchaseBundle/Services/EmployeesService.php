@@ -904,26 +904,12 @@ EOF;
                 'member_mobile' => $memberMobile !== '' ? $memberMobile : ($memberEmail !== '' ? $memberEmail : (string) $userId),
                 'distributor_id' => $enterpriseInfo['distributor_id'],
             ];
-            switch ($enterpriseInfo['auth_type']) {
-                case 'email':
-                    if ($memberEmail === '') {
-                        throw new ResourceException('请先绑定邮箱');
-                    }
-                    $data['name'] = $memberEmail;
-                    $data['email'] = $memberEmail;
-                    break;
-                case 'no_verify':
-                    $mob = $memberMobile !== '' ? $memberMobile : (string) $userId;
-                    $data['name'] = '用户-'.substr($mob, -4);
-                    $data['mobile'] = $mob;
-                    break;
-                default:
-                    if ($memberMobile === '') {
-                        throw new ResourceException('请先绑定手机号');
-                    }
-                    $data['name'] = $memberMobile;
-                    $data['mobile'] = $memberMobile;
-                    break;
+            // 口令已验过即建档：身份由口令确认，不沿用企业 email/mobile 白名单对会员资料的约束
+            $mob = $memberMobile !== '' ? $memberMobile : (string) $userId;
+            $data['name'] = '用户-'.substr($mob, -4);
+            $data['mobile'] = $mob;
+            if ($memberEmail !== '') {
+                $data['email'] = $memberEmail;
             }
 
             $this->entityRepository->create($data);

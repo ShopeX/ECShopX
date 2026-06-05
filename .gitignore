@@ -35,3 +35,11 @@ doc/
 .tasks/
 storage/csv
 storage/excel
+
+.docker-dev/
+
+# 本地 Docker 开发（种子数据、补丁脚本等，勿提交）
+docker-dev/seed-*.sql
+docker-dev/patch-*.sql
+docker-dev/extract-weapp-staging.py
+docker-compose.override.yml

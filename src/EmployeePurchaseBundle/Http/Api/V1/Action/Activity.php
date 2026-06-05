@@ -105,7 +105,7 @@ class Activity extends Controller
         $companyId = $authInfo['company_id'];
         $distributor_id = $authInfo['distributor_id'];
         $operator_id = $authInfo['operator_id'];
-        $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description', 'is_passphrase_enabled', 'passphrase_enterprises');
+        $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'list_pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description', 'is_passphrase_enabled', 'passphrase_enterprises');
         $params['company_id'] = $companyId;
         // 处理布尔值参数：支持字符串 'true'/'1' 和整数 1/0
         $params['if_relative_join'] = isset($params['if_relative_join']) && ($params['if_relative_join'] === 'true' || $params['if_relative_join'] === '1' || $params['if_relative_join'] === 1 || $params['if_relative_join'] === true) ? 1 : 0;
@@ -117,6 +117,7 @@ class Activity extends Controller
             'title' => ['required', '请输入活动标题'],
             'pages_template_id' => ['required', '请选择活动首页关联模版'],
             'pic' => ['required', '请上传活动图片'],
+            'list_pic' => ['required', '请上传活动列表海报'],
             'share_pic' => ['required', '请上传活动分享图片'],
             'enterprise_id' => ['required', '请选择参与企业'],
             'display_time' => ['required', '请选择活动预热时间'],
@@ -530,7 +531,7 @@ class Activity extends Controller
         $companyId = $authInfo['company_id'];
         $distributor_id = $authInfo['distributor_id'];
         $operator_id = $authInfo['operator_id'];
-        $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description', 'is_passphrase_enabled', 'passphrase_enterprises');
+        $params = $request->all('name', 'title', 'pages_template_id', 'pic', 'list_pic', 'share_pic', 'enterprise_id', 'display_time', 'employee_begin_time', 'employee_end_time', 'employee_limitfee', 'if_relative_join', 'invite_limit', 'relative_begin_time', 'relative_end_time', 'if_share_limitfee', 'relative_limitfee', 'minimum_amount', 'close_modify_hours_after_activity', 'price_display_config', 'is_discount_description_enabled', 'discount_description', 'is_passphrase_enabled', 'passphrase_enterprises');
         // 与 createActivity 一致：JSON 常传整数 1/0 或布尔，勿仅用 === '1'（否则 if_relative_join 恒为 0，亲友配置保存后不生效）
         $params['if_relative_join'] = isset($params['if_relative_join']) && ($params['if_relative_join'] === 'true' || $params['if_relative_join'] === '1' || $params['if_relative_join'] === 1 || $params['if_relative_join'] === true) ? 1 : 0;
         $params['if_share_limitfee'] = isset($params['if_share_limitfee']) && ($params['if_share_limitfee'] === 'true' || $params['if_share_limitfee'] === '1' || $params['if_share_limitfee'] === 1 || $params['if_share_limitfee'] === true) ? 1 : 0;
@@ -554,6 +555,7 @@ class Activity extends Controller
             'title' => ['required', '请输入活动标题'],
             'pages_template_id' => ['required', '请选择活动首页关联模版'],
             'pic' => ['required', '请上传活动图片'],
+            'list_pic' => ['required', '请上传活动列表海报'],
             'share_pic' => ['required', '请上传活动分享图片'],
             'enterprise_id' => ['required', '请选择参与企业'],
             'display_time' => ['required', '请选择活动预热时间'],

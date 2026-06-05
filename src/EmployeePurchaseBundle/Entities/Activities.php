@@ -97,6 +97,13 @@ class Activities
     private $share_pic;
 
     /**
+     * @var string
+     *
+     * @ORM\Column(name="list_pic", type="string", options={"comment":"活动列表海报", "default": ""})
+     */
+    private $list_pic = '';
+
+    /**
      * @var json_array
      *
      * @ORM\Column(name="enterprise_id", type="simple_array", options={"comment":"参与企业ID"})
@@ -397,6 +404,30 @@ class Activities
     public function getSharePic()
     {
         return $this->share_pic;
+    }
+
+    /**
+     * Set listPic.
+     *
+     * @param string $listPic
+     *
+     * @return Activities
+     */
+    public function setListPic($listPic)
+    {
+        $this->list_pic = $listPic;
+
+        return $this;
+    }
+
+    /**
+     * Get listPic.
+     *
+     * @return string
+     */
+    public function getListPic()
+    {
+        return $this->list_pic;
     }
 
     /**
