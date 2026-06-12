@@ -60,17 +60,28 @@ class OpenScreenAd extends Controller
      */
     public function getInfo(Request $request)
     {
-        // CONST: 1E236443
-        $params = $request->all('company_id');
         $auth_info = $request->get('auth');
 
         $filter['company_id'] = $auth_info['company_id'];
         $filter['is_enable'] = 1;
-        $filter['start_time|lte'] = time();
-        $filter['end_time|gte'] = time();
         $OpenScreenAd = new OpenScreenAdServices();
         $data = $OpenScreenAd->lists($filter, '*', 1, 1);
         $result = !empty($data['list']) ? reset($data['list']) : [];
+
+        // 只有配置了开始/结束时间才校验；都是 0 表示不限期（管理端未传时间时的默认值）
+        if (!empty($result)) {
+            $now = time();
+            $startTime = (int) ($result['start_time'] ?? 0);
+            $endTime = (int) ($result['end_time'] ?? 0);
+            if (!($startTime === 0 && $endTime === 0)) {
+                if ($startTime > 0 && $startTime > $now) {
+                    $result = [];
+                } elseif ($endTime > 0 && $endTime < $now) {
+                    $result = [];
+                }
+            }
+        }
+
         if ($result) {
             $result['ad_url'] = json_decode($result['ad_url'], true);
         }

@@ -43,3 +43,5 @@ docker-dev/seed-*.sql
 docker-dev/patch-*.sql
 docker-dev/extract-weapp-staging.py
 docker-compose.override.yml
+
+.codegraph/

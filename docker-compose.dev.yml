@@ -50,6 +50,19 @@ services:
     networks:
       - ecshopx-dev-network
 
+  ecshopx-web-frontend:
+    image: node:20.19.0-alpine
+    container_name: ecshopx-web-frontend
+    restart: unless-stopped
+    working_dir: /data/httpd/ECShopX_web-frontend
+    command: sh -c "tail -f /dev/null"
+    volumes:
+      - ..:/data/httpd
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      - ecshopx-dev-network
+
 volumes:
   mysql_data:
     name: ecshopx-dev-mysql

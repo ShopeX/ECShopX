@@ -662,7 +662,7 @@ class CartService
             $memberpreference = true;
             $cartdata['shop_type'] = $cartdata['shop_type'] ?? '';
             if ($cartType != 'employee_purchase' && ($cartdata['shop_type'] != 'pointsmall' && $cartdata['shop_type'] != 'shop_offline')) {
-                $memberpreference = $this->checkCurrentMemberpreferenceByItemId($companyId, $userId, $itemId, $cartdata['shop_id'], false, $msg);
+                $memberpreference = $this->checkCurrentMemberpreferenceByItemId($companyId, $userId, $itemId, $msg, $cartdata['shop_id'], false);
             }
             if (!$memberpreference) {
                 $invalidCart[] = $cartdata;

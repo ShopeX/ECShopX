@@ -1370,7 +1370,7 @@ class OrderService
         $itemsCommissionService = new ItemsCommissionService();
         foreach ($this->orderItemList as $itemInfo) {
             if (!in_array($this->orderInterface->orderClass, ['pointsmall', 'employee_purchase'])) {
-                $memberpreference = $this->checkCurrentMemberpreferenceByItemId($orderData['company_id'], $orderData['user_id'], $itemInfo['itemId'], $orderData['distributor_id'], false, $msg);
+                $memberpreference = $this->checkCurrentMemberpreferenceByItemId($orderData['company_id'], $orderData['user_id'], $itemInfo['itemId'], $msg, $orderData['distributor_id'], false);
                 if (!$memberpreference) {
                     $orderData['extraTips'] = $msg;
                     if ($isCheck) {

@@ -1515,9 +1515,63 @@ class Members extends Controller
         if (!$memberRegSettingService->checkImageVcode($token, $companyId, $yzmcode, $type)) {
             throw new ResourceException(trans('MembersBundle/Members.image_captcha_error'));
         }
-        $memberRegSettingService->generateSmsVcode($mobile, $companyId, $type);
+        $debugVcode = $memberRegSettingService->generateSmsVcode($mobile, $companyId, $type);
 
-        return $this->response->array(['status' => true]);
+        $response = ['status' => true];
+        if (is_string($debugVcode)) {
+            $response['message'] = '短信调试模式已开启';
+            $response['debug_vcode'] = $debugVcode;
+        }
+        return $this->response->array($response);
+    }
+
+    /**
+     * @SWG\Get(
+     *     path="/member/verify",
+     *     summary="POS 会员手机号验证码校验并查询会员信息",
+     *     tags={"会员"},
+     *     description="POS 场景通过手机号和短信验证码校验会员身份，并返回会员信息，不生成前台会员登录态",
+     *     operationId="verifyMemberByMobileCode",
+     *     @SWG\Parameter(name="mobile", in="query", description="手机号", required=true, type="string"),
+     *     @SWG\Parameter(name="vcode", in="query", description="短信验证码", required=true, type="string"),
+     *     @SWG\Response(response=200, description="成功返回结构"),
+     *     @SWG\Response(response="default", description="错误返回结构", @SWG\Schema(type="array", @SWG\Items(ref="#/definitions/MembersErrorRespones")))
+     * )
+     */
+    public function verifyMember(Request $request)
+    {
+        $companyId = (int) app('auth')->user()->get('company_id');
+        $mobile = trim((string) $request->input('mobile', ''));
+        $vcode = trim((string) $request->input('vcode', ''));
+
+        if ($mobile === '' || !preg_match('/^1[3456789]\d{9}$/', $mobile)) {
+            throw new ResourceException(trans('MembersBundle/Members.mobile_error'));
+        }
+
+        if ($vcode === '') {
+            throw new ResourceException(trans('MembersBundle/Members.verification_code_required'));
+        }
+
+        if (!(new MemberRegSettingService())->checkSmsVcode($mobile, $companyId, $vcode, 'login')) {
+            throw new ResourceException(trans('MembersBundle/Members.sms_code_error'));
+        }
+
+        $memberInfo = $this->memberService->getInfoByMobile($companyId, $mobile);
+        if (empty($memberInfo['user_id'])) {
+            throw new ResourceException(trans('MembersBundle/Members.mobile_not_exists'));
+        }
+
+        return $this->response->array([
+            'data' => [
+                'user_id' => $memberInfo['user_id'],
+                'mobile' => $memberInfo['mobile'] ?? $mobile,
+                'username' => $memberInfo['username'] ?? '',
+                'user_card_code' => $memberInfo['user_card_code'] ?? '',
+                'avatar' => $memberInfo['avatar'] ?? '',
+                'member_name' => $memberInfo['username'] ?? '',
+                'member_mobile' => $memberInfo['mobile'] ?? $mobile,
+            ],
+        ]);
     }
 
     public function createMember(Request $request)
@@ -1531,13 +1585,13 @@ class Members extends Controller
             throw new ResourceException(trans('MembersBundle/Members.invalid_mobile'));
         }
 
-        /*if (!$postData['vcode']) {
+        if (empty($postData['vcode'])) {
             throw new ResourceException(trans('MembersBundle/Members.verification_code_required'));
         }
 
         if (!(new MemberRegSettingService())->checkSmsVcode($postData['mobile'], $companyId, $postData['vcode'], $postData['check_type'] ?? 'sign')) {
             throw new ResourceException(trans('MembersBundle/Members.sms_code_error'));
-        }*/
+        }
 
         $memberInfo = $this->memberService->getInfoByMobile((int)$companyId, (string)$postData['mobile']);
         if ($memberInfo) {
@@ -1559,7 +1613,7 @@ class Members extends Controller
         //新增-会员信息
         $memberInfo = [
             'company_id' => $companyId,
-            'username' => randValue(8),
+            'username' => $postData['name'] ?? randValue(8),
             'mobile' => $postData['mobile'],
             'grade_id' => $defaultGradeInfo['grade_id'],
             'password' => substr(str_shuffle('QWERTYUIOPASDFGHJKLZXCVBNM1234567890qwertyuiopasdfghjklzxcvbnm'), 5, 10),

@@ -48,7 +48,7 @@ class DistributorCartObject implements CartInterface
     public function checkItemParams($params)
     {
         // 检查是否是有效的会员优先购
-        $memberpreference = $this->checkCurrentMemberpreferenceByItemId($params['company_id'], $params['user_id'], $params['item_id'], $params['shop_id'], false, $msg);
+        $memberpreference = $this->checkCurrentMemberpreferenceByItemId($params['company_id'], $params['user_id'], $params['item_id'], $msg, $params['shop_id'], false);
         if (!$memberpreference) {
             throw new ResourceException($msg);
         }

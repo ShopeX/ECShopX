@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ECShopX 开发环境设置脚本（Docker 方式）
-# 使用单容器运行所有服务：PHP-FPM、Nginx、MySQL、Redis
-# 支持三个项目：ECShopX、ECShopX_admin-frontend、ECShopX_mobile-frontend
+# 主容器运行 PHP-FPM、Nginx、MySQL、Redis，Web 前端使用独立 Node 容器
+# 支持四个项目：ECShopX、ECShopX_admin-frontend、ECShopX_mobile-frontend、ECShopX_web-frontend
 
 set -e
 
@@ -17,6 +17,7 @@ PARENT_DIR="$(cd "$PROJECT_ROOT/.." && pwd)"
 
 # 容器配置
 CONTAINER_NAME="ecshopx-dev"
+WEB_CONTAINER_NAME="ecshopx-web-frontend"
 DOCKER_COMPOSE_FILE="$PROJECT_ROOT/docker-compose.dev.yml"
 
 # 数据库配置
@@ -197,6 +198,18 @@ is_container_running() {
     docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$" 2>/dev/null
 }
 
+is_web_container_running() {
+    docker ps --format '{{.Names}}' | grep -q "^${WEB_CONTAINER_NAME}$" 2>/dev/null
+}
+
+ensure_web_container_running() {
+    if ! is_web_container_running; then
+        log_error "Web 前端容器 $WEB_CONTAINER_NAME 未运行，请先启动 Docker Compose"
+        return 1
+    fi
+    return 0
+}
+
 # ===========================================
 # 检查容器是否存在（包括已停止的）
 # ===========================================
@@ -344,6 +357,62 @@ check_docker() {
 check_and_clone_frontend() {
     log_step "检查前端项目目录..."
     
+    # 检查 ECShopX_web-frontend
+    PC_DIR="$PARENT_DIR/ECShopX_web-frontend"
+    PC_REPO="https://gitee.com/ShopeX/ECShopX_web-frontend.git"
+    
+    if [ ! -d "$PC_DIR" ] || [ ! -f "$PC_DIR/package.json" ]; then
+        if [ ! -d "$PC_DIR" ]; then
+            log_warning "ECShopX_web-frontend 目录不存在"
+        else
+            log_warning "ECShopX_web-frontend 目录存在但缺少 package.json"
+        fi
+        
+        echo ""
+        echo -n "是否从 Gitee 克隆PC商城（ECShopX_web-frontend）代码？ [Y/n]: "
+        read -r answer < /dev/tty
+        
+        if [ -z "$answer" ] || [ "$answer" = "Y" ] || [ "$answer" = "y" ] || [ "$answer" = "yes" ] || [ "$answer" = "YES" ]; then
+            if [ -d "$PC_DIR" ]; then
+                log_info "清空现有目录内容..."
+                find "$PC_DIR" -mindepth 1 -delete 2>/dev/null
+            fi
+            
+            log_info "正在从 Gitee 克隆PC商城（ECShopX_web-frontend）..."
+            git clone "$PC_REPO" "$PC_DIR" > /tmp/git_clone_pc.log 2>&1 &
+            local clone_pid=$!
+            
+            # 显示进度动画
+            local spinstr='|/-\'
+            while kill -0 $clone_pid 2>/dev/null; do
+                local temp=${spinstr#?}
+                printf "\r${CYAN}[INFO]${NC} 克隆PC商城（ECShopX_web-frontend）中 ${spinstr:0:1}"
+                spinstr=$temp${spinstr%"$temp"}
+                sleep 0.2
+            done
+            wait $clone_pid
+            local clone_exit=$?
+            
+            if [ $clone_exit -eq 0 ]; then
+                printf "\r${GREEN}[SUCCESS]${NC}PC商城（ECShopX_web-frontend）克隆成功"
+                printf "%50s" ""
+                echo ""
+                INSTALLED_PC=true
+            else
+                printf "\r${RED}[ERROR]${NC}PC商城（ECShopX_web-frontend）克隆失败"
+                printf "%50s" ""
+                echo ""
+                cat /tmp/git_clone_pc.log 2>/dev/null | tail -10
+                exit 1
+            fi
+        else
+            log_warning "跳过PC商城（ECShopX_web-frontend）克隆"
+        fi
+    else
+        log_info "ECShopX_web-frontend 目录已存在且包含 package.json，跳过克隆"
+        INSTALLED_PC=true
+    fi
+    
     # 检查 ECShopX_admin-frontend
     ADMIN_DIR="$PARENT_DIR/ECShopX_admin-frontend"
     ADMIN_REPO="https://gitee.com/ShopeX/ECShopX_admin-frontend.git"
@@ -460,62 +529,6 @@ check_and_clone_frontend() {
         INSTALLED_VSHOP=true
     fi
     
-    # 检查 ECShopX_desktop-frontend
-    PC_DIR="$PARENT_DIR/ECShopX_desktop-frontend"
-    PC_REPO="https://gitee.com/ShopeX/ECShopX_desktop-frontend.git"
-    
-    if [ ! -d "$PC_DIR" ] || [ ! -f "$PC_DIR/package.json" ]; then
-        if [ ! -d "$PC_DIR" ]; then
-            log_warning "ECShopX_desktop-frontend 目录不存在"
-        else
-            log_warning "ECShopX_desktop-frontend 目录存在但缺少 package.json"
-        fi
-        
-        echo ""
-        echo -n "是否从 Gitee 克隆PC商城（ECShopX_desktop-frontend）代码？ [Y/n]: "
-        read -r answer < /dev/tty
-        
-        if [ -z "$answer" ] || [ "$answer" = "Y" ] || [ "$answer" = "y" ] || [ "$answer" = "yes" ] || [ "$answer" = "YES" ]; then
-            if [ -d "$PC_DIR" ]; then
-                log_info "清空现有目录内容..."
-                find "$PC_DIR" -mindepth 1 -delete 2>/dev/null
-            fi
-            
-            log_info "正在从 Gitee 克隆PC商城（ECShopX_desktop-frontend）..."
-            git clone "$PC_REPO" "$PC_DIR" > /tmp/git_clone_pc.log 2>&1 &
-            local clone_pid=$!
-            
-            # 显示进度动画
-            local spinstr='|/-\'
-            while kill -0 $clone_pid 2>/dev/null; do
-                local temp=${spinstr#?}
-                printf "\r${CYAN}[INFO]${NC} 克隆PC商城（ECShopX_desktop-frontend）中 ${spinstr:0:1}"
-                spinstr=$temp${spinstr%"$temp"}
-                sleep 0.2
-            done
-            wait $clone_pid
-            local clone_exit=$?
-            
-            if [ $clone_exit -eq 0 ]; then
-                printf "\r${GREEN}[SUCCESS]${NC}PC商城（ECShopX_desktop-frontend）克隆成功"
-                printf "%50s" ""
-                echo ""
-                INSTALLED_PC=true
-            else
-                printf "\r${RED}[ERROR]${NC}PC商城（ECShopX_desktop-frontend）克隆失败"
-                printf "%50s" ""
-                echo ""
-                cat /tmp/git_clone_pc.log 2>/dev/null | tail -10
-                exit 1
-            fi
-        else
-            log_warning "跳过PC商城（ECShopX_desktop-frontend）克隆"
-        fi
-    else
-        log_info "ECShopX_desktop-frontend 目录已存在且包含 package.json，跳过克隆"
-        INSTALLED_PC=true
-    fi
-    
     echo ""
 }
 
@@ -544,12 +557,16 @@ check_container_status() {
                 ;;
             2)
                 log_info "使用现有容器..."
+                log_info "确保 Docker Compose 中的所有服务已启动..."
+                $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" up -d
                 # 如果容器未运行，先启动它
                 if ! is_container_running; then
                     log_info "启动现有容器..."
-                    $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" up -d
                     sleep 5
                     wait_for_services
+                elif ! is_web_container_running; then
+                    log_info "等待 Web 前端容器启动..."
+                    sleep 5
                 fi
                 return 1  # 跳过构建
                 ;;
@@ -559,6 +576,8 @@ check_container_status() {
                 ;;
             *)
                 log_info "使用现有容器..."
+                log_info "确保 Docker Compose 中的所有服务已启动..."
+                $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" up -d
                 return 1
                 ;;
         esac
@@ -1048,54 +1067,50 @@ check_container_directory() {
     local project_name=$3
     local max_retries=2
     local retry_count=0
+    local target_container="$CONTAINER_NAME"
+    
+    if [ "$project_name" = "ECShopX_web-frontend" ]; then
+        target_container="$WEB_CONTAINER_NAME"
+    fi
     
     # 首先检查容器是否运行
-    if ! is_container_running; then
-        log_warning "容器未运行，无法检查目录挂载状态"
+    if ! docker ps --format '{{.Names}}' | grep -q "^${target_container}$" 2>/dev/null; then
+        log_warning "容器 $target_container 未运行，无法检查目录挂载状态"
         log_info "目录挂载将在容器启动后自动生效"
-        # 对于 ECShopX_desktop-frontend，如果容器未运行，也返回成功（允许继续）
-        if [ "$project_name" = "ECShopX_desktop-frontend" ]; then
-            return 0
-        fi
         return 0  # 容器未运行时，假设挂载会在启动后生效
     fi
     
     while [ $retry_count -lt $max_retries ]; do
         # 检查目录是否存在
-        if docker exec "$CONTAINER_NAME" sh -c "test -d $container_path" 2>/dev/null; then
+        if docker exec "$target_container" sh -c "test -d $container_path" 2>/dev/null; then
             # 检查 package.json 是否存在
-            if docker exec "$CONTAINER_NAME" sh -c "test -f $container_path/package.json" 2>/dev/null; then
-                log_success "目录挂载检查通过: $container_path"
+            if docker exec "$target_container" sh -c "test -f $container_path/package.json" 2>/dev/null; then
+                log_success "目录挂载检查通过: $target_container:$container_path"
                 return 0  # 目录和文件都存在
             else
                 if [ $retry_count -eq 0 ]; then
-                    log_warning "容器内 $container_path/package.json 不存在，尝试重启容器以确保目录正确挂载..."
+                    log_warning "容器 $target_container 内 $container_path/package.json 不存在，尝试重启容器以确保目录正确挂载..."
                     if ! restart_container_for_mount "$project_name"; then
                         return 1
                     fi
                     retry_count=$((retry_count + 1))
                     continue
                 else
-                    # 对于 ECShopX_desktop-frontend，如果重启后仍然不存在，也允许继续（可能是配置问题）
-                    if [ "$project_name" = "ECShopX_desktop-frontend" ]; then
-                        log_warning "容器内 $container_path/package.json 仍然不存在，但继续执行..."
-                        return 0
-                    fi
-                    log_error "容器内 $container_path/package.json 仍然不存在"
+                    log_error "容器 $target_container 内 $container_path/package.json 仍然不存在"
                     log_info "请检查主机目录 $host_path 是否存在且包含 package.json"
                     return 1
                 fi
             fi
         else
             if [ $retry_count -eq 0 ]; then
-                log_warning "容器内 $container_path 目录不存在，尝试重启容器以确保目录正确挂载..."
+                log_warning "容器 $target_container 内 $container_path 目录不存在，尝试重启容器以确保目录正确挂载..."
                 if ! restart_container_for_mount "$project_name"; then
                     return 1
                 fi
                 retry_count=$((retry_count + 1))
                 continue
             else
-                log_error "容器内 $container_path 目录仍然不存在"
+                log_error "容器 $target_container 内 $container_path 目录仍然不存在"
                 log_info "请检查 docker-compose.dev.yml 中的卷挂载配置是否正确"
                 log_info "主机目录路径: $host_path"
                 return 1
@@ -1112,11 +1127,17 @@ check_container_directory() {
 
 restart_container_for_mount() {
     local project_name=$1
+    local target_container="$CONTAINER_NAME"
+    
+    if [ "$project_name" = "ECShopX_web-frontend" ]; then
+        target_container="$WEB_CONTAINER_NAME"
+    fi
+    
     log_warning "检测到 $project_name 目录未正确挂载，正在重启容器..."
     
-    if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$" 2>/dev/null; then
-        log_info "重启容器 $CONTAINER_NAME..."
-        docker-compose -f "$DOCKER_COMPOSE_FILE" restart || {
+    if docker ps --format '{{.Names}}' | grep -q "^${target_container}$" 2>/dev/null; then
+        log_info "重启容器 $target_container..."
+        $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" restart "$target_container" || {
             log_error "容器重启失败"
             return 1
         }
@@ -1124,8 +1145,10 @@ restart_container_for_mount() {
         log_info "等待容器启动..."
         sleep 5
         
-        # 等待服务就绪
-        wait_for_services
+        if [ "$target_container" = "$CONTAINER_NAME" ]; then
+            # 等待主服务就绪
+            wait_for_services
+        fi
         
         log_success "容器重启完成"
         return 0
@@ -1145,6 +1168,7 @@ configure_frontend_env() {
     local api_base_url=${3:-"http://localhost:8080/api/"}
     local app_id=${4:-""}
     local default_lang=${5:-""}
+    local target_container="$CONTAINER_NAME"
     
     # 检查主机目录是否存在
     if [ ! -d "$project_dir" ]; then
@@ -1158,16 +1182,17 @@ configure_frontend_env() {
         container_path="/data/httpd/ECShopX_admin-frontend"
     elif [ "$project_name" = "ECShopX_mobile-frontend" ]; then
         container_path="/data/httpd/ECShopX_mobile-frontend"
-    elif [ "$project_name" = "ECShopX_desktop-frontend" ]; then
-        container_path="/data/httpd/ECShopX_desktop-frontend"
+    elif [ "$project_name" = "ECShopX_web-frontend" ]; then
+        container_path="/data/httpd/ECShopX_web-frontend"
+        target_container="$WEB_CONTAINER_NAME"
     else
         log_warning "未知的项目名称: $project_name"
         return 0
     fi
     
     # 如果容器未运行，直接配置主机目录
-    if ! is_container_running; then
-        log_info "容器未运行，配置主机目录的 .env 文件..."
+    if ! docker ps --format '{{.Names}}' | grep -q "^${target_container}$" 2>/dev/null; then
+        log_info "容器 $target_container 未运行，配置主机目录的 .env 文件..."
         local env_file="$project_dir/.env"
         
         # 如果 .env 不存在，尝试从 .env.example 复制
@@ -1223,6 +1248,21 @@ configure_frontend_env() {
                 echo "VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/" >> "$env_file"
             fi
             log_success "已配置 VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/"
+            
+            # 配置 VUE_APP_WEBSITE（PC前端访问地址）
+            if [ "$INSTALLED_PC" = true ]; then
+                if grep -q "^VUE_APP_WEBSITE=" "$env_file" 2>/dev/null; then
+                    # macOS 和 Linux 兼容的 sed 命令
+                    if [[ "$OSTYPE" == "darwin"* ]]; then
+                        sed -i '' "s|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=http://localhost:8082|" "$env_file"
+                    else
+                        sed -i "s|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=http://localhost:8082|" "$env_file"
+                    fi
+                else
+                    echo "VUE_APP_WEBSITE=http://localhost:8082" >> "$env_file"
+                fi
+                log_success "已配置 VUE_APP_WEBSITE=http://localhost:8082"
+            fi
         fi
         
         # 配置 ECShopX_mobile-frontend
@@ -1271,59 +1311,59 @@ configure_frontend_env() {
             fi
         fi
         
-        # 配置 ECShopX_desktop-frontend
-        if [ "$project_name" = "ECShopX_desktop-frontend" ]; then
-            # 使用 sed 修改或添加 VUE_APP_API_BASE_URL
-            if grep -q "^VUE_APP_API_BASE_URL=" "$env_file" 2>/dev/null; then
+        # 配置 ECShopX_web-frontend
+        if [ "$project_name" = "ECShopX_web-frontend" ]; then
+            # 使用 sed 修改或添加 NUXT_PUBLIC_API_BASE
+            if grep -q "^NUXT_PUBLIC_API_BASE=" "$env_file" 2>/dev/null; then
                 # macOS 和 Linux 兼容的 sed 命令
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    sed -i '' "s|^VUE_APP_API_BASE_URL=.*|VUE_APP_API_BASE_URL=$api_base_url|" "$env_file"
+                    sed -i '' "s|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app|" "$env_file"
                 else
-                    sed -i "s|^VUE_APP_API_BASE_URL=.*|VUE_APP_API_BASE_URL=$api_base_url|" "$env_file"
+                    sed -i "s|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app|" "$env_file"
                 fi
             else
-                echo "VUE_APP_API_BASE_URL=$api_base_url" >> "$env_file"
+                echo "NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app" >> "$env_file"
             fi
-            log_success "已配置 VUE_APP_API_BASE_URL=$api_base_url"
+            log_success "已配置 NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app"
             
-            # 配置 VUE_APP_COMPANYID（默认值为1）
-            if grep -q "^VUE_APP_COMPANYID=" "$env_file" 2>/dev/null; then
+            # 配置 NUXT_PUBLIC_COMPANY_ID（默认值为1）
+            if grep -q "^NUXT_PUBLIC_COMPANY_ID=" "$env_file" 2>/dev/null; then
                 # macOS 和 Linux 兼容的 sed 命令
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    sed -i '' "s|^VUE_APP_COMPANYID=.*|VUE_APP_COMPANYID=1|" "$env_file"
+                    sed -i '' "s|^NUXT_PUBLIC_COMPANY_ID=.*|NUXT_PUBLIC_COMPANY_ID=1|" "$env_file"
                 else
-                    sed -i "s|^VUE_APP_COMPANYID=.*|VUE_APP_COMPANYID=1|" "$env_file"
+                    sed -i "s|^NUXT_PUBLIC_COMPANY_ID=.*|NUXT_PUBLIC_COMPANY_ID=1|" "$env_file"
                 fi
             else
-                echo "VUE_APP_COMPANYID=1" >> "$env_file"
+                echo "NUXT_PUBLIC_COMPANY_ID=1" >> "$env_file"
             fi
-            log_success "已配置 VUE_APP_COMPANYID=1"
+            log_success "已配置 NUXT_PUBLIC_COMPANY_ID=1"
             
-            # 配置 VUE_APP_DEFAULT_LANG（如果提供）
+            # 配置 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE（如果提供）
             if [ -n "$default_lang" ]; then
-                if grep -q "^VUE_APP_DEFAULT_LANG=" "$env_file" 2>/dev/null; then
+                if grep -q "^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=" "$env_file" 2>/dev/null; then
                     # macOS 和 Linux 兼容的 sed 命令
                     if [[ "$OSTYPE" == "darwin"* ]]; then
-                        sed -i '' "s|^VUE_APP_DEFAULT_LANG=.*|VUE_APP_DEFAULT_LANG=$default_lang|" "$env_file"
+                        sed -i '' "s|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang|" "$env_file"
                     else
-                        sed -i "s|^VUE_APP_DEFAULT_LANG=.*|VUE_APP_DEFAULT_LANG=$default_lang|" "$env_file"
+                        sed -i "s|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang|" "$env_file"
                     fi
                 else
-                    echo "VUE_APP_DEFAULT_LANG=$default_lang" >> "$env_file"
+                    echo "NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang" >> "$env_file"
                 fi
-                log_success "已配置 VUE_APP_DEFAULT_LANG=$default_lang"
+                log_success "已配置 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang"
             fi
         fi
     else
         # 容器运行中，配置容器内的 .env 文件
         # 检查容器内目录是否存在
-        if ! docker exec "$CONTAINER_NAME" sh -c "test -d $container_path" 2>/dev/null; then
-            log_warning "容器内 $container_path 目录不存在，跳过配置"
+        if ! docker exec "$target_container" sh -c "test -d $container_path" 2>/dev/null; then
+            log_warning "容器 $target_container 内 $container_path 目录不存在，跳过配置"
             return 0
         fi
         
         # 在容器内配置 .env 文件
-        docker exec "$CONTAINER_NAME" sh -c "
+        docker exec "$target_container" sh -c "
             cd $container_path && \
             if [ ! -f .env ]; then
                 if [ -f .env.example ]; then
@@ -1336,7 +1376,7 @@ configure_frontend_env() {
         
         # 配置 ECShopX_admin-frontend
         if [ "$project_name" = "ECShopX_admin-frontend" ]; then
-            docker exec "$CONTAINER_NAME" sh -c "
+            docker exec "$target_container" sh -c "
                 cd $container_path && \
                 if grep -q '^VUE_APP_BASE_API=' .env 2>/dev/null; then
                     sed -i 's|^VUE_APP_BASE_API=.*|VUE_APP_BASE_API=$api_base_url|' .env
@@ -1348,7 +1388,7 @@ configure_frontend_env() {
             
             # 配置 VUE_APP_DEFAULT_LANG（如果提供）
             if [ -n "$default_lang" ]; then
-                docker exec "$CONTAINER_NAME" sh -c "
+                docker exec "$target_container" sh -c "
                     cd $container_path && \
                     if grep -q '^VUE_APP_DEFAULT_LANG=' .env 2>/dev/null; then
                         sed -i 's|^VUE_APP_DEFAULT_LANG=.*|VUE_APP_DEFAULT_LANG=$default_lang|' .env
@@ -1360,7 +1400,7 @@ configure_frontend_env() {
             fi
             
             # 配置 VUE_APP_QIANKUN_ENTRY
-            docker exec "$CONTAINER_NAME" sh -c "
+            docker exec "$target_container" sh -c "
                 cd $container_path && \
                 if grep -q '^VUE_APP_QIANKUN_ENTRY=' .env 2>/dev/null; then
                     sed -i 's|^VUE_APP_QIANKUN_ENTRY=.*|VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/|' .env
@@ -1369,11 +1409,24 @@ configure_frontend_env() {
                 fi
             " 2>/dev/null || true
             log_success "已配置容器内 VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/"
+            
+            # 配置 VUE_APP_WEBSITE（PC前端访问地址）
+            if [ "$INSTALLED_PC" = true ]; then
+                docker exec "$target_container" sh -c "
+                    cd $container_path && \
+                    if grep -q '^VUE_APP_WEBSITE=' .env 2>/dev/null; then
+                        sed -i 's|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=http://localhost:8082|' .env
+                    else
+                        echo 'VUE_APP_WEBSITE=http://localhost:8082' >> .env
+                    fi
+                " 2>/dev/null || true
+                log_success "已配置容器内 VUE_APP_WEBSITE=http://localhost:8082"
+            fi
         fi
         
         # 配置 ECShopX_mobile-frontend
         if [ "$project_name" = "ECShopX_mobile-frontend" ]; then
-            docker exec "$CONTAINER_NAME" sh -c "
+            docker exec "$target_container" sh -c "
                 cd $container_path && \
                 if grep -q '^APP_BASE_URL=' .env 2>/dev/null; then
                     sed -i 's|^APP_BASE_URL=.*|APP_BASE_URL=$api_base_url|' .env
@@ -1385,7 +1438,7 @@ configure_frontend_env() {
             
             # 配置 APP_PLATFORM（如果提供）
             if [ -n "$app_id" ]; then
-                docker exec "$CONTAINER_NAME" sh -c "
+                docker exec "$target_container" sh -c "
                     cd $container_path && \
                     if grep -q '^APP_PLATFORM=' .env 2>/dev/null; then
                         sed -i 's|^APP_PLATFORM=.*|APP_PLATFORM=$app_id|' .env
@@ -1398,7 +1451,7 @@ configure_frontend_env() {
             
             # 配置 APP_I18N_ORIGIN_LANG（如果提供）
             if [ -n "$default_lang" ]; then
-                docker exec "$CONTAINER_NAME" sh -c "
+                docker exec "$target_container" sh -c "
                     cd $container_path && \
                     if grep -q '^APP_I18N_ORIGIN_LANG=' .env 2>/dev/null; then
                         sed -i 's|^APP_I18N_ORIGIN_LANG=.*|APP_I18N_ORIGIN_LANG=$default_lang|' .env
@@ -1410,40 +1463,40 @@ configure_frontend_env() {
             fi
         fi
         
-        # 配置 ECShopX_desktop-frontend
-        if [ "$project_name" = "ECShopX_desktop-frontend" ]; then
-            docker exec "$CONTAINER_NAME" sh -c "
+        # 配置 ECShopX_web-frontend
+        if [ "$project_name" = "ECShopX_web-frontend" ]; then
+            docker exec "$target_container" sh -c "
                 cd $container_path && \
-                if grep -q '^VUE_APP_API_BASE_URL=' .env 2>/dev/null; then
-                    sed -i 's|^VUE_APP_API_BASE_URL=.*|VUE_APP_API_BASE_URL=$api_base_url|' .env
+                if grep -q '^NUXT_PUBLIC_API_BASE=' .env 2>/dev/null; then
+                    sed -i 's|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app|' .env
                 else
-                    echo 'VUE_APP_API_BASE_URL=$api_base_url' >> .env
+                    echo 'NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app' >> .env
                 fi
             " 2>/dev/null || true
-            log_success "已配置容器内 VUE_APP_API_BASE_URL=$api_base_url"
+            log_success "已配置容器内 NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app"
             
-            # 配置 VUE_APP_COMPANYID（默认值为1）
-            docker exec "$CONTAINER_NAME" sh -c "
+            # 配置 NUXT_PUBLIC_COMPANY_ID（默认值为1）
+            docker exec "$target_container" sh -c "
                 cd $container_path && \
-                if grep -q '^VUE_APP_COMPANYID=' .env 2>/dev/null; then
-                    sed -i 's|^VUE_APP_COMPANYID=.*|VUE_APP_COMPANYID=1|' .env
+                if grep -q '^NUXT_PUBLIC_COMPANY_ID=' .env 2>/dev/null; then
+                    sed -i 's|^NUXT_PUBLIC_COMPANY_ID=.*|NUXT_PUBLIC_COMPANY_ID=1|' .env
                 else
-                    echo 'VUE_APP_COMPANYID=1' >> .env
+                    echo 'NUXT_PUBLIC_COMPANY_ID=1' >> .env
                 fi
             " 2>/dev/null || true
-            log_success "已配置容器内 VUE_APP_COMPANYID=1"
+            log_success "已配置容器内 NUXT_PUBLIC_COMPANY_ID=1"
             
-            # 配置 VUE_APP_DEFAULT_LANG（如果提供）
+            # 配置 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE（如果提供）
             if [ -n "$default_lang" ]; then
-                docker exec "$CONTAINER_NAME" sh -c "
+                docker exec "$target_container" sh -c "
                     cd $container_path && \
-                    if grep -q '^VUE_APP_DEFAULT_LANG=' .env 2>/dev/null; then
-                        sed -i 's|^VUE_APP_DEFAULT_LANG=.*|VUE_APP_DEFAULT_LANG=$default_lang|' .env
+                    if grep -q '^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=' .env 2>/dev/null; then
+                        sed -i 's|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang|' .env
                     else
-                        echo 'VUE_APP_DEFAULT_LANG=$default_lang' >> .env
+                        echo 'NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang' >> .env
                     fi
                 " 2>/dev/null || true
-                log_success "已配置容器内 VUE_APP_DEFAULT_LANG=$default_lang"
+                log_success "已配置容器内 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang"
             fi
         fi
     fi
@@ -1610,37 +1663,40 @@ build_admin() {
 }
 
 # ===========================================
-# 编译 ECShopX_desktop-frontend
+# 编译 ECShopX_web-frontend
 # ===========================================
 
 build_pc() {
     if [ "$SKIP_PC" = true ]; then
-        log_info "跳过 ECShopX_desktop-frontend 编译（--skip-pc）"
+        log_info "跳过 ECShopX_web-frontend 编译（--skip-pc）"
         return 0
     fi
     
-    PC_DIR="$PARENT_DIR/ECShopX_desktop-frontend"
+    PC_DIR="$PARENT_DIR/ECShopX_web-frontend"
     
     if [ ! -d "$PC_DIR" ]; then
-        log_warning "ECShopX_desktop-frontend 目录不存在，跳过编译"
+        log_warning "ECShopX_web-frontend 目录不存在，跳过编译"
         return 0
     fi
     
     log_info "=========================================="
-    log_info "开始编译 ECShopX_desktop-frontend（PC前端）..."
+    log_info "开始编译 ECShopX_web-frontend（PC前端）..."
     log_info "=========================================="
     
     if [ ! -f "$PC_DIR/package.json" ]; then
-        log_error "ECShopX_desktop-frontend/package.json 不存在"
+        log_error "ECShopX_web-frontend/package.json 不存在"
         return 1
     fi
     
-    # 检查是否已有编译产物（Nuxt项目编译后生成.nuxt或.output目录）
-    if docker exec "$CONTAINER_NAME" sh -c "[ -d /data/httpd/ECShopX_desktop-frontend/.nuxt ]" 2>/dev/null || \
-       docker exec "$CONTAINER_NAME" sh -c "[ -d /data/httpd/ECShopX_desktop-frontend/.output ]" 2>/dev/null || \
-       [ -d "$PC_DIR/.nuxt" ] || [ -d "$PC_DIR/.output" ]; then
-        log_info "检测到已有编译产物，跳过编译"
-        log_info "如需重新编译，请删除 ECShopX_desktop-frontend/.nuxt 或 .output 目录"
+    if ! ensure_web_container_running; then
+        return 1
+    fi
+    
+    # 检查是否已有可启动的 Nuxt 生产产物（.nuxt 可能由 pnpm install/postinstall 生成，不能代表已编译完成）
+    if docker exec "$WEB_CONTAINER_NAME" sh -c "[ -f /data/httpd/ECShopX_web-frontend/.output/server/index.mjs ]" 2>/dev/null || \
+       [ -f "$PC_DIR/.output/server/index.mjs" ]; then
+        log_info "检测到已有 Nuxt 生产编译产物，跳过编译"
+        log_info "如需重新编译，请删除 ECShopX_web-frontend/.output 目录"
         # 即使跳过编译，也需要启动Nuxt服务
         need_build=false
     else
@@ -1649,7 +1705,7 @@ build_pc() {
     
     # 检查容器内目录是否存在并确保正确挂载
     log_info "检查容器内目录挂载状态..."
-    if ! check_container_directory "/data/httpd/ECShopX_desktop-frontend" "$PC_DIR" "ECShopX_desktop-frontend"; then
+    if ! check_container_directory "/data/httpd/ECShopX_web-frontend" "$PC_DIR" "ECShopX_web-frontend"; then
         return 1
     fi
     
@@ -1659,21 +1715,14 @@ build_pc() {
         log_info "启动 Nuxt 服务（监听3000端口）..."
         
         # 检查是否已有Nuxt进程在运行
-        if docker exec "$CONTAINER_NAME" sh -c "pgrep -f 'nuxt.*3000\|node.*nuxt' > /dev/null" 2>/dev/null; then
+        if docker exec "$WEB_CONTAINER_NAME" sh -c "pgrep -f 'nuxt.*3000|pnpm.*preview|pnpm.*dev|node .*\\.output/server/index\\.mjs' > /dev/null" 2>/dev/null; then
             log_info "Nuxt 服务已在运行"
         else
-            # 启动Nuxt服务
-            if docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX_desktop-frontend && npm run | grep -q 'start'" 2>/dev/null; then
-                docker exec -d "$CONTAINER_NAME" sh -c "
-                    cd /data/httpd/ECShopX_desktop-frontend && \
-                    PORT=3000 HOST=0.0.0.0 nohup npm run start > /var/log/nuxt.log 2>&1 &
-                " 2>/dev/null || true
-            else
-                docker exec -d "$CONTAINER_NAME" sh -c "
-                    cd /data/httpd/ECShopX_desktop-frontend && \
-                    PORT=3000 HOST=0.0.0.0 nohup npm run dev > /var/log/nuxt.log 2>&1 &
-                " 2>/dev/null || true
-            fi
+            # 启动已编译的 Nuxt 服务
+            docker exec -d "$WEB_CONTAINER_NAME" sh -c "
+                cd /data/httpd/ECShopX_web-frontend && \
+                NITRO_HOST=0.0.0.0 NITRO_PORT=3000 HOST=0.0.0.0 PORT=3000 nohup node .output/server/index.mjs > /var/log/nuxt.log 2>&1 &
+            " 2>/dev/null || true
             
             # 等待Nuxt服务启动
             sleep 3
@@ -1714,18 +1763,19 @@ build_pc() {
         fi
         
         # 配置前端项目的 .env 文件
-        log_info "配置 ECShopX_desktop-frontend 的 .env 文件..."
-        configure_frontend_env "$PC_DIR" "ECShopX_desktop-frontend" "http://localhost:8080" "" "$SELECTED_LANG"
+        log_info "配置 ECShopX_web-frontend 的 .env 文件..."
+        configure_frontend_env "$PC_DIR" "ECShopX_web-frontend" "http://localhost:8080" "" "$SELECTED_LANG"
         
-        log_info "安装 npm 依赖..."
+        log_info "启用 pnpm 并安装依赖..."
         # 使用绝对路径并先验证目录存在
-        docker exec "$CONTAINER_NAME" sh -c "
-            if [ ! -d /data/httpd/ECShopX_desktop-frontend ]; then
+        docker exec "$WEB_CONTAINER_NAME" sh -c "
+            if [ ! -d /data/httpd/ECShopX_web-frontend ]; then
                 echo '错误: 目录不存在'
                 exit 1
             fi
-            cd /data/httpd/ECShopX_desktop-frontend || exit 1
-            npm install --legacy-peer-deps
+            cd /data/httpd/ECShopX_web-frontend || exit 1
+            corepack enable
+            PNPM_HOME=/tmp/pnpm pnpm install --store-dir /tmp/pnpm-store
         " > /tmp/npm_pc_output.log 2>&1 &
         local npm_pid=$!
         
@@ -1733,7 +1783,7 @@ build_pc() {
         local spinstr='|/-\'
         while kill -0 $npm_pid 2>/dev/null; do
             local temp=${spinstr#?}
-            printf "\r${CYAN}[INFO]${NC} 安装 ECShopX_desktop-frontend npm 依赖中 ${spinstr:0:1}"
+            printf "\r${CYAN}[INFO]${NC} 安装 ECShopX_web-frontend pnpm 依赖中 ${spinstr:0:1}"
             spinstr=$temp${spinstr%"$temp"}
             sleep 0.2
         done
@@ -1741,27 +1791,27 @@ build_pc() {
         local npm_exit=$?
         
         if [ $npm_exit -ne 0 ]; then
-            printf "\r${RED}[ERROR]${NC} ECShopX_desktop-frontend npm install 失败"
+            printf "\r${RED}[ERROR]${NC} ECShopX_web-frontend pnpm install 失败"
             printf "%50s" ""
             echo ""
             cat /tmp/npm_pc_output.log 2>/dev/null | tail -20
-            log_info "请检查容器内目录状态: docker exec $CONTAINER_NAME ls -la /data/httpd/ECShopX_desktop-frontend"
+            log_info "请检查容器内目录状态: docker exec $WEB_CONTAINER_NAME ls -la /data/httpd/ECShopX_web-frontend"
             return 1
         else
-            printf "\r${GREEN}[SUCCESS]${NC} ECShopX_desktop-frontend npm 依赖安装完成"
+            printf "\r${GREEN}[SUCCESS]${NC} ECShopX_web-frontend pnpm 依赖安装完成"
             printf "%50s" ""
             echo ""
         fi
         
-        log_info "执行编译（npm run build）..."
-        docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX_desktop-frontend && npm run build" > /tmp/build_pc_output.log 2>&1 &
+        log_info "执行编译（pnpm build）..."
+        docker exec "$WEB_CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX_web-frontend && PNPM_HOME=/tmp/pnpm pnpm build" > /tmp/build_pc_output.log 2>&1 &
         local build_pid=$!
         
         # 显示进度动画
         local spinstr='|/-\'
         while kill -0 $build_pid 2>/dev/null; do
             local temp=${spinstr#?}
-            printf "\r${CYAN}[INFO]${NC} 编译 ECShopX_desktop-frontend 中 ${spinstr:0:1}"
+            printf "\r${CYAN}[INFO]${NC} 编译 ECShopX_web-frontend 中 ${spinstr:0:1}"
             spinstr=$temp${spinstr%"$temp"}
             sleep 0.2
         done
@@ -1769,67 +1819,53 @@ build_pc() {
         local build_exit=$?
         
         if [ $build_exit -ne 0 ]; then
-            printf "\r${RED}[ERROR]${NC} ECShopX_desktop-frontend 编译失败"
+            printf "\r${RED}[ERROR]${NC} ECShopX_web-frontend 编译失败"
             printf "%50s" ""
             echo ""
             cat /tmp/build_pc_output.log 2>/dev/null | tail -20
             return 1
         else
-            printf "\r${GREEN}[SUCCESS]${NC} ECShopX_desktop-frontend 编译完成"
+            printf "\r${GREEN}[SUCCESS]${NC} ECShopX_web-frontend 编译完成"
             printf "%50s" ""
             echo ""
         fi
         # 验证编译产物
-        if ! docker exec "$CONTAINER_NAME" sh -c "[ -d /data/httpd/ECShopX_desktop-frontend/.nuxt ] || [ -d /data/httpd/ECShopX_desktop-frontend/.output ]" 2>/dev/null; then
-            log_error "ECShopX_desktop-frontend 编译输出不完整"
+        if ! docker exec "$WEB_CONTAINER_NAME" sh -c "[ -f /data/httpd/ECShopX_web-frontend/.output/server/index.mjs ]" 2>/dev/null; then
+            log_error "ECShopX_web-frontend 编译输出不完整"
             return 1
         fi
     fi
     
-    # 检查编译产物（Nuxt项目编译后生成.nuxt或.output目录）
-    if docker exec "$CONTAINER_NAME" sh -c "[ -d /data/httpd/ECShopX_desktop-frontend/.nuxt ] || [ -d /data/httpd/ECShopX_desktop-frontend/.output ]" 2>/dev/null; then
-        log_success "ECShopX_desktop-frontend 编译成功"
+    # 检查可启动的 Nuxt 生产编译产物
+    if docker exec "$WEB_CONTAINER_NAME" sh -c "[ -f /data/httpd/ECShopX_web-frontend/.output/server/index.mjs ]" 2>/dev/null; then
+        log_success "ECShopX_web-frontend 编译成功"
         
         # 启动 Nuxt 服务
         log_info "启动 Nuxt 服务（监听3000端口）..."
         
         # 检查是否已有Nuxt进程在运行
-        if docker exec "$CONTAINER_NAME" sh -c "pgrep -f 'nuxt.*3000\|node.*nuxt' > /dev/null" 2>/dev/null; then
+        if docker exec "$WEB_CONTAINER_NAME" sh -c "pgrep -f 'nuxt.*3000|pnpm.*preview|pnpm.*dev|node .*\\.output/server/index\\.mjs' > /dev/null" 2>/dev/null; then
             log_info "Nuxt 服务已在运行，重启服务..."
-            docker exec "$CONTAINER_NAME" sh -c "pkill -f 'nuxt.*3000\|node.*nuxt'" 2>/dev/null || true
+            docker exec "$WEB_CONTAINER_NAME" sh -c "pkill -f 'nuxt.*3000|pnpm.*preview|pnpm.*dev|node .*\\.output/server/index\\.mjs'" 2>/dev/null || true
             sleep 2
         fi
         
         # 在后台启动Nuxt服务
-        # 优先使用生产模式（npm run start），如果不存在则使用开发模式（npm run dev）
-        log_info "检查可用的启动命令..."
-        if docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX_desktop-frontend && npm run | grep -q 'start'" 2>/dev/null; then
-            log_info "使用生产模式启动（npm run start）..."
-            docker exec -d "$CONTAINER_NAME" sh -c "
-                cd /data/httpd/ECShopX_desktop-frontend && \
-                PORT=3000 HOST=0.0.0.0 nohup npm run start > /var/log/nuxt.log 2>&1 &
-            " || {
-                log_error "Nuxt 服务启动失败"
-                log_info "请检查日志: docker exec $CONTAINER_NAME tail -f /var/log/nuxt.log"
-                return 1
-            }
-        else
-            log_info "使用开发模式启动（npm run dev）..."
-            docker exec -d "$CONTAINER_NAME" sh -c "
-                cd /data/httpd/ECShopX_desktop-frontend && \
-                PORT=3000 HOST=0.0.0.0 nohup npm run dev > /var/log/nuxt.log 2>&1 &
-            " || {
-                log_error "Nuxt 服务启动失败"
-                log_info "请检查日志: docker exec $CONTAINER_NAME tail -f /var/log/nuxt.log"
-                return 1
-            }
-        fi
+        log_info "使用生产模式启动（node .output/server/index.mjs）..."
+        docker exec -d "$WEB_CONTAINER_NAME" sh -c "
+            cd /data/httpd/ECShopX_web-frontend && \
+            NITRO_HOST=0.0.0.0 NITRO_PORT=3000 HOST=0.0.0.0 PORT=3000 nohup node .output/server/index.mjs > /var/log/nuxt.log 2>&1 &
+        " || {
+            log_error "Nuxt 服务启动失败"
+            log_info "请检查日志: docker exec $WEB_CONTAINER_NAME tail -f /var/log/nuxt.log"
+            return 1
+        }
         
         # 等待Nuxt服务启动
         log_info "等待 Nuxt 服务启动..."
         local nuxt_ready=false
         for i in {1..30}; do
-            if docker exec "$CONTAINER_NAME" sh -c "curl -s http://127.0.0.1:3000 > /dev/null" 2>/dev/null; then
+            if docker exec "$WEB_CONTAINER_NAME" sh -c "wget -q --spider http://127.0.0.1:3000 >/dev/null 2>&1 || wget -S -O /dev/null http://127.0.0.1:3000 2>&1 | grep -q 'HTTP/'" 2>/dev/null; then
                 nuxt_ready=true
                 break
             fi
@@ -1853,7 +1889,7 @@ build_pc() {
             printf "\r${YELLOW}[WARNING]${NC} Nuxt 服务启动超时，但可能仍在启动中"
             printf "%50s" ""
             echo ""
-            log_info "请检查日志: docker exec $CONTAINER_NAME tail -f /var/log/nuxt.log"
+            log_info "请检查日志: docker exec $WEB_CONTAINER_NAME tail -f /var/log/nuxt.log"
             if [ "$INSTALLED_VSHOP" = true ]; then
                 log_info "H5前端访问地址: http://localhost:8081"
             fi
@@ -1868,7 +1904,7 @@ build_pc() {
             log_warning "Nginx 配置重载失败，可能需要重启容器"
         }
     else
-        log_error "ECShopX_desktop-frontend 编译输出不完整"
+        log_error "ECShopX_web-frontend 编译输出不完整"
         return 1
     fi
 }
@@ -2304,8 +2340,10 @@ show_success_info() {
     fi
     log_info "常用命令："
     log_info "  查看日志:     $DOCKER_COMPOSE_CMD -f $DOCKER_COMPOSE_FILE logs -f"
-    log_info "  服务状态:     docker exec $CONTAINER_NAME supervisorctl status"
-    log_info "  进入容器:     docker exec -it $CONTAINER_NAME sh"
+    log_info "  主服务状态:   docker exec $CONTAINER_NAME supervisorctl status"
+    log_info "  进入主容器:   docker exec -it $CONTAINER_NAME sh"
+    log_info "  进入Web容器:  docker exec -it $WEB_CONTAINER_NAME sh"
+    log_info "  Web前端日志:  docker exec $WEB_CONTAINER_NAME tail -f /var/log/nuxt.log"
     log_info "  停止服务:     $DOCKER_COMPOSE_CMD -f $DOCKER_COMPOSE_FILE down"
     log_info "  重启服务:     $DOCKER_COMPOSE_CMD -f $DOCKER_COMPOSE_FILE restart"
     log_info "  重新构建:     $0 --rebuild"
@@ -2325,7 +2363,7 @@ main() {
     
     echo "=========================================="
     echo "  ECShopX 开发环境设置 (Docker)"
-    echo "  支持: ECShopX / ECShopX_admin-frontend / ECShopX_mobile-frontend / ECShopX_desktop-frontend"
+    echo "  支持: ECShopX / ECShopX_admin-frontend / ECShopX_mobile-frontend / ECShopX_web-frontend"
     echo "=========================================="
     echo ""
     
@@ -2346,9 +2384,9 @@ main() {
     configure_cron_and_supervisor_queues
     
     # 编译前端项目
+    build_pc || log_warning "PC商城（ECShopX_web-frontend）编译未完成"
     build_admin || log_warning "管理后台（ECShopX_admin-frontend）编译未完成"
     build_vshop || log_warning "移动商城（ECShopX_mobile-frontend）编译未完成"
-    build_pc || log_warning "PC商城（ECShopX_desktop-frontend）编译未完成"
     
     # 导入 Demo 数据
     import_demo_data || log_warning "Demo 数据导入未完成"

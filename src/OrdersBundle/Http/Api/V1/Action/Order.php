@@ -1875,7 +1875,7 @@ class Order extends Controller
         $setting['latest_aftersale_time'] = $input['latest_aftersale_time'] ?? 0; //默认确认收货后不可申请售后
         $setting['auto_refuse_time'] = $input['auto_refuse_time'] ?? 0; //默认确认收货后不可申请售后
         $setting['auto_aftersales'] = isset($input['auto_aftersales']) && $input['auto_aftersales'] && $input['auto_aftersales'] != 'false'; // 未发货售后自动同意
-        $setting['offline_aftersales'] = isset($input['offline_aftersales']) && $input['offline_aftersales'] && $input['offline_aftersales'] != 'false'; // 到店退货
+        $setting['offline_aftersales'] = isset($input['offline_aftersales']) && ($input['offline_aftersales'] === 'true' || $input['offline_aftersales'] === true); // 到店退货
         $setting['is_refund_freight'] =  $input['is_refund_freight'] ?? 0; // 退货退款可退运费
 
         if ($setting['is_refund_freight'] == 1) {

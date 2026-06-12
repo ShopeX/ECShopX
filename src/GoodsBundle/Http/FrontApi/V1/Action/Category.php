@@ -18,6 +18,7 @@
 namespace GoodsBundle\Http\FrontApi\V1\Action;
 
 use App\Http\Controllers\Controller as BaseController;
+use CompanysBundle\Ego\CompanysActivationEgo;
 use DistributionBundle\Services\DistributorService;
 use GoodsBundle\Services\ItemsCategoryService;
 use GoodsBundle\Services\ItemsRelCatsService;
@@ -138,8 +139,13 @@ class Category extends BaseController
         // 小程序端仅返回前台展示的分类
         $filter['is_show_front'] = 1;
 
-        if ($request->input('distributor_id')) {
-            // $filter['distributor_id'] = $request->input('distributor_id');
+        $distributorId = (int)$request->input('distributor_id', 0);
+        $company = (new CompanysActivationEgo())->check($company_id);
+        $productModel = $company['product_model'] ?? 'platform';
+        $itemsCategoryService = new ItemsCategoryService();
+        $categoryDistributorId = $itemsCategoryService->resolveCategoryDistributorIdForFront($productModel, $distributorId);
+        if ($productModel !== 'standard' && $categoryDistributorId > 0) {
+            $filter['distributor_id'] = $categoryDistributorId;
         }
 
         $onlyTop = $request->input('only_top', false);
@@ -148,7 +154,6 @@ class Category extends BaseController
             $filter['category_level'] = 1;
         }
 
-        $itemsCategoryService = new ItemsCategoryService();
         $result = $itemsCategoryService->getItemsCategory($filter, true, 1, -1, ['sort' => 'DESC', 'created' => 'ASC'], 'category_id,category_name,category_level,parent_id,image_url,customize_page_id');
 
         // 分类获取不到获取商城主类目
@@ -180,8 +185,9 @@ class Category extends BaseController
             }
         }
 
-        $distributorId = (int)$request->input('distributor_id', 0);
-        if ($distributorId > 0 && $itemsCategoryService->isSaleableCategoryFilterEnabled($company_id)) {
+        $applySaleableFilter = $itemsCategoryService->shouldApplySaleableFilterForFront($productModel, $distributorId)
+            || ($distributorId > 0 && $itemsCategoryService->isSaleableCategoryFilterEnabled($company_id));
+        if ($distributorId > 0 && $applySaleableFilter) {
             $result = $itemsCategoryService->filterCategoryTreeBySaleableItems($company_id, $distributorId, $result);
         }
 
@@ -444,13 +450,26 @@ class Category extends BaseController
 
         $filter['company_id'] = $company_id;
 
-        if ($request->input('distributor_id')) {
-            $filter['distributor_id'] = $request->input('distributor_id');
+        $distributorId = (int)$request->input('distributor_id', 0);
+        $company = (new CompanysActivationEgo())->check($company_id);
+        $productModel = $company['product_model'] ?? 'platform';
+        $itemsCategoryService = new ItemsCategoryService();
+        $categoryDistributorId = $itemsCategoryService->resolveCategoryDistributorIdForFront($productModel, $distributorId);
+        if ($productModel !== 'standard' && $categoryDistributorId > 0) {
+            $filter['distributor_id'] = $categoryDistributorId;
         }
 
         $filter['is_main_category'] = $request->input('is_main_category', false);
-//        $filter['category_level']   = $request->input('category_level');
 
+        if ($itemsCategoryService->shouldApplySaleableFilterForFront($productModel, $distributorId)) {
+            $filter['category_id'] = $itemsCategoryService->getSaleableTopLevelCategoryIds($company_id, $distributorId);
+            if (empty($filter['category_id'])) {
+                return $this->response->array(['list' => [], 'total_count' => 0]);
+            }
+            $result = $itemsCategoryService->lists($filter);
+
+            return $this->response->array($result);
+        }
 
         $settingService = new SettingService();
         $config = $settingService->getConfig($company_id);
@@ -463,14 +482,18 @@ class Category extends BaseController
         $itemFilter['item_type'] = 'normal';
         $itemFilter['is_default'] = true;
 
-        $distributorFilter = [
-            'company_id' => $company_id,
-            'is_valid' => 'true'
-        ];
-        $distributorService = new DistributorService();
-        $validDistributorList = $distributorService->getDistributorOriginalList($distributorFilter, 1, -1);
-        $validDistributorIds = array_column($validDistributorList['list'], 'distributor_id');
-        $itemFilter['distributor_id'] = array_merge(['0'], $validDistributorIds);
+        if ($categoryDistributorId > 0) {
+            $itemFilter['distributor_id'] = $categoryDistributorId;
+        } else {
+            $distributorFilter = [
+                'company_id' => $company_id,
+                'is_valid' => 'true'
+            ];
+            $distributorService = new DistributorService();
+            $validDistributorList = $distributorService->getDistributorOriginalList($distributorFilter, 1, -1);
+            $validDistributorIds = array_column($validDistributorList['list'], 'distributor_id');
+            $itemFilter['distributor_id'] = array_merge(['0'], $validDistributorIds);
+        }
 
         $itemsService = new ItemsService();
         $itemsList = $itemsService->itemsRepository->list($itemFilter, [], -1, 1, ['item_id']);
@@ -480,7 +503,6 @@ class Category extends BaseController
         $itemsRelCatsService = new ItemsRelCatsService();
         $itemsRelCatsList = $itemsRelCatsService->lists($itemRelCatsParams);
 
-        $itemsCategoryService = new ItemsCategoryService();
         $filter['category_id'] = [];
         foreach ($itemsRelCatsList['list'] as $cat) {
             $category = $itemsCategoryService->getInfo(['company_id' => $company_id, 'category_id' => $cat['category_id']]);
@@ -495,7 +517,6 @@ class Category extends BaseController
             }
         }
 
-        $itemsCategoryService = new ItemsCategoryService();
         $result = $itemsCategoryService->lists($filter);
 
         return $this->response->array($result);

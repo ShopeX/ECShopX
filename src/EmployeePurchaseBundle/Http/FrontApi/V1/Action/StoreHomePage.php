@@ -21,7 +21,7 @@ class StoreHomePage extends BaseController
      *     path="/wxapp/employeepurchase/store-home-page/{id}",
      *     summary="内购模版详情（含完整模板装修数据）",
      *     tags={"内购"},
-     *     description="返回内购模版表字段、pages_template 列表完整行（pages_template_record）、以及与 pagestemplate/detail 同构的 page_template_detail（list/config/tab_bar 等）。当存在 weapp_customize_page_id 时，page_template_detail 优先从 wechat_weapp_setting 的 page_name=custom_{weapp_customize_page_id}、version=v1.0.1 读取（与后台 shopDecoration 保存一致）；若无匹配行则回退为商城首页 index（v1.0.2）。resolved_pages_template_id 为装修 pages_template 主键，与自定义页 page_name 语义不同。需传 distributor_id。可选 e_activity_id 参与组件价活动上下文。",
+     *     description="返回内购模版表字段、pages_template 列表完整行（pages_template_record）、以及与 pagestemplate/detail 同构的 page_template_detail（list/config/tab_bar 等）。当存在 weapp_customize_page_id 时，page_template_detail 从 wechat_weapp_setting 的 page_name=custom_{weapp_customize_page_id} 读取，version 依次尝试 shop_{distributor_id} 与 v1.0.1。resolved_pages_template_id 为装修 pages_template 主键，与自定义页 page_name 语义不同。可选 distributor_id、e_activity_id。",
      *     operationId="employeepurchaseStoreHomePageDetailFront",
      *     @SWG\Parameter(name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
      *     @SWG\Parameter(name="id", in="path", description="内购模版主键 employee_purchase_store_home_page.id", required=true, type="integer"),

@@ -29,6 +29,7 @@ use KaquanBundle\Services\DiscountNewGiftCardService;
 use KaquanBundle\Services\KaquanService;
 use KaquanBundle\Services\DiscountCardService;
 use KaquanBundle\Services\UserDiscountService;
+use KaquanBundle\Support\ShopDiscountCardListFilter;
 
 class DiscountCard extends BaseController
 {
@@ -656,15 +657,12 @@ class DiscountCard extends BaseController
         }
         
         $store_self = $request->input('store_self');
-        $sourceId = floatval($request->get('distributor_id', 0));//如果是平台，这里是0
+        $sourceId = intval($request->get('distributor_id', 0));//如果是平台，这里是0
         if ($store_self == "true") {//平台版仅支持自营商品【总店】
             $filter['or']['distributor_id|like'] = ',0,';
             $filter['or']['distributor_id|like'] = '%,%';
-        } else {
-            if ($request->get('distributor_id')) {
-                $filter['or']['distributor_id|like'] = ',' . $request->get('distributor_id') . ',';
-                $filter['or']['distributor_id|like'] = '%,%';
-            }
+        } elseif ($sourceId > 0) {
+            ShopDiscountCardListFilter::applyToFilter($filter, $sourceId);
         }
 
         if ($request->input('receive')) {
@@ -672,10 +670,6 @@ class DiscountCard extends BaseController
         }
 
         if ($from == 'btn') {
-            // 如果来源是按钮出发，平台显示所有的券，店铺显示自己的券
-            if ($sourceId > 0) {
-                $filter['source_id'] = $sourceId;
-            }
             $filter['end_date'] = time();//排除已过期的优惠券
         }
 

@@ -246,7 +246,7 @@ trait CheckPromotionsValid
      * @param inteter $itemId 商品详情也的商品ID，也是默认商品ID
      * @param bool  $isItemsAll 如果商品为多规格商品是否需要查询所有的SKU信息
      */
-    public function checkCurrentMemberpreferenceByItemId($companyId, $userId, $itemId, $distributorId = null, $isItemsAll = true, &$msg)
+    public function checkCurrentMemberpreferenceByItemId($companyId, $userId, $itemId, &$msg, $distributorId = null, $isItemsAll = true)
     {
         $itemsService = new ItemsService();
         $itemInfo = $itemsService->getInfo(['item_id' => $itemId, 'company_id' => $companyId]);

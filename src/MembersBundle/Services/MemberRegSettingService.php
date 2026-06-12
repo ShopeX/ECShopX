@@ -231,6 +231,10 @@ class MemberRegSettingService
         app('log')->info("code :" . json_encode(['phone' => $phone, 'company' => $companyId, 'vcode' => $vcode]));
         //保存验证码
         $this->saveSmsVcode($phone, $companyId, $vcode, $type);
+        if (config("common.sms_debug_vcode")) {
+            app('log')->info("member sms debug vcode enabled :" . json_encode(['phone' => $phone, 'company' => $companyId, 'type' => $type]));
+            return $vcode;
+        }
         //发送短信
         $this->sendSmsVcode($companyId, $phone, $vcode, $type);
         return true;

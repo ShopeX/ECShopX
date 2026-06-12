@@ -1401,7 +1401,7 @@ class PagesTemplateServices
                     if (!$distributor_ids) {
                         break;
                     }
-                    $distributor_list = $distributorService->entityRepository->getLists(['distributor_id' => $distributor_ids], 'distributor_id, name, logo, first_letter, tag_name, tag_start_time, tag_end_time');
+                    $distributor_list = $distributorService->entityRepository->getLists(['distributor_id' => $distributor_ids], 'distributor_id, name, logo, first_letter');
                     if (!$distributor_list) {
                         break;
                     }
@@ -1420,10 +1420,6 @@ class PagesTemplateServices
                                 $distributor_info = $distributor_map[$child_data_v['distributor_id']] ?? [];
                                 if (!$distributor_info) {
                                     continue;
-                                }
-                                //店铺标签不在有效期内
-                                if (intval($distributor_info['tag_start_time']) > time() or intval($distributor_info['tag_end_time']) < time()) {
-                                    $distributor_info['tag_name'] = '';
                                 }
                                 $child_data_v = array_merge($child_data_v, $distributor_info);
                                 $child_v['data'][$child_data_k] = $child_data_v;
@@ -1445,7 +1441,7 @@ class PagesTemplateServices
                     if (!$distributor_ids) {
                         break;
                     }
-                    $distributor_list = $distributorService->entityRepository->getLists(['distributor_id' => $distributor_ids], 'distributor_id, name, logo, first_letter, tag_name, tag_start_time, tag_end_time');
+                    $distributor_list = $distributorService->entityRepository->getLists(['distributor_id' => $distributor_ids], 'distributor_id, name, logo, first_letter');
                     if (!$distributor_list) {
                         break;
                     }
@@ -1455,10 +1451,6 @@ class PagesTemplateServices
                         $distributor_info = $distributor_map[$tmp_v['distributor_id']] ?? [];
                         if (!$distributor_info) {
                             continue;
-                        }
-                        //店铺标签不在有效期内
-                        if (intval($distributor_info['tag_start_time']) > time() or intval($distributor_info['tag_end_time']) < time()) {
-                            $distributor_info['tag_name'] = '';
                         }
                         $tmp_v = array_merge($tmp_v, $distributor_info);
                         $params['data'][$tmp_k] = $tmp_v;

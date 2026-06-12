@@ -81,15 +81,30 @@ trait GetOrderIdTrait
         $identityOrderId = $promoterOrderId = [];
         $is_promoter_identity = $is_promoter_mobile = false;
         if (isset($filter['promoter_identity']) && $filter['promoter_identity']) {
-            $sql = "select promoter.user_id from popularize_promoter promoter left join popularize_promoter_identity identity on promoter.identity_id=identity.id where promoter.company_id=".$filter['company_id']." and identity.name='".$filter['promoter_identity']."'";
-            $lists = $conn->executeQuery($sql)->fetchAll();
+            $qb = $conn->createQueryBuilder();
+            $lists = $qb->select('promoter.user_id')
+                ->from('popularize_promoter', 'promoter')
+                ->leftJoin('promoter', 'popularize_promoter_identity', 'identity', 'promoter.identity_id = identity.id')
+                ->where($qb->expr()->eq('promoter.company_id', $qb->expr()->literal($filter['company_id'])))
+                ->andWhere($qb->expr()->eq('identity.name', $qb->expr()->literal($filter['promoter_identity'])))
+                ->execute()
+                ->fetchAll();
             $userIds = array_column($lists, 'user_id');
             $userIds = array_filter($userIds, function($value) {
                 return $value !== null && $value !== false && $value !== "" && $value !== 0;
             });
             if ($userIds) {
-                $sql = "select id,order_id,user_id,buy_user_id from popularize_brokerage where company_id=".$filter['company_id']." and brokerage_type='first_level' and user_id in (".implode($userIds, ',').")";
-                $lists = $conn->executeQuery($sql)->fetchAll();
+                $qb = $conn->createQueryBuilder();
+                $userIdLiterals = array_map(function ($value) use ($qb) {
+                    return $qb->expr()->literal($value);
+                }, $userIds);
+                $lists = $qb->select('id', 'order_id', 'user_id', 'buy_user_id')
+                    ->from('popularize_brokerage')
+                    ->where($qb->expr()->eq('company_id', $qb->expr()->literal($filter['company_id'])))
+                    ->andWhere($qb->expr()->eq('brokerage_type', $qb->expr()->literal('first_level')))
+                    ->andWhere($qb->expr()->in('user_id', $userIdLiterals))
+                    ->execute()
+                    ->fetchAll();
                 $identityOrderId = array_column($lists, 'order_id');
                 $identityOrderId = array_filter($identityOrderId, function($value) {
                     return $value !== null && $value !== false && $value !== "" && $value !== 0;
@@ -102,8 +117,14 @@ trait GetOrderIdTrait
             $memberService = new MemberService();
             $userId = $memberService->getUserIdByMobile($filter['promoter_mobile'], $filter['company_id']);
             if ($userId) {
-                $sql = "select brokerage.order_id from popularize_promoter promoter left join popularize_brokerage brokerage on promoter.user_id=brokerage.user_id where promoter.company_id=".$filter['company_id']." and promoter.user_id=".$userId;
-                $lists = $conn->executeQuery($sql)->fetchAll();
+                $qb = $conn->createQueryBuilder();
+                $lists = $qb->select('brokerage.order_id')
+                    ->from('popularize_promoter', 'promoter')
+                    ->leftJoin('promoter', 'popularize_brokerage', 'brokerage', 'promoter.user_id = brokerage.user_id')
+                    ->where($qb->expr()->eq('promoter.company_id', $qb->expr()->literal($filter['company_id'])))
+                    ->andWhere($qb->expr()->eq('promoter.user_id', $qb->expr()->literal($userId)))
+                    ->execute()
+                    ->fetchAll();
                 $promoterOrderId = array_column($lists, 'order_id');
                 $promoterOrderId = array_filter($promoterOrderId, function($value) {
                     return $value !== null && $value !== false && $value !== "" && $value !== 0;
@@ -151,8 +172,18 @@ trait GetOrderIdTrait
         // p_promoter_mobile:上级推广员手机号
         // promoter_is_close:是否结算
         $orderIds = array_column($orderLists, 'order_id');
-        $sql = "select order_id,user_id,is_close from popularize_brokerage where brokerage_type='first_level' and source='order' and order_id in (".implode($orderIds, ',').")";
-        $userLists = $conn->executeQuery($sql)->fetchAll();
+        $literalQb = $conn->createQueryBuilder();
+        $orderIdLiterals = array_map(function ($value) use ($literalQb) {
+            return $literalQb->expr()->literal($value);
+        }, $orderIds);
+        $qb = $conn->createQueryBuilder();
+        $userLists = $qb->select('order_id', 'user_id', 'is_close')
+            ->from('popularize_brokerage')
+            ->where($qb->expr()->eq('brokerage_type', $qb->expr()->literal('first_level')))
+            ->andWhere($qb->expr()->eq('source', $qb->expr()->literal('order')))
+            ->andWhere($qb->expr()->in('order_id', $orderIdLiterals))
+            ->execute()
+            ->fetchAll();
         $userIds = array_column($userLists, 'user_id');
         $userIds = array_filter($userIds, function($value) {
             return $value !== null && $value !== false && $value !== "" && $value !== 0;
@@ -162,8 +193,22 @@ trait GetOrderIdTrait
         }
         $result = [];
         // 查询推广员
-        $sql = "select promoter.user_id,promoter.promoter_name,promoter.pname p_promoter_name,promoter.pmobile p_promoter_mobile,identity.name promoter_identity from popularize_promoter promoter left join popularize_promoter_identity identity on promoter.identity_id=identity.id where promoter.user_id in (".implode($userIds, ',').")";
-        $promoterLists = $conn->executeQuery($sql)->fetchAll();
+        $userIdLiterals = array_map(function ($value) use ($literalQb) {
+            return $literalQb->expr()->literal($value);
+        }, $userIds);
+        $qb = $conn->createQueryBuilder();
+        $promoterLists = $qb->select(
+                'promoter.user_id',
+                'promoter.promoter_name',
+                'promoter.pname AS p_promoter_name',
+                'promoter.pmobile AS p_promoter_mobile',
+                'identity.name AS promoter_identity'
+            )
+            ->from('popularize_promoter', 'promoter')
+            ->leftJoin('promoter', 'popularize_promoter_identity', 'identity', 'promoter.identity_id = identity.id')
+            ->where($qb->expr()->in('promoter.user_id', $userIdLiterals))
+            ->execute()
+            ->fetchAll();
         $promoterLists = array_column($promoterLists, null, 'user_id');
         
         // 查询推广员手机号
@@ -175,16 +220,35 @@ trait GetOrderIdTrait
             $promoterData[$value['order_id']]['promoter_is_close'] = $value['is_close'];
         }
         // 查询订单分佣金额
-        $where = "company_id=".$companyId." and order_id in (".implode($orderIds, ',').") and source='order'";
-        $sql = "select order_id,sum(rebate) order_total_rebate from popularize_brokerage where ".$where." group by order_id";
-        $orderRebate = $conn->executeQuery($sql)->fetchAll();
+        $buildBrokerageRebateQuery = function ($brokerageType = null) use ($conn, $companyId, $orderIdLiterals) {
+            $qb = $conn->createQueryBuilder();
+            $qb->from('popularize_brokerage')
+                ->where($qb->expr()->eq('company_id', $qb->expr()->literal($companyId)))
+                ->andWhere($qb->expr()->in('order_id', $orderIdLiterals))
+                ->andWhere($qb->expr()->eq('source', $qb->expr()->literal('order')));
+            if ($brokerageType !== null) {
+                $qb->andWhere($qb->expr()->eq('brokerage_type', $qb->expr()->literal($brokerageType)));
+            }
+            return $qb;
+        };
+        $orderRebate = $buildBrokerageRebateQuery()
+            ->select('order_id', 'SUM(rebate) AS order_total_rebate')
+            ->groupBy('order_id')
+            ->execute()
+            ->fetchAll();
         $orderRebate = array_column($orderRebate, null, 'order_id');
         // 查询订单分佣金额
-        $sql = "select order_id,sum(rebate) as rebate from popularize_brokerage where ".$where." and brokerage_type='first_level' group by order_id";
-        $firstRebate = $conn->executeQuery($sql)->fetchAll();
+        $firstRebate = $buildBrokerageRebateQuery('first_level')
+            ->select('order_id', 'SUM(rebate) AS rebate')
+            ->groupBy('order_id')
+            ->execute()
+            ->fetchAll();
         $firstRebate = array_column($firstRebate, null, 'order_id');
-        $sql = "select order_id,sum(rebate) as rebate from popularize_brokerage where ".$where." and brokerage_type='second_level' group by order_id";
-        $secondRebate = $conn->executeQuery($sql)->fetchAll();
+        $secondRebate = $buildBrokerageRebateQuery('second_level')
+            ->select('order_id', 'SUM(rebate) AS rebate')
+            ->groupBy('order_id')
+            ->execute()
+            ->fetchAll();
         $secondRebate = array_column($secondRebate, null, 'order_id');
         foreach ($orderIds as $order_id) {
             if (isset($promoterData[$order_id])) {

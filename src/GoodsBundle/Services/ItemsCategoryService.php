@@ -145,6 +145,66 @@ class ItemsCategoryService
     }
 
     /**
+     * FrontApi 分类列表查询用的 distributor_id（items_category 维度）。
+     * BBC(standard) 共用平台销售分类；platform 使用店铺独立分类。
+     */
+    public function resolveCategoryDistributorIdForFront(string $productModel, int $requestDistributorId): int
+    {
+        if ($productModel === 'standard') {
+            return 0;
+        }
+
+        return $requestDistributorId;
+    }
+
+    /**
+     * FrontApi 是否按店铺可售商品过滤分类树（BBC 店铺主页）。
+     */
+    public function shouldApplySaleableFilterForFront(string $productModel, int $requestDistributorId): bool
+    {
+        return $productModel === 'standard' && $requestDistributorId > 0;
+    }
+
+    /**
+     * 获取店铺可售商品对应的一级销售分类 ID 列表（用于 categorylevel 等扁平接口）。
+     */
+    public function getSaleableTopLevelCategoryIds(int $companyId, int $distributorId): array
+    {
+        if ($companyId <= 0 || $distributorId <= 0) {
+            return [];
+        }
+
+        $categoryIdMap = $this->getSaleableCategoryIdMap($companyId, $distributorId);
+        if (empty($categoryIdMap)) {
+            return [];
+        }
+
+        $topLevelIds = [];
+        foreach (array_keys($categoryIdMap) as $categoryId) {
+            if (!is_numeric($categoryId)) {
+                continue;
+            }
+            $category = $this->itemsCategoryRepository->getInfo([
+                'company_id' => $companyId,
+                'category_id' => (int)$categoryId,
+            ]);
+            if (!$category) {
+                continue;
+            }
+            if ((int)($category['parent_id'] ?? 0) === 0) {
+                $topLevelIds[] = (int)$category['category_id'];
+            } else {
+                $path = explode(',', (string)($category['path'] ?? ''));
+                if (!empty($path[0]) && is_numeric($path[0])) {
+                    $topLevelIds[] = (int)$path[0];
+                }
+            }
+        }
+
+        return array_values(array_unique($topLevelIds));
+    }
+
+    /**
      * 关于节点的回溯
      * @param $categories
      * @return array

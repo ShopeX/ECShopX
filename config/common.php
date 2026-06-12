@@ -108,6 +108,7 @@ return [
     'encrypt_sensitive_data' => env('ENCRYPT_SENSITIVE_DATA', false),
 
     'sms_send_limit' => env("SMS_SEND_LIMIT", 5), // 一种短信验证码在一天里的发送上限
+    'sms_debug_vcode' => env('SMS_DEBUG_VCODE', false), // 开发调试短信验证码：开启后不调用真实短信通道，直接返回验证码
 
     'shop_admin_url' => env('SHOP_ADMIN_URL', ''),// 管理后台地址,结尾带斜杠
     'appcenter_base_url' => env('APPCENTER_BASE_URL', env('TEST_MODE', false) ? 'https://account.uc.ex-sandbox.com' : 'https://account.shopex.cn'),

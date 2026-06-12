@@ -68,7 +68,7 @@ RUN mkdir -p /var/log/supervisor \
     && mkdir -p /data/httpd/ECShopX \
     && mkdir -p /data/httpd/ECShopX_admin-frontend \
     && mkdir -p /data/httpd/ECShopX_mobile-frontend \
-    && mkdir -p /data/httpd/ECShopX_desktop-frontend \
+    && mkdir -p /data/httpd/ECShopX_web-frontend \
     && (id -u redis >/dev/null 2>&1 || adduser -D -s /sbin/nologin redis) \
     && (id -u www-data >/dev/null 2>&1 || (addgroup -g 82 www-data && adduser -D -s /sbin/nologin -u 82 -G www-data www-data)) \
     && chown -R redis:redis /var/lib/redis /var/log/redis /var/run/redis \

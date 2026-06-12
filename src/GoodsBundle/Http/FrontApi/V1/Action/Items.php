@@ -1498,4 +1498,54 @@ class Items extends BaseController
         unset($itemInfo['itemId'], $itemInfo['consumeType'], $itemInfo['itemName'], $itemInfo['itemBn'], $itemInfo['companyId'], $itemInfo['item_main_cat_id'], $itemInfo['nospec'], $itemInfo['pics_create_qrcode']);
         return $this->response->array($itemInfo);
     }
+
+    /**
+     * @SWG\Get(
+     *     path="/wxapp/goods/items/batch",
+     *     summary="批量获取商品基本信息",
+     *     tags={"商品"},
+     *     description="批量获取商品基本信息（图片、ID、名称、价格），供 ecshopx-web 等端使用",
+     *     operationId="getBatchItems",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", type="string" ),
+     *     @SWG\Parameter( name="item_ids", in="query", description="商品ID列表，逗号分隔，如 1,2,3", required=true, type="string" ),
+     *     @SWG\Response(
+     *         response=200,
+     *         description="成功返回结构",
+     *         @SWG\Schema(
+     *             @SWG\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @SWG\Items(
+     *                     type="object",
+     *                     @SWG\Property(property="item_id", type="integer", description="商品ID"),
+     *                     @SWG\Property(property="item_name", type="string", description="商品名称"),
+     *                     @SWG\Property(property="price", type="integer", description="销售价（单位：分）"),
+     *                     @SWG\Property(property="pics", type="array", description="商品图片数组", @SWG\Items(type="string"))
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/GoodsErrorRespones") ) )
+     * )
+     */
+    public function getBatchItems(Request $request)
+    {
+        $authInfo = $request->get('auth');
+        $itemIdsStr = $request->input('item_ids', '');
+
+        if (empty($itemIdsStr)) {
+            return $this->response->array([]);
+        }
+
+        $itemIds = array_filter(array_map('intval', explode(',', $itemIdsStr)));
+        if (empty($itemIds)) {
+            return $this->response->array([]);
+        }
+
+        $itemsRepository = app('registry')->getManager('default')->getRepository(\GoodsBundle\Entities\Items::class);
+        $cols = 'item_id,item_name,price,pics';
+        $result = $itemsRepository->getLists(['item_id' => $itemIds], $cols, 1, -1, []);
+
+        return $this->response->array($result);
+    }
 }

@@ -1247,8 +1247,13 @@ class Members extends Controller
                 }
             }
         }
-        $memberRegSettingService->generateSmsVcode($phone, $companyId, $type);
-        return $this->response->array(['message' => "短信发送成功"]);
+        $debugVcode = $memberRegSettingService->generateSmsVcode($phone, $companyId, $type);
+        $response = ['message' => "短信发送成功"];
+        if (is_string($debugVcode)) {
+            $response['message'] = '短信调试模式已开启';
+            $response['debug_vcode'] = $debugVcode;
+        }
+        return $this->response->array($response);
     }
 
     /**

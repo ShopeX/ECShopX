@@ -39,6 +39,7 @@ $api->version('v1', function($api) {
         $api->get('/member/sms/code', ['as' => 'member.sms.code',      'uses' => 'Members@getSmsCode']);
         // 获取图片验证码-已支持h5
         $api->get('/member/image/code', ['as' => 'member.image.code',      'uses' => 'Members@getImageVcode']);
+        $api->get('/member/verify', ['name'=>'POS会员手机号验证码校验并查询会员信息','middleware'=>['activated'], 'as' => 'member.verify', 'uses' =>'Members@verifyMember']);
         $api->post('/member',   ['name'=>'新增会员','middleware'=>['activated'],  'as' => 'member.create', 'uses' =>'Members@createMember']);
         $api->patch('/member', ['name'=>'更新会员信息','middleware'=>'activated',  'as' => 'member.update', 'uses' =>'Members@updateMemberInfo']);
         $api->put('/member',   ['name'=>'更新会员手机信息','middleware'=>'activated',  'as' => 'member.upate.mobile', 'uses' =>'Members@updateMobileById']);

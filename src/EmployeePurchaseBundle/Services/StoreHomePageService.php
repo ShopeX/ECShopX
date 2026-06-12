@@ -64,6 +64,66 @@ class StoreHomePageService
     }
 
     /**
+     * 自定义页装修 version 候选（按优先级）。
+     * - decorate/index scene=1010：门店维度写入 shop_{distributor_id}
+     * - 旧 shopDecoration page_template：固定 v1.0.1（与 distributor 无关）
+     *
+     * @return list<string>
+     */
+    public static function customDecorationSettingVersionCandidates(int $rowDistributorId, int $authDistributorId): array
+    {
+        $distributorId = $rowDistributorId > 0 ? $rowDistributorId : $authDistributorId;
+        $versions = [];
+        if ($distributorId > 0) {
+            $versions[] = 'shop_'.$distributorId;
+        }
+        $versions[] = self::CUSTOM_DECORATION_SETTING_VERSION;
+
+        return array_values(array_unique($versions));
+    }
+
+    /**
+     * 拉取 wechat_weapp_setting 时尝试的 template_name（decorate/index scene=1010 曾硬编码 yykweishop）。
+     *
+     * @param array<string,mixed> $storeHomeRow
+     *
+     * @return list<string>
+     */
+    public static function decorationTemplateNameCandidates(array $storeHomeRow): array
+    {
+        $names = [];
+        $primary = (string) ($storeHomeRow['template_name'] ?? '');
+        if ($primary !== '') {
+            $names[] = $primary;
+        }
+        if ($primary !== 'yykweishop') {
+            $names[] = 'yykweishop';
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * 解析 pages_template 列表时的查询计划（按优先级）。
+     *
+     * @return list<array{distributor_id: int, weapp_pages: string}>
+     */
+    public static function pagesTemplateListSearchPlans(int $rowDistributorId): array
+    {
+        if ($rowDistributorId > 0) {
+            return [
+                ['distributor_id' => $rowDistributorId, 'weapp_pages' => 'distributor_index'],
+                ['distributor_id' => $rowDistributorId, 'weapp_pages' => 'index'],
+                ['distributor_id' => 0, 'weapp_pages' => 'index'],
+            ];
+        }
+
+        return [
+            ['distributor_id' => 0, 'weapp_pages' => 'index'],
+        ];
+    }
+
+    /**
      * @param array<string,mixed>|null $detail PagesTemplateServices::content 返回值
      */
     public static function pageTemplateDetailHasNonEmptyList(?array $detail): bool
@@ -253,10 +313,11 @@ class StoreHomePageService
             'page_template_detail' => null,
         ];
 
+        $templateName = (string) ($row['template_name'] ?? '');
         $pid = (int) ($resolved['resolved_pages_template_id'] ?? 0);
-        if ($pid > 0) {
-            $distId = (int) ($row['distributor_id'] ?? 0);
-            $customizeId = isset($row['weapp_customize_page_id']) ? (int) $row['weapp_customize_page_id'] : 0;
+        $distId = (int) ($row['distributor_id'] ?? 0);
+        $customizeId = isset($row['weapp_customize_page_id']) ? (int) $row['weapp_customize_page_id'] : 0;
+        if ($templateName !== '' && ($pid > 0 || $customizeId > 0)) {
             $pagesTemplateServices = new PagesTemplateServices();
 
             $indexParams = [
@@ -264,8 +325,8 @@ class StoreHomePageService
                 'regionauth_id' => 0,
                 'user_id' => $userId,
                 'distributor_id' => $distId,
-                'weapp_pages' => 'index',
-                'template_name' => (string) ($row['template_name'] ?? ''),
+                'weapp_pages' => $distId > 0 ? 'distributor_index' : 'index',
+                'template_name' => $templateName,
                 'version' => self::INDEX_DECORATION_SETTING_VERSION,
                 'page' => '1',
                 'page_size' => '50',
@@ -277,26 +338,14 @@ class StoreHomePageService
 
             $customPageName = self::weappSettingPageNameForCustomizePage($customizeId);
             if ($customPageName !== null) {
-                $customParams = array_merge($indexParams, [
-                    'version' => self::CUSTOM_DECORATION_SETTING_VERSION,
-                    'weapp_setting_page_name' => $customPageName,
-                ]);
-                $detail = $pagesTemplateServices->content($customParams);
-                if (!self::pageTemplateDetailHasNonEmptyList($detail)) {
-                    $customParams['weapp_setting_pages_template_id'] = 0;
-                    $detail = $pagesTemplateServices->content($customParams);
-                }
-                if (!self::pageTemplateDetailHasNonEmptyList($detail)) {
-                    app('log')->warning('[StoreHomePageService] enterprise_store_home 自定义页装修无匹配 wechat_weapp_setting，回退 index', [
-                        'company_id' => $companyId,
-                        'store_home_page_id' => $id,
-                        'weapp_customize_page_id' => $customizeId,
-                        'weapp_setting_page_name' => $customPageName,
-                    ]);
-                    $detail = $pagesTemplateServices->content($indexParams);
-                }
-                $base['page_template_detail'] = $detail;
-            } else {
+                $base['page_template_detail'] = $this->fetchCustomPageDecorationDetail(
+                    $companyId,
+                    $row,
+                    $customPageName,
+                    $distId,
+                    $authDistributorId
+                );
+            } elseif ($pid > 0) {
                 $base['page_template_detail'] = $pagesTemplateServices->content($indexParams);
             }
         }
@@ -325,19 +374,25 @@ class StoreHomePageService
         }
 
         $distributorId = (int) ($storeHomeRow['distributor_id'] ?? 0);
-        $weappPages = $distributorId > 0 ? 'distributor_index' : 'index';
 
         $pagesTemplateServices = new PagesTemplateServices();
-        $listResult = $pagesTemplateServices->lists([
-            'company_id' => $companyId,
-            'distributor_id' => $distributorId,
-            'weapp_pages' => $weappPages,
-            'page_no' => 1,
-            'page_size' => 100,
-        ]);
-
-        $rows = $listResult['list'] ?? [];
-        $picked = self::pickResolvedPagesTemplateRow(is_array($rows) ? $rows : [], $templateName);
+        $picked = null;
+        foreach (self::decorationTemplateNameCandidates($storeHomeRow) as $tryTemplateName) {
+            foreach (self::pagesTemplateListSearchPlans($distributorId) as $plan) {
+                $listResult = $pagesTemplateServices->lists([
+                    'company_id' => $companyId,
+                    'distributor_id' => $plan['distributor_id'],
+                    'weapp_pages' => $plan['weapp_pages'],
+                    'page_no' => 1,
+                    'page_size' => 100,
+                ]);
+                $rows = $listResult['list'] ?? [];
+                $picked = self::pickResolvedPagesTemplateRow(is_array($rows) ? $rows : [], $tryTemplateName);
+                if ($picked !== null) {
+                    break 2;
+                }
+            }
+        }
 
         if ($picked === null) {
             return [
@@ -358,6 +413,122 @@ class StoreHomePageService
                 'status' => $picked['status'] ?? null,
             ],
             'pages_template_record' => $picked,
+        ];
+    }
+
+    /**
+     * 自定义页装修：与后台 getParamByTempName 一致（custom_{id} + shop_{distributor_id}，pages_template_id=0）。
+     *
+     * @param array<string,mixed> $storeHomeRow
+     *
+     * @return array{list: array<int, array<string,mixed>>, config: array<int, array<string,mixed>>}
+     */
+    private function fetchCustomPageDecorationDetail(
+        int $companyId,
+        array $storeHomeRow,
+        string $customPageName,
+        int $distId,
+        int $authDistributorId
+    ): array {
+        foreach (self::decorationTemplateNameCandidates($storeHomeRow) as $tryTemplateName) {
+            foreach (self::customDecorationSettingVersionCandidates($distId, $authDistributorId) as $version) {
+                $entities = $this->weappSettingRepository->getParamByTempName(
+                    $companyId,
+                    $tryTemplateName,
+                    $customPageName,
+                    null,
+                    $version,
+                    0
+                );
+                $list = self::buildTemplateConfListFromWeappSettingEntities($entities, $companyId, $tryTemplateName);
+                if ($list !== []) {
+                    return self::buildPageTemplateDetailFromTemplateConfList($list);
+                }
+            }
+        }
+
+        return ['list' => [], 'config' => []];
+    }
+
+    /**
+     * @param mixed $raw
+     *
+     * @return array<string,mixed>
+     */
+    public static function safeDecodeWeappSettingParams($raw): array
+    {
+        if (is_array($raw)) {
+            return $raw;
+        }
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        $unserialized = @unserialize($raw);
+        if (is_array($unserialized)) {
+            return $unserialized;
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param mixed $entities
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public static function buildTemplateConfListFromWeappSettingEntities($entities, int $companyId, string $fallbackTemplateName = ''): array
+    {
+        if ($entities instanceof \Traversable) {
+            $entities = iterator_to_array($entities);
+        }
+        if (!is_array($entities)) {
+            return [];
+        }
+
+        $list = [];
+        foreach ($entities as $row) {
+            if (!is_object($row)) {
+                continue;
+            }
+
+            $pageName = method_exists($row, 'getPageName') ? (string) $row->getPageName() : '';
+            $list[] = [
+                'id' => method_exists($row, 'getId') ? $row->getId() : 0,
+                'template_name' => method_exists($row, 'getTemplateName') ? $row->getTemplateName() : $fallbackTemplateName,
+                'company_id' => method_exists($row, 'getCompanyId') ? $row->getCompanyId() : $companyId,
+                'name' => method_exists($row, 'getName') ? (string) $row->getName() : '',
+                'page_name' => $pageName !== '' ? $pageName : 'index',
+                'params' => self::safeDecodeWeappSettingParams(method_exists($row, 'getParams') ? $row->getParams() : null),
+            ];
+        }
+
+        return $list;
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $list
+     *
+     * @return array<string,mixed>
+     */
+    public static function buildPageTemplateDetailFromTemplateConfList(array $list): array
+    {
+        $config = [];
+        foreach ($list as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $params = $row['params'] ?? null;
+            if (is_array($params) && isset($params['name']) && isset($params['base'])) {
+                $config[] = $params;
+            }
+        }
+
+        return [
+            'list' => $list,
+            'config' => $config,
         ];
     }
 

@@ -122,12 +122,6 @@ class PagesTemplate extends Controller
             if ($result['data']) {
                 $result['data'] = $itemsService->applyMultiSpecTotalStoreForItemList($result['data']);
             }
-            if ($eActivityId > 0 && $result['data']) {
-                $activityItemsService = new ActivityItemsService();
-                $wrapped = ['list' => $result['data']];
-                $wrapped = $activityItemsService->getItemsListActityPrice($wrapped, $eActivityId, (int) $params['company_id']);
-                $result['data'] = $wrapped['list'];
-            }
             if ($result['data']) {
                 $result['data'] = $itemsService->getItemsListMemberPrice($result['data'], $authInfo['user_id'], $params['company_id']);
             }
@@ -139,6 +133,13 @@ class PagesTemplate extends Controller
                 $promotionType = '';
             }
             $result['data'] = $itemsService->getItemsListActityTag($result['data'], $params['company_id'], $params['regionauth_id'], $params['user_id'], $promotionId, $promotionType, 'include_not_start');
+            // 内购活动价最后覆盖，避免被营销标签 activity_price 覆盖
+            if ($eActivityId > 0 && $result['data']) {
+                $activityItemsService = new ActivityItemsService();
+                $wrapped = ['list' => $result['data']];
+                $wrapped = $activityItemsService->getItemsListActityPrice($wrapped, $eActivityId, (int) $params['company_id']);
+                $result['data'] = $wrapped['list'];
+            }
         }
 
         //优惠券标签

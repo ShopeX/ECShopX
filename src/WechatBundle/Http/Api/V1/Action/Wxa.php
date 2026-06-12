@@ -761,7 +761,7 @@ class Wxa extends Controller
 
         $list = $settingService->getTemplateConf($companyId, $templateName, $pageName, $name, $version);
 
-        if (!isset($list[0]['params']['is_open'])) {
+        if (!empty($list) && !isset($list[0]['params']['is_open'])) {
             $list[0]['params']['is_open'] = true;
         }
 
@@ -1264,6 +1264,5 @@ class Wxa extends Controller
         }
         return $this->response->array($response);
     }
-
 
 }

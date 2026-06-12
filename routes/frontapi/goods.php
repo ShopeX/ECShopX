@@ -16,6 +16,8 @@ $api->version('v1', function ($api) {
     $api->group(['namespace' => 'GoodsBundle\Http\FrontApi\V1\Action', 'middleware' => 'frontnoauth:h5app', 'prefix' => 'h5app'], function ($api) {
         // 商品列表-已支持h5
         $api->get('/wxapp/goods/items',               ['as' => 'goods.items.lists',    'uses' => 'Items@getItemsList']);
+        // 批量获取商品基本信息（图片、ID、名称、价格）
+        $api->get('/wxapp/goods/items/batch', ['as' => 'goods.items.batch', 'uses' => 'Items@getBatchItems']);
         // 获取商品筛选条件
         $api->get('/wxapp/goods/items/filter', ['as' => 'goods.items.filter',    'uses' => 'Items@getItemsFilter']);
         //获取小店商品列表
