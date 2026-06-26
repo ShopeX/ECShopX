@@ -177,8 +177,13 @@ class MemberCardService
                 'grade_name' => '普通会员',
                 'default_grade' => true,
                 'background_pic_url' => '',
-                'promotion_condition' => '',
-                'privileges' => '',
+                'promotion_condition' => [
+                    'total_consumption' => '',
+                ],
+                'privileges' => [
+                    'discount' => 0,
+                    'discount_desc' => 10,
+                ],
                 'description' => '',
             ];
             $result = $this->memberCardGradeRepository->setDefaultGrade($gradeInfo);
