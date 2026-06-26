@@ -86,7 +86,7 @@ class UploadFileService
      *
      * @param object $fileObject SplFileInfo
      */
-    public function uploadFile($companyId, $operatorId, $distributorId, $supplierId, $fileType, $fileObject, $shouldQueue = true)
+    public function uploadFile($companyId, $operatorId, $distributorId, $supplierId, $fileType, $fileObject, $shouldQueue = true, $relationId = 0)
     {
         $this->getUpdateFile($fileType);
 
@@ -132,6 +132,7 @@ class UploadFileService
             'created' => $uploadTime,
             'distributor_id' => $distributorId,
             'merchant_id' => $operator['merchant_id'] ?? 0,
+            'relation_id' => $relationId,
             'left_job_num' => 1, //默认剩余一个待处理的子任务
         ];
         // app('log')->debug("\n uploadFile data =>:".json_encode($data, 256));
@@ -199,21 +200,19 @@ class UploadFileService
             array_walk($headerData, function (&$value) {
                 $value = preg_replace("/\s|　/", "", $value);
             });
-            $column = $this->headerHandle($headerData, $companyId);
+            $column = $this->headerHandle($headerData, $companyId, $data['relation_id'] ?? 0);
             $headerSuccess = true;
             unset($results[0]);
         } catch (\Exception $e) {
             $headerSuccess = false;
             $errorLine++;
-            $headerTitle = $this->uploadFile->getHeaderTitle($companyId);
-            $columnNum = count($headerTitle['all']);
+            $columnNum = $this->getHeaderColumnNum($companyId, $data['relation_id'] ?? 0, $headerData);
             $errorData[] = array_merge(array_fill(0, $columnNum, ''), ['头部标题或Excel解析错误', $e->getMessage()]);
             //$this->errorHandle($data['id'], $errorData);
         } catch (\Throwable $e) {
             $headerSuccess = false;
             $errorLine++;
-            $headerTitle = $this->uploadFile->getHeaderTitle($companyId);
-            $columnNum = count($headerTitle['all']);
+            $columnNum = $this->getHeaderColumnNum($companyId, $data['relation_id'] ?? 0, $headerData);
             $errorData[] = array_merge(array_fill(0, $columnNum, ''), ['头部标题或Excel解析错误', $e->getMessage()]);
             //$this->errorHandle($data['id'], $errorData);
         }
@@ -227,8 +226,7 @@ class UploadFileService
             } catch (BadRequestHttpException $e) {
                 $headerSuccess = false;
                 $errorLine++;
-                $headerTitle = $this->uploadFile->getHeaderTitle($companyId);
-                $columnNum = count($headerTitle['all']);
+                $columnNum = $this->getHeaderColumnNum($companyId, $data['relation_id'] ?? 0, $headerData);
                 $errorData[] = array_merge(array_fill(0, $columnNum, ''), ['数据行数', $e->getMessage()]);
                 app('log')->error('handleUploadFile => ' . json_encode($errorData, 256));
             }
@@ -236,6 +234,9 @@ class UploadFileService
 
         // 如果头部是正确的，才会处理到下一步
         if ($headerSuccess) {
+            if (method_exists($uploadFile, 'beforeImportHandle')) {
+                $uploadFile->beforeImportHandle((int) $companyId, $data);
+            }
             $newAarray = array_chunk($results, 500, true);
             $this->entityRepository->updateOneBy(['id' => $data['id']], ['left_job_num' => count($newAarray)]);
             // app('log')->debug("\n _uploadItems data =>:".json_encode($data, 256));
@@ -264,10 +265,10 @@ class UploadFileService
      * @param string $operatorType 商家类型，用来判断是否供应商
      * @return string Excel文件的二进制内容
      */
-    public function uploadTemplate(string $fileType, string $fileName, int $companyId = 0, $operatorType = '')
+    public function uploadTemplate(string $fileType, string $fileName, int $companyId = 0, $operatorType = '', $relationId = 0)
     {
         $uploadFile = $this->getUpdateFile($fileType);
-        $title = $this->uploadFile->getHeaderTitle($companyId, $operatorType);
+        $title = $this->getUploadHeaderTitle($companyId, $operatorType, $relationId);
         $dataList[] = array_keys($title['all']);
         $demoDataList = [];
         if (method_exists($this->uploadFile, 'getDemoData')) {
@@ -331,9 +332,9 @@ class UploadFileService
     /**
      * 处理导入头部信息
      */
-    private function headerHandle($headerData, $companyId = 0)
+    private function headerHandle($headerData, $companyId = 0, $relationId = 0)
     {
-        $title = $this->uploadFile->getHeaderTitle($companyId);
+        $title = $this->getUploadHeaderTitle($companyId, '', $relationId);
         if ($title) {
             foreach (array_keys($title['is_need']) as $col) {
                 if (!in_array($col, $headerData)) {
@@ -348,6 +349,33 @@ class UploadFileService
             }
         }
         return $column;
+    }
+
+    private function getUploadHeaderTitle($companyId = 0, $operatorType = '', $relationId = 0)
+    {
+        $method = new \ReflectionMethod($this->uploadFile, 'getHeaderTitle');
+        $parameterNum = $method->getNumberOfParameters();
+        if ($parameterNum >= 3) {
+            return $this->uploadFile->getHeaderTitle($companyId, $operatorType, $relationId);
+        }
+        if ($parameterNum == 2) {
+            return $this->uploadFile->getHeaderTitle($companyId, $operatorType);
+        }
+        if ($parameterNum == 1) {
+            return $this->uploadFile->getHeaderTitle($companyId);
+        }
+
+        return $this->uploadFile->getHeaderTitle();
+    }
+
+    private function getHeaderColumnNum($companyId = 0, $relationId = 0, array $headerData = [])
+    {
+        try {
+            $headerTitle = $this->getUploadHeaderTitle($companyId, '', $relationId);
+            return count($headerTitle['all'] ?? []);
+        } catch (\Throwable $e) {
+            return count($headerData);
+        }
     }
 
     /**
@@ -391,7 +419,7 @@ class UploadFileService
             } else {
                 // 如果导入的顶部标题不存在，则默认拿已经定义好的标题列
                 if (empty($exportHeaderTitleColumns)) {
-                    $headerTitle = $this->uploadFile->getHeaderTitle($data['company_id']);
+                    $headerTitle = $this->getUploadHeaderTitle($data['company_id'], '', $data['relation_id'] ?? 0);
                     $exportHeaderTitleColumns = array_keys($headerTitle["all"] ?? []);
                 }
                 $title = array_merge($exportHeaderTitleColumns, ["错误行数", "错误原因"]);
@@ -555,10 +583,13 @@ class UploadFileService
             }
             try {
                 $fileRowData = $this->preRowHandle($column, $row);
-                $fileRowData['distributor_id'] = $data['distributor_id'] ?? 0;
+                if (!isset($fileRowData['distributor_id']) || $fileRowData['distributor_id'] === null || $fileRowData['distributor_id'] === '') {
+                    $fileRowData['distributor_id'] = $data['distributor_id'] ?? 0;
+                }
                 $fileRowData['supplier_id'] = $data['supplier_id'] ?? 0;
                 $fileRowData['operator_id'] = $data['operator_id'];
                 $fileRowData['merchant_id'] = $data['merchant_id'];
+                $fileRowData['relation_id'] = $data['relation_id'] ?? 0;
                 $uploadFile->handleRow((int)$data['company_id'], $fileRowData);
                 $successLine++;
             } catch (\Exception $e) {

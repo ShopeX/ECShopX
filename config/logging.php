@@ -106,6 +106,14 @@ return [
             'driver' => 'monolog',
             'handler' => NullHandler::class,
         ],
+
+        /** 数云开放网关（店铺同步等），见 .tasks/plans/shuyun-open-platform-shop-sync-body-and-logging.md */
+        'shuyun_open_platform' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/shuyun-open-platform.log'),
+            'level' => 'debug',
+            'days' => 14,
+        ],
     ],
 
 ];

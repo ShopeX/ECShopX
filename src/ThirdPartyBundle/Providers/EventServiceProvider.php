@@ -34,6 +34,7 @@ class EventServiceProvider extends ServiceProvider
 
         'ThirdPartyBundle\Events\TradeRefundEvent' => [
             'ThirdPartyBundle\Listeners\TradeRefundSendSaasErp', // 退款申请发送到saasErp
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderRefundSyncToShuyunOpenPlatformListener@handleTradeRefund',
         ],
 
         'ThirdPartyBundle\Events\TradeAftersalesEvent' => [
@@ -64,14 +65,20 @@ class EventServiceProvider extends ServiceProvider
             // 'PaymentBundle\Listeners\OfflinePaymentCreate',
             'ThirdPartyBundle\Listeners\MarketingCenter\OrderAddPushMarketingCenter',
         ],
+        'OrdersBundle\Events\NormalOrderPaySuccessEvent' => [
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderTradeSyncToShuyunOpenPlatformListener',
+            'ShuyunOpenPlatformBundle\Listeners\ShuyunOfflineBenefitResultPushOnPaySuccessListener',
+        ],
         'OrdersBundle\Events\NormalOrderDeliveryEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\OrderDeliveryPushMarketingCenter',
             "ThirdPartyBundle\Listeners\DmCrm\OrderDeliveryListener", // 订单发货完成，达摩crm确认扣除积分
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderTradeSyncToShuyunOpenPlatformListener@handleDelivery',
         ],
         'OrdersBundle\Events\NormalOrderConfirmReceiptEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\OrderConfirmReceiptPushMarketingCenter',
             "ThirdPartyBundle\Listeners\ShopexCrm\SyncConfirmReceiptOrder",
             // "ThirdPartyBundle\Listeners\DmCrm\OrderFinishListener", // 订单完成，推送订单到达摩crm
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderTradeSyncToShuyunOpenPlatformListener@handleConfirmReceipt',
         ],
         'ThirdPartyBundle\Events\TradeAftersalesRefuseEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\TradeAftersalesRefusePushMarketingCenter',
@@ -88,6 +95,8 @@ class EventServiceProvider extends ServiceProvider
         'ThirdPartyBundle\Events\TradeRefundFinishEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\TradeRefundFinishPushMarketingCenter',
              "ThirdPartyBundle\Listeners\DmCrm\TradeRefundFinishListener", // 售后订单完成，推送售后订单到达摩crm
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderRefundSyncToShuyunOpenPlatformListener@handleTradeRefundFinish',
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderTradeSyncToShuyunOpenPlatformListener@handleTradeRefundFinish',
         ],
         'GoodsBundle\Events\ItemDeleteEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\ItemDelPushMarketingCenter',
@@ -95,6 +104,9 @@ class EventServiceProvider extends ServiceProvider
         'GoodsBundle\Events\ItemBatchEditStatusEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\ItemBatchEditStatusPushMarketingCenter',
             'GoodsBundle\Listeners\ItemsApproveStatusSync', // 商品状态同步
+        ],
+        'GoodsBundle\Events\ItemStoreUpdateEvent' => [
+            'ShuyunOpenPlatformBundle\Listeners\ItemStoreShuyunOpenPlatformProductSyncListener',
         ],
         'ThirdPartyBundle\Events\ScheduleCancelOrdersEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\ScheduleCancelOrdersPushMarketingCenter',

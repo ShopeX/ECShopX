@@ -27,13 +27,15 @@ class StoreHomePage extends Controller
     {
         $auth = app('auth')->user()->get();
         $companyId = (int) $auth['company_id'];
-        $authDistributorId = (int) ($auth['distributor_id'] ?? 0);
         $page = max(1, (int) $request->input('page', 1));
         $pageSize = max(1, min(100, (int) $request->input('pageSize', 20)));
-        $filterDist = $request->input('distributor_id');
-        $filterDistributorId = ($filterDist === null || $filterDist === '') ? null : (int) $filterDist;
+
+        $authDistributorId = 0;
+        $filterDistributorId = null;
         if (($auth['operator_type'] ?? '') === 'distributor') {
-            $filterDistributorId = null;
+            $authDistributorId = (int) ($auth['distributor_id'] ?? $request->input('distributor_id', 0));
+        } elseif (($filterDist = $request->input('distributor_id')) !== null && $filterDist !== '') {
+            $filterDistributorId = (int) $filterDist;
         }
 
         $result = $this->service->getList($companyId, $authDistributorId, $page, $pageSize, $filterDistributorId);

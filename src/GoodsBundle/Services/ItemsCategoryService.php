@@ -26,6 +26,7 @@ use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use Doctrine\DBAL\Connection;
 use PointsmallBundle\Entities\PointsmallItemRelAttributes;
 use PointsmallBundle\Entities\PointsmallItems;
+use ShuyunOpenPlatformBundle\Listeners\ItemsCategorySyncToShuyunOpenPlatformDispatch;
 
 class ItemsCategoryService
 {
@@ -657,6 +658,7 @@ class ItemsCategoryService
         }
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
+        $res = null;
         try {
             if (!isset($params['parent_id'])) {
                 $params['parent_id'] = $parentId;
@@ -692,6 +694,19 @@ class ItemsCategoryService
             }
 
             $conn->commit();
+            if ($res !== null && isset($res['category_id'])) {
+                $fresh = $this->itemsCategoryRepository->getInfo([
+                    'category_id' => $res['category_id'],
+                    'company_id' => $companyId,
+                ]);
+                if (is_array($fresh) && $fresh !== []) {
+                    $lvl = (int) ($fresh['category_level'] ?? 0);
+                    if (in_array($lvl, [2, 3], true)) {
+                        ItemsCategorySyncToShuyunOpenPlatformDispatch::dispatchIfAuthAllows($companyId, (int) $fresh['category_id']);
+                    }
+                }
+            }
+
             return $result;
         } catch (\Exception $e) {
             $conn->rollback();
@@ -730,6 +745,7 @@ class ItemsCategoryService
                 $newPath = $result['category_id'];
             }
             $result = $this->itemsCategoryRepository->updateOneBy(['category_id' => $result['category_id']], ['path' => $newPath]);
+            $this->maybeDispatchShuyunOpenPlatformCategorySync($companyId, $result);
 
             if (isset($row['children']) && $row['children']) {
                 $this->__saveCategory($row['children'], $companyId, $distributorId, $level + 1, $result['category_id'], $result['path']);
@@ -737,6 +753,22 @@ class ItemsCategoryService
         }
 
         return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $categoryRow
+     */
+    private function maybeDispatchShuyunOpenPlatformCategorySync(int $companyId, array $categoryRow): void
+    {
+        $lvl = (int) ($categoryRow['category_level'] ?? 0);
+        if (! in_array($lvl, [2, 3], true)) {
+            return;
+        }
+        $cid = (int) ($categoryRow['category_id'] ?? 0);
+        if ($cid < 1) {
+            return;
+        }
+        ItemsCategorySyncToShuyunOpenPlatformDispatch::dispatchIfAuthAllows($companyId, $cid);
     }
 
     /**

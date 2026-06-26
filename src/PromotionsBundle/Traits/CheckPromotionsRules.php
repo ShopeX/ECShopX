@@ -416,7 +416,7 @@ trait CheckPromotionsRules
                 $errorMessage .= '：'.implode(',', $secKillName[$seckillType]);
                 $rs = $service->getSeckillItemList(['seckill_id' => $secKillIds[$seckillType], 'company_id' => $params['company_id']]);
                 $secKillItemIds = array_column($rs['list'], 'item_id');
-                $this->checkValidByItemIds($secKillItemIds, $params, $errorMessage);
+                $this->checkValidByItemIds($params, $secKillItemIds, $errorMessage);
             }
         }
 
@@ -451,12 +451,12 @@ trait CheckPromotionsRules
         }
 
         $bargainItemIds = array_column($rs['list'], 'item_id');
-        $this->checkValidByItemIds($bargainItemIds, $params, $errorMessage);
+        $this->checkValidByItemIds($params, $bargainItemIds, $errorMessage);
 
         return true;//不存在冲突
     }
 
-    public function checkValidByItemIds($checkItemIds = [], $params, $errorMessage = '活动存在冲突')
+    public function checkValidByItemIds($params, $checkItemIds = [], $errorMessage = '活动存在冲突')
     {
         if (!$checkItemIds) {
             return false;

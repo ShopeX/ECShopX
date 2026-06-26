@@ -67,13 +67,25 @@ class PointMemberRuleService
     }
 
     /**
-     * 返回积分名
-     * @return mixed
+     * 返回积分名（展示文案中的「积分」商户自定义名）。
+     *
+     * @param int|string|null $companyId 显式租户；队列/CLI 等无登录用户时必须传入，否则退回默认译名
      */
-    public function getPointName()
+    public function getPointName($companyId = null)
     {
-        $companyId = app('auth')->user()->get('company_id');
-        $result = $this->getPointRule($companyId);
+        $resolved = $companyId;
+        if ($resolved === null || $resolved === '') {
+            $user = app('auth')->user();
+            if (\is_object($user) && \method_exists($user, 'get')) {
+                $resolved = $user->get('company_id');
+            }
+        }
+        if ($resolved === null || $resolved === '') {
+            return (string) trans('MembersBundle/Members.point_ass');
+        }
+
+        $result = $this->getPointRule($resolved);
+
         return $result['name'];
     }
 
@@ -132,7 +144,7 @@ class PointMemberRuleService
             $point = bcmul(bcdiv($money, 100, 2), $this->rule['deduct_point'], 2);
             return intval(ceil($point));
         } else {
-            throw new PointResourceException("{point}支付未开启");
+            throw new PointResourceException("{point}支付未开启", $companyId);
         }
     }
 
@@ -248,7 +260,7 @@ class PointMemberRuleService
     * @param memberPoint:会员积分
     * @param payFee:订单最终支付金额
     */
-    public function orderMaxPoint($companyId, $memberPoint, $payFee, $freightFee = 0, $orderData)
+    public function orderMaxPoint($companyId, $memberPoint, $payFee, $orderData, $freightFee = 0)
     {
         $totalPoint = $totalMaxMoney = $totalMoneyToPoint = $totalPointZiti = 0;
         if ($this->rule['deduct_point']) {

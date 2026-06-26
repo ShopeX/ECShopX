@@ -203,7 +203,7 @@ class CartService
 
         $activityItemsService = new ActivityItemsService();
         $activityItemInfo = $activityItemsService->getInfo(['company_id' => $filter['company_id'], 'activity_id' => $filter['activity_id'], 'item_id' => $filter['item_id']]);
-        if (!$activityItemInfo) {
+        if (!$activityItemInfo || (int) ($activityItemInfo['shelf_status'] ?? 1) !== 1) {
             throw new ResourceException('商品未参加内购活动');
         }
 
@@ -318,11 +318,12 @@ class CartService
         }
 
         foreach ($itemList as $key => $item) {
-            if (isset($activityItemList[$item['item_id']])) {
+            $actRow = $activityItemList[$item['item_id']] ?? null;
+            if ($actRow && (int) ($actRow['shelf_status'] ?? 1) === 1) {
                 $itemList[$key]['sale_price'] = $item['price'];
-                $itemList[$key]['price'] = $activityItemList[$item['item_id']]['activity_price'];
+                $itemList[$key]['price'] = $actRow['activity_price'];
                 if (!$activity['if_share_store']) {
-                    $itemList[$key]['store'] = $activityItemList[$item['item_id']]['activity_store'];
+                    $itemList[$key]['store'] = $actRow['activity_store'];
                 }
             } else {
                 $itemList[$key]['sale_price'] = $item['price'];
@@ -400,7 +401,7 @@ class CartService
             'activity_id' => $filter['activity_id'],
             'item_id' => $mergedParams['item_id'],
         ]);
-        if (!$activityItem) {
+        if (!$activityItem || (int) ($activityItem['shelf_status'] ?? 1) !== 1) {
             throw new ResourceException('商品未参加内购活动');
         }
         $num = (int) ($mergedParams['num'] ?? 0);
@@ -462,7 +463,7 @@ class CartService
         $lines = [];
         foreach ($rawLines as $row) {
             $iid = $row['item_id'];
-            if (!isset($activityItemByItemId[$iid])) {
+            if (!isset($activityItemByItemId[$iid]) || (int) ($activityItemByItemId[$iid]['shelf_status'] ?? 1) !== 1) {
                 throw new ResourceException('商品未参加内购活动');
             }
             $price = (int) $activityItemByItemId[$iid]['activity_price'];

@@ -141,11 +141,6 @@ class DistributorService
      */
     public function updateDistributor($distributorId, $data)
     {
-        $defaultData = $this->getDefaultDistributor($data['company_id']);
-        if (!$defaultData) {
-            $data['is_default'] = true;
-        }
-
         $infoById = $this->entityRepository->getInfo(['distributor_id' => $distributorId, 'company_id' => $data['company_id']]);
         if (!$infoById) {
             throw new ResourceException(trans('DistributionBundle/Services/DistributorService.confirm_update_data'));
@@ -181,7 +176,22 @@ class DistributorService
             $itemsService->updateBy(['distributor_id' => $distributorId], ['audit_status' => 'approved']);
         }
 
+        $oldName = (string) ($infoById['name'] ?? '');
+        $oldIsValid = (string) ($infoById['is_valid'] ?? '');
         $result = $this->entityRepository->updateOneBy(['distributor_id' => $distributorId], $data);
+        if (is_array($result)) {
+            $result['__old_name'] = $oldName;
+            $result['__old_is_valid'] = $oldIsValid;
+            if (array_key_exists('__client_intent_status', $data)) {
+                $result['__client_intent_status'] = $data['__client_intent_status'];
+            }
+            if (array_key_exists('__client_intent_review_result', $data)) {
+                $result['__client_intent_review_result'] = $data['__client_intent_review_result'];
+            }
+            if (array_key_exists('__client_intent_profile', $data)) {
+                $result['__client_intent_profile'] = $data['__client_intent_profile'];
+            }
+        }
 
         //触发事件
         $this->dispatchEventsWhenUpdate($result);
@@ -291,6 +301,9 @@ class DistributorService
 
         if (isset($data['is_ziti']) && is_numeric($data['is_ziti'])) {
             $data['is_ziti'] = $data['is_ziti'] == '1';
+        }
+        if (isset($data['is_platform_store_buy']) && is_numeric($data['is_platform_store_buy'])) {
+            $data['is_platform_store_buy'] = $data['is_platform_store_buy'] == '1';
         }
         if (isset($data['is_delivery']) && is_numeric($data['is_delivery'])) {
             $data['is_delivery'] = $data['is_delivery'] == '1';
@@ -464,6 +477,79 @@ class DistributorService
     public function getInfoSimple(array $filter): array
     {
         return $this->entityRepository->getInfo($filter);
+    }
+
+    /**
+     * 店铺行（getInfoSimple 等）上的 is_platform_store_buy 是否视为开启。
+     *
+     * @param array<string, mixed> $distributorRow
+     */
+    public static function isPlatformStoreBuyEnabledRaw(array $distributorRow): bool
+    {
+        $v = $distributorRow['is_platform_store_buy'] ?? false;
+
+        return $v === true || $v === 1 || $v === '1' || $v === 'true';
+    }
+
+    /**
+     * 店务立即购买：须指定有效店铺且已开启云仓可购买。
+     *
+     * @throws ResourceException
+     */
+    public static function assertShopadminPlatformStoreBuyAllowed(int $companyId, int $distributorId): void
+    {
+        if ($distributorId <= 0) {
+            throw new ResourceException('立即购买需指定有效店铺');
+        }
+        $svc = new self();
+        $row = $svc->getInfoSimple([
+            'distributor_id' => $distributorId,
+            'company_id' => $companyId,
+        ]);
+        if ($row === []) {
+            throw new ResourceException('无效店铺');
+        }
+        if (!self::isPlatformStoreBuyEnabledRaw($row)) {
+            throw new ResourceException('该店铺未开启云仓可购买');
+        }
+    }
+
+    /**
+     * 店务立即购买门禁（含商品维度）：总部发货不要求云仓开关；店铺发货走云仓快买仍须开启。
+     *
+     * @param array<string, mixed> $itemInfo
+     * @throws ResourceException
+     */
+    public static function assertShopadminFastBuyAllowed(int $companyId, int $distributorId, array $itemInfo): void
+    {
+        if ($distributorId <= 0) {
+            throw new ResourceException('立即购买需指定有效店铺');
+        }
+        $svc = new self();
+        $row = $svc->getInfoSimple([
+            'distributor_id' => $distributorId,
+            'company_id' => $companyId,
+        ]);
+        if ($row === []) {
+            throw new ResourceException('无效店铺');
+        }
+        self::assertShopadminFastBuyAllowedForItem($itemInfo, self::isPlatformStoreBuyEnabledRaw($row));
+    }
+
+    /**
+     * 纯逻辑：按 SKU 发货模式与门店云仓开关判断是否允许快买（便于单测）。
+     *
+     * @param array<string, mixed> $itemInfo
+     * @throws ResourceException
+     */
+    public static function assertShopadminFastBuyAllowedForItem(array $itemInfo, bool $platformStoreBuyEnabled): void
+    {
+        if (ItemsService::isSkuHeadquartersShipment($itemInfo)) {
+            return;
+        }
+        if (!$platformStoreBuyEnabled) {
+            throw new ResourceException('该店铺未开启云仓可购买');
+        }
     }
 
     //查到是否有总店配置
@@ -694,6 +780,7 @@ class DistributorService
                 'lat' => $val2['lat'],
                 'is_distributor' => $val2['is_distributor'] ?? true,
                 'is_default' => $val2['is_default'],
+                'is_valid' => $val2['is_valid'] ?? null,
             ];
         }
         $distributorList['list'] = $newlistdata;

@@ -196,7 +196,14 @@ class RegistrationRecordRepository extends EntityRepository
                     $k = 'like';
                     $value = '%'.$value.'%';
                 }
-                $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
+                if (in_array($k, ['in', 'notin'], true) && is_array($value)) {
+                    array_walk($value, function (&$colVal) use ($qb) {
+                        $colVal = $qb->expr()->literal($colVal);
+                    });
+                    $qb = $qb->andWhere($qb->expr()->$k($v, $value));
+                } else {
+                    $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
+                }
                 continue;
             } elseif (is_array($value)) {
                 array_walk($value, function (&$colVal) use ($qb) {

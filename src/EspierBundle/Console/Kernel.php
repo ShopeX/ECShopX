@@ -92,6 +92,7 @@ use SystemLinkBundle\Console\CopyItems;
 use SystemLinkBundle\Console\GetOrderInfoCommand;
 use EspierBundle\Commands\SystemAddressInitialization;
 use EspierBundle\Commands\SendOrderToOmsCommand;
+use EspierBundle\Commands\SendAftersalesToSaasOmsCommand;
 use EspierBundle\Commands\SendOrderToSaasOmsCommand;
 use YoushuBundle\Services\TaskService as YoushuTaskService;
 use AftersalesBundle\Services\AftersalesRefundService;
@@ -121,6 +122,12 @@ use EspierBundle\Commands\KafkaConsumerCommand;
 use KujialeBundle\Commands\UpdateDesignerWorksCommand;
 use TbItemsBundle\Commands\SyncTbitemsCommand;
 use DistributionBundle\Console\FillDistributorLatLngCommand;
+use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformSyncOrderTradeCommand;
+use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformSyncRefundCommand;
+use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformAssessHistoricalSyncCommand;
+use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformRunHistoricalSyncCommand;
+use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformTokenRefreshCommand;
+
 class Kernel extends ConsoleKernel
 {
     public function getArtisan()
@@ -138,6 +145,7 @@ class Kernel extends ConsoleKernel
         DepositCommand::class,
         SupplierTestCommand::class,
         SendOrderToSaasOmsCommand::class,
+        SendAftersalesToSaasOmsCommand::class,
         OmsGetStockCommand::class,
         AutoDrawCashCommand::class,
         AdaPayCatrgoryCommand::class,
@@ -188,6 +196,11 @@ class Kernel extends ConsoleKernel
         InitMultiLangCommand::class,
         UpdateDesignerWorksCommand::class,
         FillDistributorLatLngCommand::class,
+        ShuyunOpenPlatformTokenRefreshCommand::class,
+        ShuyunOpenPlatformSyncOrderTradeCommand::class,
+        ShuyunOpenPlatformSyncRefundCommand::class,
+        ShuyunOpenPlatformAssessHistoricalSyncCommand::class,
+        ShuyunOpenPlatformRunHistoricalSyncCommand::class,
     ];
 
     /**
@@ -364,6 +377,12 @@ class Kernel extends ConsoleKernel
             $exportLogService = new ExportLogService();
             $exportLogService->scheduleDeleteHistoryFile();
         })->dailyAt('3:00');
+
+        // 数云开放网关：定时触发 Token 刷新 GET（新 Token 依赖回调 POST；无启用/缺省配置行则仓储层不返回）
+        $schedule->command('shuyun:open-platform:refresh-tokens')
+            ->dailyAt('4:15')
+            ->withoutOverlapping()
+            ->name('shuyun_open_platform_refresh_tokens');
 
         // 银联商务支付，划付，上传文件
         $schedule->call(function () {

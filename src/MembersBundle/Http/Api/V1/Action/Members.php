@@ -53,6 +53,9 @@ use KaquanBundle\Services\UserDiscountService;
 use MembersBundle\Entities\MembersDeleteRecord;
 use EspierBundle\Services\Config\ConfigRequestFieldsService;
 use MembersBundle\Services\MemberSalespersonNotifyService;
+use ShuyunOpenPlatformBundle\Repositories\CompanyShuyunOpenPlatformConfigRepository;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformMemberRegisterService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformShopSyncService;
 
 class Members extends Controller
 {
@@ -1603,6 +1606,14 @@ class Members extends Controller
         if (!$defaultGradeInfo) {
             throw new ResourceException(trans('MembersBundle/Members.missing_default_level'));
         }
+        
+
+        // 与小程序 wxapp/new_login 注册一致：distributor_id → reg_distributor / op_distributor
+        // 本接口视为线下平台注册：commit 后按需同步数云 OFFLINE（见 syncShuyunOpenPlatformOfflineAfterLocalCreateMemberIfEnabled）
+        $distributorId = 0;
+        if (isset($postData['distributor_id']) && $postData['distributor_id'] !== '' && $postData['distributor_id'] !== null) {
+            $distributorId = (int) $postData['distributor_id'];
+        }
 
         // 与小程序 wxapp/new_login 注册一致：distributor_id → reg_distributor / op_distributor
         $distributorId = 0;
@@ -1676,6 +1687,13 @@ class Members extends Controller
             throw new ResourceException(trans('MembersBundle/Members.member_add_failed'));
         }
 
+        $offlineShuyunOpenRegisterCompleted = $this->syncShuyunOpenPlatformOfflineAfterLocalCreateMemberIfEnabled(
+            (int) $companyId,
+            (int) $distributorId,
+            $result,
+            (string) $postData['mobile']
+        );
+
         $eventData = [
             'user_id' => $result['user_id'],
             'company_id' => $companyId,
@@ -1689,6 +1707,10 @@ class Members extends Controller
             'distributor_id' => $distributorId,
             'if_register_promotion' => $ifRegisterPromotion,
         ];
+        if ($offlineShuyunOpenRegisterCompleted) {
+            // §5.1.1 S7a：仅数云 OFFLINE member.register 实际成功后才强制 point.change 走 OFFLINE（与店务建档一致）
+            $eventData['shuyun_open_point_change_force_offline_plat'] = true;
+        }
         event(new CreateMemberSuccessEvent($eventData));
 
         //等级信息
@@ -1701,6 +1723,111 @@ class Members extends Controller
         return $this->response->array($result);
     }
 
+    /**
+     * 本接口固定按线下平台处理：数云开放平台已启用且可执行 member.register 时同步（platCode=OFFLINE），不调用数云私有绑定推送。
+     * 未启用或不可执行时跳过，仅本地成功，返回 **false**。若需同步但 distributor_id 无效则抛错。同步失败则补偿删除本地会员并抛出 {@see ResourceException}。数云 OFFLINE 注册 **成功完成** 时返回 **true**（供事件 S7a 置位）。
+     *
+     * @param  array<string, mixed>  $createResult  create 返回，须含 user_id
+     *
+     * @return bool true 当且仅当本方法实际调用了数云 OFFLINE member.register 并成功完成（含卡号增强）
+     */
+    private function syncShuyunOpenPlatformOfflineAfterLocalCreateMemberIfEnabled(
+        int $companyId,
+        int $distributorId,
+        array $createResult,
+        string $mobile
+    ): bool {
+        $configRepo = app(CompanyShuyunOpenPlatformConfigRepository::class);
+        $config = $configRepo->findOneByCompanyId($companyId);
+        if ($config === null || (int) $config->getIsEnabled() !== 1) {
+            return false;
+        }
+
+        $shopSync = app(ShuyunOpenPlatformShopSyncService::class);
+        if (!$shopSync->isEligible($config)) {
+            return false;
+        }
+
+        if ($distributorId <= 0) {
+            throw new ResourceException(trans('MembersBundle/Members.offline_shuyun_distributor_required'));
+        }
+
+        $userId = (int) ($createResult['user_id'] ?? 0);
+        if ($userId <= 0) {
+            throw new ResourceException(trans('MembersBundle/Members.offline_shuyun_user_invalid'));
+        }
+
+        $distributorRow = ['distributor_id' => $distributorId];
+
+        $shuyunOpenMemberRegisterSucceeded = false;
+        try {
+            app(ShuyunOpenPlatformMemberRegisterService::class)->registerSingle(
+                $companyId,
+                $distributorRow,
+                (string) $userId,
+                $mobile,
+                null,
+                null,
+                true
+            );
+            $shuyunOpenMemberRegisterSucceeded = true;
+            $this->memberService->syncUserCardCodeFromShuyunEnhanceAfterRegister(
+                $companyId,
+                $userId,
+                $distributorRow,
+                true
+            );
+        } catch (\Throwable $e) {
+            app('log')->warning('Store offline open platform member.register failed after createMember.', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'distributor_id' => $distributorId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'shuyun_open_member_register_succeeded' => $shuyunOpenMemberRegisterSucceeded,
+            ]);
+            try {
+                (new MemberService())->deleteMembers(
+                    $companyId,
+                    $userId,
+                    $mobile,
+                    $distributorId,
+                    true,
+                    ! $shuyunOpenMemberRegisterSucceeded
+                );
+            } catch (\Throwable $deleteEx) {
+                app('log')->error('Store offline shuyun sync failure: local deleteMembers compensation failed.', [
+                    'company_id' => $companyId,
+                    'user_id' => $userId,
+                    'exception' => get_class($deleteEx),
+                    'message' => $deleteEx->getMessage(),
+                ]);
+            }
+            throw new ResourceException(trans('MembersBundle/Members.offline_shuyun_sync_failed', [
+                'msg' => $e->getMessage(),
+            ]));
+        }
+
+        try {
+            $this->memberService->updateMemberInfo(
+                ['offline_reg_distributor' => $distributorId],
+                ['company_id' => $companyId, 'user_id' => $userId]
+            );
+        } catch (\Throwable $persistEx) {
+            app('log')->error('Store offline open platform: failed to persist offline_reg_distributor after successful register.', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'distributor_id' => $distributorId,
+                'exception' => get_class($persistEx),
+                'message' => $persistEx->getMessage(),
+            ]);
+            throw new ResourceException(trans('MembersBundle/Members.offline_shuyun_sync_failed', [
+                'msg' => $persistEx->getMessage(),
+            ]));
+        }
+
+        return true;
+    }
 
     /**
      * @SWG\Put(

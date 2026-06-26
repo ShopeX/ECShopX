@@ -211,7 +211,7 @@ class ItemsAttributeValuesRepository extends EntityRepository
      */
     public function lists($filter, $page = 1, $pageSize = 100, $orderBy = array())
     {
-        app('log')->debug(__FUNCTION__.':'.__LINE__.':filter:'.json_encode($filter));
+        // app('log')->debug(__FUNCTION__.':'.__LINE__.':filter:'.json_encode($filter));
         $criteria = Criteria::create();
         foreach ($filter as $field => $value) {
             $list = explode("|", $field);

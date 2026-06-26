@@ -23,9 +23,13 @@ use PointBundle\Services\PointMemberRuleService;
 class PointResourceException extends ResourceException
 {
     // Powered by ShopEx EcShopX
-    public function __construct($message)
+    /**
+     * @param string $message
+     * @param int|string|null $companyId 无登录态（队列/命令行等）时用于解析「积分」名称；不传则仍尝试 auth，再不行用默认译名
+     */
+    public function __construct($message, $companyId = null)
     {
-        $pointName = (new PointMemberRuleService())->getPointName();
+        $pointName = (new PointMemberRuleService())->getPointName($companyId);
         $message = str_replace("{point}", $pointName, $message);
         parent::__construct($message);
     }

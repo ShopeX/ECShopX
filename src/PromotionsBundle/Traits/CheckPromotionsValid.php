@@ -73,6 +73,7 @@ trait CheckPromotionsValid
         ];
         $seckillList = $promotionSeckillActivityService->entityRelRepository->lists($filter, 1, -1);
         $activityData = [];
+        $effectiveDistributorId = $this->resolveActivitySourceDistributorId($itemInfo, $distributorId);
         if ($seckillList['total_count'] > 0) {
             // 商品参加活动类型为秒杀
             $activityItemStoreService = new SeckillActivityItemStoreService();
@@ -94,8 +95,9 @@ trait CheckPromotionsValid
             }
 
             $activityData['info'] = $promotionSeckillActivityService->getInfoById($seckillId);
-            if ($itemInfo['distributor_id'] == $activityData['info']['source_id']) {
-                if ($activityData['info']['distributor_id'] && $distributorId && !in_array($distributorId, $activityData['info']['distributor_id'])) {
+            if ($effectiveDistributorId === (int) ($activityData['info']['source_id'] ?? 0)) {
+                $activityDistributorIds = $this->normalizeActivityDistributorIds($activityData['info']['distributor_id'] ?? []);
+                if ($activityDistributorIds && $effectiveDistributorId && !in_array($effectiveDistributorId, $activityDistributorIds, true)) {
                     $activityData = [];
                 } else {
                     if ($activityData['info']['seckill_type'] == 'normal') {
@@ -179,7 +181,7 @@ trait CheckPromotionsValid
             $activityData['activity_type'] = 'limited_buy';
             $limitInfo = $limitService->getLimitInfo($companyId, $limit_id);
 
-            if ($itemInfo['distributor_id'] == $limitInfo['source_id']) {
+            if ($effectiveDistributorId === (int) ($limitInfo['source_id'] ?? 0)) {
                 $limitInfo['rule'] = json_decode($limitInfo['rule'], 1);
                 if (is_array($itemId)) {
                     $itemTreeLists = $itemId;
@@ -697,5 +699,31 @@ trait CheckPromotionsValid
         }
 
         return true;
+    }
+
+    /**
+     * 活动归属店铺：优先使用请求中的店铺上下文，与商品列表活动标签逻辑保持一致。
+     */
+    private function resolveActivitySourceDistributorId(array $itemInfo, $distributorId = null): int
+    {
+        if ($distributorId !== null && $distributorId !== '' && $distributorId !== 'undefined' && $distributorId !== 'null') {
+            return (int) $distributorId;
+        }
+
+        return (int) ($itemInfo['distributor_id'] ?? 0);
+    }
+
+    /**
+     * @param array|string|null $distributorIds
+     */
+    private function normalizeActivityDistributorIds($distributorIds): array
+    {
+        if (!is_array($distributorIds)) {
+            $distributorIds = explode(',', trim((string) $distributorIds, ','));
+        }
+
+        return array_values(array_filter(array_map('intval', $distributorIds), function ($id) {
+            return $id >= 0;
+        }));
     }
 }

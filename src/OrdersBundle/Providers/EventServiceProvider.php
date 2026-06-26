@@ -35,6 +35,7 @@ class EventServiceProvider extends ServiceProvider
             'ThirdPartyBundle\Listeners\MarketingCenter\TradePushMarketingCenter',
             'OrdersBundle\Listeners\HelpToPayForPurchasePlusOne',
             'OrdersBundle\Listeners\TradeFinishConsumeCard',
+            'ShuyunOpenPlatformBundle\Listeners\ShuyunOfflineBenefitLinkSendItemOnTradeFinishListener',
             'OrdersBundle\Listeners\TradeFinishNotifyPush',
             'OrdersBundle\Listeners\TradeFinishSmsNotify',
             'OrdersBundle\Listeners\TradeFinishWxaTemplateMsg',
@@ -60,6 +61,8 @@ class EventServiceProvider extends ServiceProvider
         ],
         'OrdersBundle\Events\NormalOrderCancelEvent' => [
             'OrdersBundle\Listeners\NormalOrderCancelListener',
+            'ShuyunOpenPlatformBundle\Listeners\ShuyunOfflineBenefitResultPushOnOrderCancelListener',
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderTradeSyncToShuyunOpenPlatformListener@handleOrderCancel',
         ],
 
         'OrdersBundle\Events\NormalOrderAddEvent' => [

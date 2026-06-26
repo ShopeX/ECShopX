@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright 2019-2026 ShopeX
  *
@@ -35,6 +36,7 @@ use GoodsBundle\Entities\ItemsCategory;
 use GoodsBundle\Services\ItemsService;
 use HfPayBundle\Services\HfpayLedgerConfigService;
 use KaquanBundle\Services\UserDiscountService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOfflineBenefitOrderLinkService;
 use MembersBundle\Services\MemberService;
 use MembersBundle\Services\UserService;
 use MembersBundle\Services\MembersWhitelistService;
@@ -58,19 +60,16 @@ use PopularizeBundle\Services\PromoterService;
 use PromotionsBundle\Services\SmsManagerService;
 use PromotionsBundle\Services\SpecificCrowdDiscountService;
 use PointBundle\Services\PointMemberService;
-
 use DepositBundle\Services\DepositTrade;
 use CrossBorderBundle\Services\Identity;
 use CompanysBundle\Services\SettingService;
 use PromotionsBundle\Services\PointupvaluationActivityService as PointupvaluationService;
-
 use OrdersBundle\Events\OrderProcessLogEvent;
 // 商品库存
 use PromotionsBundle\Services\TurntableService;
 use SupplierBundle\Services\ItemsCommissionService;
 use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
 use SalespersonBundle\Services\SalespersonService;
-use OrdersBundle\Services\LocalDeliveryService;
 use MerchantBundle\Services\MerchantService;
 use ThirdPartyBundle\Events\TradeUpdateEvent as SaasErpUpdateEvent;
 use CompanysBundle\Ego\CompanysActivationEgo;
@@ -138,7 +137,7 @@ class OrderService
         $this->_check($params);
 
         $orderData = $this->_formatOrderData($params);
-        if(isset($params['invoice_content'])){
+        if (isset($params['invoice_content'])) {
             app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':params:invoice_content:'.json_encode($params['invoice_content']));
         }
         $conn = app('registry')->getConnection('default');
@@ -146,7 +145,7 @@ class OrderService
 
         // 判断是否跨境
         if (isset($params['iscrossborder']) and $params['iscrossborder'] == 1) {
-//            $orderData = $this->crossBorderHandle($params, $orderData);
+            //            $orderData = $this->crossBorderHandle($params, $orderData);
             $preg_card = '/^[1-9]\d{5}(19|20)\d{2}[01]\d[0123]\d\d{3}[xX\d]$/';
             if (!preg_match($preg_card, $params['identity_id'])) {
                 throw new ResourceException(trans('OrdersBundle/Order.id_card_format_error'));
@@ -171,8 +170,10 @@ class OrderService
         }
 
         //订单可以获取到的积分 放到积分抵扣之后去计算, 来排除抵扣部分
-        // 数云模式,商城不处理积分，数云处理 !config('common.oem-shuyun')
-        if (property_exists($this->orderInterface, 'isSupportGetPoint') && $this->orderInterface->isSupportGetPoint && $orderData['user_id'] > 0 && !config('common.oem-shuyun')) {
+        // 数云 LPEE / 数云开放网关会员：消费获赠由数云端处理，商城不落单、不计算 get_points
+        $mallSkipsOrderGrantPoints = config('common.oem-shuyun')
+            || app(MemberService::class)->isShuyunOpenPlatformMemberEnabled((int) $params['company_id']);
+        if (property_exists($this->orderInterface, 'isSupportGetPoint') && $this->orderInterface->isSupportGetPoint && $orderData['user_id'] > 0 && ! $mallSkipsOrderGrantPoints) {
             $pointMemberService = new PointMemberService();
             $orderData = $pointMemberService->memberGetPoints($params['company_id'], $orderData);
         }
@@ -234,6 +235,16 @@ class OrderService
                         $params['trans_id'] = $ordersResult['order_id'];
                         $params['fee'] = $ordersResult['total_fee'];
                         $userDiscountService->userConsumeCard($ordersResult['company_id'], $row['coupon_code'], $params);
+                        try {
+                            app(ShuyunOfflineBenefitOrderLinkService::class)->linkCouponToOrder(
+                                (int) $ordersResult['company_id'],
+                                (int) $ordersResult['order_id'],
+                                (int) $orderData['user_id'],
+                                (string) $row['coupon_code']
+                            );
+                        } catch (\Throwable $e) {
+                            app('log')->debug('Shuyun offline benefit order link: '.$e->getMessage());
+                        }
                     }
                     //记录定向促销会员日志和最高优惠金额
                     if (($row['type'] ?? '') == 'member_tag_targeted_promotion') {
@@ -268,10 +279,13 @@ class OrderService
             $job = (new SendPayOrdersRemindJob($orderData))->delay(300);
             app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($job);
 
-            if(isset($params['invoice_content'])){
-                //createInvoiceOrderForOrder
+            if (isset($params['invoice_content'])) {
                 $orderInvoiceService = new OrderInvoiceService();
-                $orderInvoiceService->createInvoiceOrderForOrder($params['invoice_content'], $orderData);
+                $invoicePayload = $this->normalizeInvoiceContentToArray($params['invoice_content']);
+                if (isset($params['invoice_type'])) {
+                    $invoicePayload['type'] = $params['invoice_type'];
+                }
+                $orderInvoiceService->createInvoiceOrderForOrder($invoicePayload, $orderData);
             }
 
             $remarks = '订单创建';
@@ -681,7 +695,8 @@ class OrderService
         }
 
         if ($params['distributor_id'] != 0) { //总部自提点is_valid=false，不知道为什么，只能这么判断了
-            if ($distributorInfo['is_valid'] != 'true') {
+            // 店务管理员开单：允许云店 is_valid=false 的门店下单（与 shop_offline 购物车一致）
+            if ($this->orderInterface->orderClass !== 'shopadmin' && $distributorInfo['is_valid'] != 'true') {
                 throw new ResourceException(trans('OrdersBundle/Order.shop_invalid'));
             }
         }
@@ -775,7 +790,7 @@ class OrderService
             $distributorService = new DistributorService();
             $distributorInfo = $distributorService->getInfoSimple(['distributor_id' => $params['distributor_id'] ]);
             app('log')->debug("\n".__FUNCTION__."-".__LINE__.":distributorInfo:". json_encode($distributorInfo));
-            if(isset($distributorInfo['is_open_salesman']) && $distributorInfo['is_open_salesman'] ){
+            if (isset($distributorInfo['is_open_salesman']) && $distributorInfo['is_open_salesman']) {
                 $promoterUserId = $promoterService->getPromoter($params['company_id'], $params['user_id']);
             }
         }
@@ -784,27 +799,27 @@ class OrderService
         $promoterinfo_json = app('redis')->get($key);
         app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':filter_salesperson:' . json_encode($promoterinfo_json));
 
-        $promoterinfoData = json_decode($promoterinfo_json,true);
-        if(isset($promoterinfoData['promoter_user_id'])
-        && $promoterinfoData['promoter_user_id'] ){
+        $promoterinfoData = json_decode($promoterinfo_json, true);
+        if (isset($promoterinfoData['promoter_user_id'])
+        && $promoterinfoData['promoter_user_id']) {
             $promoterUserId = $promoterinfoData['promoter_user_id'];
         }
 
         //业务员 代课下单
-        if(isset($params['promoter_user_id']) && $params['promoter_user_id']){
+        if (isset($params['promoter_user_id']) && $params['promoter_user_id']) {
             $promoterUserId = $params['promoter_user_id'];
         }
 
         //导购ID信息处理
-        if(isset($promoterUserId) && isset($distributorInfo['is_open_salesman']) && $distributorInfo['is_open_salesman'] ){
+        if (isset($promoterUserId) && isset($distributorInfo['is_open_salesman']) && $distributorInfo['is_open_salesman']) {
             // check 业务员 导购店铺
             $salespersonService = new SalespersonService();
 
             $filter_salesperson = array(
-                'company_id'=> $params['company_id'],
-                'user_id'=> $promoterUserId,//$promoterinfoData['promoter_user_id'],
-                'shop_id'=> $params['distributor_id'],
-                'is_valid'=> 'true',
+                'company_id' => $params['company_id'],
+                'user_id' => $promoterUserId,//$promoterinfoData['promoter_user_id'],
+                'shop_id' => $params['distributor_id'],
+                'is_valid' => 'true',
             );
             app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':filter_salesperson:' . json_encode($filter_salesperson));
 
@@ -812,18 +827,18 @@ class OrderService
             app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':salespersonInfo:' . json_encode($salespersonInfo));
 
 
-            if(isset($salespersonInfo['user_id']) && $salespersonInfo['user_id']  ){
+            if (isset($salespersonInfo['user_id']) && $salespersonInfo['user_id']) {
                 $promoterUserId = $promoterUserId;
                 $params['salesman_id'] = $promoterUserId;
                 app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':promoterUserId:' . json_encode($promoterUserId));
-            }else{
+            } else {
                 $promoterUserId = 0;
-                $salespersonInfo = array('user_id'=>'','name'=>'','mobile'=>'');
+                $salespersonInfo = array('user_id' => '','name' => '','mobile' => '');
             }
 
-        }else{
+        } else {
             $promoterUserId = 0;
-            $salespersonInfo = array('user_id'=>'','name'=>'','mobile'=>'');
+            $salespersonInfo = array('user_id' => '','name' => '','mobile' => '');
         }
 
         //创建订单时，导购员id获取前端传参，不予取会员原有绑定的导购员
@@ -883,7 +898,7 @@ class OrderService
                 $distributorInfo = $distributorService->getInfoSimple(['distributor_id' => $params['distributor_id']]);
             }
 
-            
+
         }
 
         $distributor_id = $params['distributor_id'] ?? 0;
@@ -939,8 +954,9 @@ class OrderService
             'merchant_id' => $distributorInfo['merchant_id'] ?? 0,
             'self_delivery_time' => $params['self_delivery_time'] ?? 0,
             'source_from' => $params['source_from'] ?? null,
-            'salespersonInfo' => $salespersonInfo ?? array('user_id'=>'','name'=>'','mobile'=>''),
+            'salespersonInfo' => $salespersonInfo ?? array('user_id' => '','name' => '','mobile' => ''),
             'invoice_status' => '',
+            'uses_platform_item_stock' => ($this->orderInterface->orderClass === 'shopadmin' && ($params['cart_type'] ?? '') === 'fastbuy') ? 1 : 0,
         ];
 
         //查询积分规则
@@ -1007,8 +1023,12 @@ class OrderService
             }
 
             if (property_exists($this->orderInterface, 'isSupportGetPoint') && $this->orderInterface->isSupportGetPoint) {
-                $pointMemberRuleService = new PointMemberRuleService();
-                $orderData['bonus_points'] = $pointMemberRuleService->shoppingGivePoint($params['company_id'], $orderData['total_fee']);
+                if (app(MemberService::class)->isShuyunOpenPlatformMemberEnabled((int) $params['company_id'])) {
+                    $orderData['bonus_points'] = 0;
+                } else {
+                    $pointMemberRuleService = new PointMemberRuleService();
+                    $orderData['bonus_points'] = $pointMemberRuleService->shoppingGivePoint($params['company_id'], $orderData['total_fee']);
+                }
             }
 
             if (!in_array($this->orderInterface->orderClass, ['community', 'employee_purchase']) && $params['receipt_type'] == 'dada') {
@@ -1250,22 +1270,22 @@ class OrderService
             $orderData['receiver_city'] = $params['receiver_city'] ?? '';
             $orderData['receiver_district'] = $params['receiver_district'] ?? '';
             $orderData['receiver_address'] = $params['receiver_address'] ?? '';
-            if($distributorInfo['is_self_delivery']){
+            if ($distributorInfo['is_self_delivery']) {
                 $selfDeliveryService = new selfDeliveryService();
-                $setting = $selfDeliveryService->getSelfDeliverySetting($params['company_id'],$params['distributor_id'], $distributorInfo['distributor_self']);
+                $setting = $selfDeliveryService->getSelfDeliverySetting($params['company_id'], $params['distributor_id'], $distributorInfo['distributor_self']);
                 if (!$setting || $setting['is_open'] != 'true') {
                     throw new ResourceException(trans('OrdersBundle/Order.merchant_self_delivery_not_enabled'));
                 }
 
                 $orderData['receipt_type'] = 'merchant';
 
-                if($orderData['total_fee'] < bcmul($setting['min_amount'], 100)){
+                if ($orderData['total_fee'] < bcmul($setting['min_amount'], 100)) {
                     throw new ResourceException(trans('OrdersBundle/Order.order_amount_requirement_for_self_delivery', ['{0}' => $setting['min_amount']]));
                 }
                 $rules = $setting['rule'] ?? [];
                 $freight_fee = $setting['freight_fee'];
-                foreach ($rules as $rule){
-                    if($orderData['total_fee'] >= bcmul($rule['full'], 100)){
+                foreach ($rules as $rule) {
+                    if ($orderData['total_fee'] >= bcmul($rule['full'], 100)) {
                         $freight_fee = $rule['freight_fee'];
                     }
                 }
@@ -1273,7 +1293,7 @@ class OrderService
                 $orderData['freight_fee'] = bcmul($freight_fee, 100);
                 $orderData['total_fee'] = $orderData['total_fee'] > 0 ? $orderData['total_fee'] + $orderData['freight_fee'] : 0; // 订单总金额
 
-            }else{
+            } else {
                 // ToDo 去达达查询运费
                 $orderData['receipt_type'] = 'dada';
 
@@ -1289,9 +1309,9 @@ class OrderService
             }
 
         }
-        //记录发票信息
+        //记录发票信息（invoice_content 常为 JSON 字符串，见 WxappOrder Swagger type=string）
         if (isset($params['invoice_type'], $params['invoice_content'])) {
-            $orderData['invoice'] = $params['invoice_content'];
+            $orderData['invoice'] = $this->normalizeInvoiceContentToArray($params['invoice_content']);
             $orderData['invoice']['type'] = $params['invoice_type'];
         }
 
@@ -1304,8 +1324,8 @@ class OrderService
 
         if ($this->orderInterface->orderType == 'normal' && $this->orderInterface->orderClass == 'normal') {
             //获取同城配送的送达时间
-            if(isset($orderData['receipt_type']) && $orderData['receipt_type'] == 'merchant' && $distributorInfo['is_self_delivery'] && $distributorInfo['freight_time'] > 0){
-                $orderData['deliveryTimeList'] = $this->getDeliveryTimeList($distributorInfo['hour'],$distributorInfo['freight_time']);
+            if (isset($orderData['receipt_type']) && $orderData['receipt_type'] == 'merchant' && $distributorInfo['is_self_delivery'] && $distributorInfo['freight_time'] > 0) {
+                $orderData['deliveryTimeList'] = $this->getDeliveryTimeList($distributorInfo['hour'], $distributorInfo['freight_time']);
             }
             $orderData['is_require_subdistrict'] = false;
             if ($distributorInfo['is_require_subdistrict'] ?? false) {
@@ -1434,7 +1454,7 @@ class OrderService
                 'user_id' => $params['user_id'],
                 'item_name' => $itemInfo['itemName'],
                 'templates_id' => $itemInfo['templates_id'] ?: 0,
-                'pic' => isset($itemInfo['pics'][0]) ? $itemInfo['pics'][0] : '',
+                'pic' => $this->resolveOrderItemPic($itemInfo),
                 'num' => $buyNum, // 购买数量
                 'sale_price' => $itemInfo['sale_price'],// 商品销售价，现在只用来显示
                 'price' => intval($price), // 商品原价
@@ -1485,8 +1505,12 @@ class OrderService
                 $supplierFreightFee[$itemTmp['supplier_id']] = 0;
             }
 
-            if ($itemTmp['supplier_id'])  $order_holder[] = 'supplier';
-            if (!$itemTmp['supplier_id'])  $order_holder[] = 'self';
+            if ($itemTmp['supplier_id']) {
+                $order_holder[] = 'supplier';
+            }
+            if (!$itemTmp['supplier_id']) {
+                $order_holder[] = 'self';
+            }
 
             if ($activity_price > 0) {
                 $itemTmp['activity_price'] = $activity_price;
@@ -1604,7 +1628,7 @@ class OrderService
         if (property_exists($this->orderInterface, 'isSupportCart') && $this->orderInterface->isSupportCart) {
             $params = $this->orderInterface->checkoutCartItems($params);
         }
-        if(isset($params['invoice_content'])){
+        if (isset($params['invoice_content'])) {
             app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':params:invoice_content:'.json_encode($params['invoice_content']));
         }
 
@@ -1612,7 +1636,7 @@ class OrderService
         $orderData = $this->_formatOrderData($params, false);
         // 判断是否跨境
         if (isset($params['iscrossborder']) and $params['iscrossborder'] == 1) {
-//            $orderData = $this->crossBorderHandle($params, $orderData);
+            //            $orderData = $this->crossBorderHandle($params, $orderData);
             $Identity_data['user_id'] = $orderData['user_id'];
             $Identity_data['company_id'] = $orderData['company_id'];
             $Identity = new Identity();
@@ -1653,7 +1677,7 @@ class OrderService
         // 重新计算商品总价，不含价格立减活动及会员价优惠
         $orderData['item_fee_new'] = $orderData['total_fee']                  //实付金额
                                    - ($orderData['freight_fee'] ?? 0)         //减去运费
-                                   + ($orderData['point_fee_item'] ?? 0)      //加上积分抵扣point_fee to   point_fee_item                                 + ($orderData['point_fee_item'] ?? 0)           //加上积分抵扣point_fee to point_feeto 
+                                   + ($orderData['point_fee_item'] ?? 0)      //加上积分抵扣point_fee to   point_fee_item                                 + ($orderData['point_fee_item'] ?? 0)           //加上积分抵扣point_fee to point_feeto
                                    + ($orderData['coupon_discount'] ?? 0)     //加上优惠券抵扣
                                    + ($orderData['promotion_discount'] ?? 0); //加上促销优惠
 
@@ -1732,11 +1756,11 @@ class OrderService
             }
 
             // 判断是否有会员折扣金额
-//            if (isset($items[$k]['member_discount'])) {
-//                $items[$k]['taxable_fee'] = $items[$k]['item_fee'] - $items[$k]['member_discount'];
-//            } else {
-//                $items[$k]['taxable_fee'] = $items[$k]['item_fee'];
-//            }
+            //            if (isset($items[$k]['member_discount'])) {
+            //                $items[$k]['taxable_fee'] = $items[$k]['item_fee'] - $items[$k]['member_discount'];
+            //            } else {
+            //                $items[$k]['taxable_fee'] = $items[$k]['item_fee'];
+            //            }
             $items[$k]['taxable_fee'] = $v['total_fee'];
 
             // 判断是否有计税规则
@@ -1780,7 +1804,7 @@ class OrderService
         $taxstrategy_tax_rate = 0;
         $filter['id'] = $taxstrategy_id;
         $filter['company_id'] = $company_id;
-//        $filter['state'] = 1;    // 不考虑策略当前状态是否删除
+        //        $filter['state'] = 1;    // 不考虑策略当前状态是否删除
         $Strategy = new Strategy();
         $data = $Strategy->getInfo($filter);
         // 判断是否有规则
@@ -1850,7 +1874,20 @@ class OrderService
                 $orderStatus = 'WAIT_GROUPS_SUCCESS';
             }
             if ($orderData['order_class'] == 'shopadmin') {
-                $orderStatus = 'DONE';
+                // 收银台购物车（自提）：支付后直接已完成。立即购买（物流/云仓）：与 C 端物流单一致为已支付，待发货。
+                $shopadminImmediateBuy = !empty($orderData['uses_platform_item_stock']);
+                if (!$shopadminImmediateBuy && !empty($orderData['order_id']) && !empty($orderData['company_id'])) {
+                    /** @var \OrdersBundle\Repositories\NormalOrdersRepository $normalOrdersRepo */
+                    $normalOrdersRepo = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+                    $normalOrderRow = $normalOrdersRepo->getInfo([
+                        'order_id' => $orderData['order_id'],
+                        'company_id' => $orderData['company_id'],
+                    ]);
+                    $shopadminImmediateBuy = !empty($normalOrderRow['uses_platform_item_stock']);
+                }
+                if (!$shopadminImmediateBuy) {
+                    $orderStatus = 'DONE';
+                }
             }
         }
 
@@ -1999,12 +2036,28 @@ class OrderService
         //用户剩余积分
         $pointMemberService = new PointMemberService();
 
-        $memberPointInfo = $pointMemberService->getInfo(['user_id' => $orderData['user_id'],'company_id' => $orderData['company_id']]);
+        $pointRuleService = new PointMemberRuleService($orderData['company_id']);
+        $pointRulesConfig = $pointRuleService->getPointRule($orderData['company_id']);
+        $deductOpen = $pointRulesConfig['isOpenMemberPoint'] === 'true' && $pointRulesConfig['isOpenDeductPoint'] === 'true';
+        $pointUse = (int) ($params['point_use'] ?? 0);
+        $payType = (string) ($params['pay_type'] ?? '');
+        $memberService = app(MemberService::class);
+        $shuyunOpenPlatformMember = $memberService->isShuyunOpenPlatformMemberEnabled((int) $orderData['company_id']);
+        // 未开启数云开放会员时：仅在本单实际使用积分或积分支付时外呼数云，未抵扣时用本地余额以减少网关调用。
+        // 开启数云开放会员时：须始终用 enhance.member.query.detail 的 validPoint（含 getFreightFee 的 user_point），禁止仅用本地 point_member。
+        $needShuyunRemoteBalance = $deductOpen && ($pointUse > 0 || $payType === 'point');
+
+        $memberPointFilter = [
+            'user_id' => $orderData['user_id'],
+            'company_id' => $orderData['company_id'],
+        ];
+        if (! $shuyunOpenPlatformMember && ! $needShuyunRemoteBalance) {
+            $memberPointFilter['shuyun_open_remote_for_balance'] = false;
+        }
+        $memberPointInfo = $pointMemberService->getInfo($memberPointFilter);
         $memberPoint = $memberPointInfo['point'] ?? 0;
         //获取本单可用的积分数
-        $pointRuleService = new PointMemberRuleService($orderData['company_id']);
 
-        $pointRulesConfig = $pointRuleService->getPointRule($orderData['company_id']);
         $orderData['user_point'] = $memberPoint;
         $upvaluation = false;
         if ($pointRulesConfig['isOpenMemberPoint'] == 'true' && $pointRulesConfig['isOpenDeductPoint'] == 'true') {
@@ -2024,7 +2077,7 @@ class OrderService
                 $orderData['limit_point'] = $usePoint['limit_point'];// 本单最大可抵扣积分
                 $orderData['max_uppoint'] = $usePoint['max_uppoint'];// 本单最大升值积分
             } else {
-                $usePoint = $pointRuleService->orderMaxPoint($params['company_id'], $memberPoint, $orderData['total_fee'], $orderData['freight_fee'], $orderData);
+                $usePoint = $pointRuleService->orderMaxPoint($params['company_id'], $memberPoint, $orderData['total_fee'], $orderData, $orderData['freight_fee']);
                 // 使用计算的最大积分数尝试，返回的实际抵扣积分为最大可使用积分
                 $tempOrderData = $orderData;
                 $tempOrderData['point_use'] = $usePoint['max_point'];
@@ -2155,8 +2208,8 @@ class OrderService
         }
 
         // 自提订单赠送大转盘
-//        $turntableService = new TurntableService();
-//        $turntableService->payGetTurntableTimes($detail['orderInfo']['user_id'], $detail['orderInfo']['company_id'], $detail['orderInfo']['total_fee']);
+        //        $turntableService = new TurntableService();
+        //        $turntableService->payGetTurntableTimes($detail['orderInfo']['user_id'], $detail['orderInfo']['company_id'], $detail['orderInfo']['total_fee']);
 
         //小程序发货信息管理
         event(new WxOrderShippingEvent($companyId, $orderId, 'ziti', 'batch', true));
@@ -2489,7 +2542,7 @@ class OrderService
             // throw new ResourceException('当前店铺不存在');
         }
 
-        if ($createDistributorInfo['is_valid'] != 'true') {
+        if ($this->orderInterface->orderClass !== 'shopadmin' && $createDistributorInfo['is_valid'] != 'true') {
             $msg = '当前店铺已失效';
             return false;
             // throw new ResourceException('当前店铺已失效');
@@ -2566,7 +2619,7 @@ class OrderService
         $filter = [
             'company_id' => $companyId,
             'shop_code' => $result['data']['store_bn'],
-        ];  
+        ];
         app('log')->info(':debug:getBindSalesmanData:'.__LINE__.' filter===>' . json_encode($filter));
         $distributorInfo = $distributorService->getInfo($filter);
         if (!$distributorInfo) {
@@ -2596,27 +2649,28 @@ class OrderService
         // return $data;
     }
 
-    public function updatePayType($orderId, $payType, $payChannel = null) {
+    public function updatePayType($orderId, $payType, $payChannel = null)
+    {
         if (method_exists($this->orderInterface, 'updatePayType')) {
             return $this->orderInterface->updatePayType($orderId, $payType, $payChannel);
         }
         return true;
     }
 
-    public function getDeliveryTimeList($hour,$freight_time = 2)
+    public function getDeliveryTimeList($hour, $freight_time = 2)
     {
         $interval = 30; // 半小时间隔
-        $hour = ($hour != '' && $hour!= '-') ? $hour : "08:20-21:00";
-        list($startHour,$endHour) = explode('-',$hour);
+        $hour = ($hour != '' && $hour != '-') ? $hour : "08:20-21:00";
+        list($startHour, $endHour) = explode('-', $hour);
         $timeRanges = [
-            'today'=>[
-                'name'=>'今天',
-                'date'=>date('Y-m-d'),
-                'list'=>[]
+            'today' => [
+                'name' => '今天',
+                'date' => date('Y-m-d'),
+                'list' => []
             ],
-            'tomorrow'=>[
-                'name'=>'明天 周',
-                'list'=>[]
+            'tomorrow' => [
+                'name' => '明天 周',
+                'list' => []
             ],
         ];
 
@@ -2629,20 +2683,20 @@ class OrderService
         $chineseDayOfWeek = $chineseDays[$dayOfWeek];
         $timeRanges['tomorrow']['name'] .= $chineseDayOfWeek;
         $timeRanges['tomorrow']['date'] = $today->toDateString();
-        $timeRanges['today']['list'][] =  date("H:i", strtotime("+{$freight_time} hour"));
+        $timeRanges['today']['list'][] = date("H:i", strtotime("+{$freight_time} hour"));
         while ($currentTime < $endTime) {
             $nextTime = $currentTime + ($interval * 60) ; // 计算下一个时间点
             // 确保下次循环不会超过结束时间
             if ($nextTime >= $endTime) {
                 $nextTime = $endTime;
             }
-            if($currentTime > $time){
+            if ($currentTime > $time) {
                 $tempCurrent = $currentTime + ($freight_time * 60 * 60);
                 $tempNext = $nextTime + ($freight_time * 60 * 60);
-                if($tempNext >= $endTime){
+                if ($tempNext >= $endTime) {
                     $tempNext = $endTime;
                 }
-                if($tempCurrent < $endTime){
+                if ($tempCurrent < $endTime) {
                     $timeRanges['today']['list'][] = date("H:i", $tempCurrent) . '-' . date("H:i", $tempNext);
                 }
 
@@ -2697,6 +2751,52 @@ class OrderService
             'distributor_info' => $distributorInfo,
         ];
         return $data;
+    }
+
+    /**
+     * 开票信息入参多为 JSON 字符串；统一为数组供写入订单与开票申请。
+     *
+     * @param mixed $invoiceContent
+     * @return array
+     */
+    private function normalizeInvoiceContentToArray($invoiceContent): array
+    {
+        if (is_array($invoiceContent)) {
+            return $invoiceContent;
+        }
+        if (is_string($invoiceContent) && $invoiceContent !== '') {
+            $decoded = json_decode($invoiceContent, true);
+            if (JSON_ERROR_NONE === json_last_error() && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * 订单行商品图：优先购物车已解析的规格图，否则按 SKU 规格图规则解析。
+     *
+     * @param array<string, mixed> $itemInfo
+     */
+    protected function resolveOrderItemPic(array $itemInfo): string
+    {
+        $itemId = (int) ($itemInfo['itemId'] ?? $itemInfo['item_id'] ?? 0);
+        if ($itemId && property_exists($this->orderInterface, 'itemCart') && is_array($this->orderInterface->itemCart)) {
+            $cart = $this->orderInterface->itemCart[$itemId] ?? null;
+            if (is_array($cart) && !empty($cart['pics'])) {
+                if (is_string($cart['pics'])) {
+                    return $cart['pics'];
+                }
+                if (is_array($cart['pics'])) {
+                    $first = reset($cart['pics']);
+
+                    return is_string($first) ? $first : '';
+                }
+            }
+        }
+
+        return (new CartService())->resolveCartItemPic($itemInfo);
     }
 
     /**

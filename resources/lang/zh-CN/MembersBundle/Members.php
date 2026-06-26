@@ -42,6 +42,14 @@ return [
     'mobile_already_exists' => '手机号已存在',
     'missing_default_level' => '缺少默认等级',
     'member_add_failed' => '会员添加失败',
+    'offline_shuyun_distributor_required' => '同步数云线下会员须传入有效的 distributor_id',
+    'offline_shuyun_sync_failed' => '数云会员注册失败：:msg',
+    'offline_shuyun_user_invalid' => '会员标识异常，数云同步失败',
+    'store_member_ready_user_required' => '请指定会员',
+    'store_member_ready_distributor_required' => '请选择门店',
+    'store_member_ready_not_found' => '未找到该会员',
+    'store_member_ready_mobile_missing' => '会员手机号缺失，无法完成门店登记',
+    'store_member_ready_sync_failed' => '门店会员登记失败：:msg',
 
     // Api/V1/Action/ExportData.php异常信息
     'operator_account_error' => '操作员账号有误',

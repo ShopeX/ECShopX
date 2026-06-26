@@ -146,6 +146,13 @@ class UploadeFile
     private $merchant_id = 0;
 
     /**
+     * @var integer
+     *
+     * @ORM\Column(name="relation_id", type="bigint", options={"comment":"关联id", "default": 0})
+     */
+    private $relation_id = 0;
+
+    /**
      * Get id
      *
      * @return integer
@@ -513,5 +520,29 @@ class UploadeFile
     public function getSupplierId()
     {
         return $this->supplier_id;
+    }
+
+    /**
+     * Set relationId.
+     *
+     * @param int $relationId
+     *
+     * @return UploadeFile
+     */
+    public function setRelationId($relationId = 0)
+    {
+        $this->relation_id = $relationId;
+
+        return $this;
+    }
+
+    /**
+     * Get relationId.
+     *
+     * @return int
+     */
+    public function getRelationId()
+    {
+        return $this->relation_id;
     }
 }

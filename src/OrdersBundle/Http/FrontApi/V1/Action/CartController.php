@@ -948,7 +948,7 @@ class CartController extends BaseController
         // }
 
         $cartService = new CartService();
-        $result = $cartService->countCart($filter, $cartType, $iscrossborder, $isShopScreen);
+        $result = $cartService->countCart($filter, $iscrossborder, $isShopScreen, $cartType);
 
         return $this->response->array($result);
     }

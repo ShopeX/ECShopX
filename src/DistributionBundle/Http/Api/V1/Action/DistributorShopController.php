@@ -319,6 +319,7 @@ class DistributorShopController extends Controller
           1 => 'city',
           2 => 'area',
       ];
+        // 非后管「更新店铺」主链：主锚点为 `Distributor@updateDistributor`（计划 2.5）；本接口不按该计划扩展 D6/V-STA。
         $params = $request->all('name', 'address', 'mobile', 'is_valid', 'regions_id', 'regions', 'contact', 'is_ziti', 'lng', 'lat', 'hour', 'logo', 'banner', 'auto_sync_goods', 'is_audit_goods');
         $params['distributor_id'] = $distributor_id;
         $params['is_distributor'] = false;
@@ -361,6 +362,7 @@ class DistributorShopController extends Controller
         if (isset($params['regions']) && count($params['regions']) == 2) {
             $params['area'] = '';
         }
+
         $distributorService = new DistributorService();
         $data = $distributorService->updateDistributor($distributor_id, $params);
 

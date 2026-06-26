@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright 2019-2026 ShopeX
  *
@@ -17,11 +18,16 @@
 
 namespace PointBundle\Http\FrontApi\V1\Action;
 
+use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 use PointBundle\Services\PointMemberLogService;
 use PointBundle\Services\PointMemberService;
+use PointBundle\Services\PointMemberShuyunOpenPlatformPointListService;
 use MembersBundle\Services\MemberService;
+use ShuyunOpenPlatformBundle\Repositories\CompanyShuyunOpenPlatformConfigRepository;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformLoyaltyPointChangelogSearchService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformShopSyncService;
 use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
 use ThirdPartyBundle\Services\DmCrm\PointService;
 
@@ -91,6 +97,34 @@ class PointMember extends Controller
             }
         }
 
+        $shuyunPointList = new PointMemberShuyunOpenPlatformPointListService(
+            app(ShuyunOpenPlatformLoyaltyPointChangelogSearchService::class),
+            app(CompanyShuyunOpenPlatformConfigRepository::class),
+            app(ShuyunOpenPlatformShopSyncService::class),
+        );
+        if ($shuyunPointList->isShuyunOpenPlatformMemberEnabled((int) $authInfo['company_id'])) {
+            $shuyunPointList->assertEligibleOrThrow((int) $authInfo['company_id']);
+            $memberService = new MemberService();
+            $memberInfoInfo = $memberService->getMemberInfo([
+                'user_id' => $authInfo['user_id'],
+                'company_id' => $authInfo['company_id'],
+            ]);
+            $regDistributor = (int) ($memberInfoInfo['reg_distributor'] ?? 0);
+            if ($regDistributor <= 0) {
+                throw new ResourceException('会员缺少注册店铺信息，暂无法从数云查询积分明细');
+            }
+            $result = $shuyunPointList->buildListFromChangelog(
+                (int) $authInfo['company_id'],
+                (int) $authInfo['user_id'],
+                $regDistributor,
+                (int) $page,
+                (int) $pageSize,
+                is_string($outinType) ? $outinType : null
+            );
+
+            return $this->response->array($result);
+        }
+
         // 达摩crm, 会员积分明细
         $ns = new DmCrmSettingService();
         if ($ns->getDmCrmSetting($authInfo['company_id'])['is_open'] ?? '') {
@@ -109,13 +143,13 @@ class PointMember extends Controller
                 'company_id' => $authInfo['company_id']
             ];
             $pointList = $pointService->getPointDetailList($paramsData);
-            
+
             $result['list'] = $pointList['items'] ?? [];
             $result['total_count'] = $pointList['totalCount'] ?? 0;
             if (!empty($result['list'])) {
-                // 兼容积分支出/收入过滤  
+                // 兼容积分支出/收入过滤
                 if ($outinType) {
-                     if ($outinType == 'outcome') {
+                    if ($outinType == 'outcome') {
                         $tempList = array_filter($result['list'], function ($item) {
                             return $item['outcome'] > 0;
                         });
@@ -128,7 +162,7 @@ class PointMember extends Controller
                     }
                 }
                 // 处理预占积分时间问题
-                foreach($result['list'] as $k => $v) {
+                foreach ($result['list'] as $k => $v) {
                     // if (preg_match('/积分解冻时间+(:|：)(\d{4}-\d{2}-\d{2})/', $v['operater_remark'], $matches)) {
                     //     $dateStr = $matches[2]." 00:00:00";
                     //     $result['list'][$k]['created'] = $dateStr;
@@ -140,14 +174,14 @@ class PointMember extends Controller
                     if (!empty($v['effectTime'])) {
                         $result['list'][$k]['created'] = $v['effectTime'];
                         if (time() < $v['effectTime']) {
-                           // 未来时间，积分未解冻
-                           unset($result['list'][$k]);
+                            // 未来时间，积分未解冻
+                            unset($result['list'][$k]);
                         }
                     }
                 }
                 $result['list'] = array_values($result['list']);
-            } 
-        }else{
+            }
+        } else {
             $pointMemberService = new PointMemberLogService();
             $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
 
@@ -156,7 +190,7 @@ class PointMember extends Controller
             }
 
         }
-    
+
         return $this->response->array($result);
     }
 

@@ -40,10 +40,14 @@ class MembercardGradeRepository extends EntityRepository
         $em->flush();
 
         $result = [
-            'company_id' => $grade->getCompanyId(),
             'grade_id' => $grade->getGradeId(),
+            'company_id' => $grade->getCompanyId(),
             'grade_name' => $grade->getGradeName(),
             'default_grade' => $grade->getDefaultGrade(),
+            'background_pic_url' => $grade->getBackgroundPicUrl(),
+            'promotion_condition' => $grade->getPromotionCondition(),
+            'privileges' => $grade->getPrivileges(),
+            'description' => $grade->getDescription(),
         ];
         $service = new MultiLangService();
         $service->addMultiLangByParams($result[$this->prk],$gradeInfo,$this->table);

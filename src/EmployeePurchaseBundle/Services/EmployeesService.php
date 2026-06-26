@@ -833,17 +833,15 @@ EOF;
     }
 
     /**
-     * 口令活动：用户已在 behavior-report 验口令（Redis）且未预录白名单时，自动写入 employee_purchase_employees（加车/下单/活动数据前调用）。
-     * 已是员工或已是亲友则跳过；名额逻辑与 {@see authentication()} 一致。
+     * 口令活动：用户已在 behavior-report 验口令（Redis）时，占本活动参与名额并写 bind 流水；非员工则自动建档。
+     * 已是亲友则跳过；已是员工则跳过建档但仍占本活动名额；名额逻辑与 {@see authentication()} 一致。
      */
     public function ensurePassphraseEmployeeFromVerifiedActivity(int $companyId, int $enterpriseId, int $activityId, int $userId): void
     {
         if ($companyId < 1 || $enterpriseId < 1 || $activityId < 1 || $userId < 1) {
             return;
         }
-        if ($this->check($companyId, $enterpriseId, $userId)) {
-            return;
-        }
+        $isEmployee = (bool) $this->check($companyId, $enterpriseId, $userId);
         $relativesService = new RelativesService();
         if ($relativesService->check($companyId, $enterpriseId, $activityId, $userId)) {
             return;
@@ -873,16 +871,33 @@ EOF;
 
         $quotaConsumed = false;
         $participateQuotaSvc = new PassphraseParticipateQuotaRedisService();
+        $emExempt = app('registry')->getManager('default');
+        /** @var \EmployeePurchaseBundle\Repositories\ActivityEnterpriseParticipateUserRepository $exemptRepo */
+        $exemptRepo = $emExempt->getRepository(ActivityEnterpriseParticipateUser::class);
         if ($participateQuotaSvc->isApplicable($companyId, $activityId, $enterpriseId)) {
-            $emExempt = app('registry')->getManager('default');
-            /** @var \EmployeePurchaseBundle\Repositories\ActivityEnterpriseParticipateUserRepository $exemptRepo */
-            $exemptRepo = $emExempt->getRepository(ActivityEnterpriseParticipateUser::class);
             if (!$exemptRepo->existsForUser($companyId, $activityId, $enterpriseId, $userId)) {
                 if (!$participateQuotaSvc->tryConsumeSlot($companyId, $activityId, $enterpriseId)) {
                     throw new ResourceException('该企业在本活动下的参与名额已满');
                 }
                 $quotaConsumed = true;
             }
+        }
+
+        $bindLogParams = [
+            'company_id' => $companyId,
+            'enterprise_id' => $enterpriseId,
+            'user_id' => $userId,
+            'activity_id' => $activityId,
+            'auth_type' => ActivityEnterpriseBehaviorLogService::BIND_CHANNEL_PASSPHRASE,
+        ];
+
+        if ($isEmployee) {
+            if ($quotaConsumed) {
+                $exemptRepo->insertIgnore($companyId, $activityId, $enterpriseId, $userId);
+                $this->tryWriteEmployeeBindBehaviorLog($bindLogParams);
+            }
+
+            return;
         }
 
         $conn = app('registry')->getConnection('default');
@@ -927,19 +942,10 @@ EOF;
         }
 
         if ($quotaConsumed) {
-            $emExempt = app('registry')->getManager('default');
-            /** @var \EmployeePurchaseBundle\Repositories\ActivityEnterpriseParticipateUserRepository $exemptRepo */
-            $exemptRepo = $emExempt->getRepository(ActivityEnterpriseParticipateUser::class);
             $exemptRepo->insertIgnore($companyId, $activityId, $enterpriseId, $userId);
         }
 
-        $this->tryWriteEmployeeBindBehaviorLog([
-            'company_id' => $companyId,
-            'enterprise_id' => $enterpriseId,
-            'user_id' => $userId,
-            'activity_id' => $activityId,
-            'auth_type' => ActivityEnterpriseBehaviorLogService::BIND_CHANNEL_PASSPHRASE,
-        ]);
+        $this->tryWriteEmployeeBindBehaviorLog($bindLogParams);
     }
 
     /**

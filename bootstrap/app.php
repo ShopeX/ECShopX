@@ -93,6 +93,8 @@ $app->configure('tbitems');
 $app->configure('paypal');
 $app->configure('kujiale');
 $app->configure('langue');
+$app->configure('logging');
+$app->configure('shuyun_open_platform');
 
 /*
 |--------------------------------------------------------------------------
@@ -185,6 +187,7 @@ $app->loadComponent('app', 'EspierBundle\Providers\FixedEncrypterRWProvider', 'f
 $app->register(EspierBundle\Providers\FixedEncrypterRWProvider::class); // 数据加密
 $app->register(EspierBundle\Providers\JwtAuthServiceProvider::class);// @todo 性能超级差
 $app->register(EspierBundle\Providers\LaravelDoctrineServiceProvider::class);
+$app->register(ShuyunOpenPlatformBundle\Providers\ShuyunOpenPlatformServiceProvider::class); // 数云开放网关容器绑定（须在 Doctrine 之后）
 $app->register(EspierBundle\Providers\LocalStorageServiceProvider::class); // 本地存储
 $app->register(EspierBundle\Providers\OssStorageServiceProvider::class); // 阿里OSS存储
 if (!in_array(env('APP_ENV', 'local'), ['production', 'staging'])) {

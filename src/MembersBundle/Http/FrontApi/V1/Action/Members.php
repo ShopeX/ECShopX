@@ -323,6 +323,11 @@ class Members extends Controller
                 'company_id' => $authInfo['company_id'],
             ];
             $memberInfo = $this->memberService->getMemberInfo($filter, true);
+            $this->memberService->mergeShuyunOpenPlatformEnhanceIntoMemberInfo(
+                (int) $authInfo['company_id'],
+                (int) $authInfo['user_id'],
+                $memberInfo
+            );
             unset($memberInfo['region_mobile']);
             $mobile = (string) ($memberInfo['mobile'] ?? '');
             MemberSyntheticMobileService::stripSyntheticMobileForFrontApi($memberInfo);
@@ -465,7 +470,9 @@ class Members extends Controller
 
             // 达摩crm, 会员积分
             $ns = new DmCrmSettingService();
-            if ($ns->getDmCrmSetting($authInfo['company_id'])['is_open'] ?? '') {
+            if (! $this->memberService->isShuyunOpenPlatformMemberEnabled((int) $authInfo['company_id'])
+                && ($ns->getDmCrmSetting($authInfo['company_id'])['is_open'] ?? '')
+            ) {
                 $pointService = new PointService($authInfo['company_id']);
                 $paramsData = [
                     'mobile' => $mobile,
@@ -808,6 +815,10 @@ class Members extends Controller
         ];
         // 设置过滤条件
         $filter = ['user_id' => $authInfo['user_id'], 'company_id' => $companyId];
+        // 开放网关：远端 member.modify 成功后再写本地（A-MOD-01）
+        if ($this->memberService->isShuyunOpenPlatformMemberEnabled($companyId)) {
+            $this->memberService->shuyunModify($companyId, $authInfo['user_id'], $postData);
+        }
         // 更新用户信息
         $this->memberService->memberInfoUpdate($postData, $filter);
         // 更新微信用户信息, 如果不存在unionid和openid则有可能是app环境
@@ -827,8 +838,8 @@ class Members extends Controller
                 'authorizer_appid' => $authInfo['wxapp_appid'],
             ]);
         }
-        // 数云模式,去数云更新用户信息
-        if (config('common.oem-shuyun')) {
+        // LPEE：本地更新后再同步数云（开放网关已启用时仅走 OPEN，不回退 LPEE）
+        if (! $this->memberService->isShuyunOpenPlatformMemberEnabled($companyId) && config('common.oem-shuyun')) {
             $this->memberService->shuyunModify($companyId, $authInfo['user_id'], $postData);
         }
         $result = $this->memberService->getMemberInfo($filter);

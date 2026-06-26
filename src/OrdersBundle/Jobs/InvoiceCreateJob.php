@@ -58,6 +58,12 @@ class InvoiceCreateJob implements ShouldQueue
             
             // 调用 OrderInvoiceService 的 createFapiao 方法
             $result = $orderInvoiceService->createFapiao($this->jobData);
+
+            if (is_array($result)
+                && ($result['message'] ?? '') === BaiwangService::MSG_CONFIG_NOT_READY) {
+                // 百旺未配置：服务内已打一条 warning，此处不再写业务/完成日志
+                return;
+            }
             
             app('log')->info('[InvoiceCreateJob][handle] 发票创建任务执行完成', [
                 'invoice_id' => $this->jobData['invoice_id'],
@@ -65,6 +71,10 @@ class InvoiceCreateJob implements ShouldQueue
             ]);
             
         } catch (\Exception $e) {
+            if ($e->getMessage() === BaiwangService::MSG_CONFIG_NOT_READY) {
+                return;
+            }
+
             app('log')->error('[InvoiceCreateJob][handle] 发票创建任务执行失败', [
                 'invoice_id' => $this->jobData['invoice_id'],
                 'error' => $e->getMessage(),
@@ -90,6 +100,10 @@ class InvoiceCreateJob implements ShouldQueue
      */
     public function failed(\Exception $exception)
     {
+        if ($exception->getMessage() === BaiwangService::MSG_CONFIG_NOT_READY) {
+            return;
+        }
+
         app('log')->error('[InvoiceCreateJob][failed] 发票创建任务失败', [
             'invoice_id' => $this->jobData['invoice_id'],
             'error' => $exception->getMessage()

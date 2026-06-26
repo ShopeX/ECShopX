@@ -267,10 +267,12 @@ class AbstractNormalOrder implements OrderInterface
 
     public function minusItemStore($orderData)
     {
+        $usePlatformItemStock = !empty($orderData['uses_platform_item_stock']);
         foreach ($orderData['items'] as $vitem) {
+            $deductAsTotalStore = $usePlatformItemStock || $vitem['is_total_store'];
             $minusItemStoreParams[] = [
                 'item_id' => $vitem['item_id'],
-                'key' => $vitem['is_total_store'] ? $vitem['item_id'] : $vitem['distributor_id'] . '_' . $vitem['item_id'],
+                'key' => $deductAsTotalStore ? $vitem['item_id'] : $vitem['distributor_id'] . '_' . $vitem['item_id'],
                 'num' => $vitem['num'],
             ];
         }
@@ -412,6 +414,7 @@ class AbstractNormalOrder implements OrderInterface
                 $pointsmallItemStoreService = new pointsmallItemStoreService();
 
                 $limitServer = new LimitService();
+                $restorePlatformStock = !empty($orderInfo['uses_platform_item_stock']);
                 // 库存以及限购恢复
                 foreach ($orderItems['list'] as $row) {
                     if (!in_array($order_class, ['seckill', 'pointsmall'])) {
@@ -421,8 +424,9 @@ class AbstractNormalOrder implements OrderInterface
                         }
 
                         if ($order_class != 'employee_purchase' || ($order_class == 'employee_purchase' && $relData['if_share_store'])) {
-                            // 总部发货
-                            if ($row['is_total_store']) {
+                            // 总部发货；店务立即购买（云仓/平台 SKU 库存）须与扣减一致，返还到平台库存
+                            $asTotalStore = $restorePlatformStock || $row['is_total_store'];
+                            if ($asTotalStore) {
                                 $itemStoreService->minusItemStore($row['item_id'], -$row['num'], $row['distributor_id'], true);
                             } else {
                                 $itemStoreService->minusItemStore($row['item_id'], -$row['num'], $row['distributor_id'], false);
@@ -618,11 +622,13 @@ class AbstractNormalOrder implements OrderInterface
             $pointsmallItemStoreService = new pointsmallItemStoreService();
 
             $limitServer = new LimitService();
+            $restorePlatformStock = !empty($order['uses_platform_item_stock']);
             // 库存以及限购恢复
             foreach ($orderItems['list'] as $row) {
                 if (!in_array($order['order_class'], ['seckill', 'pointsmall'])) {
-                    // 总部发货
-                    if ($row['is_total_store']) {
+                    // 总部发货；店务立即购买返还平台库存
+                    $asTotalStore = $restorePlatformStock || $row['is_total_store'];
+                    if ($asTotalStore) {
                         $itemStoreService->minusItemStore($row['item_id'], -$row['cancel_item_num'], $row['distributor_id'], true);
                     } else {
                         $itemStoreService->minusItemStore($row['item_id'], -$row['cancel_item_num'], $row['distributor_id'], false);
@@ -1138,15 +1144,15 @@ class AbstractNormalOrder implements OrderInterface
 
                 if ((!$v['order_auto_close_aftersales_time'] || $v['order_auto_close_aftersales_time'] > time()) && $v['left_aftersales_num'] > 0) {
                     $result['list'][$k]['can_apply_aftersales'] = 1;
-                    app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][can_apply_aftersales]:1' );
+                    // app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][can_apply_aftersales]:1' );
 
                 }
 
-                app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][order_id]:' . json_encode($v['order_id']));
-                app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][order_status]:' . json_encode($v['order_status']));
+                // app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][order_id]:' . json_encode($v['order_id']));
+                // app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][order_status]:' . json_encode($v['order_status']));
                 if( $v['order_status'] == "CANCEL"){
                     $result['list'][$k]['can_apply_aftersales'] = 0;
-                    app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][can_apply_aftersales]:0' );
+                    // app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][can_apply_aftersales]:0' );
 
                 }
 
@@ -2582,8 +2588,8 @@ class AbstractNormalOrder implements OrderInterface
         //消费满送大转盘抽奖次数
 //        $turntableService = new TurntableService();
 //        $turntableService->payGetTurntableTimes($params['user_id'], $params['company_id'], $orderInfo['total_fee']);
-        //消费送积分
-        if ($orderInfo['bonus_points'] > 0) {
+        //消费送积分（数云开放网关会员：获赠由数云端处理，商城不 addPoint）
+        if ($orderInfo['bonus_points'] > 0 && ! app(MemberService::class)->isShuyunOpenPlatformMemberEnabled((int) $orderInfo['company_id'])) {
             $pointMemberService = new PointMemberService();
             $mark = "订单号：" . $orderInfo['order_id'] . " 消费送积分";
             $pointMemberService->addPoint($orderInfo['user_id'], $orderInfo['company_id'], intval($orderInfo['bonus_points']), 7, true, $mark, $orderInfo['order_id']);
@@ -2975,6 +2981,8 @@ class AbstractNormalOrder implements OrderInterface
         $eventData = [
             'order_id' => $params['order_id'],
             'company_id' => $params['company_id'],
+            'user_id' => (int) ($order['user_id'] ?? 0),
+            'total_fee' => $order['total_fee'] ?? 0,
         ];
         event(new NormalOrderCancelEvent($eventData));
 
@@ -3355,7 +3363,10 @@ class AbstractNormalOrder implements OrderInterface
                 'msg' => $e->getMessage(),
             ];
             app('log')->info('订单取消失败,ERROR:'.var_export($error, true));
-            $conn->rollback();
+            // update() 内已 begin 嵌套事务并在 catch 中 rollback 后，此处连接可能已无事务，避免二次 rollback 触发 ConnectionException
+            if ($conn->getTransactionNestingLevel() > 0) {
+                $conn->rollback();
+            }
             throw $e;
         }
     }
@@ -4130,8 +4141,18 @@ class AbstractNormalOrder implements OrderInterface
         }
 
         if ($orderInfo['user_id'] > 0) {
-            $pointMemberService = new PointMemberService();
-            $orderInfo = $pointMemberService->memberGetPoints($orderInfo['company_id'], $orderInfo);
+            if (app(MemberService::class)->isShuyunOpenPlatformMemberEnabled((int) $orderInfo['company_id'])) {
+                $orderInfo['get_points'] = 0;
+                $orderInfo['extra_points'] = 0;
+                if (isset($orderInfo['items']) && is_array($orderInfo['items'])) {
+                    foreach ($orderInfo['items'] as $ik => $iv) {
+                        $orderInfo['items'][$ik]['get_points'] = 0;
+                    }
+                }
+            } else {
+                $pointMemberService = new PointMemberService();
+                $orderInfo = $pointMemberService->memberGetPoints($orderInfo['company_id'], $orderInfo);
+            }
         }
 
         $conn = app('registry')->getConnection('default');

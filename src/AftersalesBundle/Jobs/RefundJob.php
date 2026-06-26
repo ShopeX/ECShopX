@@ -23,6 +23,7 @@ use EspierBundle\Jobs\Job;
 use AftersalesBundle\Services\AftersalesRefundService;
 use AftersalesBundle\Entities\Aftersales;
 use AftersalesBundle\Entities\AftersalesDetail;
+use OrdersBundle\Events\NormalOrderConfirmReceiptEvent;
 use OrdersBundle\Services\Orders\BargainNormalOrderService;
 use OrdersBundle\Services\Orders\NormalOrderService;
 use OrdersBundle\Services\OrderService;
@@ -101,6 +102,11 @@ class RefundJob extends Job
             }
 
             $this->__updateAfterSaleFinish($refund);
+            // 退款成功后刷新一次 trade.sync，供数云侧拿到全额退款关闭等主单终态。
+            event(new NormalOrderConfirmReceiptEvent([
+                'order_id' => $refund['order_id'],
+                'company_id' => $refund['company_id'],
+            ]));
         }
         return true;
     }

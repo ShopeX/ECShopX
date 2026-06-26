@@ -236,7 +236,7 @@ class MemberRegSettingService
             return $vcode;
         }
         //发送短信
-        $this->sendSmsVcode($companyId, $phone, $vcode, $type);
+        $this->sendSmsVcode($companyId, $phone, $vcode);
         return true;
     }
 
@@ -276,11 +276,11 @@ class MemberRegSettingService
     }
 
     //短信验证码的发送动作
-    private function sendSmsVcode($companyId, $phone, $code, $type)
+    private function sendSmsVcode($companyId, $phone, $code)
     {
         $data = ['code' => $code];
         $smsManagerService = new SmsManagerService($companyId);
-        $smsManagerService->send($phone, $companyId, $type, $data); // verification_code
+        $smsManagerService->send($phone, $companyId, 'verification_code', $data);
         return true;
     }
 }

@@ -23,6 +23,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 // use Illuminate\Foundation\Bus\Dispatchable;
 use OrdersBundle\Services\OrderInvoiceService;
+use ThirdPartyBundle\Services\FapiaoCentre\BaiwangService;
 
 class InvoiceQueryJob implements ShouldQueue
 {
@@ -93,6 +94,11 @@ class InvoiceQueryJob implements ShouldQueue
             ]);
 
         } catch (\Exception $e) {
+            if ($e->getMessage() === BaiwangService::MSG_CONFIG_NOT_READY) {
+                // 仅 OrderInvoiceService 打一条 warning，此处避免重复写文件日志
+                return;
+            }
+
             app('log')->error('[InvoiceQueryJob][handle] 发票查询任务处理失败', [
                 'job_data' => $this->jobData,
                 'error' => $e->getMessage(),

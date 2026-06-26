@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright 2019-2026 ShopeX
  *
@@ -18,13 +19,13 @@
 namespace PaymentBundle\Services;
 
 use DepositBundle\Services\DepositTrade;
-use Dingo\Api\Exception\ResourceException;
 use OrdersBundle\Services\PrescriptionService;
 use OrdersBundle\Traits\GetOrderServiceTrait;
 use OrdersBundle\Services\OrderAssociationService;
 use OrdersBundle\Traits\GetPaymentServiceTrait;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use OrdersBundle\Services\TradeService;
+use OrdersBundle\Entities\NormalOrders;
 
 class PaymentService
 {
@@ -129,8 +130,24 @@ class PaymentService
         $authorizerAppId = $authInfo['woa_appid'] ?? '';
         $wxaAppId = $authInfo['wxapp_appid'] ?? '';
 
+        $posVoucherUrl = '';
+        if (strtolower((string) $params['pay_type']) === 'pos') {
+            $posVoucherUrl = isset($params['pos_payment_voucher_url']) ? trim((string) $params['pos_payment_voucher_url']) : '';
+            if ($posVoucherUrl !== '') {
+                PosPaymentVoucherValidator::validateNonEmpty($posVoucherUrl);
+            }
+        }
+
         $service = $this->getPaymentService($params['pay_type'], $data['distributor_id']);
         $payResult = $service->doPayment($authorizerAppId, $wxaAppId, $data, false);
+
+        if (strtolower((string) $params['pay_type']) === 'pos' && $posVoucherUrl !== '' && !empty($payResult['pay_status'])) {
+            $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+            $normalOrdersRepository->updateBy(
+                ['order_id' => $params['order_id'], 'company_id' => $authInfo['company_id']],
+                ['pos_payment_voucher_url' => $posVoucherUrl]
+            );
+        }
 
         if (isset($result['orderInfo']['pay_type'])) {
             $result['orderInfo']['pay_type'] = $payResult['pay_type'] ?? '';

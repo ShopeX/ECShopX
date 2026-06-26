@@ -18,6 +18,7 @@
 namespace ThirdPartyBundle\Listeners;
 
 use OrdersBundle\Events\TradeFinishEvent;
+use OrdersBundle\Services\OrderPostPayIntegrationReadinessService;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -39,6 +40,8 @@ class TradeFinishSendSaasErp extends BaseListeners implements ShouldQueue
 
     protected $queue = 'default';
     public const METHOD = 'store.trade.update';
+    private const ORDER_NOT_READY_RETRY_MAX_ATTEMPTS = 5;
+    private const ORDER_NOT_READY_RETRY_DELAY_SEC = 3;
 
 
     /**
@@ -64,6 +67,23 @@ class TradeFinishSendSaasErp extends BaseListeners implements ShouldQueue
         if (!$erp_node_id) {
             app('log')->debug('saaserp TradeFinishSendSaasErp companyId:'.$companyId.",orderId:".$orderId.",msg:未开启SaasErp\n");
             return true;
+        }
+
+        $readiness = app(OrderPostPayIntegrationReadinessService::class);
+        if (! $readiness->isOrderReadyForPostPayIntegration($companyId, $orderId)) {
+            if ($readiness->orderHasSuccessfulTrade($companyId, $orderId)
+                && (int) $this->attempts() < self::ORDER_NOT_READY_RETRY_MAX_ATTEMPTS) {
+                app('log')->info('saaserp TradeFinishSendSaasErp order not ready after pay, will retry.', [
+                    'company_id' => $companyId,
+                    'order_id' => $orderId,
+                    'attempt' => (int) $this->attempts(),
+                    'max_attempts' => self::ORDER_NOT_READY_RETRY_MAX_ATTEMPTS,
+                    'retry_delay_sec' => self::ORDER_NOT_READY_RETRY_DELAY_SEC,
+                ]);
+                $this->release(self::ORDER_NOT_READY_RETRY_DELAY_SEC);
+
+                return true;
+            }
         }
 
         $orderService = new OrderService();
@@ -125,6 +145,7 @@ class TradeFinishSendSaasErp extends BaseListeners implements ShouldQueue
 
     public static function request($orderStruct = [], $companyId = null)
     {
+        $result = null;
         try {
             $request = new Request($companyId);
             $result = $request->call(self::METHOD, $orderStruct);

@@ -192,6 +192,13 @@ class NormalOrderService extends AbstractNormalOrder
 
         $limitLines = [];
         foreach ($orderData['items'] as $item) {
+            $actRow = $activityItemList[$item['item_id']] ?? null;
+            if (!$actRow || (int) ($actRow['shelf_status'] ?? 1) !== 1) {
+                if ($isCheck) {
+                    throw new ResourceException('商品已下架');
+                }
+                $orderData['extraTips'] = '商品已下架';
+            }
             $limitLines[] = [
                 'item_id' => $item['item_id'],
                 'num' => (int) $item['num'],

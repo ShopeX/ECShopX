@@ -155,9 +155,9 @@ class Distributor
     private $contact;
 
     /**
-     * @var string
+     * @var string 取值语义见 {@see \DistributionBundle\Services\DistributorCloudShopStatusGuard}
      *
-     * @ORM\Column(name="is_valid", type="string", options={"comment":"店铺是否有效","default":"true"})
+     * @ORM\Column(name="is_valid", type="string", options={"comment":"店铺状态：true启用云店 false禁用云店 closed闭店 delete撤店","default":"true"})
      */
     private $is_valid = "true";
 
@@ -259,6 +259,13 @@ class Distributor
      * @ORM\Column(name="is_ziti", type="boolean", nullable=true, options={"comment":"是否支持自提", "default": false})
      */
     private $is_ziti = false;
+
+    /**
+     * @var bool
+     *
+     * @ORM\Column(name="is_platform_store_buy", type="boolean", nullable=false, options={"comment":"是否开启云仓可购买（店务立即购买等）", "default": false})
+     */
+    private $is_platform_store_buy = false;
 
     /**
      * @var integer
@@ -1078,6 +1085,21 @@ class Distributor
     public function getIsZiti()
     {
         return $this->is_ziti;
+    }
+
+    /**
+     * @return $this
+     */
+    public function setIsPlatformStoreBuy($isPlatformStoreBuy)
+    {
+        $this->is_platform_store_buy = (bool) $isPlatformStoreBuy;
+
+        return $this;
+    }
+
+    public function getIsPlatformStoreBuy()
+    {
+        return (bool) $this->is_platform_store_buy;
     }
 
     /**

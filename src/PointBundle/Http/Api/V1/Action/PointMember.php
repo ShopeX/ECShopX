@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright 2019-2026 ShopeX
  *
@@ -21,10 +22,13 @@ use EspierBundle\Jobs\ExportFileJob;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 use Dingo\Api\Exception\ResourceException;
-use Doctrine\ORM\Query\Expr\Func;
 use PointBundle\Services\PointMemberLogService;
 use PointBundle\Services\PointMemberService;
+use PointBundle\Services\PointMemberShuyunOpenPlatformPointListService;
 use MembersBundle\Services\MemberService;
+use ShuyunOpenPlatformBundle\Repositories\CompanyShuyunOpenPlatformConfigRepository;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformLoyaltyPointChangelogSearchService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformShopSyncService;
 use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
 use ThirdPartyBundle\Services\DmCrm\PointService;
 
@@ -45,7 +49,7 @@ class PointMember extends Controller
             $member_list = $memberService->getMemberList(['company_id' => $params['company_id'],'mobile' => $mobile]);
             if (!empty($member_list)) {
                 $filterUsers[] = array_column($member_list, 'user_id');
-            }else {
+            } else {
                 $filterUsers[] = [];
             }
         }
@@ -53,7 +57,7 @@ class PointMember extends Controller
             $member_list = $memberService->getMemberList(['company_id' => $params['company_id'],'username' => $username], 1, -1);
             if (!empty($member_list)) {
                 $filterUsers[] = array_column($member_list, 'user_id');
-            }else {
+            } else {
                 $filterUsers[] = [];
             }
         }
@@ -68,7 +72,7 @@ class PointMember extends Controller
         if (isset($filterUsers) && !empty($filterUsers)) {
             $compareArr = $filterUsers[0];
             foreach ($filterUsers as $key => $value) {
-                if($key == 0) {
+                if ($key == 0) {
                     continue;
                 }
                 $compareArr = array_intersect($value, $compareArr);
@@ -131,6 +135,74 @@ class PointMember extends Controller
         $pageSize = $request->input('pageSize', 20);
         $pointMemberService = new PointMemberLogService();
         $params = $this->getFilter($request);
+        $companyId = (int) $params['company_id'];
+
+        $shuyunPointList = new PointMemberShuyunOpenPlatformPointListService(
+            app(ShuyunOpenPlatformLoyaltyPointChangelogSearchService::class),
+            app(CompanyShuyunOpenPlatformConfigRepository::class),
+            app(ShuyunOpenPlatformShopSyncService::class),
+        );
+        if ($shuyunPointList->isShuyunOpenPlatformMemberEnabled($companyId)) {
+            $shuyunPointList->assertEligibleOrThrow($companyId);
+            $singleUid = PointMemberShuyunOpenPlatformPointListService::extractSingleUserId($params);
+            $useShuyunChangelog = $singleUid !== null
+                && !PointMemberShuyunOpenPlatformPointListService::hasPointLogDateRangeFilter($params);
+            if ($useShuyunChangelog) {
+                $memberService = new MemberService();
+                $memberInfoInfo = $memberService->getMemberInfo([
+                    'user_id' => $singleUid,
+                    'company_id' => $companyId,
+                ]);
+                if (empty($memberInfoInfo)) {
+                    throw new ResourceException('未查询到相关会员信息');
+                }
+                $regDistributor = (int) ($memberInfoInfo['reg_distributor'] ?? 0);
+                if ($regDistributor <= 0) {
+                    throw new ResourceException('会员缺少注册店铺信息，暂无法从数云查询积分明细');
+                }
+                $result = $shuyunPointList->buildListFromChangelog(
+                    $companyId,
+                    $singleUid,
+                    $regDistributor,
+                    (int) $page,
+                    (int) $pageSize,
+                    null
+                );
+                if (!empty($result['list'])) {
+                    $memberList = $memberService->getMemberList([
+                        'company_id' => $companyId,
+                        'user_id' => [$singleUid],
+                    ], 1, -1);
+                    $memberList = array_column($memberList, null, 'user_id');
+                    foreach ($result['list'] as $key => $row) {
+                        $uidKey = $row['user_id'] ?? '';
+                        $m = $memberList[$uidKey] ?? $memberList[(string) $singleUid] ?? [];
+                        $result['list'][$key]['username'] = $m['username'] ?? '';
+                        $result['list'][$key]['name'] = $m['name'] ?? '';
+                        $result['list'][$key]['mobile'] = $m['mobile'] ?? '';
+                    }
+                }
+
+                return $this->response->array($result);
+            }
+            $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ['created' => 'DESC']);
+            if (isset($result['list']) && !empty($result['list'])) {
+                $memberService = new MemberService();
+                $userIds = array_column($result['list'], 'user_id');
+                $memberList = $memberService->getMemberList(['company_id' => $companyId, 'user_id' => $userIds], 1, -1);
+                $memberList = array_column($memberList, null, 'user_id');
+            }
+            foreach ($result['list'] as $key => $row) {
+                $point = explode('：', $row['point_desc']);
+                $result['list'][$key]['journal_type_desc'] = PointMemberService::JOURNAL_TYPE_MAP[$row['journal_type']] ?? '';
+                $result['list'][$key]['username'] = $memberList[$row['user_id']]['username'] ?? '';
+                $result['list'][$key]['name'] = $memberList[$row['user_id']]['name'] ?? '';
+                $result['list'][$key]['mobile'] = $memberList[$row['user_id']]['mobile'] ?? '';
+                $result['list'][$key]['s_point'] = end($point) ?: 0;
+            }
+
+            return $this->response->array($result);
+        }
 
         // 达摩crm, 会员积分明细
         $ns = new DmCrmSettingService();
@@ -142,8 +214,8 @@ class PointMember extends Controller
             $pointTotal = 0;
             if (isset($params['user_id']) && is_array($params['user_id'])) {
                 // pass
-            }elseif(isset($params['user_id']) && !empty($params['user_id'])){
-                $params['user_id'] = [$params['user_id']];    
+            } elseif (isset($params['user_id']) && !empty($params['user_id'])) {
+                $params['user_id'] = [$params['user_id']];
             } else {
                 $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
                 if (isset($result['list']) && !empty($result['list'])) {
@@ -153,7 +225,7 @@ class PointMember extends Controller
                 }
             }
             if (!empty($params['user_id'])) {
-                foreach($params['user_id'] as $k => $userId) {
+                foreach ($params['user_id'] as $k => $userId) {
                     $memberFilter = [
                         'user_id' => $userId,
                         'company_id' => $params['company_id']
@@ -165,7 +237,7 @@ class PointMember extends Controller
                     $paramsData = [
                         'mobile' => $memberInfoInfo['mobile'],
                         'currentPage' => $page,
-                        'pageSize' => count($params['user_id']) >= 1 ? ceil($pageSize/count($params['user_id'])) : $pageSize ,
+                        'pageSize' => count($params['user_id']) >= 1 ? ceil($pageSize / count($params['user_id'])) : $pageSize ,
                         'user_id' => $userId,
                         'company_id' => $params['company_id']
                     ];
@@ -186,15 +258,15 @@ class PointMember extends Controller
                 }
                 $memberList = $memberService->getMemberList(['company_id' => $params['company_id'],'user_id' => $userIds], 1, -1);
                 $memberList = array_column($memberList, null, 'user_id');
-            
+
                 foreach ($result['list'] as $key => $row) {
                     $result['list'][$key]['username'] = $memberList[$row['user_id']]['username'] ?? '';
-                    $result['list'][$key]['name'] =  $memberList[$row['user_id']]['name'] ?? '';
-                    $result['list'][$key]['mobile'] =  $memberList[$row['user_id']]['mobile'] ?? '';
-                    $result['list'][$key]['s_point'] =  $row['s_point'] ?? 0;
+                    $result['list'][$key]['name'] = $memberList[$row['user_id']]['name'] ?? '';
+                    $result['list'][$key]['mobile'] = $memberList[$row['user_id']]['mobile'] ?? '';
+                    $result['list'][$key]['s_point'] = $row['s_point'] ?? 0;
                 }
             }
-        }else {
+        } else {
             $result = $pointMemberService->lists($params, $page, $pageSize, $orderBy = ["created" => "DESC"]);
             if (isset($result['list']) && !empty($result['list'])) {
                 $memberService = new MemberService();
@@ -207,9 +279,9 @@ class PointMember extends Controller
                 $point = explode('：', $row['point_desc']);
                 $result['list'][$key]['journal_type_desc'] = PointMemberService::JOURNAL_TYPE_MAP[$row['journal_type']] ?? '';
                 $result['list'][$key]['username'] = $memberList[$row['user_id']]['username'] ?? '';
-                $result['list'][$key]['name'] =  $memberList[$row['user_id']]['name'] ?? '';
-                $result['list'][$key]['mobile'] =  $memberList[$row['user_id']]['mobile'] ?? '';
-                $result['list'][$key]['s_point'] =  end($point) ?? 0;
+                $result['list'][$key]['name'] = $memberList[$row['user_id']]['name'] ?? '';
+                $result['list'][$key]['mobile'] = $memberList[$row['user_id']]['mobile'] ?? '';
+                $result['list'][$key]['s_point'] = end($point) ?? 0;
             }
         }
 
@@ -325,7 +397,8 @@ class PointMember extends Controller
         return $this->response->array(['status' => $result]);
     }
 
-    public function exportData(Request $request) {
+    public function exportData(Request $request)
+    {
         $page = $request->input('page', 1);
         $pageSize = $request->input('pageSize', 20);
         $pointMemberService = new PointMemberLogService();
@@ -339,7 +412,7 @@ class PointMember extends Controller
         $operator_type = app('auth')->user()->get('operator_type');
         if (in_array($operator_type, ['admin', 'staff'])) {
             $params['datapass_block'] = 1;
-        }else {
+        } else {
             $params['datapass_block'] = 0;
         }
 
@@ -347,7 +420,7 @@ class PointMember extends Controller
         if ($shouldQueue) {
             $gotoJob = (new ExportFileJob('member_point_logs', $params['company_id'], $params, $operator_id))->onQueue('slow');
             app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
-        }else {
+        } else {
             (new ExportFileJob('member_point_logs', $params['company_id'], $params, $operator_id))->handle();
         }
 

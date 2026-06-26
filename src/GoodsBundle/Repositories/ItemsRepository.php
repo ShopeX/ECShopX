@@ -570,7 +570,7 @@ class ItemsRepository extends EntityRepository
                 $qb->setFirstResult(($page - 1) * $pageSize)
                     ->setMaxResults($pageSize);
             }
-            app('log')->info(__FUNCTION__.':'.__LINE__.':qb:'.$qb->getSQL());
+            // app('log')->info(__FUNCTION__.':'.__LINE__.':qb:'.$qb->getSQL());
             $list = $qb->execute()->fetchAll();
             foreach ($list as $key => $row) {
                 $values = [];

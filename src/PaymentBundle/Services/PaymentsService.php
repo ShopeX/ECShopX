@@ -208,38 +208,32 @@ class PaymentsService
         if ($data['pay_type'] == 'alipaymini') {
             $attributes['alipay_user_id'] = $data['alipay_user_id'];
         }
-        $conn = app('registry')->getConnection('default');
-        $conn->beginTransaction();
-        try {
-            if ($data['pay_type'] != 'point' && isset($data['point']) && $data['point'] > 0 && ! empty($pointNewData)) {
-                $pointPaymentService = new PointPayService();
-                $pointAttribute = $attributes;
-                $pointAttribute['trade_id'] = $pointNewData['trade_id'];
-                $pointAttribute['pay_fee'] = $pointNewData['pay_fee'];
-                $pointPaymentService->doPay($authorizerAppId, $wxaAppId, $pointAttribute);
-            }
-
-            //如果为0元订单，直接支付成功
-            if (isset($newData['pay_status']) && $newData['pay_status']) {
-                $result = ['pay_status' => true];
-            } else {
-                $result = [];
-                if (!($data['is_create_prescription_order'] ?? 0)) { // 处方药订单创建完订单后不支付，需补充处方信息
-                    $result = $this->paymentService->doPay($authorizerAppId, $wxaAppId, $attributes);
-                }
-
-                $result['trade_info'] = [
-                    'order_id' => $attributes['order_id'],
-                    'trade_id' => $attributes['trade_id'],
-                    'trade_source_type' => $newData['trade_source_type'],
-                ];
-            }
-
-            $conn->commit();
-        } catch (\Exception $e) {
-            $conn->rollback();
-            throw $e;
+        // 不在此处包外层事务：POS/同步支付会触发 TradeFinishEvent → 更新订单 → 数云/SaasErp 等异步集成。
+        // 外层未提交事务会导致队列 worker 仍读到 NOTPAY，误推 WAIT_BUYER_PAY。
+        if ($data['pay_type'] != 'point' && isset($data['point']) && $data['point'] > 0 && ! empty($pointNewData)) {
+            $pointPaymentService = new PointPayService();
+            $pointAttribute = $attributes;
+            $pointAttribute['trade_id'] = $pointNewData['trade_id'];
+            $pointAttribute['pay_fee'] = $pointNewData['pay_fee'];
+            $pointPaymentService->doPay($authorizerAppId, $wxaAppId, $pointAttribute);
         }
+
+        //如果为0元订单，直接支付成功
+        if (isset($newData['pay_status']) && $newData['pay_status']) {
+            $result = ['pay_status' => true];
+        } else {
+            $result = [];
+            if (!($data['is_create_prescription_order'] ?? 0)) { // 处方药订单创建完订单后不支付，需补充处方信息
+                $result = $this->paymentService->doPay($authorizerAppId, $wxaAppId, $attributes);
+            }
+
+            $result['trade_info'] = [
+                'order_id' => $attributes['order_id'],
+                'trade_id' => $attributes['trade_id'],
+                'trade_source_type' => $newData['trade_source_type'],
+            ];
+        }
+
         return $result;
     }
 

@@ -66,6 +66,7 @@ $error = [
     'distributor_id_required' => 'Store ID is required',
     'single_distributor_only' => 'Only single store delivery distance can be viewed',
     'distributor_id_error' => 'Store ID error',
+    'batch_update_is_total_store_not_supported' => 'Batch update API does not support modifying store inventory',
 ];
 
 // Other Messages
@@ -110,6 +111,7 @@ $others = [
     'return_address_hours_required_update' => 'Return address business hours are required',
     'business_type_required_update' => 'Please select business type',
     'miniprogram_code_params_error' => 'Error in getting mini-program code parameters, please check.',
+    'virtual_shop_status_not_allowed' => 'Virtual stores cannot change operational status',
 ];
 
 return array_merge($validation, $error, $others); 

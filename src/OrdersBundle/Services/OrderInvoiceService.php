@@ -33,6 +33,7 @@ use AftersalesBundle\Services\AftersalesService;
 use OrdersBundle\Traits\GetOrderServiceTrait;
 use CompanysBundle\Services\SettingService;
 use DistributionBundle\Entities\Distributor;
+use ThirdPartyBundle\Services\FapiaoCentre\BaiwangService;
 
 class OrderInvoiceService
 {
@@ -1684,6 +1685,14 @@ class OrderInvoiceService
                     ]);
                     continue;
                 }
+
+                if (!BaiwangService::isCompanyBaiwangConfigReadyInRedis((int) $invoice['company_id'])) {
+                    app('log')->warning('[OrderInvoiceService][invoiceRedQuerySchedule] 百旺配置未就绪，跳过入队', [
+                        'invoice_id' => $invoice['id'],
+                        'company_id' => $invoice['company_id'],
+                    ]);
+                    continue;
+                }
                 
                 // 构建任务参数
                 $jobData = [
@@ -1763,8 +1772,18 @@ class OrderInvoiceService
             // 获取售后信息并更新发票商品行
             $data['refundDetail'] = $refundDetail;            
             app('log')->info('[OrderInvoiceService][createFapiao] 发票:', $data);
-            // 调用百旺服务创建发票
-            $baiwangService = new \ThirdPartyBundle\Services\FapiaoCentre\BaiwangService();
+            // 调用百旺服务创建发票（按公司加载百旺配置）
+            $bwCompanyId = isset($data['company_id']) ? (int) $data['company_id'] : 1;
+            $baiwangService = new BaiwangService($bwCompanyId);
+            if (!$baiwangService->hasRequiredConfig()) {
+                app('log')->warning('[OrderInvoiceService][createFapiao] 百旺配置未就绪，跳过开票', [
+                    'invoice_id' => $data['id'] ?? null,
+                    'company_id' => $bwCompanyId,
+                    'order_id' => $data['order_id'] ?? null,
+                ]);
+
+                return ['success' => false, 'message' => BaiwangService::MSG_CONFIG_NOT_READY];
+            }
             $result = $baiwangService->createFapiao($data);
             
             app('log')->info('[OrderInvoiceService][createFapiao] 百旺服务返回结果', $result);
@@ -1819,6 +1838,16 @@ class OrderInvoiceService
             return $result;
             
         } catch (\Exception $e) {
+            if ($e->getMessage() === BaiwangService::MSG_CONFIG_NOT_READY) {
+                app('log')->warning('[OrderInvoiceService][createFapiao] 百旺配置未就绪，跳过开票', [
+                    'invoice_id' => $data['id'] ?? null,
+                    'company_id' => $data['company_id'] ?? null,
+                    'order_id' => $data['order_id'] ?? null,
+                ]);
+
+                return ['success' => false, 'message' => BaiwangService::MSG_CONFIG_NOT_READY];
+            }
+
             app('log')->error('[OrderInvoiceService][createFapiao] 发票创建异常', [
                 'invoice_id' => $data['id'],
                 'error' => $e->getMessage(),
@@ -1986,8 +2015,12 @@ class OrderInvoiceService
             $data = $invoice;
 
             app('log')->info('[OrderInvoiceService][queryInvoice] 发票:', $data);
-            // 调用百旺服务查询发票
-            $baiwangService = new \ThirdPartyBundle\Services\FapiaoCentre\BaiwangService();
+            // 调用百旺服务查询发票（按发票所属公司加载百旺配置）
+            $companyId = isset($data['company_id']) ? (int) $data['company_id'] : 1;
+            $baiwangService = new BaiwangService($companyId);
+            if (!$baiwangService->hasRequiredConfig()) {
+                throw new \Exception(BaiwangService::MSG_CONFIG_NOT_READY);
+            }
             $result = $baiwangService->queryInvoice($data);
             
             app('log')->info('[OrderInvoiceService][queryInvoice] 百旺服务返回结果', $result);
@@ -2035,17 +2068,26 @@ class OrderInvoiceService
             return $result;
             
         } catch (\Exception $e) {
+            if ($e->getMessage() === BaiwangService::MSG_CONFIG_NOT_READY) {
+                app('log')->warning('[OrderInvoiceService][queryInvoice] 百旺配置未就绪，跳过本次查询', [
+                    'invoice_id' => $data['id'] ?? null,
+                    'company_id' => $data['company_id'] ?? null,
+                    'order_id' => $data['order_id'] ?? null,
+                    'message' => $e->getMessage(),
+                ]);
+                throw $e;
+            }
+
             app('log')->error('[OrderInvoiceService][queryInvoice] 发票查询异常', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
-            // 记录异常日志
+
             $this->createInvoiceLog($data['id'], 'system', '发票查询异常: ' . $e->getMessage(), [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             throw $e;
         }
     }
@@ -2076,6 +2118,13 @@ class OrderInvoiceService
         
         foreach ($inProgressInvoices as $invoice) {
             try {
+                if (!BaiwangService::isCompanyBaiwangConfigReadyInRedis((int) $invoice['company_id'])) {
+                    app('log')->warning('[OrderInvoiceService][queryInvoiceSchedule] 百旺配置未就绪，跳过入队', [
+                        'invoice_id' => $invoice['id'],
+                        'company_id' => $invoice['company_id'],
+                    ]);
+                    continue;
+                }
                 // 推送到队列
                 $jobData = [
                     'invoice_id' => $invoice['id'],
@@ -2357,7 +2406,7 @@ class OrderInvoiceService
             return [];
         }
 
-        $fapiaoService = new \ThirdPartyBundle\Services\FapiaoCentre\BaiwangService($params['company_id']);
+        $fapiaoService = new BaiwangService($params['company_id']);
         $res = $fapiaoService->redInvoice($invoiceInfo);
         app('log')->info('[redInvoice] 冲红结果:'.json_encode($res));
         // [redInvoice] 冲红结果:{"method":"baiwang.s.outputinvoice.fastRed","requestId":"bw_6881daaf725ea6.11892602","response":{"redConfirmSerialNo":"1397957295973613568"},"success":true}
@@ -2418,7 +2467,10 @@ class OrderInvoiceService
             }
 
             // 调用百旺服务查询发票
-            $fapiaoService = new \ThirdPartyBundle\Services\FapiaoCentre\BaiwangService($companyId);
+            $fapiaoService = new BaiwangService($companyId);
+            if (!$fapiaoService->hasRequiredConfig()) {
+                throw new \Exception(BaiwangService::MSG_CONFIG_NOT_READY);
+            }
             
             // 构建查询参数，参考测试命令的参数格式
             $queryParams = $invoiceInfo;
@@ -2474,13 +2526,23 @@ class OrderInvoiceService
             return $result;
 
         } catch (\Exception $e) {
+            if ($e->getMessage() === BaiwangService::MSG_CONFIG_NOT_READY) {
+                app('log')->warning('[OrderInvoiceService][queryRedInvoice] 百旺配置未就绪，跳过红冲查询', [
+                    'invoice_id' => $params['id'] ?? null,
+                    'company_id' => $params['company_id'] ?? null,
+                    'order_id' => $params['order_id'] ?? null,
+                    'red_confirm_serial_no' => $params['redConfirmSerialNo'] ?? null,
+                    'message' => $e->getMessage(),
+                ]);
+                throw $e;
+            }
+
             app('log')->error('[queryRedInvoice] 查询红冲发票失败', [
                 'params' => $params,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
-            // 创建错误日志
             if (!empty($params['id'])) {
                 $this->createInvoiceLog($params['id'], 'system', '红冲查询失败: ' . $e->getMessage(), [
                     'params' => $params,

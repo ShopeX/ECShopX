@@ -262,7 +262,10 @@ class ActivitiesService
         $this->passphraseEnterpriseRepository->batchInsert($batch);
 
         foreach ($rows as $r) {
-            $quotaRedis->warmEnterprise((int) $companyId, (int) $activityId, (int) $r['enterprise_id'], (int) $r['participate_quota']);
+            $eid = (int) $r['enterprise_id'];
+            $newQuota = (int) $r['participate_quota'];
+            $oldQuota = (int) ($oldQuotaByEnterprise[$eid] ?? 0);
+            $quotaRedis->syncRemainingAfterQuotaSettingChange((int) $companyId, (int) $activityId, $eid, $oldQuota, $newQuota);
         }
         foreach (array_keys($oldEids) as $eid) {
             if (!isset($newEids[(int) $eid])) {
@@ -774,12 +777,12 @@ class ActivitiesService
     }
 
     /**
-     * 活动参与企业导出：企业名称、编码、口令码（未开启口令或该企业无绑定则为空）、扫码落地页小程序码下载 URL
+     * 活动参与企业导出：企业名称、编码、口令码、可参与名额、口令码额度（元）、扫码落地页小程序码下载 URL
      *
      * @param int      $companyId
      * @param int      $activityId
      * @param int|null $distributorScopeId 店铺账号时为其 distributor_id；平台为 null
-     * @return array<int, array{0: string, 1: string, 2: string, 3: string}> 每行四列，供 Excel 导出
+     * @return array<int, array{0: string, 1: string, 2: string, 3: string, 4: string, 5: string}> 每行六列，供 Excel 导出
      */
     public function buildActivityEnterpriseQrcodeExportRows(int $companyId, int $activityId, $distributorScopeId = null): array
     {
@@ -815,6 +818,19 @@ class ActivitiesService
         }
 
         $passphraseEnabled = !empty($activity['is_passphrase_enabled']);
+        $passphraseByEnterprise = [];
+        if ($passphraseEnabled) {
+            $passphraseRows = $this->passphraseEnterpriseRepository->getLists([
+                'company_id' => $companyId,
+                'activity_id' => $activityId,
+            ], 'enterprise_id,participate_quota,passphrase_limitfee,passphrase_code');
+            foreach ($passphraseRows as $pr) {
+                $peid = (int) ($pr['enterprise_id'] ?? 0);
+                if ($peid > 0) {
+                    $passphraseByEnterprise[$peid] = $pr;
+                }
+            }
+        }
         $baseUrl = rtrim((string) (config('app.url') ?: env('APP_URL', '')), '/');
         if ($baseUrl === '') {
             $baseUrl = 'http://localhost';
@@ -830,8 +846,17 @@ class ActivitiesService
             $name = (string) ($ent['name'] ?? '');
             $sn = (string) ($ent['enterprise_sn'] ?? '');
             $pass = '';
+            $participateQuota = '';
+            $passphraseLimitfee = '';
             if ($passphraseEnabled) {
-                $pass = $this->getPassphraseCodeForActivityEnterprise($companyId, $activityId, $eid) ?? '';
+                $passphraseRow = $passphraseByEnterprise[$eid] ?? null;
+                if ($passphraseRow !== null) {
+                    $code = $passphraseRow['passphrase_code'] ?? null;
+                    $pass = ($code !== null && $code !== '') ? (string) $code : '';
+                    $participateQuota = (string) (int) ($passphraseRow['participate_quota'] ?? 0);
+                    $limitFen = (int) ($passphraseRow['passphrase_limitfee'] ?? 0);
+                    $passphraseLimitfee = number_format($limitFen / 100, 2, '.', '');
+                }
             }
             // 与 WechatBundle Qrcode::getQrcode 一致：服务端用 company_id 取小程序；其余参数经 getShareId 落 Redis，scene 仅 share_id。
             // cid 会随 getShareId 写入 Redis（company_id 在 getQrcode 里会从入参剔除），落地页 getByShareId 可带回商户与活动上下文。
@@ -854,7 +879,7 @@ class ActivitiesService
                 '&',
                 PHP_QUERY_RFC3986
             );
-            $rows[] = [$name, $sn, $pass, $qrcodeUrl];
+            $rows[] = [$name, $sn, $pass, $participateQuota, $passphraseLimitfee, $qrcodeUrl];
         }
 
         return $rows;
@@ -863,10 +888,19 @@ class ActivitiesService
     public function getActivityItemList($filter, $page, $pageSize, $itemSpec = false, $isDefault = false, $orderBy = ['item_id' => 'desc'])
     {
         $distributorId = $filter['distributor_id'] ?? 0;
-        unset($filter['distributor_id']);
+        $shelfStatus = $filter['shelf_status'] ?? null;
+        unset($filter['distributor_id'], $filter['shelf_status']);
         $result = $this->goodsEntityRepository->getActivityGoodsList($filter, $page, $pageSize);
         if ($result['list']) {
-            $result['list'] = $this->itemsEntityRepository->getActivityItemsList($filter['company_id'], $filter['activity_id'], array_column($result['list'], 'goods_id'), $itemSpec, $isDefault, $orderBy);
+            $result['list'] = $this->itemsEntityRepository->getActivityItemsList(
+                $filter['company_id'],
+                $filter['activity_id'],
+                array_column($result['list'], 'goods_id'),
+                $itemSpec,
+                $isDefault,
+                $orderBy,
+                $shelfStatus
+            );
             if ($distributorId > 0) {
                 // 查询店铺商品的是否为总库库存、店铺库存字段
                 $itemIds = array_column($result['list'], 'item_id');
@@ -916,6 +950,7 @@ class ActivitiesService
                 'goods_id' => $item['goods_id'],
                 'activity_price' => $item['price'],
                 'activity_store' => 0,
+                'shelf_status' => 1,
             ];
 
             $goodsData[$item['goods_id']] = [
@@ -1030,6 +1065,19 @@ class ActivitiesService
 
     public function updateActivityItems($filter, $data)
     {
+        return $this->itemsEntityRepository->updateBy($filter, $data);
+    }
+
+    public function updateActivityItemsByGoods($filter, $data)
+    {
+        $item = $this->itemsEntityRepository->getInfo($filter);
+        if (!$item) {
+            throw new ResourceException('活动商品不存在');
+        }
+
+        $filter['goods_id'] = $item['goods_id'];
+        unset($filter['item_id']);
+
         return $this->itemsEntityRepository->updateBy($filter, $data);
     }
 

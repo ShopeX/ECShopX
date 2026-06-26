@@ -40,6 +40,8 @@ use SalespersonBundle\Entities\ShopsRelSalesperson;
 use SalespersonBundle\Services\SalespersonTaskRecordService;
 use SalespersonBundle\Services\SalespersonService;
 use Dingo\Api\Exception\ResourceException;
+use DistributionBundle\Entities\Distributor;
+use DistributionBundle\Repositories\DistributorRepository;
 use DistributionBundle\Services\DistributorUserService;
 use Exception;
 use KaquanBundle\Services\MemberCardService;
@@ -66,6 +68,11 @@ use MembersBundle\Services\MembersWhitelistService;
 use KaquanBundle\Entities\VipGradeRelUser;
 use MembersBundle\Services\ShopRelMemberService;
 use ShuyunBundle\Services\MembersService as ShuyunMembersService;
+use ShuyunOpenPlatformBundle\Repositories\CompanyShuyunOpenPlatformConfigRepository;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformMemberEnhanceDetailQueryService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformMemberInfoQueryService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformMemberModifyService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformMemberUnbindService;
 use ThirdPartyBundle\Services\DmCrm\MemberService as DmMemberService;
 use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
 use ThirdPartyBundle\Services\DmCrm\DmService;
@@ -73,6 +80,11 @@ use ThirdPartyBundle\Services\DmCrm\DmService;
 class MemberService
 {
     use GetCodeTrait;
+
+    /**
+     * 单次 HTTP 请求内对 enhance.member 查询结果去重（存在 request 时），避免同参重复外呼数云。
+     */
+    private const REQUEST_ATTR_SHUYUN_ENHANCE_SNAPSHOT_CACHE = '_members_shuyun_enhance_snapshot_req_cache';
 
     /**
      * @var \MembersBundle\Repositories\MembersRepository
@@ -850,6 +862,11 @@ class MemberService
             return true;
         }
 
+        // 数云开放网关开启：会员等级由数云侧回调驱动，商城订单消费累计不触发本地按消费额升降级
+        if ($this->isShuyunOpenPlatformMemberEnabled((int) $companyId)) {
+            return true;
+        }
+
         // 达摩crm, 等级不处理
         $ns = new DmCrmSettingService();
         if ($ns->getDmCrmSetting($companyId)['is_open'] ?? '') {
@@ -1194,6 +1211,446 @@ class MemberService
     }
 
     /**
+     * 开放网关会员能力是否启用（company_shuyun_open_platform_config.is_enabled=1）。
+     */
+    public function isShuyunOpenPlatformMemberEnabled(int $companyId): bool
+    {
+        $cfg = app(CompanyShuyunOpenPlatformConfigRepository::class)->findOneByCompanyId($companyId);
+
+        return $cfg !== null && (int) $cfg->getIsEnabled() === 1;
+    }
+
+    /**
+     * 将数云增强查询结果合并进本地会员信息（不替代本地主数据失败时的展示；查询失败仅打日志）。
+     *
+     * 当前由 FrontApi 会员详情等入口调用；后管 GET /api/member 不再合并数云 enhance。
+     * 调用时走数云 enhance.member.post（{@see ShuyunOpenPlatformMemberInfoQueryService::querySingle}）合并资料类字段；店铺 id 为 reg_distributor 对应分销商 id 原值（OFFLINE）。
+     * 可用积分余额展示见 {@see queryShuyunOpenPlatformMemberPoint}（enhance.member.query.detail）。
+     *
+     * @param  array<string, mixed>  $memberInfo
+     */
+    public function mergeShuyunOpenPlatformEnhanceIntoMemberInfo(int $companyId, int $userId, array &$memberInfo): void
+    {
+        if ($memberInfo === [] || ! $this->isShuyunOpenPlatformMemberEnabled($companyId)) {
+            return;
+        }
+        if ($userId <= 0) {
+            return;
+        }
+        $distributorRepo = app('registry')->getManager('default')->getRepository(Distributor::class);
+        if (! $distributorRepo instanceof DistributorRepository) {
+            return;
+        }
+        $regDistributorId = (int) ($memberInfo['reg_distributor'] ?? 0);
+        if ($regDistributorId <= 0) {
+            return;
+        }
+        $distributorRow = $distributorRepo->getInfo([
+            'company_id' => $companyId,
+            'distributor_id' => $regDistributorId,
+        ]);
+        if (! is_array($distributorRow) || $distributorRow === []) {
+            return;
+        }
+        $snapshot = $this->fetchShuyunEnhanceMemberSnapshot(
+            $companyId,
+            $userId,
+            $distributorRow,
+            'merge skipped',
+            $this->shouldForceOfflinePlatForEnhanceQuery($distributorRow)
+        );
+        if ($snapshot === null) {
+            return;
+        }
+        $payload = $snapshot;
+        if (isset($payload['name']) && $payload['name'] !== '') {
+            $memberInfo['username'] = $payload['name'];
+            if (isset($memberInfo['requestFields']) && is_array($memberInfo['requestFields']) && array_key_exists('username', $memberInfo['requestFields'])) {
+                $memberInfo['requestFields']['username'] = $payload['name'];
+            }
+        }
+        if (isset($payload['birthday']) && $payload['birthday'] !== '') {
+            $memberInfo['birthday'] = $payload['birthday'];
+            if (isset($memberInfo['requestFields']) && is_array($memberInfo['requestFields']) && array_key_exists('birthday', $memberInfo['requestFields'])) {
+                $memberInfo['requestFields']['birthday'] = $payload['birthday'];
+            }
+        }
+        $sex = $this->mapShuyunGenderToLocalSex($payload['gender'] ?? null);
+        if ($sex !== null) {
+            $memberInfo['sex'] = $sex;
+            if (isset($memberInfo['requestFields']) && is_array($memberInfo['requestFields']) && array_key_exists('sex', $memberInfo['requestFields'])) {
+                $memberInfo['requestFields']['sex'] = $sex;
+            }
+        }
+    }
+
+    /**
+     * 开放网关启用时查询会员可用积分：走数云 {@see ShuyunOpenPlatformMemberEnhanceDetailQueryService::queryDetail}（shuyun.loyalty.enhance.member.query.detail），
+     * 取值顺序为 **validPoint**（当前可用积分）→ **pointAsserts**（积分资产，与数云文档一致时的兜底）；用于覆盖本地积分余额展示及下单前校验等。
+     *
+     * @param  array<string, mixed>  $memberInfo
+     */
+    public function queryShuyunOpenPlatformMemberPoint(int $companyId, int $userId, array $memberInfo = []): ?int
+    {
+        if (! $this->isShuyunOpenPlatformMemberEnabled($companyId) || $userId <= 0) {
+            return null;
+        }
+        if ($memberInfo === []) {
+            $memberInfo = $this->getMemberInfo([
+                'company_id' => $companyId,
+                'user_id' => $userId,
+            ]);
+        }
+        if ($memberInfo === []) {
+            return null;
+        }
+        $regDistributorId = (int) ($memberInfo['reg_distributor'] ?? 0);
+        if ($regDistributorId <= 0) {
+            return null;
+        }
+        $distributorRepo = app('registry')->getManager('default')->getRepository(Distributor::class);
+        if (! $distributorRepo instanceof DistributorRepository) {
+            return null;
+        }
+        $distributorRow = $distributorRepo->getInfo([
+            'company_id' => $companyId,
+            'distributor_id' => $regDistributorId,
+        ]);
+        if (! is_array($distributorRow) || $distributorRow === []) {
+            return null;
+        }
+
+        return $this->fetchShuyunMemberPointBalanceViaEnhanceDetail(
+            $companyId,
+            $userId,
+            $distributorRow,
+            $this->shouldForceOfflinePlatForEnhanceQuery($distributorRow)
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $distributorRow
+     */
+    private function fetchShuyunMemberPointBalanceViaEnhanceDetail(
+        int $companyId,
+        int $userId,
+        array $distributorRow,
+        bool $forceOfflinePlat
+    ): ?int {
+        try {
+            /** @var ShuyunOpenPlatformMemberEnhanceDetailQueryService $detail */
+            $detail = app(ShuyunOpenPlatformMemberEnhanceDetailQueryService::class);
+            $raw = $detail->queryDetail(
+                $companyId,
+                $distributorRow,
+                (string) $userId,
+                null,
+                $forceOfflinePlat
+            );
+
+            return $this->extractUsablePointFromShuyunEnhanceDetail($raw);
+        } catch (\Throwable $e) {
+            if (! $forceOfflinePlat) {
+                return $this->fetchShuyunMemberPointBalanceViaEnhanceDetail($companyId, $userId, $distributorRow, true);
+            }
+            app('log')->warning('Shuyun OPEN enhance.member.query.detail point query skipped.', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $raw  query.detail 成功体 data（字段以数云为准：validPoint、pointAsserts 等）
+     */
+    private function extractUsablePointFromShuyunEnhanceDetail(array $raw): ?int
+    {
+        foreach (['validPoint', 'pointAsserts'] as $k) {
+            if (isset($raw[$k]) && $raw[$k] !== null && $raw[$k] !== '') {
+                return (int) $raw[$k];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 注册后查询数云增强会员信息，若返回 memberId 则回填本地 members.user_card_code。
+     *
+     * @param  array<string, mixed>  $distributorRow
+     */
+    public function syncUserCardCodeFromShuyunEnhanceAfterRegister(
+        int $companyId,
+        int $userId,
+        array $distributorRow,
+        bool $forceOfflinePlat = false
+    ): void {
+        if ($companyId <= 0 || $userId <= 0 || $distributorRow === []) {
+            return;
+        }
+
+        $snapshot = $this->fetchShuyunEnhanceMemberSnapshot(
+            $companyId,
+            $userId,
+            $distributorRow,
+            'query skipped after register',
+            $forceOfflinePlat
+        );
+        if ($snapshot === null) {
+            return;
+        }
+
+        $memberId = $snapshot['memberId'] ?? '';
+        if ($memberId === '') {
+            return;
+        }
+
+        try {
+            $this->membersRepository->update(
+                ['user_card_code' => $memberId],
+                ['company_id' => $companyId, 'user_id' => $userId]
+            );
+        } catch (\Throwable $e) {
+            app('log')->warning('Shuyun OPEN enhance.member user_card_code sync failed after register.', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'member_id' => $memberId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * 与 {@see fetchShuyunEnhanceMemberSnapshot} 入参一致，用于请求内去重 key。
+     */
+    private function shuyunEnhanceMemberSnapshotCacheKey(
+        int $companyId,
+        int $userId,
+        int $distributorId,
+        bool $forceOfflinePlat
+    ): string {
+        return $companyId."\0".$userId."\0".$distributorId."\0".($forceOfflinePlat ? '1' : '0');
+    }
+
+    private function hasHttpRequestForShuyunEnhanceCache(): bool
+    {
+        return \function_exists('app') && \app()->bound('request');
+    }
+
+    /**
+     * @return array<string, ?array>
+     */
+    private function getShuyunEnhanceMemberSnapshotRequestCacheMap(): array
+    {
+        if (!$this->hasHttpRequestForShuyunEnhanceCache()) {
+            return [];
+        }
+        $map = \app('request')->attributes->get(self::REQUEST_ATTR_SHUYUN_ENHANCE_SNAPSHOT_CACHE, []);
+
+        return \is_array($map) ? $map : [];
+    }
+
+    private function rememberShuyunEnhanceMemberSnapshotInRequestCache(
+        int $companyId,
+        int $userId,
+        int $distributorId,
+        bool $forceOfflinePlat,
+        ?array $snapshot
+    ): void {
+        if (!$this->hasHttpRequestForShuyunEnhanceCache()) {
+            return;
+        }
+        $key = $this->shuyunEnhanceMemberSnapshotCacheKey($companyId, $userId, $distributorId, $forceOfflinePlat);
+        $map = $this->getShuyunEnhanceMemberSnapshotRequestCacheMap();
+        $map[$key] = $snapshot;
+        \app('request')->attributes->set(self::REQUEST_ATTR_SHUYUN_ENHANCE_SNAPSHOT_CACHE, $map);
+    }
+
+    /**
+     * @param  array<string, mixed>  $distributorRow
+     * @return array{name?:string,birthday?:string,gender?:string,memberId?:string}|null
+     */
+    private function fetchShuyunEnhanceMemberSnapshot(
+        int $companyId,
+        int $userId,
+        array $distributorRow,
+        string $logSuffix,
+        bool $forceOfflinePlat = false
+    ): ?array {
+        $distributorId = (int) ($distributorRow['distributor_id'] ?? 0);
+        $key = $this->shuyunEnhanceMemberSnapshotCacheKey($companyId, $userId, $distributorId, $forceOfflinePlat);
+        if ($this->hasHttpRequestForShuyunEnhanceCache()) {
+            $map = $this->getShuyunEnhanceMemberSnapshotRequestCacheMap();
+            if (\array_key_exists($key, $map)) {
+                return $map[$key];
+            }
+        }
+
+        try {
+            // 与 member.register / bind.push 一致：数云侧会员主键 id = 本地 members.user_id
+            $raw = app(ShuyunOpenPlatformMemberInfoQueryService::class)->querySingle(
+                $companyId,
+                $distributorRow,
+                (string) $userId,
+                $forceOfflinePlat
+            );
+        } catch (\Throwable $e) {
+            if (!$forceOfflinePlat) {
+                $result = $this->fetchShuyunEnhanceMemberSnapshot(
+                    $companyId,
+                    $userId,
+                    $distributorRow,
+                    $logSuffix,
+                    true
+                );
+                $this->rememberShuyunEnhanceMemberSnapshotInRequestCache(
+                    $companyId,
+                    $userId,
+                    $distributorId,
+                    false,
+                    $result
+                );
+
+                return $result;
+            }
+            app('log')->warning('Shuyun OPEN enhance.member '.$logSuffix.'.', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+            $this->rememberShuyunEnhanceMemberSnapshotInRequestCache(
+                $companyId,
+                $userId,
+                $distributorId,
+                true,
+                null
+            );
+
+            return null;
+        }
+
+        $snapshot = $this->normalizeShuyunEnhanceMemberPayload($raw);
+        $memberId = $this->extractShuyunEnhanceMemberId($raw);
+        if ($memberId !== '') {
+            $snapshot['memberId'] = $memberId;
+        }
+
+        $out = $snapshot !== [] ? $snapshot : null;
+        $this->rememberShuyunEnhanceMemberSnapshotInRequestCache(
+            $companyId,
+            $userId,
+            $distributorId,
+            $forceOfflinePlat,
+            $out
+        );
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $raw
+     * @return array{name?:string,birthday?:string,gender?:string,point?:int}
+     */
+    private function normalizeShuyunEnhanceMemberPayload(array $raw): array
+    {
+        $node = $raw;
+        if (isset($raw['member']) && is_array($raw['member'])) {
+            $node = $raw['member'];
+        }
+        $out = [];
+        foreach (['name', 'realName', 'nick', 'nickName', 'memberName'] as $k) {
+            if (isset($node[$k]) && trim((string) $node[$k]) !== '') {
+                $out['name'] = trim((string) $node[$k]);
+                break;
+            }
+        }
+        foreach (['birthday', 'birth'] as $k) {
+            if (isset($node[$k]) && trim((string) $node[$k]) !== '') {
+                $out['birthday'] = trim((string) $node[$k]);
+                break;
+            }
+        }
+        foreach (['gender', 'sex'] as $k) {
+            if (isset($node[$k]) && $node[$k] !== null && $node[$k] !== '') {
+                $out['gender'] = is_scalar($node[$k]) ? (string) $node[$k] : '';
+                break;
+            }
+        }
+        foreach (['point', 'pointAsserts'] as $k) {
+            if (isset($node[$k]) && $node[$k] !== null && $node[$k] !== '') {
+                $out['point'] = (int) $node[$k];
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    private function mapShuyunGenderToLocalSex(?string $gender): ?string
+    {
+        if ($gender === null || trim($gender) === '') {
+            return null;
+        }
+        $g = strtoupper(trim($gender));
+        if (in_array($g, ['1', 'M', 'MALE', '男'], true)) {
+            return '1';
+        }
+        if (in_array($g, ['2', 'F', 'FEMALE', '女'], true)) {
+            return '2';
+        }
+
+        return null;
+    }
+
+    /**
+     * enhance.member 查询平台选择：
+     * - 虚拟门店（distributor_self=1）走线上 platCode，不附加 offline shopId 后缀；
+     * - 非虚拟门店保持线下 OFFLINE 规则。
+     *
+     * @param  array<string, mixed>  $distributorRow
+     */
+    private function shouldForceOfflinePlatForEnhanceQuery(array $distributorRow): bool
+    {
+        $isVirtual = (int) ($distributorRow['distributor_self'] ?? 0) === 1;
+
+        return !$isVirtual;
+    }
+
+    /**
+     * @param  array<string, mixed>  $raw
+     */
+    private function extractShuyunEnhanceMemberId(array $raw): string
+    {
+        $candidates = [$raw];
+        if (isset($raw['member']) && is_array($raw['member'])) {
+            $candidates[] = $raw['member'];
+        }
+        if (isset($raw['data']) && is_array($raw['data'])) {
+            $candidates[] = $raw['data'];
+        }
+
+        foreach ($candidates as $node) {
+            foreach (['memberId', 'member_id'] as $key) {
+                if (!isset($node[$key]) || !is_scalar($node[$key])) {
+                    continue;
+                }
+                $id = trim((string) $node[$key]);
+                if ($id !== '') {
+                    return $id;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * 同步数云，会员修改
      * @param  string $companyId 企业ID
      * @param  string $userId    会员ID
@@ -1201,6 +1658,10 @@ class MemberService
      */
     public function shuyunModify($companyId, $userId, $params)
     {
+        if ($this->isShuyunOpenPlatformMemberEnabled((int) $companyId)) {
+            return $this->shuyunOpenPlatformMemberModifySync((int) $companyId, (int) $userId, $params);
+        }
+
         $shuyunModifyData = [];
         if (isset($params['username'])) {
             $shuyunModifyData['nick'] = $params['username'];
@@ -1221,6 +1682,57 @@ class MemberService
         $shuyunModifyData['unionid'] = $assocInfo['unionid'];
         $shuyunMembersService = new ShuyunMembersService($companyId, $userId);
         return $shuyunMembersService->memberUpdate($shuyunModifyData);
+    }
+
+    /**
+     * OPEN：member.modify（id = 本地 members.user_id，与 register / enhance / bind.push 一致；shopId = 虚拟店 distributor_id）。
+     *
+     * @param  array<string, mixed>  $params
+     *
+     * @throws ResourceException
+     */
+    private function shuyunOpenPlatformMemberModifySync(int $companyId, int $userId, array $params)
+    {
+        $changes = [];
+        if (isset($params['username'])) {
+            $changes['name'] = $params['username'];
+        }
+        if (isset($params['birthday'])) {
+            $changes['birthday'] = $params['birthday'];
+        }
+        if (isset($params['sex']) && in_array((string) $params['sex'], ['1', '2'], true)) {
+            $changes['gender'] = (string) $params['sex'] === '1' ? 'M' : 'F';
+        }
+        if ($changes === []) {
+            return false;
+        }
+        if ($userId <= 0) {
+            return false;
+        }
+        $distributorRepo = app('registry')->getManager('default')->getRepository(Distributor::class);
+        if (! $distributorRepo instanceof DistributorRepository) {
+            throw new ResourceException('开放网关会员资料同步失败：门店仓储不可用');
+        }
+        $virtual = $distributorRepo->getInfo([
+            'company_id' => $companyId,
+            'distributor_self' => 1,
+        ]);
+        if (! is_array($virtual) || $virtual === []) {
+            throw new ResourceException('开放网关会员资料同步失败：未找到虚拟店');
+        }
+        try {
+            app(ShuyunOpenPlatformMemberModifyService::class)->modifySingle(
+                $companyId,
+                $virtual,
+                (string) $userId,
+                $changes
+            );
+        } catch (\RuntimeException $e) {
+            $msg = trim($e->getMessage());
+            throw new ResourceException($msg !== '' ? $msg : '开放网关会员资料同步失败，请稍后重试');
+        }
+
+        return true;
     }
 
     /**
@@ -1307,7 +1819,7 @@ class MemberService
 
         $conn = app('registry')->getConnection('default');
 
-        $mFields = "DISTINCT m.user_id,m.company_id,m.grade_id,m.mobile,m.user_card_code,m.authorizer_appid,m.wxa_appid,m.source_id,m.monitor_id,m.latest_source_id,m.latest_monitor_id,m.created,m.updated,m.created_year,m.created_month,m.created_day,m.offline_card_code,m.inviter_id,m.source_from,m.password,m.disabled,m.use_point,m.remarks,m.third_data,m.region_mobile,m.mobile_country_code,m.reg_distributor,m.reg_salesperson,m.fp_salesperson,m.has_fp,m.op_distributor,m.login_email,m.email_verified_at,";
+        $mFields = "DISTINCT m.user_id,m.company_id,m.grade_id,m.mobile,m.user_card_code,m.authorizer_appid,m.wxa_appid,m.source_id,m.monitor_id,m.latest_source_id,m.latest_monitor_id,m.created,m.updated,m.created_year,m.created_month,m.created_day,m.offline_card_code,m.inviter_id,m.source_from,m.password,m.disabled,m.use_point,m.remarks,m.third_data,m.region_mobile,m.mobile_country_code,m.reg_distributor,m.reg_salesperson,m.fp_salesperson,m.has_fp,m.op_distributor,m.login_email,m.email_verified_at,m.shuyun_open_online_wxapp_sync_at,m.offline_reg_distributor,";
         $row = $mFields . 'info.username,info.name,info.sex,info.birthday,info.address,info.email,info.industry,info.income,info.edu_background,info.habbit,info.avatar';
 
         $criteria = $conn->createQueryBuilder();
@@ -2479,11 +2991,19 @@ class MemberService
 
     /**
      * 删除会员信息
-     * @param $company_id
-     * @param $user_id
+     *
+     * @param  bool  $skipShuyunOpenPlatformUnbind  为 true 时跳过开放平台 {@see ShuyunOpenPlatformMemberUnbindService::unbindSingle}。
+     *                                            仅用于「数云 member.register 未成功、尚未 bind.push」等补偿删除，避免无意义解绑阻塞本地回滚。
      * @return bool
      */
-    public function deleteMembers($company_id, $user_id, $mobile)
+    public function deleteMembers(
+        $company_id,
+        $user_id,
+        $mobile,
+        ?int $sourceDistributorIdForOpenUnbind = null,
+        bool $forceOfflinePlatForOpenUnbind = false,
+        bool $skipShuyunOpenPlatformUnbind = false
+    )
     {
         $membersWechatUsersRepository = app('registry')->getManager('default')->getRepository(WechatUsers::class);
         $membersAddressRepository = app('registry')->getManager('default')->getRepository(MembersAddress::class);
@@ -2495,8 +3015,72 @@ class MemberService
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
-            // 数云模式，执行数云注销会员接口
-            if (config('common.oem-shuyun')) {
+            $openConfigRepo = app(CompanyShuyunOpenPlatformConfigRepository::class);
+            $openConfig = $openConfigRepo->findOneByCompanyId((int) $company_id);
+            $openEnabled = $openConfig !== null && (int) $openConfig->getIsEnabled() === 1;
+
+            // 双开/仅OPEN：只走 OPEN unbind，失败不回退 LPEE（补偿删除且 register 未成功时可跳过，见 $skipShuyunOpenPlatformUnbind）
+            if ($openEnabled && ! $skipShuyunOpenPlatformUnbind) {
+                $distributorRepo = app('registry')->getManager('default')->getRepository(Distributor::class);
+                if (! $distributorRepo instanceof DistributorRepository) {
+                    throw new ResourceException('开放网关会员解绑失败：虚拟店仓储不可用');
+                }
+                $unbindService = $this->getShuyunOpenMemberUnbindServiceForDeleteMembers();
+
+                $requestedDistributorId = (int) ($sourceDistributorIdForOpenUnbind ?? 0);
+                if ($requestedDistributorId > 0) {
+                    $requestedDistributor = $distributorRepo->getInfo([
+                        'company_id' => (int) $company_id,
+                        'distributor_id' => $requestedDistributorId,
+                    ]);
+                    if (! is_array($requestedDistributor) || $requestedDistributor === []) {
+                        throw new ResourceException('开放网关会员解绑失败：未找到指定门店');
+                    }
+                    $unbindService->unbindSingle(
+                        (int) $company_id,
+                        $requestedDistributor,
+                        (string) $user_id,
+                        $forceOfflinePlatForOpenUnbind
+                    );
+                } else {
+                    // OFFLINE-only：与入会一致，仅一次 unbind（登记门店或虚拟店兜底）
+                    $memberRow = $this->membersRepository->get([
+                        'company_id' => (int) $company_id,
+                        'user_id' => (int) $user_id,
+                    ]);
+                    if ($memberRow === [] || ! isset($memberRow['user_id'])) {
+                        throw new ResourceException('开放网关会员解绑失败：会员不存在');
+                    }
+                    $resolved = $this->resolveDistributorRowForOpenUnbindOnDelete(
+                        $distributorRepo,
+                        (int) $company_id,
+                        $memberRow
+                    );
+                    if ($resolved !== null) {
+                        [$unbindDistributorRow, $forceOfflinePlat] = $resolved;
+                        $unbindService->unbindSingle(
+                            (int) $company_id,
+                            $unbindDistributorRow,
+                            (string) $user_id,
+                            $forceOfflinePlat
+                        );
+                    } else {
+                        $virtualDistributor = $distributorRepo->getInfo([
+                            'company_id' => (int) $company_id,
+                            'distributor_self' => 1,
+                        ]);
+                        if (! is_array($virtualDistributor) || $virtualDistributor === []) {
+                            throw new ResourceException('开放网关会员解绑失败：未找到虚拟店');
+                        }
+                        $unbindService->unbindSingle(
+                            (int) $company_id,
+                            $virtualDistributor,
+                            (string) $user_id,
+                            false
+                        );
+                    }
+                }
+            } elseif (! $openEnabled && config('common.oem-shuyun')) {
                 $shuyunMembersService = new ShuyunMembersService($company_id, $user_id);
                 $shuyunMembersService->memberUnbind([]);
             }
@@ -2528,8 +3112,109 @@ class MemberService
         } catch (\Throwable $throwable) {
             $conn->rollback();
             app('log')->info('file:'.$throwable->getFile().',line:'.$throwable->getLine().',message:'.$throwable->getMessage());
+            if ($throwable instanceof ResourceException) {
+                throw $throwable;
+            }
             throw new ResourceException(trans('MembersBundle/Members.logout_failed'));
         }
+    }
+
+    /**
+     * 供 {@see deleteMembers} 解析数云 OPEN unbind 服务（单测可覆写）。
+     */
+    protected function getShuyunOpenMemberUnbindServiceForDeleteMembers(): ShuyunOpenPlatformMemberUnbindService
+    {
+        return app(ShuyunOpenPlatformMemberUnbindService::class);
+    }
+
+    /**
+     * 解析删会员时单次 OPEN unbind 所用门店（OFFLINE-only，与单次 register 对齐）。
+     *
+     * @param  array<string,mixed>  $memberRow
+     * @return array{0: array<string,mixed>, 1: bool}|null  [distributorRow, forceOfflinePlat]
+     */
+    private function resolveDistributorRowForOpenUnbindOnDelete(
+        DistributorRepository $distributorRepo,
+        int $companyId,
+        array $memberRow
+    ): ?array {
+        $offlineRow = $this->resolveOfflineDistributorRowForShuyunOpenDeleteMembers(
+            $distributorRepo,
+            $companyId,
+            $memberRow,
+            true
+        );
+        if ($offlineRow !== null) {
+            return [$offlineRow, true];
+        }
+        $wxappSynced = (int) ($memberRow['shuyun_open_online_wxapp_sync_at'] ?? 0) > 0;
+        if ($wxappSynced) {
+            $regId = (int) ($memberRow['reg_distributor'] ?? 0);
+            if ($regId > 0) {
+                $regRow = $distributorRepo->getInfo([
+                    'company_id' => $companyId,
+                    'distributor_id' => $regId,
+                ]);
+                if (is_array($regRow) && $regRow !== [] && (int) ($regRow['distributor_self'] ?? 0) !== 1) {
+                    return [$regRow, true];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string,mixed>  $memberRow
+     * @return array<string,mixed>|null
+     */
+    private function resolveOfflineDistributorRowForShuyunOpenDeleteMembers(
+        DistributorRepository $distributorRepo,
+        int $companyId,
+        array $memberRow,
+        bool $enableP2Fallback
+    ): ?array {
+        $candidates = [];
+        $snap = (int) ($memberRow['offline_reg_distributor'] ?? 0);
+        if ($snap > 0) {
+            $candidates[] = $snap;
+        }
+        if ($enableP2Fallback) {
+            $reg = (int) ($memberRow['reg_distributor'] ?? 0);
+            if ($reg > 0 && ! in_array($reg, $candidates, true)) {
+                $candidates[] = $reg;
+            }
+        }
+        foreach ($candidates as $distId) {
+            $row = $distributorRepo->getInfo([
+                'company_id' => $companyId,
+                'distributor_id' => $distId,
+            ]);
+            if (! is_array($row) || $row === []) {
+                continue;
+            }
+            if ($this->isDistributorRowVirtualForShuyunOpenDelete($row)) {
+                if ($enableP2Fallback && $distId === (int) ($memberRow['reg_distributor'] ?? 0) && (int) ($memberRow['reg_distributor'] ?? 0) > 0) {
+                    app('log')->warning('Shuyun OPEN deleteMembers: skip OFFLINE unbind, reg_distributor points to virtual distributor.', [
+                        'company_id' => $companyId,
+                        'user_id' => $memberRow['user_id'] ?? null,
+                        'distributor_id' => $distId,
+                    ]);
+                }
+
+                continue;
+            }
+
+            return $row;
+        }
+
+        return null;
+    }
+
+    /** @param array<string,mixed> $distributorRow */
+    private function isDistributorRowVirtualForShuyunOpenDelete(array $distributorRow): bool
+    {
+        return (int) ($distributorRow['distributor_self'] ?? 0) === 1;
     }
 
     /**

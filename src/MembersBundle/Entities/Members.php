@@ -265,6 +265,24 @@ class Members
     private $op_distributor = 0;
 
     /**
+     * 数云开放平台：线上 wxapp 路径 member.register + bind.push 等已成功完成时的 Unix 时间戳；NULL 表示尚未成功同步。
+     *
+     * @var int|null
+     *
+     * @ORM\Column(name="shuyun_open_online_wxapp_sync_at", type="integer", nullable=true, options={"unsigned": true, "comment": "数云 OPEN 线上 wxapp 同步成功时间（Unix）；NULL 未成功"})
+     */
+    private $shuyun_open_online_wxapp_sync_at;
+
+    /**
+     * 店务 OFFLINE member.register 成功时写入的 distributor_id；NULL 表示未写入或未走成功路径。
+     *
+     * @var int|null
+     *
+     * @ORM\Column(name="offline_reg_distributor", type="integer", nullable=true, options={"unsigned": true, "comment": "店务 OFFLINE member.register 成功时写入的分销商 ID；NULL 未写入"})
+     */
+    private $offline_reg_distributor;
+
+    /**
      * @var string
      *
      * @ORM\Column(name="fp_salesperson", type="string", length=100, nullable=true, options={"comment":"分配的导购员工编号(employee_number/work_userid)"})
@@ -930,6 +948,46 @@ class Members
     public function getRegDistributor()
     {
         return $this->reg_distributor;
+    }
+
+    /**
+     * @param int|null $at Unix timestamp or null to clear
+     *
+     * @return Members
+     */
+    public function setShuyunOpenOnlineWxappSyncAt($at = null)
+    {
+        $this->shuyun_open_online_wxapp_sync_at = $at === null || $at === '' ? null : (int) $at;
+
+        return $this;
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getShuyunOpenOnlineWxappSyncAt()
+    {
+        return $this->shuyun_open_online_wxapp_sync_at === null ? null : (int) $this->shuyun_open_online_wxapp_sync_at;
+    }
+
+    /**
+     * @param int|null $distributorId
+     *
+     * @return Members
+     */
+    public function setOfflineRegDistributor($distributorId = null)
+    {
+        $this->offline_reg_distributor = $distributorId === null || $distributorId === '' ? null : (int) $distributorId;
+
+        return $this;
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getOfflineRegDistributor()
+    {
+        return $this->offline_reg_distributor === null ? null : (int) $this->offline_reg_distributor;
     }
 
     /**

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright 2019-2026 ShopeX
  *
@@ -19,6 +20,8 @@ namespace OrdersBundle\Services\Orders;
 
 use Dingo\Api\Exception\ResourceException;
 use CompanysBundle\Services\OperatorCartService;
+use CompanysBundle\Services\OperatorShopFastBuyRedisService;
+use DistributionBundle\Services\DistributorService;
 use GoodsBundle\Services\ItemsCategoryService;
 use CompanysBundle\Services\OperatorsService;
 
@@ -66,7 +69,7 @@ class ShopadminNormalOrderService extends AbstractNormalOrder
     public $isSupportPointDiscount = true;
 
     // 订单是否支持获取积分
-    public $isSupportGetPoint = false;
+    public $isSupportGetPoint = true;
 
     public $isSupportMarkDown = true;
 
@@ -82,6 +85,20 @@ class ShopadminNormalOrderService extends AbstractNormalOrder
     public $itemCart;
     public $MemberDiscount;
 
+    public function check($params)
+    {
+        if (($params['cart_type'] ?? '') !== 'fastbuy') {
+            return true;
+        }
+        (new OperatorCartService())->revalidateFastBuyPlatformStock([
+            'company_id' => $params['company_id'],
+            'operator_id' => $params['operator_id'],
+            'distributor_id' => $params['distributor_id'],
+        ]);
+
+        return true;
+    }
+
     public function checkoutCartItems($params)
     {
         $userId = $params['user_id'];
@@ -91,7 +108,11 @@ class ShopadminNormalOrderService extends AbstractNormalOrder
             'company_id' => $params['company_id'],
         ];
         $operatorCartService = new OperatorCartService();
-        $cartData = $operatorCartService->getCartdataList($filter, $userId, true);
+        if (($params['cart_type'] ?? 'cart') === 'fastbuy') {
+            $cartData = $operatorCartService->getFastBuyCartdataList($filter, $userId, true);
+        } else {
+            $cartData = $operatorCartService->getCartdataList($filter, $userId, true);
+        }
         $cartlist = reset($cartData['valid_cart']);
         if (!$cartlist) {
             throw new ResourceException('购物车为空');
@@ -131,6 +152,10 @@ class ShopadminNormalOrderService extends AbstractNormalOrder
             }
         }
 
+        if (empty($params['items'])) {
+            throw new ResourceException('请先勾选要结算的商品');
+        }
+
         $this->TotalFee[$userId] = $cartlist['total_fee'];
         $this->TotalDiscountFee[$userId] = $cartlist['discount_fee'] ?? 0;
         $this->MemberDiscount[$userId] = $cartlist['member_discount'] ?? 0;
@@ -148,6 +173,15 @@ class ShopadminNormalOrderService extends AbstractNormalOrder
 
     public function emptyCart($params)
     {
+        if (($params['cart_type'] ?? 'cart') === 'fastbuy') {
+            (new OperatorShopFastBuyRedisService())->clear(
+                (int) $params['company_id'],
+                (int) $params['operator_id'],
+                (int) $params['distributor_id']
+            );
+
+            return true;
+        }
         if (isset($params['items']) && $params['items']) {
             $filter['item_id'] = array_column($params['items'], 'item_id');
             $filter['company_id'] = $params['company_id'];
@@ -445,7 +479,7 @@ class ShopadminNormalOrderService extends AbstractNormalOrder
                     }
 
                     $discountInfo['discount_fee'] = $remainDiscountFee;
-                }else{
+                } else {
                     $discountInfo['discount_fee'] = floor(bcmul($itemTotalFee, $percent, 2));
                 }
                 //app('log')->info("赠品分摊金额 => {$item['item_name']} : {$itemTotalFee} * $totalGiftFee / $activityItemsTotalFee");

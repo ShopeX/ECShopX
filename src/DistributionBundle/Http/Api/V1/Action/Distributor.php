@@ -24,6 +24,8 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 
 use DistributionBundle\Services\DistributorService;
+use DistributionBundle\Services\VirtualDistributorUpdateStatusGuard;
+use DistributionBundle\Services\DistributorCloudShopStatusGuard;
 use DistributionBundle\Services\DistributeCountService;
 use DistributionBundle\Services\DistributorItemsService;
 use MerchantBundle\Services\MerchantService;
@@ -78,6 +80,7 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="fixed_salesperson_qrcode_url", in="query", description="导购固定码URL", required=false, type="string"),
      *     @SWG\Parameter( name="hour", in="query", description="经营时间", required=true, type="string"),
      *     @SWG\Parameter( name="is_ziti", in="query", description="是否支持自提", required=true, type="string"),
+     *     @SWG\Parameter( name="is_platform_store_buy", in="query", description="是否开启云仓可购买 0/1 或 true/false", required=false, type="string"),
      *     @SWG\Parameter( name="is_delivery", in="query", description="是否快递", required=true, type="string"),
      *     @SWG\Parameter( name="auto_sync_goods", in="query", description="自动同步总部商品", type="string"),
      *     @SWG\Parameter( name="logo", in="query", description="logo", type="string"),
@@ -134,6 +137,7 @@ class Distributor extends Controller
      *                  @SWG\Property( property="is_default", type="string", example="0", description="是否默认"),
      *                  @SWG\Property( property="is_audit_goods", type="string", example="false", description="是否审核店铺商品"),
      *                  @SWG\Property( property="is_ziti", type="string", example="false", description="是否支持自提"),
+     *                  @SWG\Property( property="is_platform_store_buy", type="string", example="false", description="是否开启云仓可购买"),
      *                  @SWG\Property( property="regions_id", type="array",
      *                      @SWG\Items( type="string", example="310000", description=""),
      *                  ),
@@ -336,6 +340,11 @@ class Distributor extends Controller
         if (isset($params['is_ziti'])) {
             $params['is_ziti'] = (!$params['is_ziti'] || $params['is_ziti'] === 'false') ? false : true;
         }
+        if (isset($params['is_platform_store_buy'])) {
+            $params['is_platform_store_buy'] = (!$params['is_platform_store_buy'] || $params['is_platform_store_buy'] === 'false') ? false : true;
+        } else {
+            $params['is_platform_store_buy'] = false;
+        }
         if (isset($params['show_mobile'])) {
             $params['show_mobile'] = ($params['show_mobile'] === 1 || $params['show_mobile'] === '1' || $params['show_mobile'] === true || $params['show_mobile'] === 'true') ? 1 : 0;
         } else {
@@ -520,6 +529,7 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="fixed_salesperson_qrcode", in="query", description="导购固定码", required=false, type="string"),
      *     @SWG\Parameter( name="hour", in="query", description="经营时间", required=true, type="string"),
      *     @SWG\Parameter( name="is_ziti", in="query", description="是否支持自提", required=true, type="string"),
+     *     @SWG\Parameter( name="is_platform_store_buy", in="query", description="是否开启云仓可购买 0/1 或 true/false", required=false, type="string"),
      *     @SWG\Parameter( name="is_delivery", in="query", description="是否快递", required=true, type="string"),
      *     @SWG\Parameter( name="auto_sync_goods", in="query", description="自动同步总部商品", required=true, type="string"),
      *     @SWG\Parameter( name="logo", in="query", description="logo", type="string"),
@@ -577,6 +587,7 @@ class Distributor extends Controller
      *                  @SWG\Property( property="is_default", type="string", example="0", description="是否默认"),
      *                  @SWG\Property( property="is_audit_goods", type="string", example="true", description="是否审核店铺商品"),
      *                  @SWG\Property( property="is_ziti", type="string", example="false", description="是否支持自提"),
+     *                  @SWG\Property( property="is_platform_store_buy", type="string", example="false", description="是否开启云仓可购买"),
      *                  @SWG\Property( property="regions_id", type="array",
      *                      @SWG\Items( type="string", example="310000", description=""),
      *                  ),
@@ -617,10 +628,10 @@ class Distributor extends Controller
             2 => 'area',
         ];
         $params = $request->all('name', 'address', 'house_number', 'mobile', 'show_mobile', 'show_salesperson', 'fixed_salesperson_qrcode_url', 'regions_id', 'regions', 'contact',
-            'shop_id', 'is_ziti', 'lng', 'lat', 'hour', 'logo', 'banner', 'auto_sync_goods', 'is_audit_goods',
+            'shop_id', 'is_ziti', 'is_platform_store_buy', 'lng', 'lat', 'hour', 'logo', 'banner', 'auto_sync_goods', 'is_audit_goods',
             'is_delivery', 'shop_code', 'distributor_self', 'regionauth_id', 'is_open', 'rate', 'is_dada', 'business',
             'is_valid', 'contract_phone', 'introduce','merchant_id','distribution_type', 'distributor_category_id', 'is_require_subdistrict',
-            'is_require_building', 'offline_aftersales', 'offline_aftersales_distributor_id', 'offline_aftersales_other',
+            'is_require_building', 'is_default', 'offline_aftersales', 'offline_aftersales_distributor_id', 'offline_aftersales_other',
             'offline_aftersales_address','is_self_delivery','freight_time','is_open_salesman','is_refund_freight', 'wdt_shop_no', 'jst_shop_id','open_divided');
         $merchantId = app('auth')->user()->get('merchant_id');
         $operatorType = app('auth')->user()->get('operator_type');
@@ -629,6 +640,9 @@ class Distributor extends Controller
             $params['distribution_type'] = '1';
         }
         $reviewResult = $request->input('review_result', '');
+        // D6: 记录客户端本次请求意图（不得仅依赖后续被合并/改写后的 $params）
+        $hasIsValidIntent = $request->has('is_valid');
+        $hasReviewResultIntent = $request->has('review_result') && $reviewResult !== '';
         $params['distributor_id'] = $distributor_id;
         if (!empty($params['is_dada']) && $params['is_dada'] == 'false') {
             $params['is_dada'] = '';
@@ -772,8 +786,14 @@ class Distributor extends Controller
         if (isset($params['is_ziti'])) {
             $params['is_ziti'] = (!$params['is_ziti'] || $params['is_ziti'] === 'false') ? false : true;
         }
+        if (isset($params['is_platform_store_buy'])) {
+            $params['is_platform_store_buy'] = (!$params['is_platform_store_buy'] || $params['is_platform_store_buy'] === 'false') ? false : true;
+        }
         if (isset($params['is_delivery'])) {
             $params['is_delivery'] = (!$params['is_delivery'] || $params['is_delivery'] === 'false') ? false : true;
+        }
+        if (isset($params['is_default'])) {
+            $params['is_default'] = (!$params['is_default'] || $params['is_default'] === 'false') ? false : true;
         }
         if (isset($params['is_self_delivery'])) {
             $params['is_self_delivery'] = (!$params['is_self_delivery'] || $params['is_self_delivery'] === 'false') ? false : true;
@@ -805,6 +825,33 @@ class Distributor extends Controller
             }
         }
 
+        // V-STA-01 / D6：虚拟店须在强制 is_valid 之前拒绝非法状态意图（多字段 PUT 下须用 Request::has + 原始 input）
+        if ($hasIsValidIntent || $hasReviewResultIntent) {
+            $isVirtualShop = isset($params['distributor_self']) && (string) $params['distributor_self'] === '1';
+            if (!$isVirtualShop) {
+                $distributorServiceForVirtual = new DistributorService();
+                $virtualRow = $distributorServiceForVirtual->getData([
+                    'distributor_id' => $distributor_id,
+                    'company_id' => app('auth')->user()->get('company_id'),
+                ]);
+                $isVirtualShop = $virtualRow && (int) ($virtualRow['distributor_self'] ?? 0) === 1;
+            }
+            VirtualDistributorUpdateStatusGuard::forbidNonEnabledStatusIntentForVirtualShop(
+                $isVirtualShop,
+                $hasIsValidIntent,
+                $request->input('is_valid'),
+                $hasReviewResultIntent,
+                $reviewResult
+            );
+        }
+
+        if ($hasIsValidIntent && !$hasReviewResultIntent) {
+            $params['is_valid'] = DistributorCloudShopStatusGuard::normalizeIncomingIsValid($request->input('is_valid'));
+            if (!in_array($params['is_valid'], DistributorCloudShopStatusGuard::allowedIsValidValues(), true)) {
+                throw new ResourceException(trans('DistributionBundle/Services/DistributorCloudShopStatusGuard.invalid_is_valid'));
+            }
+        }
+
         if (isset($params['distributor_self']) && $params['distributor_self'] == '1') {
             $params['is_valid'] = 'true';
         }
@@ -832,6 +879,10 @@ class Distributor extends Controller
             $params['area'] = '';
         }
 
+        $params['__client_intent_status'] = $hasIsValidIntent || $hasReviewResultIntent;
+        $params['__client_intent_review_result'] = $hasReviewResultIntent;
+        $params['__client_intent_profile'] = ! $params['__client_intent_status'];
+
         $companyId = app('auth')->user()->get('company_id');
         $params['company_id'] = $companyId;
 
@@ -857,6 +908,17 @@ class Distributor extends Controller
                 $params[$col] = $distributorInfo[$col];
             }
         }
+
+        if ($hasIsValidIntent && !$hasReviewResultIntent) {
+            $afterIsValid = (string) $params['is_valid'];
+            DistributorCloudShopStatusGuard::assertTransitionAllowed(
+                (int) $companyId,
+                (int) $distributor_id,
+                $distributorInfo,
+                $afterIsValid
+            );
+        }
+
         $localDeliveryService = new LocalDeliveryService();
         $localDeliveryConfig = $localDeliveryService->getConfigService()->getInfo(['company_id' => $companyId]);
         if (!empty($params['is_dada'])) {
@@ -949,6 +1011,17 @@ class Distributor extends Controller
 
         $result = $distributorService->updateDistributor($distributor_id, $params);
 
+        // 仅当客户端显式传入 warehouse_ids 时才校验并同步关联仓库；部分字段更新（如 auto_sync_goods）不应触发
+        if ($request->has('warehouse_ids')) {
+            $warehouseIds = $this->parseWarehouseIdsParam($request->input('warehouse_ids'));
+            (new \DistributionBundle\Services\DistributorWarehouseService())->assertWarehouseIdsRequired($warehouseIds);
+            (new \DistributionBundle\Services\DistributorWarehouseService())->syncWarehouses(
+                (int) $companyId,
+                (int) $distributor_id,
+                $warehouseIds
+            );
+        }
+
         if (isset($params['offline_aftersales_address']) && $params['offline_aftersales_address']) {
             $aftersalesAddress = $params['offline_aftersales_address'];
             if (isset($aftersalesAddress['name'], $aftersalesAddress['address'], $aftersalesAddress['mobile']) && $aftersalesAddress['name'] && $aftersalesAddress['address'] && $aftersalesAddress['mobile']) {
@@ -1009,6 +1082,7 @@ class Distributor extends Controller
      *     @SWG\Parameter( name="distribution_type", in="query", description="店铺类型:0自营;1加盟", required=false, type="string"),
      *     @SWG\Parameter( name="merchant_id", in="query", description="所属商家", required=false, type="string"),
      *     @SWG\Parameter( name="distributor_category_id", in="query", description="店铺分类id", required=false, type="string"),
+     *     @SWG\Parameter( name="is_valid", in="query", description="店铺状态筛选：传具体值则等值匹配（true/false/closed/delete 等；历史数据可能为 1/0）；传 cloud_all 则同时包含启用云店、禁用云店、闭店及 1/0 存值（不含撤店 delete）", required=false, type="string"),
      *     @SWG\Parameter( name="show_distributor_self", in="query", description="是否展示虚拟门店(distributor_self=1)，传1或true时列表不过滤虚拟门店；默认0不展示", required=false, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="object",
@@ -1037,6 +1111,7 @@ class Distributor extends Controller
      *                          @SWG\Property( property="shop_id", type="string", example="0", description="门店id"),
      *                          @SWG\Property( property="is_default", type="string", example="false", description=""),
      *                          @SWG\Property( property="is_ziti", type="string", example="false", description="是否支持自提"),
+     *                          @SWG\Property( property="is_platform_store_buy", type="string", example="false", description="是否开启云仓可购买"),
      *                          @SWG\Property( property="lng", type="string", example="121.417559", description="地图纬度"),
      *                          @SWG\Property( property="lat", type="string", example="31.176522", description="地图经度"),
      *                          @SWG\Property( property="hour", type="string", example="08:00-21:00", description="营业时间，格式11:11-12:12"),
@@ -1121,7 +1196,12 @@ class Distributor extends Controller
         }
 
         if ($request->input('is_valid')) {
-            $filter['is_valid'] = $request->input('is_valid');
+            $iv = trim((string) $request->input('is_valid'));
+            if (strcasecmp($iv, 'cloud_all') === 0) {
+                $filter['is_valid|in'] = DistributorCloudShopStatusGuard::isValidValuesForCloudAllListFilter();
+            } else {
+                $filter['is_valid'] = $request->input('is_valid');
+            }
         }
 
         if ($request->input('distributor_category_id')) {
@@ -1462,11 +1542,16 @@ class Distributor extends Controller
                 continue;
             }
 
+            $distributorSelf = $result['distributor_self'] ?? 0;
             $createData = [
                 'company_id' => $companyId,
                 'distributor_id' => $distributorId,
                 'item_ids' => $params['item_ids'],
                 'is_can_sale' => $params['is_can_sale'] ?? false,
+                'distributor_self' => $distributorSelf === true
+                    || $distributorSelf === 'true'
+                    || $distributorSelf === 1
+                    || $distributorSelf === '1',
             ];
             $res = $distributorItemsService->createDistributorItems($createData, $isQueue);
         }
@@ -1773,7 +1858,9 @@ class Distributor extends Controller
         $pageSize = $request->get('pageSize') ?: -1;
         $page = $request->get('page') ?: 1;
         $data = $distributorItemsService->getDistributorRelItemList($filter, $pageSize, $page, ['item_id' => 'desc'], false);
-        if (!empty($data['list'])) {
+        // is_sku=true 为 SKU 展开列表，逐行展示各自库存，不做 SPU 汇总
+        $isSkuList = $request->get('is_sku') === 'true' || $request->get('is_sku') === true;
+        if (!empty($data['list']) && !$isSkuList) {
             $company = (new CompanysActivationEgo())->check($companyId);
             if (($company['product_model'] ?? '') === 'standard') {
                 $data['list'] = $distributorItemsService->applyMultiSpecTotalStoreForDistributorRelItemList($data['list']);
@@ -1995,6 +2082,11 @@ class Distributor extends Controller
 
     public function updateDistributorItem(request $request)
     {
+        $requestData = $request->all();
+        // if (array_key_exists('is_total_store', $requestData)) {
+        //     throw new ResourceException(trans('DistributionBundle/Controllers/Distributor.batch_update_is_total_store_not_supported'));
+        // }
+
         $params = $request->all('distributor_id', 'item_id', 'goods_id', 'is_can_sale', 'store', 'price', 'is_total_store', 'is_default');
 
         $params['company_id'] = app('auth')->user()->get('company_id');
@@ -2249,6 +2341,7 @@ class Distributor extends Controller
      *                         @SWG\Property( property="tel_no", description="企业电话", type="string"),
      *                         @SWG\Property( property="hour", description="营业时间", type="string"),
      *                         @SWG\Property( property="is_ziti", description="是否支持自提", type="string"),
+     *                         @SWG\Property( property="is_platform_store_buy", description="是否开启云仓可购买", type="string"),
      *                         @SWG\Property( property="auto_sync_goods", description="自动同步总部商品", type="string"),
      *                         @SWG\Property( property="is_delivery", description="支持快递", type="string"),
      *                         @SWG\Property( property="is_dada", description="同城配送", type="string"),
@@ -2292,6 +2385,7 @@ class Distributor extends Controller
      *                  @SWG\Property( property="is_default", type="string", example="0", description="是否默认"),
      *                  @SWG\Property( property="is_audit_goods", type="string", example="false", description="是否审核店铺商品"),
      *                  @SWG\Property( property="is_ziti", type="string", example="false", description="是否支持自提"),
+     *                  @SWG\Property( property="is_platform_store_buy", type="string", example="false", description="是否开启云仓可购买"),
      *                  @SWG\Property( property="regions_id", type="array",
      *                      @SWG\Items( type="string", example="310000", description=""),
      *                  ),
@@ -2533,7 +2627,12 @@ class Distributor extends Controller
             $filter['distributor_id'] = (array)$request->get('distributorIds');
         }
 
-        if ($request->input('is_valid')) {
+        if (trim((string) $request->input('is_valid')) === 'true') {
+            $filter['is_valid|in'] = [
+                DistributorCloudShopStatusGuard::IS_VALID_CLOUD_ENABLED,
+                DistributorCloudShopStatusGuard::IS_VALID_CLOUD_DISABLED,
+            ];
+        } elseif ($request->input('is_valid')) {
             $filter['is_valid'] = $request->input('is_valid');
         }
 

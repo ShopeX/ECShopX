@@ -52,6 +52,7 @@ if ($lumenRoutingKeyOne == 'wechatAuth') {
             require __DIR__.'/../routes/thirdparty/kuaizhen.php';
             require __DIR__.'/../routes/thirdparty/icbcpay.php';
             require __DIR__.'/../routes/thirdparty/dm.php';
+            require __DIR__.'/../routes/thirdparty/shuyun_open_platform_callback.php';
             break;
         case ($dingoRoutingKeyOne == 'openapi') :
             require __DIR__.'/../routes/thirdparty/openapi.php';
@@ -128,6 +129,7 @@ if ($lumenRoutingKeyOne == 'wechatAuth') {
             require __DIR__.'/../routes/api/popularize.php';
             require __DIR__.'/../routes/api/point.php';
             require __DIR__.'/../routes/api/selfService.php';
+            require __DIR__.'/../routes/api/shuyun_open_platform.php';
             require __DIR__.'/../routes/api/third.php';
             require __DIR__.'/../routes/api/notice.php';
             require __DIR__.'/../routes/api/im.php';

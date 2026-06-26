@@ -25,10 +25,12 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         'DistributionBundle\Events\DistributorCreateEvent' => [
             'SystemLinkBundle\Listeners\ShopCreateSendOme',
+            'ShuyunOpenPlatformBundle\Listeners\DispatchShopSyncToShuyunOpenPlatformOnDistributorCreateListener',
         ],
 
         'DistributionBundle\Events\DistributorUpdateEvent' => [
             'SystemLinkBundle\Listeners\ShopUpdateSendOme',
+            'ShuyunOpenPlatformBundle\Listeners\DispatchShopSyncToShuyunOpenPlatformOnDistributorUpdateListener',
         ],
 
         // 退货退款时可退运费，自动更新到自营店

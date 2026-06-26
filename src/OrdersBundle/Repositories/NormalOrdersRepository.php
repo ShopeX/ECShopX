@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright 2019-2026 ShopeX
  *
@@ -117,7 +118,7 @@ class NormalOrdersRepository extends EntityRepository
             foreach ($filter as $k => $v) {
                 if ($k == 'supplier_id') {
                     $filter['so.supplier_id'] = $filter['supplier_id'];
-                } else if (!in_array($k, ['prescription_order_filter'])) {
+                } elseif (!in_array($k, ['prescription_order_filter'])) {
                     $filter['o.' . $k] = $v;
                 }
                 unset($filter[$k]);
@@ -294,18 +295,18 @@ class NormalOrdersRepository extends EntityRepository
             // 其他情况，使用auto_cancel_time
             if (isset($filter['order_status']) && $filter['order_status'] == 'NOTPAY') {
                 $condition = $qb->expr()->orX(
-                   $qb->expr()->andX(
-                       $qb->expr()->eq('pay_type', $qb->expr()->literal('offline_pay')),
-                       $qb->expr()->eq('offline_payment_status', 0)
-                   ),
-                   $qb->expr()->andX(
-                       $qb->expr()->orX(
-                           $qb->expr()->neq('pay_type', $qb->expr()->literal('offline_pay')),
-                           $qb->expr()->eq('offline_payment_status', -1)
-                       ),
-                       $qb->expr()->gt('auto_cancel_time', time())
-                   )
-               );
+                    $qb->expr()->andX(
+                        $qb->expr()->eq('pay_type', $qb->expr()->literal('offline_pay')),
+                        $qb->expr()->eq('offline_payment_status', 0)
+                    ),
+                    $qb->expr()->andX(
+                        $qb->expr()->orX(
+                            $qb->expr()->neq('pay_type', $qb->expr()->literal('offline_pay')),
+                            $qb->expr()->eq('offline_payment_status', -1)
+                        ),
+                        $qb->expr()->gt('auto_cancel_time', time())
+                    )
+                );
                 $qb->andWhere($condition);
             }
 
@@ -640,6 +641,12 @@ class NormalOrdersRepository extends EntityRepository
         if (isset($data['is_logistics'])) {
             $orderEntity->setIsLogistics($data['is_logistics']);
         }
+        if (array_key_exists('uses_platform_item_stock', $data)) {
+            $orderEntity->setUsesPlatformItemStock($data['uses_platform_item_stock']);
+        }
+        if (array_key_exists('pos_payment_voucher_url', $data)) {
+            $orderEntity->setPosPaymentVoucherUrl($data['pos_payment_voucher_url'] ?: null);
+        }
         if (isset($data['is_profitsharing'])) {
             $orderEntity->setIsProfitsharing($data['is_profitsharing']);
         }
@@ -829,6 +836,8 @@ class NormalOrdersRepository extends EntityRepository
             'pack' => $orderEntity->getPack(),
             'is_shopscreen' => $orderEntity->getIsShopScreen(),
             'is_logistics' => $orderEntity->getIsLogistics(),
+            'uses_platform_item_stock' => $orderEntity->getUsesPlatformItemStock(),
+            'pos_payment_voucher_url' => $orderEntity->getPosPaymentVoucherUrl(),
             'is_profitsharing' => $orderEntity->getIsProfitsharing(),
             'profitsharing_status' => $orderEntity->getProfitsharingStatus(),
             'order_auto_close_aftersales_time' => $orderEntity->getOrderAutoCloseAftersalesTime(),
@@ -863,13 +872,13 @@ class NormalOrdersRepository extends EntityRepository
         ];
 
         // 跨境订单
-//        if($orderEntity->getType() == 1){
+        //        if($orderEntity->getType() == 1){
         $result['type'] = $orderEntity->getType();
         $result['taxable_fee'] = $orderEntity->getTaxableFee();
         $result['identity_id'] = $orderEntity->getIdentityId();
         $result['identity_name'] = $orderEntity->getIdentityName();
         $result['total_tax'] = $orderEntity->getTotalTax();
-//        }
+        //        }
 
         if (!$result['discount_fee']) {
             $result['discount_fee'] = $result['member_discount'] + $result['coupon_discount'];

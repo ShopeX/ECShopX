@@ -44,6 +44,7 @@ class CompanysActivationEgo
 
     // 检测api的路径，如果没有买则判断是否购买了移动收银
     private static $mobile_cashier_path_check = [
+        '/api/operator/member/ready',
         '/api/operator/cartdata/pending',
         '/api/operator/cartdataadd',
         '/api/operator/cartdatalist',

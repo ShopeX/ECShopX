@@ -43,6 +43,7 @@ class ActivityItemsService
             'item_id' => $itemIds,
             'activity_id' => $activityId,
             'company_id' => $companyId,
+            'shelf_status' => 1,
         ];
         $list = $this->entityRepository->getLists($filter, 'item_id,activity_price,activity_store');
         $list = array_column($list, null, 'item_id');
@@ -67,6 +68,7 @@ class ActivityItemsService
             ->leftJoin('i', 'goods_items_rel_cats', 'c', 'i.item_id = c.item_id')
             ->andWhere($qb->expr()->eq('i.company_id', $companyId))
             ->andWhere($qb->expr()->eq('i.activity_id', $activityId))
+            ->andWhere($qb->expr()->eq('i.shelf_status', 1))
             ->andWhere($qb->expr()->isNotNull('c.category_id'));
         $categoryIds = $qb->execute()->fetchAll();
         if (!$categoryIds) {

@@ -84,6 +84,7 @@ class DistributorRepository extends EntityRepository
         'is_default',
         'is_audit_goods',
         'is_ziti',
+        'is_platform_store_buy',
         'regions_id',
         'regions',
         'is_domestic',

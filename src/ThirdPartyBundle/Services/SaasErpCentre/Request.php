@@ -90,7 +90,7 @@ class Request
             $status = $this->_check($method, $data);
             if ($status) {
                 $orderId = $data['tid'] ?? '';
-                app('log')->debug('saaserp : method ===> '. $method .' 订单号 ===> ' . $orderId . '不是自营店铺订单  不同步');
+                app('log')->debug('saaserp::check::'. $method .' 订单号 ===> ' . $orderId . '不是自营店铺订单  不同步');
                 return [];
             }
 
@@ -131,9 +131,10 @@ class Request
                 $result['data'] = json_decode($result['data'], 1);
             }
 
-            app('log')->debug("matrix url ".$this->url);
-            app('log')->debug("saaserp params ".var_export($query_params, true));
-            app('log')->debug("saaserp res ".var_export($result, true));
+            app('log')->debug("saaserp::url::".$this->url);
+            $jsonLogFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+            app('log')->debug('saaserp::params::'. $method .'::' . json_encode($query_params, $jsonLogFlags));
+            app('log')->debug('saaserp::result::'. $method .'::' . json_encode($result, $jsonLogFlags));
             
             $logParams = [
                 'result' => $result,
@@ -161,7 +162,7 @@ class Request
             return $result;
         } catch (\Exception $e) {
             $errorMsg = 'Error on line '.$e->getLine().' in '.$e->getFile().': <b>'.$e->getMessage()."\n\n";
-            app('log')->debug('saaserp error:'.$errorMsg);
+            app('log')->debug('saaserp::error::'.$errorMsg);
             $response = [];
         }
 

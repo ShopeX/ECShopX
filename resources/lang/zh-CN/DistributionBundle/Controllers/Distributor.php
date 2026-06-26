@@ -66,6 +66,7 @@ $error = [
     'distributor_id_required' => '店铺ID必填',
     'single_distributor_only' => '只能查看单个店铺的配送距离',
     'distributor_id_error' => '店铺ID错误',
+    'batch_update_is_total_store_not_supported' => '批量修改接口不支持修改店铺库存',
 ];
 
 // 其他消息
@@ -110,6 +111,7 @@ $others = [
     'return_address_hours_required_update' => '退货点营业时间必填',
     'business_type_required_update' => '请选择业务类型',
     'miniprogram_code_params_error' => '获取小程序码参数出错，请检查.',
+    'virtual_shop_status_not_allowed' => '虚拟门店不允许修改营业状态',
 ];
 
 return array_merge($validation, $error, $others); 

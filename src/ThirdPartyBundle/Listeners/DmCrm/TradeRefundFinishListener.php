@@ -10,6 +10,7 @@ use AftersalesBundle\Services\AftersalesService;
 use ThirdPartyBundle\Services\DmCrm\OrderService;
 use SalespersonBundle\Services\SalespersonService;
 use DistributionBundle\Services\DistributorService;
+use MembersBundle\Services\MemberService;
 use ThirdPartyBundle\Events\TradeRefundFinishEvent;
 use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
 
@@ -24,11 +25,16 @@ class TradeRefundFinishListener
             $order_id = $event->entities['order_id'];
             $refund_bn  = $event->entities['refund_bn'];
             $aftersaleRefund = $event->entities;
+            // 与 PointMemberService::addPoint 一致：数云开放网关（会员能力）开启时，退款推送以数云 refund.sync 为准，不与达摩双写；两者同时开时优先数云
+            if (app(MemberService::class)->isShuyunOpenPlatformMemberEnabled((int) $company_id)) {
+                return;
+            }
             // 达摩crm, 预扣积分/取消积分
             $ns = new DmCrmSettingService();
             if (!$ns->getDmCrmSetting($company_id)['is_open'] ?? '') {
-                return false;
-            }  
+                // 未开启达摩时仅跳过本监听；禁止 return false，否则会终止事件传播，后续如数云退款单同步监听将不执行
+                return;
+            }
             $normalOrderRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
             $normalOrdersItemsRepository = app('registry')->getManager('default')->getRepository(NormalOrdersItems::class);
             $orderInfo = $normalOrderRepository->getInfo(['company_id' => $company_id, 'order_id' => $order_id]);

@@ -275,11 +275,8 @@ class Items extends BaseController
             $SupplierItemsService = new SupplierItemsService();
             $result = $SupplierItemsService->addItems($params);
         } elseif ($isSupplierGoods) {
-            // 平台审核 供应商商品
+            // 平台审核供应商商品：由 reviewGoods 负责 draft merge / 同步，不再直接 addItems 写主表
             $SupplierItemsService = new SupplierItemsService();
-            if ($params['audit_status'] == 'approved') {
-                $result = $SupplierItemsService->addItems($params);
-            }
             $result = $SupplierItemsService->reviewGoods($params, $item_id);
         } else {
             //平台，店铺商品。只更新商品主表，不需要更新供应商表数据
@@ -1747,7 +1744,9 @@ class Items extends BaseController
             if (isset($params['item_id']) && $params['item_id']) {
                 $params['default_item_id'] = $params['item_id'];
                 unset($params['item_id']);
-                $pageSize = -1;
+                if ($pageSize <= 0) {
+                    $pageSize = -1;
+                }
             }
             unset($params['distributor_id']);
             $result = $itemsService->getSkuItemsList($params, $page, $pageSize);
@@ -1831,7 +1830,7 @@ class Items extends BaseController
                 // $cost_price = bcdiv($value['cost_price'],'100',10); //成本格
                 // $tax_rate = bcdiv($value['tax_rate'],'100',10) + 1; //税率
                 if ($value['cost_price'] && ($value['price'] > $value['cost_price'])) {
-                    $value['gross_profit_rate'] = bcmul(($value['price'] - $value['cost_price']) * 100, $value['price'], 2).'%';
+                    $value['gross_profit_rate'] = bcdiv(($value['price'] - $value['cost_price']) * 100, $value['price'], 2).'%';
                 } else {
                     $value['gross_profit_rate'] = '-';
                 }
@@ -2155,7 +2154,9 @@ class Items extends BaseController
 
         if ($isGetSkuList) {
             if (isset($params['item_id']) && $params['item_id']) {
-                $pageSize = -1;
+                if ($pageSize <= 0) {
+                    $pageSize = -1;
+                }
             }
             $result = $itemsService->getSkuItemsList($params, $page, $pageSize);
         } else {
@@ -2652,6 +2653,22 @@ class Items extends BaseController
         }
         //营销标签
         $result['list'] = $itemsService->getItemsListActityTag($result['list'], $filter['company_id']);
+
+        $distributorId = (int) ($filter['distributor_id'] ?? 0);
+        $exposePlatformStore = false;
+        if ($distributorId > 0) {
+            $distributorService = new DistributorService();
+            $dRow = $distributorService->getInfoSimple([
+                'distributor_id' => $distributorId,
+                'company_id' => (int) $filter['company_id'],
+            ]);
+            $exposePlatformStore = $dRow !== [] && DistributorService::isPlatformStoreBuyEnabledRaw($dRow);
+            $result['is_platform_store_buy'] = $exposePlatformStore;
+        }
+
+        if (!empty($result['list'])) {
+            $result['list'] = $itemsService->appendPlatformStoreForOnsaleSkuList($result['list'], $exposePlatformStore);
+        }
 
         return $this->response->array($result);
     }

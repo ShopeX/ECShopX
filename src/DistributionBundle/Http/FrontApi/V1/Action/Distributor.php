@@ -18,7 +18,7 @@
 namespace DistributionBundle\Http\FrontApi\V1\Action;
 
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+// use Illuminate\Http\Response;
 use GoodsBundle\Services\ItemsService;
 use MembersBundle\Services\MemberService;
 use MembersBundle\Services\WechatUserService;
@@ -32,8 +32,8 @@ use KaquanBundle\Services\DiscountCardService;
 use KaquanBundle\Services\KaquanService;
 use MembersBundle\Services\MemberAddressService;
 use ThirdPartyBundle\Services\Map\MapService;
-use CompanysBundle\Services\ShopsService;
-use CompanysBundle\Services\Shops\WxShopsService;
+// use CompanysBundle\Services\ShopsService;
+// use CompanysBundle\Services\Shops\WxShopsService;
 use SalespersonBundle\Services\SalespersonService;
 use DistributionBundle\Services\BasicConfigService;
 use DistributionBundle\Services\DistributorService;
@@ -51,7 +51,7 @@ use DistributionBundle\Services\DistributorWhiteListService;
 use DistributionBundle\Services\DistributorSalesCountService;
 use DistributionBundle\Services\DistributorAftersalesAddressService;
 use DistributionBundle\Services\DistributorCategoryService;
-use ThirdPartyBundle\Services\Map\TencentMapService as TencentMapRequest;
+// use ThirdPartyBundle\Services\Map\TencentMapService as TencentMapRequest;
 use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
 use WorkWechatBundle\Services\WorkWechatService;
 
@@ -233,17 +233,27 @@ class Distributor extends BaseController
     public function getDistributorIsValid(Request $request)
     {
         $result = [];
+        $triedDefaultDistributor = false;
+        $skipDefaultDistributorFallback = false;
 
         $authInfo = $request->get('auth');
         $userId = (int)$authInfo['user_id'];
         $distributorService = new DistributorService();
+        $distributionService = new DistributionService();
         $filter = [
             'company_id' => $authInfo['company_id'],
             'is_valid' => 'true', 
         ];
         $postdata = $request->all();
+        $hasDistributorIdInput = array_key_exists('distributor_id', $postdata)
+            && $postdata['distributor_id'] !== ''
+            && $postdata['distributor_id'] !== null;
+        $hasLngInput = $request->input('lng') !== null && $request->input('lng') !== '';
+        $hasLatInput = $request->input('lat') !== null && $request->input('lat') !== '';
         $lng = $request->input('lng') ? $request->input('lng') : 0;
         $lat = $request->input('lat') ? $request->input('lat') : 0;
+        $radioType = (int)($distributionService->getDistributionConfigInRule($authInfo['company_id'])['radio_type'] ?? 1);
+        $preferVirtualStoreByInRule = !$hasDistributorIdInput && !$hasLngInput && !$hasLatInput && $radioType === 1;
 
         $setting = (new SettingService())->getOpenDistributorDivided($authInfo['company_id']);
         if($setting['status'] === true){//开启了，就找没开启店铺
@@ -264,7 +274,7 @@ class Distributor extends BaseController
 //                }
 //            }
         }
-        if ((!$lng || !$lat) && $userId > 0) {
+        if (!$preferVirtualStoreByInRule && (!$lng || !$lat) && $userId > 0) {
             $addressDetail = (new MemberAddressService())->getDefaultAddress((int)$filter["company_id"], (int)$authInfo['company_id']);
             // 用户会优先根据授权时的经纬度
             // 如果用户授权拒绝，则去获取用户默认收货地址里的经纬度
@@ -359,13 +369,6 @@ class Distributor extends BaseController
                 $isShopDivided = 1;//走默认店铺给特殊字段
             }
             $result = $distributorService->getNearShopData($filter, $lat, $lng,$isShopDivided);
-            if($isShopDivided === 0){
-                if(isset($postdata['distributor_id']) && $postdata['distributor_id'] == 0){
-                    if($result['distributor_self'] == 1){
-                        $result['distributor_id'] = 0;
-                    }
-                }
-            }
 //            if(!empty($postdata['show_type']) && $postdata['show_type'] === 'self'){
 //                if(empty($postdata['self_distributor_id'])){
 //                    $result = [];
@@ -388,70 +391,50 @@ class Distributor extends BaseController
 //                }else{
 //                    $result = $distributorService->getDistributorSelf($authInfo['company_id'], true);
 //                }
-                if(empty($userId)){
-                    if($setting['status'] === true){
-
-                        $filter['distributor_id'] = 0;
-                        $result = $distributorService->getInfo($filter);
-                    }else{
-                        $result = $distributorService->getDistributorSelf($authInfo['company_id'], true);
-                        $result['distributor_id'] = 0;
-                    }
-                }else{
-                    if($setting['status'] === true){
-                        $result = $distributorService->getDistributorSelf($authInfo['company_id'], true,['open_divided'=>0]);
-                    }else{
-                        $result = $distributorService->getDistributorSelf($authInfo['company_id'], true);
-                        $result['distributor_id'] = 0;
-                    }
-                }
-
+                $result = $distributorService->getDistributorSelf($authInfo['company_id'], true);
 
                 $result['is_delivery'] = $result['is_delivery'] ?? true;
                 $result['is_ziti'] = $result['is_ziti'] ?? false;
 //                $result['distributor_id'] = 0;
                 $result['is_valid'] = 'true';
             } else {//默认店铺
+                if ($preferVirtualStoreByInRule) {
+                    $skipDefaultDistributorFallback = true;
+                    $result = $distributorService->getDistributorSelf($authInfo['company_id'], true);
+                    if ($result) {
+                        $result['is_delivery'] = $result['is_delivery'] ?? true;
+                        $result['is_ziti'] = $result['is_ziti'] ?? false;
+                        $result['is_valid'] = 'true';
+                    }
+                } else {
+                    $triedDefaultDistributor = true;
+                    $result = $distributorService->getInfoSimple([
+                        'company_id' => $authInfo['company_id'],
+                        'is_default' => 1,
+                        'is_valid' => 'true',
+                    ]);
+                }
+            }
+        }
+        if(empty($result['is_valid'])){
+            if (!$skipDefaultDistributorFallback && !$triedDefaultDistributor) {
+                $triedDefaultDistributor = true;
                 $result = $distributorService->getInfoSimple([
                     'company_id' => $authInfo['company_id'],
                     'is_default' => 1,
                     'is_valid' => 'true',
                 ]);
-                // $filter['distributor_id'] = 0;
-                // $result = $distributorService->getInfo($filter);
             }
-        }
-        if(empty($result['is_valid'])){
-            //            $result = [
-            //                'distributor_id' => 0,
-            //                'is_delivery' => true,
-            //                'is_ziti' => false,
-            //            ];
-                               //这里应该取默认
-                        $result = $distributorService->getInfoSimple([
-                            'company_id' => $authInfo['company_id'],
-                            'is_default' => 1,
-                            'is_valid' => 'true',
-                        ]);
-                        if (!$result) {
-                            $result = [
-                                'distributor_id' => 0,
-                                'is_delivery' => true,
-                                'is_ziti' => false,
-                            ];
-                        }
-                        return $this->response->array($result);
-        }
-            
-
-        if(empty($result['is_valid'])){
-            $result = [
-                'distributor_id' => 0,
-                'is_delivery' => true,
-                'is_ziti' => false,
-            ];
+            if (!$result) {
+                $result = [
+                    'distributor_id' => 0,
+                    'is_delivery' => true,
+                    'is_ziti' => false,
+                ];
+            }
             return $this->response->array($result);
         }
+            
 
         if ($result && $result['is_valid'] == 'true') {
             $result['status'] = false;
@@ -925,11 +908,11 @@ class Distributor extends BaseController
         // 默认拿不是总店的店铺
         $filter['distributor_self'] = 0;
 
-        // 默认只返回启用的店铺，可通过 is_valid 参数显式筛选
+        // 默认返回启用与禁用云店，可通过 is_valid 参数显式筛选（如 is_valid=true 仅启用）
         if ($request->input('is_valid')) {
             $filter['is_valid'] = $request->input('is_valid');
         } else {
-            $filter['is_valid'] = 'true';
+            $filter['is_valid'] = ['true', 'false'];
         }
         
         if ($request->input('get_shop')) {

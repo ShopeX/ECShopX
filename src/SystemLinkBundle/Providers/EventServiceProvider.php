@@ -39,10 +39,12 @@ class EventServiceProvider extends ServiceProvider
         'SystemLinkBundle\Events\TradeRefundEvent' => [
             'ThirdPartyBundle\Listeners\MarketingCenter\TradeRefundPushMarketingCenter',
             'SystemLinkBundle\Listeners\TradeRefundSendOme', // 退款申请发送到ome
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderRefundSyncToShuyunOpenPlatformListener@handleTradeRefund',
         ],
 
         'SystemLinkBundle\Events\TradeRefundFinishEvent' => [
             'SystemLinkBundle\Listeners\TradeRefundFinishSendOme', // 退款成功发送到ome
+            'ShuyunOpenPlatformBundle\Listeners\DispatchNormalOrderRefundSyncToShuyunOpenPlatformListener@handleTradeRefundFinish',
         ],
 
         'SystemLinkBundle\Events\TradeAftersalesEvent' => [

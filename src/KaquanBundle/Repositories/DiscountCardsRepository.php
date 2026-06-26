@@ -962,4 +962,21 @@ class DiscountCardsRepository extends EntityRepository
         return  $dataList;
 
     }
+
+    /**
+     * 数云线下权益创建：按券模板 {@see DiscountCards::title} 精确匹配（主表字段），仅正常状态（kq_status=0）。
+     *
+     * @return list<DiscountCards>
+     */
+    public function findAllActiveByCompanyIdAndExactTitle(int $companyId, string $title): array
+    {
+        /** @var list<DiscountCards> $rows */
+        $rows = $this->findBy([
+            'company_id' => $companyId,
+            'title' => $title,
+            'kq_status' => 0,
+        ], ['card_id' => 'ASC']);
+
+        return $rows;
+    }
 }

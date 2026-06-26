@@ -31,7 +31,11 @@ class Json extends DingoJson
         });
 
         if (!$this->isOpenApiRequest()) {
-            if (!isset($content['error']) && !isset($content['_ignore_data']) && !isset($content['data'])) {
+            $skipDataWrap = isset($content['_ignore_data']) || $this->isShuyunOpenPlatformInboundCallbackRequest();
+            if (isset($content['_ignore_data'])) {
+                unset($content['_ignore_data']);
+            }
+            if (!isset($content['error']) && !$skipDataWrap && !isset($content['data'])) {
                 $content = [
                     'data' => $content
                 ];
@@ -57,6 +61,14 @@ class Json extends DingoJson
     {
         $pathInfo = $this->request->getPathInfo();
         return $this->openapiRoutePrefix == substr($pathInfo, 0, strlen($this->openapiRoutePrefix));
+    }
+
+    /**
+     * 数云开放平台入站回调须按网关文档原样返回（如 msg/code/success），不可再包一层默认的 data。
+     */
+    private function isShuyunOpenPlatformInboundCallbackRequest(): bool
+    {
+        return str_contains($this->request->getPathInfo(), 'shuyun/open-platform/callback');
     }
 
     /**

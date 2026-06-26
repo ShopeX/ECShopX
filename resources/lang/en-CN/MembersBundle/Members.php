@@ -42,6 +42,14 @@ return [
     'mobile_already_exists' => 'Mobile number already exists',
     'missing_default_level' => 'Missing default level',
     'member_add_failed' => 'Member addition failed',
+    'offline_shuyun_distributor_required' => 'A valid distributor_id is required for offline Shuyun member sync',
+    'offline_shuyun_sync_failed' => 'Shuyun member registration failed: :msg',
+    'offline_shuyun_user_invalid' => 'Invalid member id for Shuyun sync',
+    'store_member_ready_user_required' => 'Member is required',
+    'store_member_ready_distributor_required' => 'Store is required',
+    'store_member_ready_not_found' => 'Member not found',
+    'store_member_ready_mobile_missing' => 'Member mobile is missing; cannot complete store registration',
+    'store_member_ready_sync_failed' => 'Store member registration failed: :msg',
 
     // Api/V1/Action/ExportData.php exceptions
     'operator_account_error' => 'Operator account error',

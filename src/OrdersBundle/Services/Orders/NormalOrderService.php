@@ -192,14 +192,20 @@ class NormalOrderService extends AbstractNormalOrder
                     }
                 }
 
+                $orderUsesPlatformStockById = [];
+                foreach ($result as $ordRow) {
+                    $orderUsesPlatformStockById[$ordRow['order_id']] = !empty($ordRow['uses_platform_item_stock']);
+                }
+
                 foreach ($orderItems['list'] as $row) {
                     if (isset($limitedTimeSale[$row['item_id']])) {
                         $promotion = $limitedTimeSale[$row['item_id']];
                         $totalFee = ($row['num'] * $row['price']);
                         $this->setUserBuysStore($promotion['activity_id'], $promotion['company_id'], $promotion['user_id'], $promotion['item_id'], -$row['num'], -$totalFee);
                     }
-                    // 总部发货
-                    if ($row['is_total_store']) {
+                    // 总部发货；店务立即购买（平台 SKU 库存）返还须与扣减一致
+                    $asTotalStore = !empty($orderUsesPlatformStockById[$row['order_id']]) || $row['is_total_store'];
+                    if ($asTotalStore) {
                         $itemStoreService->minusItemStore($row['item_id'], -$row['num'], $row['distributor_id'], true);
                     } else {
                         $itemStoreService->minusItemStore($row['item_id'], -$row['num'], $row['distributor_id'], false);
@@ -1061,7 +1067,7 @@ class NormalOrderService extends AbstractNormalOrder
         $sql = "SELECT COUNT(*) FROM `orders_normal_orders` AS `o` ";
         $sql .= "LEFT JOIN `offline_payment` AS `of` ON `o`.`order_id` = `of`.`order_id` ";
         $sql .= $filterSql;
-        app('log')->debug('自动取消线下转账支付方式的订单::countJoinOfflinePay=====>'.$sql);
+        // app('log')->debug('自动取消线下转账支付方式的订单::countJoinOfflinePay=====>'.$sql);
         return $conn->executeQuery($sql)->fetchColumn();
     }
 
@@ -1076,7 +1082,7 @@ class NormalOrderService extends AbstractNormalOrder
         $sql .= "LEFT JOIN `offline_payment` AS `of` ON o.order_id = of.order_id ";
         $sql .= $filterSql;
         $sql .= " LIMIT {$pageSize} OFFSET {$offset}";
-        app('log')->debug('自动取消线下转账支付方式的订单::getListJoinOfflinePay=====>'.$sql);
+        // app('log')->debug('自动取消线下转账支付方式的订单::getListJoinOfflinePay=====>'.$sql);
         return $conn->executeQuery($sql)->fetchAll();
     }
 
@@ -1177,13 +1183,18 @@ class NormalOrderService extends AbstractNormalOrder
                     }
                 }
             }
+            $orderUsesPlatformStockById = [];
+            foreach ($results as $ordRow) {
+                $orderUsesPlatformStockById[$ordRow['order_id']] = !empty($ordRow['uses_platform_item_stock']);
+            }
             foreach ($orderItems['list'] as $row) {
                 if (isset($limitedTimeSale[$row['item_id']])) {
                     $promotion = $limitedTimeSale[$row['item_id']];
                     $totalFee = ($row['num'] * $row['price']);
                     $this->setUserBuysStore($promotion['activity_id'], $promotion['company_id'], $promotion['user_id'], $promotion['item_id'], -$row['num'], -$totalFee);
                 }
-                if ($row['is_total_store']) {
+                $asTotalStore = !empty($orderUsesPlatformStockById[$row['order_id']]) || $row['is_total_store'];
+                if ($asTotalStore) {
                     $itemStoreService->minusItemStore($row['item_id'], -$row['num'], $row['distributor_id'], true);
                 } else {
                     $itemStoreService->minusItemStore($row['item_id'], -$row['num'], $row['distributor_id'], false);

@@ -24,7 +24,7 @@ use Dingo\Api\Exception\ResourceException;
 class ActivityItemsRepository extends EntityRepository
 {
     public $table = 'employee_purchase_activity_items';
-    public $cols = ['activity_id', 'item_id', 'goods_id', 'company_id', 'activity_price', 'activity_store', 'limit_fee', 'limit_num', 'sort', 'created', 'updated'];
+    public $cols = ['activity_id', 'item_id', 'goods_id', 'company_id', 'activity_price', 'activity_store', 'limit_fee', 'limit_num', 'sort', 'shelf_status', 'created', 'updated'];
 
     /**
      * 新增
@@ -310,7 +310,7 @@ class ActivityItemsRepository extends EntityRepository
         return $conn->executeUpdate($sql);
     }
 
-    public function getActivityItemsList($companyId, $activityId, $goodsId, $itemSpec = false, $isDefault = false, $orderBy = ['item_id' => 'desc'])
+    public function getActivityItemsList($companyId, $activityId, $goodsId, $itemSpec = false, $isDefault = false, $orderBy = ['item_id' => 'desc'], $shelfStatus = null)
     {
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder();
@@ -321,6 +321,9 @@ class ActivityItemsRepository extends EntityRepository
             ->andWhere($qb->expr()->in('ai.activity_id', $activityId))
             ->andWhere($qb->expr()->in('ai.goods_id', $goodsId))
             ->andWhere($qb->expr()->isNotNull('it.item_id'));
+        if ($shelfStatus !== null && $shelfStatus !== '') {
+            $qb = $qb->andWhere($qb->expr()->eq('ai.shelf_status', (int) $shelfStatus));
+        }
             // ->addOrderBy('ai.goods_id', 'DESC')
             // ->addOrderBy('ai.item_id', 'ASC');
         foreach ($orderBy as $key => $val) {

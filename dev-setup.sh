@@ -35,6 +35,20 @@ SKIP_ADMIN=false
 SKIP_VSHOP=false
 SKIP_PC=false
 
+# 外部访问地址配置（默认本地安装体验；可通过参数或交互输入覆盖）
+SITE_URL=""
+ADMIN_URL_OVERRIDE=""
+H5_URL_OVERRIDE=""
+PC_URL_OVERRIDE=""
+
+ADMIN_URL="http://localhost:8080"
+API_BASE_URL="http://localhost:8080/api/"
+H5_URL="http://localhost:8081"
+PC_URL="http://localhost:8082"
+QIANKUN_ENTRY_URL="http://localhost:8080/newpc/"
+MOBILE_API_URL="http://localhost:8080/api/h5app/wxapp"
+PC_API_URL="http://localhost:8080/api/h5app"
+
 # 业务模式（全局变量，在 build_admin 中设置，build_vshop 中复用）
 SELECTED_PLATFORM=""
 
@@ -70,23 +84,115 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    printf "%b\n" "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    printf "%b\n" "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    printf "%b\n" "${YELLOW}[WARNING]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    printf "%b\n" "${RED}[ERROR]${NC} $1"
 }
 
 log_step() {
-    echo -e "${CYAN}[STEP]${NC} $1"
+    printf "%b\n" "${CYAN}[STEP]${NC} $1"
+}
+
+trim_trailing_slashes() {
+    local value=$1
+    while [ "${value%/}" != "$value" ]; do
+        value=${value%/}
+    done
+    echo "$value"
+}
+
+validate_public_url() {
+    local name=$1
+    local value=$2
+    
+    if [ -z "$value" ]; then
+        return 0
+    fi
+    
+    case "$value" in
+        http://*|https://*)
+            return 0
+            ;;
+        *)
+            log_error "$name 必须以 http:// 或 https:// 开头: $value"
+            exit 1
+            ;;
+    esac
+}
+
+set_url_defaults_from_site_url() {
+    local normalized_site_url
+    normalized_site_url=$(trim_trailing_slashes "$SITE_URL")
+    
+    ADMIN_URL="$normalized_site_url"
+    QIANKUN_ENTRY_URL="$normalized_site_url/newpc/"
+    derive_api_base_from_admin_url
+}
+
+derive_api_base_from_admin_url() {
+    local normalized_api_url
+    normalized_api_url="$(trim_trailing_slashes "$ADMIN_URL")/api"
+    
+    API_BASE_URL="$normalized_api_url/"
+    MOBILE_API_URL="$normalized_api_url/h5app/wxapp"
+    PC_API_URL="$normalized_api_url/h5app"
+}
+
+configure_public_urls() {
+    if [ -z "$SITE_URL" ] && [ -z "$ADMIN_URL_OVERRIDE" ] && [ -z "$H5_URL_OVERRIDE" ] && [ -z "$PC_URL_OVERRIDE" ]; then
+        echo ""
+        log_info "外部访问地址配置："
+        log_info "  每项直接回车使用默认本地地址"
+        log_info "  生产环境可分别输入管理后台、PC、H5 的完整访问地址"
+        read -r -p "请输入管理后台/API 地址 (默认: $ADMIN_URL): " ADMIN_URL_OVERRIDE < /dev/tty
+        read -r -p "请输入 PC 前端地址 (默认: $PC_URL): " PC_URL_OVERRIDE < /dev/tty
+        read -r -p "请输入 H5 前端地址 (默认: $H5_URL): " H5_URL_OVERRIDE < /dev/tty
+    fi
+    
+    SITE_URL=$(trim_trailing_slashes "$SITE_URL")
+    ADMIN_URL_OVERRIDE=$(trim_trailing_slashes "$ADMIN_URL_OVERRIDE")
+    H5_URL_OVERRIDE=$(trim_trailing_slashes "$H5_URL_OVERRIDE")
+    PC_URL_OVERRIDE=$(trim_trailing_slashes "$PC_URL_OVERRIDE")
+    
+    validate_public_url "--site-url" "$SITE_URL"
+    validate_public_url "--admin-url" "$ADMIN_URL_OVERRIDE"
+    validate_public_url "--h5-url" "$H5_URL_OVERRIDE"
+    validate_public_url "--pc-url" "$PC_URL_OVERRIDE"
+    
+    if [ -n "$SITE_URL" ]; then
+        set_url_defaults_from_site_url
+    fi
+    
+    if [ -n "$ADMIN_URL_OVERRIDE" ]; then
+        ADMIN_URL="$ADMIN_URL_OVERRIDE"
+        QIANKUN_ENTRY_URL="$ADMIN_URL/newpc/"
+    fi
+    
+    if [ -n "$H5_URL_OVERRIDE" ]; then
+        H5_URL="$H5_URL_OVERRIDE"
+    fi
+    
+    if [ -n "$PC_URL_OVERRIDE" ]; then
+        PC_URL="$PC_URL_OVERRIDE"
+    fi
+    
+    derive_api_base_from_admin_url
+    
+    log_info "访问地址配置完成："
+    log_info "  管理后台: $ADMIN_URL"
+    log_info "  API 接口: $API_BASE_URL"
+    log_info "  H5前端:   $H5_URL"
+    log_info "  PC前端:   $PC_URL"
 }
 
 # ===========================================
@@ -232,11 +338,18 @@ show_help() {
     echo "  --rebuild        强制重新构建镜像（不使用缓存）"
     echo "  --skip-admin     跳过 ECShopX_admin-frontend 编译"
     echo "  --skip-vshop     跳过 ECShopX_mobile-frontend 编译"
+    echo "  --skip-pc        跳过 ECShopX_web-frontend 编译"
+    echo "  --site-url URL   兼容快捷项：设置管理后台/API 地址，如 https://admin.example.com"
+    echo "  --admin-url URL  覆盖管理后台访问地址"
+    echo "  --h5-url URL     覆盖 H5 前端访问地址"
+    echo "  --pc-url URL     覆盖 PC 前端访问地址"
     echo ""
     echo "示例:"
     echo "  $0                    # 正常启动（使用缓存）"
     echo "  $0 --rebuild          # 重新构建镜像"
     echo "  $0 --skip-admin       # 跳过管理后台编译"
+    echo "  $0 --site-url https://admin.example.com"
+    echo "  $0 --admin-url https://admin.example.com --h5-url https://m.example.com --pc-url https://www.example.com"
     echo ""
     exit 0
 }
@@ -266,6 +379,38 @@ parse_args() {
             --skip-pc)
                 SKIP_PC=true
                 shift
+                ;;
+            --site-url)
+                if [ -z "${2:-}" ]; then
+                    log_error "--site-url 需要提供 URL"
+                    exit 1
+                fi
+                SITE_URL="$2"
+                shift 2
+                ;;
+            --admin-url)
+                if [ -z "${2:-}" ]; then
+                    log_error "--admin-url 需要提供 URL"
+                    exit 1
+                fi
+                ADMIN_URL_OVERRIDE="$2"
+                shift 2
+                ;;
+            --h5-url)
+                if [ -z "${2:-}" ]; then
+                    log_error "--h5-url 需要提供 URL"
+                    exit 1
+                fi
+                H5_URL_OVERRIDE="$2"
+                shift 2
+                ;;
+            --pc-url)
+                if [ -z "${2:-}" ]; then
+                    log_error "--pc-url 需要提供 URL"
+                    exit 1
+                fi
+                PC_URL_OVERRIDE="$2"
+                shift 2
                 ;;
             *)
                 log_error "未知参数: $1"
@@ -802,7 +947,10 @@ configure_application() {
         sed -i 's/^REDIS_PASSWORD=.*/REDIS_PASSWORD=$REDIS_PASSWORD/' .env && \
         sed -i 's/^REDIS_DATABASE=.*/REDIS_DATABASE=0/' .env && \
         (grep -q '^DISK_DRIVER=' .env && sed -i 's/^DISK_DRIVER=.*/DISK_DRIVER=local/' .env || echo 'DISK_DRIVER=local' >> .env) && \
-        (grep -q '^APP_URL=' .env && sed -i 's|^APP_URL=.*|APP_URL=http://localhost:8080|' .env || echo 'APP_URL=http://localhost:8080' >> .env)" 2>/dev/null || true
+        (grep -q '^APP_URL=' .env && sed -i 's|^APP_URL=.*|APP_URL=$ADMIN_URL|' .env || echo 'APP_URL=$ADMIN_URL' >> .env) && \
+        (grep -q '^H5_BASE_URL=' .env && sed -i 's|^H5_BASE_URL=.*|H5_BASE_URL=$H5_URL|' .env || echo 'H5_BASE_URL=$H5_URL' >> .env) && \
+        (grep -q '^SHOP_ADMIN_URL=' .env && sed -i 's|^SHOP_ADMIN_URL=.*|SHOP_ADMIN_URL=$ADMIN_URL/|' .env || echo 'SHOP_ADMIN_URL=$ADMIN_URL/' >> .env) && \
+        (grep -q '^API_BASE_URL=' .env && sed -i 's|^API_BASE_URL=.*|API_BASE_URL=$API_BASE_URL|' .env || echo 'API_BASE_URL=$API_BASE_URL' >> .env)" 2>/dev/null || true
     
     # 选择业务模式并写入 PRODUCT_MODEL
     echo ""
@@ -897,6 +1045,17 @@ configure_application() {
         log_info "应用密钥已存在，跳过生成"
     fi
     
+    # 生成 JWT 密钥（仅在不存在时）
+    JWT_SECRET=$(docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX && grep '^JWT_SECRET=' .env | cut -d'=' -f2" 2>/dev/null)
+    if [ -z "$JWT_SECRET" ] || [ "$JWT_SECRET" = "" ]; then
+        log_info "生成 JWT 密钥..."
+        docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX && php artisan jwt:secret --force" 2>/dev/null || {
+            log_warning "JWT 密钥生成失败"
+        }
+    else
+        log_info "JWT 密钥已存在，跳过生成"
+    fi
+    
     # 迁移前修正 ECShopX 目录权限（容器内 www-data:www-data）
     log_info "修正 ECShopX 目录权限为 www-data:www-data..."
     docker exec "$CONTAINER_NAME" chown -R www-data:www-data /data/httpd/ECShopX 2>/dev/null || {
@@ -944,6 +1103,13 @@ configure_application() {
     
     # 初始化管理员密码
     init_admin_password
+
+    # 初始化阿里云短信场景
+    log_info "初始化阿里云短信场景..."
+    docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX && php artisan aliyunsms:scene:initialize 1" || {
+        log_warning "阿里云短信场景初始化失败"
+    }
+    log_success "阿里云短信场景初始化完成"
 }
 
 # ===========================================
@@ -1168,6 +1334,8 @@ configure_frontend_env() {
     local api_base_url=${3:-"http://localhost:8080/api/"}
     local app_id=${4:-""}
     local default_lang=${5:-""}
+    local pc_url=${6:-"$PC_URL"}
+    local qiankun_entry_url=${7:-"$QIANKUN_ENTRY_URL"}
     local target_container="$CONTAINER_NAME"
     
     # 检查主机目录是否存在
@@ -1240,28 +1408,28 @@ configure_frontend_env() {
             if grep -q "^VUE_APP_QIANKUN_ENTRY=" "$env_file" 2>/dev/null; then
                 # macOS 和 Linux 兼容的 sed 命令
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    sed -i '' "s|^VUE_APP_QIANKUN_ENTRY=.*|VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/|" "$env_file"
+                    sed -i '' "s|^VUE_APP_QIANKUN_ENTRY=.*|VUE_APP_QIANKUN_ENTRY=$qiankun_entry_url|" "$env_file"
                 else
-                    sed -i "s|^VUE_APP_QIANKUN_ENTRY=.*|VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/|" "$env_file"
+                    sed -i "s|^VUE_APP_QIANKUN_ENTRY=.*|VUE_APP_QIANKUN_ENTRY=$qiankun_entry_url|" "$env_file"
                 fi
             else
-                echo "VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/" >> "$env_file"
+                echo "VUE_APP_QIANKUN_ENTRY=$qiankun_entry_url" >> "$env_file"
             fi
-            log_success "已配置 VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/"
+            log_success "已配置 VUE_APP_QIANKUN_ENTRY=$qiankun_entry_url"
             
             # 配置 VUE_APP_WEBSITE（PC前端访问地址）
             if [ "$INSTALLED_PC" = true ]; then
                 if grep -q "^VUE_APP_WEBSITE=" "$env_file" 2>/dev/null; then
                     # macOS 和 Linux 兼容的 sed 命令
                     if [[ "$OSTYPE" == "darwin"* ]]; then
-                        sed -i '' "s|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=http://localhost:8082|" "$env_file"
+                        sed -i '' "s|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=$pc_url|" "$env_file"
                     else
-                        sed -i "s|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=http://localhost:8082|" "$env_file"
+                        sed -i "s|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=$pc_url|" "$env_file"
                     fi
                 else
-                    echo "VUE_APP_WEBSITE=http://localhost:8082" >> "$env_file"
+                    echo "VUE_APP_WEBSITE=$pc_url" >> "$env_file"
                 fi
-                log_success "已配置 VUE_APP_WEBSITE=http://localhost:8082"
+                log_success "已配置 VUE_APP_WEBSITE=$pc_url"
             fi
         fi
         
@@ -1317,14 +1485,14 @@ configure_frontend_env() {
             if grep -q "^NUXT_PUBLIC_API_BASE=" "$env_file" 2>/dev/null; then
                 # macOS 和 Linux 兼容的 sed 命令
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    sed -i '' "s|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app|" "$env_file"
+                    sed -i '' "s|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url|" "$env_file"
                 else
-                    sed -i "s|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app|" "$env_file"
+                    sed -i "s|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url|" "$env_file"
                 fi
             else
-                echo "NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app" >> "$env_file"
+                echo "NUXT_PUBLIC_API_BASE=$api_base_url" >> "$env_file"
             fi
-            log_success "已配置 NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app"
+            log_success "已配置 NUXT_PUBLIC_API_BASE=$api_base_url"
             
             # 配置 NUXT_PUBLIC_COMPANY_ID（默认值为1）
             if grep -q "^NUXT_PUBLIC_COMPANY_ID=" "$env_file" 2>/dev/null; then
@@ -1403,24 +1571,24 @@ configure_frontend_env() {
             docker exec "$target_container" sh -c "
                 cd $container_path && \
                 if grep -q '^VUE_APP_QIANKUN_ENTRY=' .env 2>/dev/null; then
-                    sed -i 's|^VUE_APP_QIANKUN_ENTRY=.*|VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/|' .env
+                    sed -i 's|^VUE_APP_QIANKUN_ENTRY=.*|VUE_APP_QIANKUN_ENTRY=$qiankun_entry_url|' .env
                 else
-                    echo 'VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/' >> .env
+                    echo 'VUE_APP_QIANKUN_ENTRY=$qiankun_entry_url' >> .env
                 fi
             " 2>/dev/null || true
-            log_success "已配置容器内 VUE_APP_QIANKUN_ENTRY=http://localhost:8080/newpc/"
+            log_success "已配置容器内 VUE_APP_QIANKUN_ENTRY=$qiankun_entry_url"
             
             # 配置 VUE_APP_WEBSITE（PC前端访问地址）
             if [ "$INSTALLED_PC" = true ]; then
                 docker exec "$target_container" sh -c "
                     cd $container_path && \
                     if grep -q '^VUE_APP_WEBSITE=' .env 2>/dev/null; then
-                        sed -i 's|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=http://localhost:8082|' .env
+                        sed -i 's|^VUE_APP_WEBSITE=.*|VUE_APP_WEBSITE=$pc_url|' .env
                     else
-                        echo 'VUE_APP_WEBSITE=http://localhost:8082' >> .env
+                        echo 'VUE_APP_WEBSITE=$pc_url' >> .env
                     fi
                 " 2>/dev/null || true
-                log_success "已配置容器内 VUE_APP_WEBSITE=http://localhost:8082"
+                log_success "已配置容器内 VUE_APP_WEBSITE=$pc_url"
             fi
         fi
         
@@ -1468,12 +1636,12 @@ configure_frontend_env() {
             docker exec "$target_container" sh -c "
                 cd $container_path && \
                 if grep -q '^NUXT_PUBLIC_API_BASE=' .env 2>/dev/null; then
-                    sed -i 's|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app|' .env
+                    sed -i 's|^NUXT_PUBLIC_API_BASE=.*|NUXT_PUBLIC_API_BASE=$api_base_url|' .env
                 else
-                    echo 'NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app' >> .env
+                    echo 'NUXT_PUBLIC_API_BASE=$api_base_url' >> .env
                 fi
             " 2>/dev/null || true
-            log_success "已配置容器内 NUXT_PUBLIC_API_BASE=$api_base_url/api/h5app"
+            log_success "已配置容器内 NUXT_PUBLIC_API_BASE=$api_base_url"
             
             # 配置 NUXT_PUBLIC_COMPANY_ID（默认值为1）
             docker exec "$target_container" sh -c "
@@ -1570,7 +1738,7 @@ build_admin() {
     
     # 配置前端项目的 .env 文件
     log_info "配置 ECShopX_admin-frontend 的 .env 文件..."
-    configure_frontend_env "$ADMIN_DIR" "ECShopX_admin-frontend" "http://localhost:8080/api/" "" "$SELECTED_LANG"
+    configure_frontend_env "$ADMIN_DIR" "ECShopX_admin-frontend" "$API_BASE_URL" "" "$SELECTED_LANG" "$PC_URL" "$QIANKUN_ENTRY_URL"
     
     log_info "安装 npm 依赖..."
     # 使用绝对路径并先验证目录存在
@@ -1764,7 +1932,7 @@ build_pc() {
         
         # 配置前端项目的 .env 文件
         log_info "配置 ECShopX_web-frontend 的 .env 文件..."
-        configure_frontend_env "$PC_DIR" "ECShopX_web-frontend" "http://localhost:8080" "" "$SELECTED_LANG"
+        configure_frontend_env "$PC_DIR" "ECShopX_web-frontend" "$PC_API_URL" "" "$SELECTED_LANG"
         
         log_info "启用 pnpm 并安装依赖..."
         # 使用绝对路径并先验证目录存在
@@ -1880,10 +2048,10 @@ build_pc() {
             printf "%50s" ""
             echo ""
             if [ "$INSTALLED_VSHOP" = true ]; then
-                log_info "H5前端访问地址: http://localhost:8081"
+                log_info "H5前端访问地址: $H5_URL"
             fi
             if [ "$INSTALLED_PC" = true ]; then
-                log_info "PC前端访问地址: http://localhost:8082"
+                log_info "PC前端访问地址: $PC_URL"
             fi
         else
             printf "\r${YELLOW}[WARNING]${NC} Nuxt 服务启动超时，但可能仍在启动中"
@@ -1891,10 +2059,10 @@ build_pc() {
             echo ""
             log_info "请检查日志: docker exec $WEB_CONTAINER_NAME tail -f /var/log/nuxt.log"
             if [ "$INSTALLED_VSHOP" = true ]; then
-                log_info "H5前端访问地址: http://localhost:8081"
+                log_info "H5前端访问地址: $H5_URL"
             fi
             if [ "$INSTALLED_PC" = true ]; then
-                log_info "PC前端访问地址: http://localhost:8082"
+                log_info "PC前端访问地址: $PC_URL"
             fi
         fi
         
@@ -1987,7 +2155,7 @@ build_vshop() {
     
     # 配置前端项目的 .env 文件
     log_info "配置 ECShopX_mobile-frontend 的 .env 文件..."
-    configure_frontend_env "$VSHOP_DIR" "ECShopX_mobile-frontend" "http://localhost:8080/api/h5app/wxapp" "$SELECTED_PLATFORM" "$SELECTED_LANG"
+    configure_frontend_env "$VSHOP_DIR" "ECShopX_mobile-frontend" "$MOBILE_API_URL" "$SELECTED_PLATFORM" "$SELECTED_LANG"
     
     log_info "安装 npm 依赖..."
     # 使用绝对路径并先验证目录存在
@@ -2313,18 +2481,18 @@ show_success_info() {
     log_info "服务信息："
     
     if [ "$INSTALLED_ADMIN" = true ]; then
-        log_info "  管理后台: http://localhost:8080"
+        log_info "  管理后台: $ADMIN_URL"
     fi
     
     if [ "$INSTALLED_VSHOP" = true ]; then
-        log_info "  H5前端:   http://localhost:8081"
+        log_info "  H5前端:   $H5_URL"
     fi
     
     if [ "$INSTALLED_PC" = true ]; then
-        log_info "  PC前端:   http://localhost:8082"
+        log_info "  PC前端:   $PC_URL"
     fi
     
-    log_info "  API 接口: http://localhost:8080/api/"
+    log_info "  API 接口: $API_BASE_URL"
     log_info "  MySQL:    localhost:3306 (用户: $MYSQL_USER, 密码: $MYSQL_PASSWORD)"
     log_info "  Redis:    localhost:6379 (密码: $REDIS_PASSWORD)"
     echo ""
@@ -2369,6 +2537,7 @@ main() {
     
     detect_os
     check_docker
+    configure_public_urls
     
     # 检查并克隆前端项目（在启动容器之前）
     check_and_clone_frontend

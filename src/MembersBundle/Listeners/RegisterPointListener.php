@@ -36,7 +36,11 @@ class RegisterPointListener extends BaseListeners implements ShouldQueue
             return;
         }
         $pointMemberService = new \PointBundle\Services\PointMemberService();
-        $pointMemberService->RegisterPoint($event->userId, $event->inviter_id, $event->companyId);
+        $extra = [];
+        if (!empty($event->shuyunOpenPointChangeForceOfflinePlat)) {
+            $extra['shuyun_open_point_change_force_offline_plat'] = true;
+        }
+        $pointMemberService->RegisterPoint($event->userId, $event->inviter_id, $event->companyId, $extra);
 //        $memberService = new MemberService();
 //        $memberService->usePointOpen($event->userId, $event->companyId);
     }

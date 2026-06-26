@@ -27,6 +27,11 @@ class BaiwangService
 {
     use GetOrderServiceTrait;
 
+    /**
+     * 百旺关键配置未就绪（Redis 无配置或缺字段）时统一异常文案，供队列/服务层识别并降级日志。
+     */
+    public const MSG_CONFIG_NOT_READY = '百旺配置未加载，请先初始化服务';
+
     public $fapiao_config;
     public $settingService;
     public $apiUrl;
@@ -107,6 +112,57 @@ class BaiwangService
         }
         app('log')->debug("[BaiwangService][getFapiaoConfigFromDb] 百旺云配置: " . json_encode($this->demoFapiaoConfig));
         return $this->demoFapiaoConfig;
+    }
+
+    /**
+     * 检查百旺关键配置是否就绪
+     *
+     * @return bool
+     */
+    public function hasRequiredConfig()
+    {
+        if (empty($this->demoFapiaoConfig) || !is_array($this->demoFapiaoConfig)) {
+            return false;
+        }
+
+        $requiredFields = ['appKey', 'appSecret', 'taxNo'];
+        foreach ($requiredFields as $field) {
+            if (empty($this->demoFapiaoConfig[$field])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 仅根据 Redis 中 BaiwangInvoiceSetting 判断是否具备最小调用条件（不入队场景用，避免构造本类触发取 token）。
+     *
+     * @param int $companyId
+     * @return bool
+     */
+    public static function isCompanyBaiwangConfigReadyInRedis($companyId)
+    {
+        $companyId = (int) $companyId;
+        if ($companyId < 1) {
+            return false;
+        }
+        $key = 'BaiwangInvoiceSetting:' . $companyId;
+        $raw = app('redis')->connection('companys')->get($key);
+        if (!$raw) {
+            return false;
+        }
+        $config = json_decode($raw, true);
+        if (empty($config) || !is_array($config)) {
+            return false;
+        }
+        foreach (['appKey', 'appSecret', 'taxNo'] as $field) {
+            if (empty($config[$field])) {
+                return false;
+            }
+        }
+
+        return true;
     }
     // public function getFapiaoConfigFromEnv(){
     //     $this->fapiao_config = [
@@ -653,7 +709,7 @@ class BaiwangService
         // 确保配置已加载
         if (empty($this->demoFapiaoConfig)) {
             app('log')->error('[BaiwangService][queryInvoice] 配置未加载');
-            throw new \Exception('百旺配置未加载，请先初始化服务');
+            throw new \Exception(self::MSG_CONFIG_NOT_READY);
         }
         
         // 传递发票对象的方式
@@ -1034,7 +1090,7 @@ class BaiwangService
         // 确保配置已加载
         if (empty($this->fapiao_config)) {
             app('log')->error('[BaiwangService][queryRedConfirm] 配置未加载');
-            throw new \Exception('百旺配置未加载，请先初始化服务');
+            throw new \Exception(self::MSG_CONFIG_NOT_READY);
         }
 
         $params['entryIdentity'] = '1';

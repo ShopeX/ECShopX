@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright 2019-2026 ShopeX
  *
@@ -35,6 +36,7 @@ use PopularizeBundle\Services\BrokerageService;
 use PromotionsBundle\Services\ExtraPointActivityService;
 use PromotionsBundle\Services\RegisterPromotionsService;
 use ShuyunBundle\Services\MembersService as ShuyunMembersService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformLoyaltyMemberPointChangeService;
 use ThirdPartyBundle\Services\DmCrm\DmCrmSettingService;
 use ThirdPartyBundle\Services\DmCrm\PointService;
 
@@ -113,9 +115,11 @@ class PointMemberService
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
+            // 数云开放网关写积分与达摩同时配置时，优先数云，不走达摩分支（避免达摩早退使数云/本地落库不执行）
+            $useOpenPlatformWrite = PointMemberShuyunOpenPlatformPointWriteService::isOpenPlatformMemberEnabled($companyId);
             // 达摩crm, 预扣积分/取消积分
             $ns = new DmCrmSettingService();
-            if ($ns->getDmCrmSetting($companyId)['is_open'] ?? '') {
+            if (($ns->getDmCrmSetting($companyId)['is_open'] ?? '') && ! $useOpenPlatformWrite) {
                 $memberService = new MemberService();
                 $filterMember = [
                     'user_id' => $userId,
@@ -137,18 +141,18 @@ class PointMemberService
                             'memberIntegralCode' => '1240',
                 //            'storeCode' => $paramsData['storeCode'],
                 //            'costFee' => $paramsData['costFee'],
-                            'remark' => "订单", 
+                            'remark' => "订单",
                             'sourceChannel' => 'c_brand_mall'
                         ];
                         $result = $pointService->minusPreparePoint($paramsData);
                         // 保存预扣id
                         $orderSerivce->update(['order_id' => $orderId, 'company_id' => $companyId], ['dm_point_preid' => $result['id'], 'updated' => time()]);
-                    }else {
+                    } else {
                         // // 如果存在aftersale_bn证明是售后退款，直接扣减积分，如果是取消订单则取消预扣积分
                         // if (isset($otherParams['aftersales_bn']) && !empty($otherParams['aftersales_bn'])) {
                         //     $paramsData = [
                         //         'cardNo' => $memberInfo['dm_card_no'],
-                        //         'mobile' => $memberInfo['mobile'],      
+                        //         'mobile' => $memberInfo['mobile'],
                         //         //            'unionId' => '',
                         //         'integral' => $point,
                         //         'type' => 1,
@@ -162,32 +166,32 @@ class PointMemberService
                         // }else {
                         //     $orderInfo = $orderSerivce->getInfo(['order_id' => $orderId, 'company_id' => $companyId]);
                         //     $paramsData = [
-                        //         'mobile' => $memberInfo['mobile'],      
+                        //         'mobile' => $memberInfo['mobile'],
                         //         'cardNo' => $memberInfo['dm_card_no'],
                         //         'preDeductionId' => $orderInfo['dm_point_preid'],
                         //     ];
                         //     $pointService->cancelPreparePoint($paramsData);
                         // }
-                        
+
                         // 2025年8月20日20:00:50 新修改逻辑
                         // 所有已支付订单,返回都走订单同步逻辑
                         $orderInfo = $orderSerivce->getInfo(['order_id' => $orderId, 'company_id' => $companyId]);
                         if ($orderInfo['pay_status'] != 'PAYED') {
                             $paramsData = [
-                                 'mobile' => $memberInfo['mobile'],      
+                                 'mobile' => $memberInfo['mobile'],
                                  'cardNo' => $memberInfo['dm_card_no'],
                                  'preDeductionId' => $orderInfo['dm_point_preid'],
                             ];
                             $pointService->cancelPreparePoint($paramsData);
                         }
                     }
-                }else {
+                } else {
                     // 2025年8月20日20:00:50 新修改逻辑
                     // 退款积分的改动场景，不在更改用户积分
                     if (isset($otherParams['refund_bn']) && !empty($otherParams['refund_bn'])) {
                         // pass
-                    }else {
-                         if (!$status) {
+                    } else {
+                        if (!$status) {
                             $paramsData = [
                                 'mobile' => $memberInfo['mobile'],
                                 'cardNo' => $memberInfo['dm_card_no'],
@@ -200,7 +204,7 @@ class PointMemberService
                                 'integralFlow' => $memberInfo['mobile'].'_'.time(),
                                 'sourceChannel' => 'c_brand_mall',
                             ];
-                        }else {
+                        } else {
                             $paramsData = [
                                 'mobile' => $memberInfo['mobile'],
                                 'cardNo' => $memberInfo['dm_card_no'],
@@ -222,24 +226,68 @@ class PointMemberService
                 return true;
             }
 
+            if ($useOpenPlatformWrite) {
+                PointMemberShuyunOpenPlatformPointWriteService::assertGatewayEligibleOrThrow($companyId);
+            }
+
             $filter = ['user_id' => $userId, 'company_id' => $companyId];
+            if ($useOpenPlatformWrite && $point != 0) {
+                $memberServiceForWrite = app(MemberService::class);
+                $memberInfoForWrite = $memberServiceForWrite->getMemberInfo($filter);
+                if (empty($memberInfoForWrite['user_id'] ?? null)) {
+                    throw new PointResourceException('会员不存在，无法调整积分', $companyId);
+                }
+                $payload = PointMemberShuyunOpenPlatformPointWriteService::buildChangePayload(
+                    (int) $userId,
+                    (int) $companyId,
+                    (int) $point,
+                    (bool) $status,
+                    (int) $journalType,
+                    (string) $record,
+                    (string) $orderId,
+                    $otherParams,
+                    $memberInfoForWrite
+                );
+                try {
+                    app(ShuyunOpenPlatformLoyaltyMemberPointChangeService::class)->change($companyId, $payload);
+                } catch (\Throwable $e) {
+                    throw new PointResourceException('数云积分调整失败，请稍后再试', $companyId);
+                }
+            }
+
+            $skippedLocalPointMemberBalance = false;
             if ($point != 0) {
-                $data = [
-                    'user_id' => $userId,
-                    'company_id' => $companyId,
-                    'point' => $point,
-                    'status' => $status
-                ];
-                $info = $this->pointMemberRepository->addPoint($filter, $data);
+                if (PointMemberShuyunOpenPlatformPointWriteService::skipsLocalPointMemberBalanceAfterOpenGatewayDeduct($useOpenPlatformWrite, $status, $point)) {
+                    // 数云开放网关扣减已成功：本地 point_member 不作权威余额闸门，避免数云已扣、本地无行导致失败
+                    $skippedLocalPointMemberBalance = true;
+                    $info = $this->pointMemberRepository->getInfo($filter);
+                    if ($info === []) {
+                        $info = [
+                            'user_id' => $userId,
+                            'company_id' => $companyId,
+                        ];
+                    }
+                } else {
+                    $data = [
+                        'user_id' => $userId,
+                        'company_id' => $companyId,
+                        'point' => $point,
+                        'status' => $status
+                    ];
+                    $info = $this->pointMemberRepository->addPoint($filter, $data);
+                }
             } else {
                 $info = $this->pointMemberRepository->getInfo($filter);
             }
             if ($info) {
+                $remainderSuffix = $skippedLocalPointMemberBalance
+                    ? '剩余积分以数云端为准'
+                    : '当前剩余积分：'.$info['point'];
                 $this->pointMemberLogRepository->create([
                     'user_id' => $userId,
                     'company_id' => $companyId,
                     'journal_type' => $journalType,
-                    'point_desc' => ($record ?: '无记录').'，当前剩余积分：'.$info['point'],
+                    'point_desc' => ($record ?: '无记录').'，'.$remainderSuffix,
                     'income' => $status ? $point : 0,
                     'order_id' => $orderId,
                     'outcome' => $status ? 0 : $point,
@@ -249,8 +297,8 @@ class PointMemberService
                 ]);
             }
 
-            // 数云模式，去数云增加/扣减积分
-            if (config('common.oem-shuyun')) {
+            // oem-shuyun LPEE：仅未走开放网关 point.change 时双写，避免与开放网关重复调数云
+            if (!$useOpenPlatformWrite && config('common.oem-shuyun')) {
                 $shuyunMembersService = new ShuyunMembersService($companyId, $userId);
                 $shuyunMembersService->shuyunAddPoint($point, $status, $record, $orderId, $otherParams);
             }
@@ -274,11 +322,14 @@ class PointMemberService
      * @return bool
      * @throws \Exception
      */
-    public function RegisterPoint($userId, $inviterId, $companyId)
+    /**
+     * @param  array<string, mixed>  $registerPointOtherParams  透传至 addPoint 的 $otherParams（如店务 S7a：`shuyun_open_point_change_force_offline_plat`）
+     */
+    public function RegisterPoint($userId, $inviterId, $companyId, array $registerPointOtherParams = [])
     {
         $registerPromotionsService = new RegisterPromotionsService();
         $info = $registerPromotionsService->getRegisterPointConfig($companyId, 'point');
-        $otherParams = ['point_type' => 'member_care'];
+        $otherParams = array_merge(['point_type' => 'member_care'], $registerPointOtherParams);
         if ($info && 'true' == $info['is_open']) {
             $conn = app('registry')->getConnection('default');
             $conn->beginTransaction();
@@ -436,6 +487,11 @@ class PointMemberService
                 $aftersalesList = array_column($aftersalesList, null, 'order_id');
 
                 foreach ($data as $row) {
+                    // 数云开放网关会员：订单完成获赠由数云端处理；标记 send_point 避免任务反复扫同一单
+                    if (app(MemberService::class)->isShuyunOpenPlatformMemberEnabled((int) $row['company_id'])) {
+                        $succ_orders[] = $row['order_id'];
+                        continue;
+                    }
                     $rule = $rules[$row['company_id']];
                     if ($rule['isOpenMemberPoint'] == 'true' && $row['end_time'] <= $time - (24 * 60 * 60) * $rule['gain_time']) {
                         if (isset($aftersalesList[$row['order_id']])) {
@@ -655,29 +711,51 @@ class PointMemberService
 
 
     /**
-     * 查询会员的数云积分总数
-     * @param  array $filter
+     * 查询会员积分余额（用于展示或下单抵扣计算）。
+     *
+     * @param  array<string, mixed>  $filter 须含 company_id、user_id；可选 **shuyun_open_remote_for_balance**：
+     *         为 `false` 时，即使开启数云开放网关会员也**不**外呼 query.detail，仅用本地 point_members（用于未使用抵扣时的下单路径收紧外呼）。
      */
     public function getInfo($filter)
     {
-        // 数云模式，去数云增加/扣减积分
-        if (config('common.oem-shuyun')) {
+        $memberService = app(MemberService::class);
+        $companyId = (int) ($filter['company_id'] ?? 0);
+        $userId = (int) ($filter['user_id'] ?? 0);
+        $repoFilter = $filter;
+        unset($repoFilter['shuyun_open_remote_for_balance']);
+        $skipShuyunRemote = isset($filter['shuyun_open_remote_for_balance']) && $filter['shuyun_open_remote_for_balance'] === false;
+
+        // 开放网关会员开启时，默认用数云 enhance.member.query.detail（validPoint）覆盖本地余额；可显式关闭外呼。
+        if ($companyId > 0 && $userId > 0 && $memberService->isShuyunOpenPlatformMemberEnabled($companyId)) {
+            if ($skipShuyunRemote) {
+                $point = $this->pointMemberRepository->getInfo($repoFilter)['point'] ?? 0;
+            } else {
+                $openPoint = $memberService->queryShuyunOpenPlatformMemberPoint($companyId, $userId);
+                if ($openPoint !== null) {
+                    $point = $openPoint;
+                } else {
+                    $point = $this->pointMemberRepository->getInfo($repoFilter)['point'] ?? 0;
+                }
+            }
+        } elseif (config('common.oem-shuyun')) {
+            // 数云 LPEE 模式，去旧数云接口查询积分。
             $shuyunMembersService = new ShuyunMembersService($filter['company_id'], $filter['user_id']);
             $point = $shuyunMembersService->getMemberPoint();
         } else {
-            $point = $this->pointMemberRepository->getInfo($filter)['point'] ?? 0;
+            $point = $this->pointMemberRepository->getInfo($repoFilter)['point'] ?? 0;
         }
 
         // 达摩crm, 会员积分
         $ns = new DmCrmSettingService();
-        if ($ns->getDmCrmSetting($filter['company_id'])['is_open'] ?? '') {
-            $memberSerivce = new MemberService();
+        if (!($companyId > 0 && $memberService->isShuyunOpenPlatformMemberEnabled($companyId))
+            && ($ns->getDmCrmSetting($filter['company_id'])['is_open'] ?? '')
+        ) {
             $pointService = new PointService($filter['company_id']);
             $filterMember = [
                 'user_id' => $filter['user_id'],
                 'company_id' => $filter['company_id'],
             ];
-            $memberInfo = $memberSerivce->getMemberInfo($filterMember, false);
+            $memberInfo = $memberService->getMemberInfo($filterMember, false);
             $pointService = new PointService($filter['company_id']);
             $paramsData = [
                 'mobile' => $memberInfo['mobile'],

@@ -1809,6 +1809,60 @@ class ItemsService
         return $itemsList;
     }
 
+    /**
+     * 店务在售列表：为每条 SKU 注入 platform_store（平台 SKU 可发库存），供 getOnsaleItemsList 使用。
+     * $injectPlatformStore 为 false 时不写入 platform_store（店铺未开启云仓可购买时）。
+     *
+     * @param array<int, array<string, mixed>> $list
+     * @return array<int, array<string, mixed>>
+     */
+    public function appendPlatformStoreForOnsaleSkuList(array $list, bool $injectPlatformStore = true): array
+    {
+        if (!$injectPlatformStore) {
+            return $list;
+        }
+        foreach ($list as &$row) {
+            $row['platform_store'] = $this->resolvePlatformStoreForSkuRow($row);
+        }
+        unset($row);
+
+        return $list;
+    }
+
+    /**
+     * 单条 SKU 是否为总部发货（未开启店铺库存）。
+     *
+     * @param array<string, mixed> $row
+     */
+    public static function isSkuHeadquartersShipment(array $row): bool
+    {
+        $isTotal = $row['is_total_store'] ?? null;
+
+        return $isTotal === true || $isTotal === 'true' || $isTotal === 1 || $isTotal === '1';
+    }
+
+    /**
+     * 单条 SKU 行上的平台可售库存（与在售列表 platform_store 规则一致），供店务立即购买等复用。
+     *
+     * @param array<string, mixed> $row
+     */
+    public function resolvePlatformStoreForSkuRow(array $row): int
+    {
+        if (array_key_exists('logistics_store', $row)) {
+            return max(0, (int) $row['logistics_store']);
+        }
+
+        if (ItemsService::isSkuHeadquartersShipment($row)) {
+            return max(0, (int) ($row['store'] ?? 0));
+        }
+
+        if (array_key_exists('distributor_store', $row)) {
+            return 0;
+        }
+
+        return max(0, (int) ($row['store'] ?? 0));
+    }
+
     public function auditItems($data)
     {
 
@@ -3235,7 +3289,8 @@ class ItemsService
     }
 
     /**
-     * 模板组件等仅含默认子品的列表：多规格商品按 goods_id + distributor_id 汇总全部子品库存，避免默认子品无库存时误置灰。
+     * 模板组件等仅含默认子品的列表：多规格商品按 goods_id + distributor_id 汇总全部子品库存，
+     * 并仅写入 default_item_id 对应行，避免 SKU 行误显示汇总值。
      *
      * @param array $list getItemListData 等返回的列表行（须含 company_id、goods_id、distributor_id、nospec、store）
      * @return array
@@ -3276,6 +3331,12 @@ class ItemsService
         }
         foreach ($list as $k => $v) {
             if (!$this->isWidgetListItemMultiSpec($v['nospec'] ?? null)) {
+                continue;
+            }
+            $itemId = (int) ($v['item_id'] ?? 0);
+            $defaultItemId = (int) ($v['default_item_id'] ?? $itemId);
+            // 与店铺商品列表一致：汇总库存只写入 default_item_id 主行
+            if ($itemId !== $defaultItemId) {
                 continue;
             }
             $gid = $v['goods_id'] ?? null;
@@ -3328,20 +3389,55 @@ class ItemsService
     public function syncGoods($companyId, $itemId, $isQueue = true) {
         $distributorItemsService = new DistributorItemsService();
         $distributorService = new DistributorService();
-        $list = $distributorService->getLists(['company_id' => $companyId, 'is_valid|neq' => 'delete', 'auto_sync_goods' => true], 'distributor_id');
         $item_ids = $itemId;
+
+        // 开启「自动同步总部商品」的实体店铺 + 虚拟门店（虚拟店无论 auto_sync_goods 是否开启，创建总部商品后都同步，便于数云等链路）。
+        // is_total_store：true=走总部库存（虚拟店）；false=走店铺独立库存（实体）。供应商 SKU 仍以 relDistributorItem 内强制总部库存为准。
+        $list = $distributorService->getLists([
+            'company_id' => $companyId,
+            'is_valid|neq' => 'delete',
+            'auto_sync_goods' => true,
+        ], 'distributor_id,distributor_self') ?: [];
+
+        $byDistributorId = [];
+        foreach ($list as $row) {
+            $id = (int) ($row['distributor_id'] ?? 0);
+            if ($id > 0) {
+                $byDistributorId[$id] = $row;
+            }
+        }
+
+        $virtualRow = $distributorService->getInfoSimple([
+            'company_id' => $companyId,
+            'distributor_self' => 1,
+        ]);
+        $virtualId = (int) ($virtualRow['distributor_id'] ?? 0);
+        if ($virtualId > 0 && ($virtualRow['is_valid'] ?? '') !== 'delete' && !isset($byDistributorId[$virtualId])) {
+            $byDistributorId[$virtualId] = [
+                'distributor_id' => $virtualId,
+                'distributor_self' => 1,
+            ];
+        }
+
+        $list = array_values($byDistributorId);
+        if (!$list) {
+            return true;
+        }
         if (count($list) <= 3) {
             $isQueue = false;
         }
         foreach ($list as $row) {
-            $createData = [
+            $isVirtual = (int) ($row['distributor_self'] ?? 0) === 1;
+            $isTotalStore = $isVirtual;
+            $distributorItemsService->createDistributorItems([
                 'company_id' => $companyId,
                 'distributor_id' => $row['distributor_id'],
                 'item_ids' => $item_ids,
                 'is_can_sale' => false,
-            ];
-            $distributorItemsService->createDistributorItems($createData, $isQueue);
+                'is_total_store' => $isTotalStore,
+            ], $isQueue);
         }
+
         return true;
     }
 

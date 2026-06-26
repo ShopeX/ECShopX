@@ -343,6 +343,16 @@ class ActivityGoodsRepository extends EntityRepository
             $qb = $qb->andWhere($qb->expr()->eq('g.activity_id', $filter['activity_id']));
         }
 
+        if (isset($filter['shelf_status']) && $filter['shelf_status'] !== '' && $filter['shelf_status'] !== null) {
+            $qb = $qb->innerJoin(
+                'g',
+                'employee_purchase_activity_items',
+                'epai',
+                'g.goods_id = epai.goods_id AND g.activity_id = epai.activity_id AND g.company_id = epai.company_id'
+            );
+            $qb = $qb->andWhere($qb->expr()->eq('epai.shelf_status', (int) $filter['shelf_status']));
+        }
+
         // 商品名称 / 关键字：与 GoodsBundle\Services\ItemsService::_filter 一致（多语言 item_name + 编号/条码）
         $nameSearch = null;
         if (isset($filter['item_name']) && $filter['item_name'] !== '') {

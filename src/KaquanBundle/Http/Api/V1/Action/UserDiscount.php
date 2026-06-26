@@ -39,6 +39,7 @@ class UserDiscount extends BaseController
      *     @SWG\Parameter(name="page_no", in="query", description="page", required=false, type="integer"),
      *     @SWG\Parameter(name="page_size", in="query", description="limit", required=false, type="integer"),
      *     @SWG\Parameter(name="distributor_id", in="query", description="店铺id", required=false, type="string"),
+     *     @SWG\Parameter(name="cart_type", in="query", description="购物车类型 cart 购物车 fastbuy 立即购买", required=false, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Items(ref="#/definitions/CardList")
      *      )),
@@ -82,9 +83,17 @@ class UserDiscount extends BaseController
             'operator_id' => $authInfo['operator_id'],
         ];
         $operatorCartService = new OperatorCartService();
-        $cartData = $operatorCartService->getCartdataList($cartFilter, $filter['user_id'], true);
-        $cartData = reset($cartData['valid_cart']);
+        $userId = (int) $filter['user_id'];
+        if ($request->input('cart_type') === 'fastbuy') {
+            $cartResult = $operatorCartService->getFastBuyCartdataList($cartFilter, $userId, true);
+        } else {
+            $cartResult = $operatorCartService->getCartdataList($cartFilter, $userId, true);
+        }
+        $cartData = reset($cartResult['valid_cart']);
         $items = [];
+        if (!is_array($cartData) || empty($cartData['list'])) {
+            $cartData = ['list' => []];
+        }
         foreach ($cartData['list'] as $item) {
             $items[$item['item_id']]['num'] = $item['num'];
             $items[$item['item_id']]['totalFee'] = $item['total_fee'] ?? 0;

@@ -154,8 +154,8 @@ class FinishOrderJob extends Job
                 $turntableService = new TurntableService();
                 $turntableService -> payGetTurntableTimes($order['user_id'], $order['company_id'], $order['total_fee']);
 
-                //消费送积分
-                if ($order['bonus_points'] > 0) {
+                //消费送积分（数云开放网关会员：获赠由数云端处理，商城不 addPoint）
+                if ($order['bonus_points'] > 0 && ! app(MemberService::class)->isShuyunOpenPlatformMemberEnabled((int) $order['company_id'])) {
                     $pointMemberService = new PointMemberService();
                     $mark = "订单号：".$order['order_id']." 消费送积分";
                     $pointMemberService->addPoint($order['user_id'], $order['company_id'], intval($order['bonus_points']), 7, true, $mark, $order['order_id']);

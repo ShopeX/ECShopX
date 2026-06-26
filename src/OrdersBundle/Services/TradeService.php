@@ -155,9 +155,46 @@ class TradeService implements InterfacesTrade
         if ($status == 'SUCCESS') {
             // $data->setTradeState('SUCCESS');
             app('log')->debug("saaserp ".__FUNCTION__.",".__LINE__.", 交易完成 去交易完成事件 埋点");
+            $data = $this->syncTradeUserIdFromOrderWhenMissing($data);
             $this->finishEvents($data);
         }
         return $data;
+    }
+
+    /**
+     * 店务/线下录单等场景 trade 可能未带会员，user_id 为 0；支付成功发事件前以订单会员为准回写 trade，供各 TradeFinish 监听器与落库一致。
+     */
+    private function syncTradeUserIdFromOrderWhenMissing($tradeEntity)
+    {
+        if (!$tradeEntity instanceof Trade) {
+            return $tradeEntity;
+        }
+        $uid = $tradeEntity->getUserId();
+        if ($uid !== null && $uid !== '' && (string) $uid !== '0') {
+            return $tradeEntity;
+        }
+        $orderId = $tradeEntity->getOrderId();
+        $companyId = $tradeEntity->getCompanyId();
+        if ($orderId === null || $orderId === '' || $companyId === null || $companyId === '') {
+            return $tradeEntity;
+        }
+        $orderAssociationService = new OrderAssociationService();
+        $order = $orderAssociationService->getOrder($companyId, $orderId);
+        if (empty($order['user_id']) || (string) $order['user_id'] === '0') {
+            return $tradeEntity;
+        }
+        $orderUserId = (string) $order['user_id'];
+        $tradeId = $tradeEntity->getTradeId();
+        $this->tradeRepository->updateOneBy(['trade_id' => $tradeId], ['user_id' => $orderUserId]);
+        app('log')->info('trade_user_id_synced_from_order', [
+            'trade_id' => $tradeId,
+            'order_id' => $orderId,
+            'company_id' => $companyId,
+            'user_id' => $orderUserId,
+        ]);
+        $fresh = $this->tradeRepository->find($tradeId);
+
+        return $fresh ?? $tradeEntity;
     }
 
     /**

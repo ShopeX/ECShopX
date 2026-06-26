@@ -170,60 +170,130 @@ class MemberCardGradeService extends BaseService
         return 1;
     }
 
-    public function batchSave($companyId, $data)
+    /**
+     * 批量保存会员等级（数云同步等）：按 grade_level 升序；最低级为默认等级。
+     * $data[] 约定：grade_id = 外部/数云侧稳定 ID（写入 membercard_grade.external_id），grade_level = 层级序号（如数云 grades[].id），grade_name = 展示名。
+     * 已存在相同 external_id 则更新该行；否则新增。删除：除默认等级与本次仍占用的本地 grade_id 外，其余非默认等级一律删除（含无 external_id 的手工等级）；删除前仍校验会员占用。
+     *
+     * @param  array<string, mixed>  $options  preserve_promotion_condition_on_update=true 时，更新已有行保留 promotion_condition
+     */
+    public function batchSave($companyId, $data, array $options = [])
     {
-        usort($data, function($a, $b) {
+        $companyId = (int) $companyId;
+        $preservePromotionConditionOnUpdate = ! empty($options['preserve_promotion_condition_on_update']);
+        if ($data === []) {
+            return $this->getRepository()->getList('*', ['company_id' => $companyId], 0, -1);
+        }
+        usort($data, function ($a, $b) {
             return $a['grade_level'] <=> $b['grade_level'];
         });
         $memberCardService = new MemberCardService();
-        $externalIds = array_column($data, 'grade_id');
+
+        $externalIds = [];
+        foreach ($data as $row) {
+            $eid = (int) ($row['grade_id'] ?? 0);
+            if ($eid > 0) {
+                $externalIds[] = $eid;
+            }
+        }
+        $externalIds = array_values(array_unique($externalIds));
+
         $conn = app('registry')->getConnection('default');
-        $sql = "SELECT * FROM membercard_grade where company_id = " . $companyId . " AND default_grade=".$memberCardService::DEFAULT_GRADE_NO." AND external_id in (".implode($externalIds, ',').")";
-        $curLists = $conn->fetchAll($sql);
-        $curExternalLists = array_column($curLists, null, 'external_id');
+        $curLists = [];
+        if ($externalIds !== []) {
+            $idsSql = implode(',', array_map('intval', $externalIds));
+            $sql = 'SELECT * FROM membercard_grade WHERE company_id = '.$companyId
+                .' AND default_grade = '.(int) $memberCardService::DEFAULT_GRADE_NO
+                .' AND external_id IN ('.$idsSql.')';
+            $curLists = $conn->fetchAll($sql);
+        }
+        $curExternalLists = [];
+        foreach ($curLists as $row) {
+            $extKey = (string) ($row['external_id'] ?? '');
+            if ($extKey !== '') {
+                $curExternalLists[$extKey] = $row;
+            }
+        }
+
         $defaultGrade = $this->getRepository()->getInfo(['company_id' => $companyId, 'default_grade' => $memberCardService::DEFAULT_GRADE_YES]);
+        if (empty($defaultGrade)) {
+            throw new ErrorException(ErrorCode::MEMBER_GRADE_ERROR, '缺少默认会员等级，无法同步。');
+        }
+
         $gradeInfo = [];
         foreach ($data as $key => $item) {
-            $externalId = $item['grade_id'];
+            $externalKey = (string) (int) ($item['grade_id'] ?? 0);
+            $gradeLevel = (int) ($item['grade_level'] ?? 0);
+            $existingPromotionCondition = null;
+            if ($key === 0) {
+                $existingPromotionCondition = $defaultGrade['promotion_condition'] ?? null;
+            } elseif ($externalKey !== '' && isset($curExternalLists[$externalKey])) {
+                $existingPromotionCondition = $curExternalLists[$externalKey]['promotion_condition'] ?? null;
+            }
             $grade = [
                 'company_id' => $companyId,
                 'grade_name' => $item['grade_name'],
                 'privileges' => ['discount' => '10'],
-                'promotion_condition' => ['total_consumption' => $item['grade_level']],
-                'external_id' => $externalId,
+                'promotion_condition' => MemberCardGradeBatchSavePromotionConditionResolver::resolve(
+                    $gradeLevel,
+                    $preservePromotionConditionOnUpdate,
+                    $existingPromotionCondition,
+                ),
+                'external_id' => $externalKey,
                 'default_grade' => $memberCardService::DEFAULT_GRADE_NO,
             ];
-            // 默认等级
-            if ($key == 0) {
+            if ($key === 0) {
                 $grade['default_grade'] = $memberCardService::DEFAULT_GRADE_YES;
                 $grade['grade_id'] = $defaultGrade['grade_id'];
-            } else if (isset($curExternalLists[$externalId])) {
-                $grade['grade_id'] = $curExternalLists[$externalId]['grade_id'];
+            } elseif ($externalKey !== '' && isset($curExternalLists[$externalKey])) {
+                $grade['grade_id'] = $curExternalLists[$externalKey]['grade_id'];
             } else {
                 $grade['grade_id'] = '';
             }
             $gradeInfo[] = $grade;
         }
-        // 检查external_id变更的，已被会员占用的等级
+
+        $keepGradeIds = [(int) $defaultGrade['grade_id']];
+        foreach ($gradeInfo as $g) {
+            $gid = $g['grade_id'] ?? '';
+            if ($gid !== '' && $gid !== null && is_numeric($gid)) {
+                $keepGradeIds[] = (int) $gid;
+            }
+        }
+        $keepGradeIds = array_values(array_unique($keepGradeIds));
+
         $curList = $memberCardService->getGradeListByCompanyId($companyId);
-        $gradeIds = array_column($curList, 'grade_id');
-        $newGradeIds = array_column($gradeInfo, 'grade_id');
-        $deleteIds = array_diff($gradeIds, $newGradeIds);
+        $deleteIds = [];
+        foreach ($curList as $g) {
+            $isDefault = $g['default_grade'] === true || $g['default_grade'] === '1' || $g['default_grade'] === 1;
+            if ($isDefault) {
+                continue;
+            }
+            $gid = (int) $g['grade_id'];
+            if (!in_array($gid, $keepGradeIds, true)) {
+                $deleteIds[] = $gid;
+            }
+        }
+
         $noDeleteMsg = [];
         $_curList = array_column($curList, null, 'grade_id');
         foreach ($deleteIds as $id) {
-            if ($_curList[$id]['member_count'] > 0) {
-                $noDeleteMsg[] = $_curList[$id]['external_id'].'-'.$_curList[$id]['grade_name'];
+            if (!isset($_curList[$id])) {
+                continue;
+            }
+            if ((int) ($_curList[$id]['member_count'] ?? 0) > 0) {
+                $ext = trim((string) ($_curList[$id]['external_id'] ?? ''));
+                $name = (string) ($_curList[$id]['grade_name'] ?? '');
+                $noDeleteMsg[] = $ext !== '' ? $ext.'-'.$name : $name;
             }
         }
-        if ($noDeleteMsg) {
-            throw new ErrorException(ErrorCode::MEMBER_GRADE_ERROR, implode($noDeleteMsg, ';').'，已有会员在使用，不能变更。');
+        if ($noDeleteMsg !== []) {
+            throw new ErrorException(ErrorCode::MEMBER_GRADE_ERROR, implode(';', $noDeleteMsg).'，已有会员在使用，不能变更。');
         }
-        $result = $memberCardService->updateGrade($companyId, $gradeInfo);
-        $filter = [
-            'company_id' => $companyId,
-        ];
-        return $this->getRepository()->getList('*', $filter, 0, -1);
+
+        $memberCardService->updateGrade($companyId, $gradeInfo, $deleteIds);
+
+        return $this->getRepository()->getList('*', ['company_id' => $companyId], 0, -1);
     }
 
 }

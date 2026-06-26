@@ -38,4 +38,23 @@ class ActivityEnterpriseParticipateUserRepository extends EntityRepository
             [$companyId, $activityId, $enterpriseId, $userId, time()]
         );
     }
+
+    public function countForActivityEnterprise(int $companyId, int $activityId, int $enterpriseId): int
+    {
+        if ($companyId <= 0 || $activityId <= 0 || $enterpriseId <= 0) {
+            return 0;
+        }
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('count(*)')
+            ->from($this->table)
+            ->where('company_id = :company_id')
+            ->andWhere('activity_id = :activity_id')
+            ->andWhere('enterprise_id = :enterprise_id')
+            ->setParameter('company_id', $companyId)
+            ->setParameter('activity_id', $activityId)
+            ->setParameter('enterprise_id', $enterpriseId);
+
+        return (int) $qb->execute()->fetchColumn();
+    }
 }

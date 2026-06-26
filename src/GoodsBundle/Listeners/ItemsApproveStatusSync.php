@@ -20,8 +20,7 @@ namespace GoodsBundle\Listeners;
 use DistributionBundle\Entities\DistributorItems;
 use GoodsBundle\Entities\Items;
 use GoodsBundle\Events\ItemBatchEditStatusEvent;
-
-use function Amp\call;
+use ShuyunOpenPlatformBundle\Listeners\ItemsProductSyncToShuyunOpenPlatformDispatch;
 
 class ItemsApproveStatusSync 
 {
@@ -47,6 +46,28 @@ class ItemsApproveStatusSync
                     'item_id' => $itemIds
                 ];
                 $res = $distributorItems->updateBy($filter, $updateData);
+                if (is_array($res) && $res !== []) {
+                    $relList = $distributorItems->lists(
+                        ['company_id' => $company_id, 'item_id' => $itemIds],
+                        ['item_id' => 'ASC'],
+                        -1,
+                        1,
+                    );
+                    $seen = [];
+                    foreach (($relList['list'] ?? []) as $rel) {
+                        $did = (int) ($rel['distributor_id'] ?? 0);
+                        $def = (int) ($rel['default_item_id'] ?? 0);
+                        if ($did < 1 || $def < 1) {
+                            continue;
+                        }
+                        $k = $did.':'.$def;
+                        if (isset($seen[$k])) {
+                            continue;
+                        }
+                        $seen[$k] = true;
+                        ItemsProductSyncToShuyunOpenPlatformDispatch::dispatchIfAuthAllows($company_id, $did, $def);
+                    }
+                }
             }
 
         }catch (\Exception $e) 

@@ -27,6 +27,7 @@ use Gedmo\Mapping\Annotation as Gedmo;
  *    @ORM\Index(name="idx_company_id", columns={"company_id"}),
  *    @ORM\Index(name="idx_activity_id", columns={"activity_id"}),
  *    @ORM\Index(name="idx_item_id", columns={"item_id"}),
+ *    @ORM\Index(name="idx_activity_shelf", columns={"activity_id", "shelf_status"}),
  * })
  * @ORM\Entity(repositoryClass="EmployeePurchaseBundle\Repositories\ActivityItemsRepository")
  */
@@ -93,6 +94,13 @@ class ActivityItems
      * @ORM\Column(name="sort", type="integer", options={"comment":"排序", "default": 0})
      */
     private $sort = 0;
+
+    /**
+     * @var integer
+     *
+     * @ORM\Column(name="shelf_status", type="smallint", options={"comment":"上下架状态:1上架,0下架", "default":1})
+     */
+    private $shelf_status = 1;
 
     /**
      * @var \DateTime $created
@@ -324,6 +332,30 @@ class ActivityItems
     public function getSort()
     {
         return $this->sort;
+    }
+
+    /**
+     * Set shelfStatus.
+     *
+     * @param int $shelfStatus
+     *
+     * @return ActivityItems
+     */
+    public function setShelfStatus($shelfStatus)
+    {
+        $this->shelf_status = $shelfStatus;
+
+        return $this;
+    }
+
+    /**
+     * Get shelfStatus.
+     *
+     * @return int
+     */
+    public function getShelfStatus()
+    {
+        return $this->shelf_status;
     }
 
     /**

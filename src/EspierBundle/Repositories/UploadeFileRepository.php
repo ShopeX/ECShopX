@@ -279,6 +279,9 @@ class UploadeFileRepository extends EntityRepository
         if (isset($data["merchant_id"])) {
             $entity->setMerchantId($data["merchant_id"]);
         }
+        if (isset($data["relation_id"])) {
+            $entity->setRelationId($data["relation_id"]);
+        }
         return $entity;
     }
 
@@ -309,6 +312,7 @@ class UploadeFileRepository extends EntityRepository
             'distributor_id' => $entity->getDistributorId(),
             'left_job_num' => $entity->getLeftJobNum(),
             'merchant_id' => $entity->getMerchantId(),
+            'relation_id' => $entity->getRelationId(),
         ];
     }
 }

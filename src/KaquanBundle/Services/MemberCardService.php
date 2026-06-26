@@ -92,8 +92,11 @@ class MemberCardService
 
     /**
      * 创建会员卡等级
+     *
+     * @param  list<array<string, mixed>>  $newGrades
+     * @param  list<int>|null  $deleteIdsOverride  非 null 时按此列表删除本地等级（如数云同步仅删有 external_id 且不在上游集合中的行）；null 时沿用「当前库中 grade_id 未出现在 newGrades 中则删除」
      */
-    public function updateGrade($companyId, $newGrades)
+    public function updateGrade($companyId, $newGrades, ?array $deleteIdsOverride = null)
     {
         foreach ($newGrades as $key => $grade) {
             if (is_numeric($newGrades[$key]['privileges']['discount']) && $newGrades[$key]['privileges']['discount'] != '10') {
@@ -109,7 +112,7 @@ class MemberCardService
 
         $gradeIds = array_column($gradeList, 'grade_id');
         $newGradeIds = array_column($newGrades, 'grade_id');
-        $deleteIds = array_diff($gradeIds, $newGradeIds);
+        $deleteIds = $deleteIdsOverride !== null ? array_values(array_unique(array_map('intval', $deleteIdsOverride))) : array_diff($gradeIds, $newGradeIds);
 
         $newGradesList = [];
         $result = $this->memberCardGradeRepository->update($companyId, $newGrades, $deleteIds, $newGradesList);
@@ -168,7 +171,17 @@ class MemberCardService
                 'description' => $grade->getDescription(),
             ];
         } else {
-            $result = [];
+            // 获取不到默认等级，自动创建一个
+            $gradeInfo = [
+                'company_id' => $companyId,
+                'grade_name' => '普通会员',
+                'default_grade' => true,
+                'background_pic_url' => '',
+                'promotion_condition' => '',
+                'privileges' => '',
+                'description' => '',
+            ];
+            $result = $this->memberCardGradeRepository->setDefaultGrade($gradeInfo);
         }
         return $result;
     }

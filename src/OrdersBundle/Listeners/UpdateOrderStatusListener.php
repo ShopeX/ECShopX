@@ -69,6 +69,14 @@ class UpdateOrderStatusListener
         }
 
         if (! in_array($order['order_status'], ['NOTPAY', 'PART_PAYMENT'])) {
+            // 非待付态进此分支，不会发 NormalOrderPaySuccessEvent，数云 trade 派单也不会触发。店务/重复回调时可检索本关键字。
+            app('log')->info('update_order_status_trade_finish_skip_awaiting_payment', [
+                'order_id' => $orderId,
+                'company_id' => $companyId,
+                'order_status' => $order['order_status'] ?? null,
+                'order_class' => $order['order_class'] ?? null,
+                'order_type' => $order['order_type'] ?? null,
+            ]);
             $orderService = $this->getOrderService($order['order_type']);
             try {
                 // 未被取消的订单，直接取消
@@ -117,11 +125,24 @@ class UpdateOrderStatusListener
             // 交易但支付成功
             if ($paymentstate == 'SUCCESS') {
                 $orderService->tradeSuccUpdateOrderStatus($order, $payType);
-                //临时解决会员消费记录筛选
+                // 临时解决会员消费记录筛选：用订单上的会员与会员拓展表对齐；仅 user_id+company_id 参与查询（无 username 等条件）
                 $membersService = new MemberService();
-                $memFilter['user_id'] = $userId;
-                $params['have_consume'] = true;
-                $membersService->memberInfoUpdate($params, $memFilter);
+                $memFilter = [
+                    'user_id' => $order['user_id'],
+                    'company_id' => $order['company_id'],
+                ];
+                $params = ['have_consume' => true];
+                try {
+                    $membersService->memberInfoUpdate($params, $memFilter);
+                } catch (\Exception $memberEx) {
+                    app('log')->warning('trade_finish_member_info_update_skipped', [
+                        'order_id' => $orderId,
+                        'company_id' => $order['company_id'] ?? null,
+                        'user_id' => $order['user_id'] ?? null,
+                        'event_user_id' => $userId,
+                        'message' => $memberEx->getMessage(),
+                    ]);
+                }
 
                 // $orderData = $orderService->getOrderInfo($order['company_id'], $order['order_id'])['orderInfo'];
                 // //扣减积分
@@ -151,7 +172,10 @@ class UpdateOrderStatusListener
 
                 $eventData = [
                     'company_id' => $companyId,
-                    'order_id' => $order['order_id']
+                    'order_id' => $order['order_id'],
+                    // 供数云等监听方在入队前判断，避免无会员/0 元订单进队列
+                    'user_id' => (int) ($order['user_id'] ?? 0),
+                    'total_fee' => $order['total_fee'] ?? 0,
                 ];
                 event(new NormalOrderPaySuccessEvent($eventData));
 

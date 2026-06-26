@@ -37,6 +37,7 @@ class UploadFile extends Controller
      *     @SWG\Parameter( name="file_type", in="query", description="模板类型 【update_distribution_item 更新门店商品的模板】", required=true, type="string"),
      *     @SWG\Parameter( name="file", in="query", description="上传的文件", required=true, type="string"),
      *     @SWG\Parameter( name="should_queue", in="query", description="是否需要实时处理，【1 异步处理】【0 实时处理】", required=false, type="integer"),
+     *     @SWG\Parameter( name="relation_id", in="query", description="关联id", required=false, type="integer"),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -67,11 +68,20 @@ class UploadFile extends Controller
     {
         $uploadFileService = new uploadFileService();
 
-        $companyId = app('auth')->user()->get('company_id');
-        $operatorId = app('auth')->user()->get('operator_id');
-        $operatorType = app('auth')->user()->get('operator_type');
+        $authInfo = app('auth')->user()->get();
+        $companyId = $authInfo['company_id'];
+        $operatorId = $authInfo['operator_id'];
+        $operatorType = $authInfo['operator_type'];
         $distributorId = $request->input('distributor_id', 0);
+        $relationId = $request->input('relation_id', 0);
         $fileType = $request->input('file_type');
+        if ($fileType == 'employee_purchase_activity_items') {
+            if (empty($relationId)) {
+                throw new ResourceException('关联id不能为空');
+            }
+            // 内购商品导入：门店 ID 取自当前登录用户，不再依赖 Excel 或请求参数
+            $distributorId = (int) ($authInfo['distributor_id'] ?? 0);
+        }
         $fileObject = $request->file('file');
         $shouldQueue = (bool)$request->input("should_queue", 1);
         if (env('APP_ENV') == 'local_dev') {
@@ -85,7 +95,7 @@ class UploadFile extends Controller
 //                $fileType = 'supplier_goods';
 //            }
         }
-        $result = $uploadFileService->uploadFile($companyId, $operatorId, $distributorId, $supplierId, $fileType, $fileObject, $shouldQueue);
+        $result = $uploadFileService->uploadFile($companyId, $operatorId, $distributorId, $supplierId, $fileType, $fileObject, $shouldQueue, $relationId);
 
         return $this->response->array(['data' => $result]);
     }
@@ -153,6 +163,10 @@ class UploadFile extends Controller
         if (!empty($distributor_id)) {
             $filter['distributor_id'] = $distributor_id;
         }
+        $relationId = $request->input('relation_id', 0);
+        if (!empty($relationId)) {
+            $filter['relation_id'] = $relationId;
+        }
 
         $distributorService = new uploadFileService();
         $data = $distributorService->lists($filter, ["created" => "DESC"], $params['pageSize'], $params['page']);
@@ -176,6 +190,7 @@ class UploadFile extends Controller
      *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
      *     @SWG\Parameter( name="file_type", in="query", description="模板类型 【update_distribution_item 更新门店商品的模板】", required=true, type="string"),
      *     @SWG\Parameter( name="file_name", in="query", description="模板名称", required=true, type="string"),
+     *     @SWG\Parameter( name="relation_id", in="query", description="关联id", required=false, type="integer"),
      *     @SWG\Response(
      *         response=200,
      *         description="成功返回结构",
@@ -205,6 +220,10 @@ class UploadFile extends Controller
         if (empty($fileName)) {
             throw new ResourceException("文件名称不能为空！");
         }
+        $relationId = $request->input('relation_id', 0);
+        if ($fileType == 'employee_purchase_activity_items' && empty($relationId)) {
+            throw new ResourceException('关联id不能为空');
+        }
 
         if ($operatorType == 'supplier') {
             if ($fileType == 'normal_goods') {
@@ -214,7 +233,7 @@ class UploadFile extends Controller
 
         $response = [
             'name' => $fileName . '.xlsx', //no extention needed
-            'file' => "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," . base64_encode($uploadFileService->uploadTemplate($fileType, $fileName, $companyId, $operatorType))
+            'file' => "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," . base64_encode($uploadFileService->uploadTemplate($fileType, $fileName, $companyId, $operatorType, $relationId))
         ];
         return response()->json($response);
     }

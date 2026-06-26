@@ -24,6 +24,7 @@ use CompanysBundle\Ego\CompanysActivationEgo;
 
 use EmployeePurchaseBundle\Services\ActivitiesService;
 use EmployeePurchaseBundle\Services\ActivityEnterpriseBehaviorLogService;
+use EmployeePurchaseBundle\Services\ActivityItemsService;
 use EmployeePurchaseBundle\Support\ActivityListDisplayStatusQuery;
 use EspierBundle\Jobs\ExportFileJob;
 use GoodsBundle\Services\ItemsCategoryService;
@@ -841,7 +842,7 @@ class Activity extends Controller
      */
     public function getActivityItemList(Request $request)
     {
-        $params = $request->all('page', 'pageSize', 'activity_id', 'main_cat_id', 'category', 'item_name', 'item_bn');
+        $params = $request->all('page', 'pageSize', 'activity_id', 'main_cat_id', 'category', 'item_name', 'item_bn', 'shelf_status');
         $rules = [
             'activity_id' => ['required|integer', '活动ID必填'],
             'page' => ['required|integer|min:1','分页参数错误'],
@@ -880,6 +881,11 @@ class Activity extends Controller
         if (isset($params['item_bn']) && $params['item_bn']) {
             $filter['item_bn'] = $params['item_bn'];
         }
+
+        if (array_key_exists('shelf_status', $params) && $params['shelf_status'] !== '' && $params['shelf_status'] !== null) {
+            $filter['shelf_status'] = (int) $params['shelf_status'];
+        }
+
         $filter['distributor_id'] = $request->get('distributor_id', 0);
         $activitiesService = new ActivitiesService();
         $result = $activitiesService->getActivityItemList($filter, $page, $pageSize, true, false);
@@ -1039,7 +1045,7 @@ class Activity extends Controller
      */
     public function updateActivityItems(Request $request)
     {
-        $params = $request->all('activity_id', 'item_id', 'activity_price', 'activity_store', 'limit_fee', 'limit_num', 'sort');
+        $params = $request->all('activity_id', 'item_id', 'activity_price', 'activity_store', 'limit_fee', 'limit_num', 'sort', 'shelf_status', 'all');
         $rules = [
             'activity_id' => ['required', '活动ID必填'],
             'item_id' => ['required', '商品ID必填'],
@@ -1070,16 +1076,36 @@ class Activity extends Controller
             $data['limit_num'] = $params['limit_num'];
         }
 
-        if (isset($params['sort']) && $params['sort']) {
+        if (isset($params['sort']) && $params['sort'] !== '') {
             $data['sort'] = $params['sort'];
+        }
+
+        if (array_key_exists('shelf_status', $params) && $params['shelf_status'] !== '' && $params['shelf_status'] !== null) {
+            $shelfStatus = (int) $params['shelf_status'];
+            if (!in_array($shelfStatus, [0, 1], true)) {
+                throw new ResourceException('上下架状态无效');
+            }
+            $data['shelf_status'] = $shelfStatus;
         }
 
         if (!$data) {
             throw new ResourceException('更新内容不能为空');
         }
 
+        $allSpec = $request->get('all', 0);
+        $allSpec = $allSpec === 'true' || $allSpec === '1' || $allSpec === 1;
+
         $activitiesService = new ActivitiesService();
-        $activitiesService->updateActivityItems($filter, $data);
+        if ($allSpec && array_key_exists('shelf_status', $data)) {
+            $activitiesService->updateActivityItemsByGoods($filter, $data);
+        } else {
+            $activitiesService->updateActivityItems($filter, $data);
+        }
+
+        if (array_key_exists('shelf_status', $data)) {
+            $activityItemsService = new ActivityItemsService();
+            $activityItemsService->storeActivityItemsCategory($filter['company_id'], $filter['activity_id']);
+        }
 
         return $this->response->array(['status' => true]);
     }

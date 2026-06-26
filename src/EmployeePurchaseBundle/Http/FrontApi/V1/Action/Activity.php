@@ -375,6 +375,7 @@ class Activity extends BaseController
         $companyId = $authInfo['company_id'];
         $filter['company_id'] = $companyId;
         $filter['activity_id'] = $params['activity_id'];
+        $filter['shelf_status'] = 1;
 
         $distributor_id = $request->get('distributor_id', 0);
         if ($distributor_id > 0) {
@@ -494,7 +495,14 @@ class Activity extends BaseController
         $activityItemsService = new ActivityItemsService();
         $activityItemList = $activityItemsService->getLists(['company_id' => $companyId, 'activity_id' => $params['activity_id'], 'goods_id' => $result['goods_id']]);
         $activityItemList = array_column($activityItemList, null, 'item_id');
-        if (isset($activityItemList[$result['item_id']])) {
+        $isOnShelf = static function ($itemId) use ($activityItemList) {
+            if (!isset($activityItemList[$itemId])) {
+                return false;
+            }
+
+            return (int) ($activityItemList[$itemId]['shelf_status'] ?? 1) === 1;
+        };
+        if ($isOnShelf($result['item_id'])) {
             $result['activity_price'] = $activityItemList[$result['item_id']]['activity_price'];
             if (!$activity['if_share_store']) {
                 $result['store'] = $activityItemList[$result['item_id']]['activity_store'];
@@ -510,7 +518,7 @@ class Activity extends BaseController
 
         if (isset($result['nospec']) && ($result['nospec'] === false || $result['nospec'] === 'false') || $result['nospec'] === 0 || $result['nospec'] === '0') {
             foreach ($result['spec_items'] as $key => $item) {
-                if (isset($activityItemList[$item['item_id']])) {
+                if ($isOnShelf($item['item_id'])) {
                     $result['spec_items'][$key]['activity_price'] = $activityItemList[$item['item_id']]['activity_price'];
                     if (!$activity['if_share_store']) {
                         $result['spec_items'][$key]['store'] = $activityItemList[$item['item_id']]['activity_store'];

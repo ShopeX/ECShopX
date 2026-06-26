@@ -31,6 +31,10 @@ use PromotionsBundle\Traits\CheckPromotionsValid;
 use GoodsBundle\Services\ItemRelAttributesService;
 use OrdersBundle\Services\ShippingTemplatesService;
 use EspierBundle\Services\UploadTokenFactoryService;
+use SupplierBundle\Support\SupplierItemsDraftFields;
+use SupplierBundle\Support\SupplierItemsDetailStaging;
+use SupplierBundle\Support\SupplierItemsReviewStaging;
+use SupplierBundle\Support\SupplierItemsStagingWriter;
 
 class SupplierItemsService
 {
@@ -42,10 +46,41 @@ class SupplierItemsService
     public $repository;
     public $supplierItemsAttrRepository;
 
+    /** @var bool */
+    private $stagingActive = false;
+
+    /** @var int|null */
+    private $stagingGoodsId = null;
+
+    /** @var SupplierItemsDraftService|null */
+    private $draftService;
+
     public function __construct()
     {
         $this->repository = app('registry')->getManager('default')->getRepository(SupplierItems::class);
         $this->supplierItemsAttrRepository = app('registry')->getManager('default')->getRepository(SupplierItemsAttr::class);
+    }
+
+    private function getDraftService()
+    {
+        if (!$this->draftService) {
+            $this->draftService = new SupplierItemsDraftService();
+        }
+        return $this->draftService;
+    }
+
+    private function resolveStagingForGoods($goodsId)
+    {
+        $this->stagingActive = false;
+        $this->stagingGoodsId = null;
+        if (!$goodsId) {
+            return;
+        }
+        $mainList = $this->repository->getLists(['goods_id' => $goodsId]);
+        if ($this->getDraftService()->shouldUseStagingForGoods($mainList)) {
+            $this->stagingActive = true;
+            $this->stagingGoodsId = $goodsId;
+        }
     }
 
     /**
@@ -295,6 +330,13 @@ class SupplierItemsService
                 $goodsId = $updateItemInfo['goods_id'];
             }
 
+            if ($goodsId) {
+                $this->resolveStagingForGoods($goodsId);
+            } else {
+                $this->stagingActive = false;
+                $this->stagingGoodsId = null;
+            }
+
             //支持导入的 default_item_id
             $defaultItemId = $params['default_item_id'] ?? null;
             $itemPrices = [];
@@ -435,11 +477,8 @@ class SupplierItemsService
 
     private function itemsRelCats($params, $defaultItemId)
     {
-        //保存商品分类
         if (isset($params['company_id']) && isset($params['item_category']) && $params['item_category'] && $defaultItemId) {
             $catIds = is_array($params['item_category']) ? $params['item_category'] : [$params['item_category']];
-            $itemId = [$defaultItemId];
-
             $paramsData = [
                 'company_id' => $params['company_id'],
                 'item_id' => $defaultItemId,
@@ -449,10 +488,12 @@ class SupplierItemsService
             $attrData = [
                 'category' => $catIds,
             ];
-            $SupplierItemsAttrService = new SupplierItemsAttrService();
-            $SupplierItemsAttrService->saveAttrData($paramsData, $attrData);
-            // $itemsService = new ItemsRelCatsService();
-            // $result = $itemsService->setItemsCategory($params['company_id'], $itemId, $catIds);
+            if ($this->stagingActive) {
+                $this->getDraftService()->saveAttrDraft($paramsData, $attrData, $this->stagingGoodsId);
+            } else {
+                $SupplierItemsAttrService = new SupplierItemsAttrService();
+                $SupplierItemsAttrService->saveAttrData($paramsData, $attrData);
+            }
         }
     }
 
@@ -461,7 +502,6 @@ class SupplierItemsService
      */
     private function itemsRelBrand($params, $defaultItemId)
     {
-        // 保存品牌
         if (isset($params['brand_id']) && trim($params['brand_id'])) {
             $paramsData = [
                 'company_id' => $params['company_id'],
@@ -472,8 +512,12 @@ class SupplierItemsService
             $attrData = [
                 'brand' => trim($params['brand_id'])
             ];
-            $SupplierItemsAttrService = new SupplierItemsAttrService();
-            $SupplierItemsAttrService->saveAttrData($paramsData, $attrData);
+            if ($this->stagingActive) {
+                $this->getDraftService()->saveAttrDraft($paramsData, $attrData, $this->stagingGoodsId);
+            } else {
+                $SupplierItemsAttrService = new SupplierItemsAttrService();
+                $SupplierItemsAttrService->saveAttrData($paramsData, $attrData);
+            }
         }
     }
 
@@ -482,28 +526,45 @@ class SupplierItemsService
      */
     private function itemsRelParams($params, $defaultItemId)
     {
-        // 保存参数
         if (isset($params['item_params']) && $params['item_params']) {
             $delFilter = [
                 'company_id' => $params['company_id'],
                 'item_id' => $defaultItemId,
                 'attribute_type' => 'item_params',
             ];
-            $SupplierItemsAttrService = new SupplierItemsAttrService();
-            $SupplierItemsAttrService->setDelData($delFilter);
-            foreach ($params['item_params'] as $row) {
-                $paramsData = [
-                    'company_id' => $params['company_id'],
-                    'item_id' => $defaultItemId,
-                    'attribute_id' => $row['attribute_id'],
-                    'attribute_type' => 'item_params',
-                ];
-                $attrData = [
-                    'item_params' => $row
-                ];
-                $SupplierItemsAttrService->saveAttrData($paramsData, $attrData);
+            if ($this->stagingActive) {
+                $draftService = $this->getDraftService();
+                $draftService->setAttrDelData($delFilter, $this->stagingGoodsId);
+                foreach ($params['item_params'] as $row) {
+                    $paramsData = [
+                        'company_id' => $params['company_id'],
+                        'item_id' => $defaultItemId,
+                        'attribute_id' => $row['attribute_id'],
+                        'attribute_type' => 'item_params',
+                    ];
+                    $attrData = [
+                        'item_params' => $row
+                    ];
+                    $draftService->saveAttrDraft($paramsData, $attrData, $this->stagingGoodsId);
+                }
+                $draftService->execAttrDelData($delFilter, $this->stagingGoodsId);
+            } else {
+                $SupplierItemsAttrService = new SupplierItemsAttrService();
+                $SupplierItemsAttrService->setDelData($delFilter);
+                foreach ($params['item_params'] as $row) {
+                    $paramsData = [
+                        'company_id' => $params['company_id'],
+                        'item_id' => $defaultItemId,
+                        'attribute_id' => $row['attribute_id'],
+                        'attribute_type' => 'item_params',
+                    ];
+                    $attrData = [
+                        'item_params' => $row
+                    ];
+                    $SupplierItemsAttrService->saveAttrData($paramsData, $attrData);
+                }
+                $SupplierItemsAttrService->execDelData($delFilter);
             }
-            $SupplierItemsAttrService->execDelData($delFilter);
         }
     }
 
@@ -511,58 +572,52 @@ class SupplierItemsService
     {
         // 商品规格特有参数
         $data = $this->itemSpecParams($data, $spec_params);
-        if (isset($spec_params['item_id']) && $spec_params['item_id'] && !$isForceCreate) {
-            // 审核重置为 submiting processing 的话，要重置已经同步到商品池的商品数据
-            if (isset($data['audit_status']) && in_array($data['audit_status'], ['submiting', 'processing'])) {
+        $isUpdate = isset($spec_params['item_id']) && $spec_params['item_id'] && !$isForceCreate;
+        if ($isUpdate) {
+            if (isset($data['audit_status']) && in_array($data['audit_status'], ['submiting', 'submitting', 'processing'])) {
                 $data['audit_reason'] = '';
                 $data['audit_date'] = '';
             }
-            $itemsResult = $this->repository->updateOneBy(['item_id' => $spec_params['item_id']], $data);
-            // $barcode_item_id = $params['item_id'];
-            // $barcode_default_item_id = $itemsResult['default_item_id'];
+            if ($this->stagingActive) {
+                $itemsResult = $this->saveStagedItemUpdate($data, $spec_params);
+            } else {
+                $itemsResult = $this->repository->updateOneBy(['item_id' => $spec_params['item_id']], $data);
+            }
         } else {
             $data['rebate_type'] = 'default';
             $data['rebate'] = 0;
             $itemsResult = $this->repository->create($data);
-            // $barcode_item_id = $itemsResult['item_id'];
-            // $barcode_default_item_id = $itemsResult['default_item_id'];
         }
-        // 保存条形码
-        // $this->saveBarcode($barcode_item_id, $barcode_default_item_id, $data['company_id'], $data['barcode']);
-        // if ($data['store'] && $data['store'] > 0) {
-        //只更新已经发布的供应商商品的库存
+
         $itemsService = new ItemsService();
         $rsItem = $itemsService->itemsRepository->getInfo(['supplier_item_id' => $itemsResult['item_id']]);
-        if ($rsItem) {
-            // 更新数据
+        $blockContentSync = SupplierItemsStagingWriter::shouldBlockPlatformContentSync(
+            $this->stagingActive,
+            $this->getDraftService()->hasPendingDraft($itemsResult['goods_id'] ?? 0, $data['company_id'] ?? null)
+        );
+        if ($rsItem && !$blockContentSync) {
             $upData = [
-                'store' => $data['store'],   //更新数据库内存
-                'pics' => $data['pics'],  // 更新图片
-                'approve_status' => $data['approve_status'], // 更新状态
+                'store' => $data['store'],
+                'pics' => $data['pics'],
+                'approve_status' => $data['approve_status'],
                 'item_name' => $data['item_name'],
             ];
-            // 审核重置为 submiting processing 的话，要重置已经同步到商品池的商品数据
-            if (isset($data['audit_status']) && in_array($data['audit_status'], ['submiting', 'processing'])) {
+            if (isset($data['audit_status']) && in_array($data['audit_status'], ['submiting', 'submitting', 'processing'])) {
                 $upData['audit_status'] = $data['audit_status'];
                 $upData['audit_reason'] = '';
                 $upData['audit_date'] = '';
             }
-            // 更新成本价
             if (isset($data['cost_price']) && $data['cost_price'] >= 0) {
                 $upData['cost_price'] = $data['cost_price'];
             }
-            // 更新起订量
             if (isset($data['start_num']) && $data['start_num'] >= 0) {
                 $upData['start_num'] = $data['start_num'];
             }
             $itemsService->itemsRepository->update($rsItem['item_id'], $upData);
-            //更新redis内存
             $itemStoreService = new ItemStoreService();
             $itemStoreService->saveItemStore($rsItem['item_id'], $data['store']);
         }
-        // }
 
-        // 保存参数
         if (isset($spec_params['item_spec'])) {
             $sort = 0;
             $delFilter = [
@@ -570,48 +625,81 @@ class SupplierItemsService
                 'item_id' => $itemsResult['item_id'],
                 'attribute_type' => 'item_spec',
             ];
-            $SupplierItemsAttrService = new SupplierItemsAttrService();
-            $SupplierItemsAttrService->setDelData($delFilter);
-            foreach ($spec_params['item_spec'] as $row) {
-                $itemImageUrl = $data['spec_images'][$row['spec_value_id']] ?? '';
-                $tempSort = $row['attribute_sort'] ?? 0;
-                $paramsData = [
-                    'company_id' => $data['company_id'],
-                    'item_id' => $itemsResult['item_id'],
-                    'attribute_id' => $row['spec_id'],
-                    'attribute_type' => 'item_spec',
-                ];
-                $attrData = [
-                    'item_spec' => [
-                        'attribute_sort' => $tempSort + $sort,
-                        'image_url' => $itemImageUrl,
-                        'attribute_value_id' => $row['spec_value_id'],
-                        'custom_attribute_value' => $row['spec_custom_value_name'] ?? null,
-                    ]
-                ];
-                $sort++;
-                $SupplierItemsAttrService->saveAttrData($paramsData, $attrData);
+            if ($this->stagingActive) {
+                $draftService = $this->getDraftService();
+                $goodsId = $this->stagingGoodsId ?: ($itemsResult['goods_id'] ?? 0);
+                $draftService->setAttrDelData($delFilter, $goodsId);
+                foreach ($spec_params['item_spec'] as $row) {
+                    $itemImageUrl = $data['spec_images'][$row['spec_value_id']] ?? '';
+                    $tempSort = $row['attribute_sort'] ?? 0;
+                    $paramsData = [
+                        'company_id' => $data['company_id'],
+                        'item_id' => $itemsResult['item_id'],
+                        'attribute_id' => $row['spec_id'],
+                        'attribute_type' => 'item_spec',
+                    ];
+                    $attrData = [
+                        'item_spec' => [
+                            'attribute_sort' => $tempSort + $sort,
+                            'image_url' => $itemImageUrl,
+                            'attribute_value_id' => $row['spec_value_id'],
+                            'custom_attribute_value' => $row['spec_custom_value_name'] ?? null,
+                        ]
+                    ];
+                    $sort++;
+                    $draftService->saveAttrDraft($paramsData, $attrData, $goodsId);
+                }
+                $draftService->execAttrDelData($delFilter, $goodsId);
+            } else {
+                $SupplierItemsAttrService = new SupplierItemsAttrService();
+                $SupplierItemsAttrService->setDelData($delFilter);
+                foreach ($spec_params['item_spec'] as $row) {
+                    $itemImageUrl = $data['spec_images'][$row['spec_value_id']] ?? '';
+                    $tempSort = $row['attribute_sort'] ?? 0;
+                    $paramsData = [
+                        'company_id' => $data['company_id'],
+                        'item_id' => $itemsResult['item_id'],
+                        'attribute_id' => $row['spec_id'],
+                        'attribute_type' => 'item_spec',
+                    ];
+                    $attrData = [
+                        'item_spec' => [
+                            'attribute_sort' => $tempSort + $sort,
+                            'image_url' => $itemImageUrl,
+                            'attribute_value_id' => $row['spec_value_id'],
+                            'custom_attribute_value' => $row['spec_custom_value_name'] ?? null,
+                        ]
+                    ];
+                    $sort++;
+                    $SupplierItemsAttrService->saveAttrData($paramsData, $attrData);
+                }
+                $SupplierItemsAttrService->execDelData($delFilter);
             }
-            $SupplierItemsAttrService->execDelData($delFilter);
         }
 
-        //新增不同类型商品的特殊参数
-        // if (method_exists($this->itemtypeObject, 'createRelItem')) {
-        //     $itemsResult = $this->itemtypeObject->createRelItem($itemsResult, $params);
-        // }
-
-        // 如果是按商品获取积分，则保存关联数据
-        // if ('items' == $data['point_access']) {
-        //     $itemRelPointAccessService = new ItemRelPointAccessService();
-        //     $relPointData = [
-        //         'company_id' => $data['company_id'],
-        //         'item_id' => $itemsResult['item_id'],
-        //         'point' => intval($params['point_num'] ?? 0),
-        //     ];
-        //     $itemRelPointAccessService->saveOneData($relPointData);
-        // }
-
         return $itemsResult;
+    }
+
+    private function saveStagedItemUpdate(array $data, array $spec_params)
+    {
+        $sourceItemId = $spec_params['item_id'];
+        $mainRow = $this->repository->getInfo(['item_id' => $sourceItemId]);
+        if (!$mainRow) {
+            throw new ResourceException(trans('SupplierBundle.no_update_data_found'));
+        }
+
+        $prepared = SupplierItemsStagingWriter::prepareStagedUpdate(
+            $data,
+            $mainRow,
+            $spec_params,
+            $this->stagingGoodsId
+        );
+        if (!empty($prepared['main'])) {
+            $this->repository->updateOneBy(['item_id' => $sourceItemId], $prepared['main']);
+        }
+        $this->getDraftService()->saveDraftSku($prepared['draft_meta'], $prepared['draft_content']);
+
+        return $this->repository->getInfo(['item_id' => $sourceItemId]);
     }
 
     private function itemSpecParams($data, $spec_params)
@@ -1050,9 +1138,25 @@ class SupplierItemsService
         if (!$itemsInfo || ($companyId && $itemsInfo['company_id'] != $companyId)) {
             return [];
         }
+
+        $draftService = $this->getDraftService();
+        $goodsId = $itemsInfo['goods_id'];
+        $hasDraft = $draftService->hasPendingDraft($goodsId, $itemsInfo['company_id']);
+        $operatorType = app('auth')->user()->get('operator_type') ?? 'supplier';
+        $readDraft = SupplierItemsDetailStaging::resolveReadDraft(
+            $itemsInfo['audit_status'] ?? '',
+            $hasDraft,
+            $operatorType
+        );
+        if ($readDraft) {
+            $overlay = $draftService->overlayDraftOnMainRows([$itemsInfo], $goodsId, $itemsInfo['company_id']);
+            $itemsInfo = $overlay[0];
+        }
         
         $itemsInfo['data_source'] = 'supplier_goods';
-        $itemsInfo['approve_status'] = '';
+        if (!$readDraft) {
+            $itemsInfo['approve_status'] = '';
+        }
         $itemsInfo['item_main_cat_id'] = $itemsInfo['item_category'] ?? '';
         // 规格转成bool
         $itemsInfo['nospec'] = ($itemsInfo['nospec'] === 'true' || $itemsInfo['nospec'] === true || $itemsInfo['nospec'] === 1 || $itemsInfo['nospec'] === '1') ? true : false;
@@ -1088,6 +1192,13 @@ class SupplierItemsService
             }
             // 获取多规格的商品id
             $itemsList = $this->repository->lists($filter, '*', 1, -1);
+            if ($readDraft) {
+                $itemsList['list'] = $draftService->overlayDraftOnMainRows(
+                    $itemsList['list'],
+                    $goodsId,
+                    $itemsInfo['company_id']
+                );
+            }
             $itemIds = array_column($itemsList['list'], 'item_id');
         } else {
             $itemIds = $itemId;
@@ -1095,10 +1206,19 @@ class SupplierItemsService
         }
 
         $itemsService = new ItemsService();
-        $itemsInfo = $this->__preGetItemRelAttr($itemsInfo, $itemIds, $itemsList);
+        $itemsInfo = $this->__preGetItemRelAttr($itemsInfo, $itemIds, $itemsList, $readDraft, $goodsId);
 
-        $SupplierItemsAttrService = new SupplierItemsAttrService();
-        $itemsInfo['item_category'] = $SupplierItemsAttrService->getAttrData($itemsInfo['item_id'], 'category');
+        if ($readDraft) {
+            $itemsInfo['item_category'] = $draftService->getAttrData(
+                $itemsInfo['item_id'],
+                'category',
+                $goodsId,
+                $itemsInfo['company_id']
+            );
+        } else {
+            $SupplierItemsAttrService = new SupplierItemsAttrService();
+            $itemsInfo['item_category'] = $SupplierItemsAttrService->getAttrData($itemsInfo['item_id'], 'category');
+        }
 
         // 商品主类目
         if ($itemsInfo['item_main_cat_id']) {
@@ -1208,18 +1328,20 @@ class SupplierItemsService
     /**
      * 商品详情，商品关联商品属性处理结构
      */
-    private function __preGetItemRelAttr($itemsInfo, $itemIds, $itemsList)
+    private function __preGetItemRelAttr($itemsInfo, $itemIds, $itemsList, $readDraft = false, $goodsId = 0)
     {
         $itemsAttributesService = new ItemsAttributesService();
         $defaultItemId = $itemsInfo['default_item_id'] ?: $itemsInfo['item_id'];
 
-        //获取品牌，属性参数
-        $SupplierItemsAttrService = new SupplierItemsAttrService();
-        // $attrList = $this->itemRelAttributesRepository->lists(['item_id' => $defaultItemId], 1, -1, ['attribute_sort' => 'asc']);
-        $attrList = $SupplierItemsAttrService->getAttrDataList($defaultItemId);
-        //规格等数据
-        // $specAttrList = $this->itemRelAttributesRepository->lists(['item_id' => $itemIds, 'attribute_type' => 'item_spec'], 1, -1, ['attribute_sort' => 'asc']);
-        $specAttrList = $SupplierItemsAttrService->getAttrDataList($itemIds, ['item_spec']);
+        if ($readDraft && $goodsId) {
+            $draftService = $this->getDraftService();
+            $attrList = $draftService->getAttrDataList($defaultItemId, $goodsId, [], $itemsInfo['company_id']);
+            $specAttrList = $draftService->getAttrDataList($itemIds, $goodsId, ['item_spec'], $itemsInfo['company_id']);
+        } else {
+            $SupplierItemsAttrService = new SupplierItemsAttrService();
+            $attrList = $SupplierItemsAttrService->getAttrDataList($defaultItemId);
+            $specAttrList = $SupplierItemsAttrService->getAttrDataList($itemIds, ['item_spec']);
+        }
         // 临时
         $itemsInfo['spec_pics'] = [];
         if ($specAttrList) {
@@ -1275,6 +1397,16 @@ class SupplierItemsService
         ];
         $this->repository->updateBy(['goods_id' => $supplierGoods['goods_id']], $saveData);
 
+        $draftService = $this->getDraftService();
+        if (SupplierItemsReviewStaging::shouldDeleteDraftOnReject($params['audit_status'])) {
+            $draftService->deleteDraftByGoodsId($supplierGoods['goods_id'], $companyId);
+            return $itemId;
+        }
+
+        if (SupplierItemsReviewStaging::shouldMergeDraftOnApprove($params['audit_status'])) {
+            $draftService->mergeDraftToMain($supplierGoods['goods_id'], $this->repository, $companyId);
+        }
+
         //总部审核通过
         if ($params['audit_status'] == 'approved') {
             $default_item_id = 0;
@@ -1294,7 +1426,9 @@ class SupplierItemsService
             }
             foreach ($supplierGoodsList as $v) {
                 $v['supplier_item_id'] = $v['item_id'];
-                $v['approve_status'] = $v['is_market'] ? 'onsale' : 'instock';
+                if (empty($v['approve_status'])) {
+                    $v['approve_status'] = $v['is_market'] ? 'onsale' : 'instock';
+                }
                 $v['consume_type'] = 'every';
                 // 特殊处理下图片
                 if (!is_array($v['pics'])) {
@@ -1529,9 +1663,46 @@ class SupplierItemsService
             }
             $params['audit_status'] = 'processing';
         }
-        if ($this->repository->getInfo($filter)) {
-            $result = $this->repository->updateBy($filter, $params);
+
+        $rows = $this->repository->getLists($filter);
+        if (!$rows) {
+            return $result;
         }
+
+        $byGoods = [];
+        foreach ($rows as $row) {
+            $byGoods[$row['goods_id']][] = $row;
+        }
+
+        $draftService = $this->getDraftService();
+        foreach ($byGoods as $goodsId => $skuRows) {
+            if ($draftService->shouldUseStagingForGoods($skuRows)) {
+                $this->resolveStagingForGoods($goodsId);
+                foreach ($skuRows as $row) {
+                    $stagedData = [
+                        'company_id' => $row['company_id'],
+                        'supplier_id' => $row['supplier_id'],
+                        'approve_status' => $params['approve_status'] ?? $row['approve_status'],
+                        'is_market' => $params['is_market'] ?? $row['is_market'],
+                        'audit_status' => $params['audit_status'] ?? $row['audit_status'],
+                        'default_item_id' => $row['default_item_id'] ?? null,
+                    ];
+                    $this->saveStagedItemUpdate($stagedData, [
+                        'item_id' => $row['item_id'],
+                        'approve_status' => $stagedData['approve_status'],
+                        'is_default' => $row['is_default'] ?? 0,
+                    ]);
+                }
+            } else {
+                $itemFilter = $filter;
+                $itemFilter['item_id'] = array_column($skuRows, 'item_id');
+                $result = $this->repository->updateBy($itemFilter, $params) && $result;
+            }
+        }
+
+        $this->stagingActive = false;
+        $this->stagingGoodsId = null;
+
         return $result;
     }
 

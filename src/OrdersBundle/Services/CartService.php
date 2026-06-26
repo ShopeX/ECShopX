@@ -452,7 +452,7 @@ class CartService
                 $cartData[] = $item;
             }
         } else {
-            $cartData = $this->__getCartBasicData($companyId, $userId, $shopId, $cartType, $shopType, $isCheckout, ($inputData ?? []) );
+            $cartData = $this->__getCartBasicData($companyId, $userId, $isCheckout, $shopId, $cartType, $shopType, $inputData ?? []);
         }
         if ($isCheckout && !$cartData) {
             throw new ResourceException(trans('OrdersBundle/Order.cart_selected_items_empty'));
@@ -521,7 +521,7 @@ class CartService
     /**
      * 获取购物车基础数据
      */
-    private function __getCartBasicData($companyId, $userId, $shopId = 0, $cartType = 'cart', $shopType = 'distributor', $isCheckout,$inputData = [] )
+    private function __getCartBasicData($companyId, $userId, $isCheckout, $shopId = 0, $cartType = 'cart', $shopType = 'distributor', $inputData = [])
     {
         $cartList = [];
         if ($cartType == 'cart') {
@@ -646,7 +646,12 @@ class CartService
         // if ($cartType != 'employee_purchase' && $shopType == 'distributor') {
         if ($shopType == 'distributor') {
             $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
-            $validShopList = $distributorRepository->getLists(['distributor_id' => $shopIds, 'is_valid' => 'true'], 'distributor_id');
+            $distributorFilter = ['distributor_id' => $shopIds];
+            // 店务线下收银购物车：不因云店 is_valid 禁用而清空有效购物车（实体门店仍可开单）
+            if ($cartType !== 'shop_offline') {
+                $distributorFilter['is_valid'] = 'true';
+            }
+            $validShopList = $distributorRepository->getLists($distributorFilter, 'distributor_id');
             $validShopIds = array_column($validShopList, 'distributor_id');
             $merchantIds = array_column($validShopList, 'merchant_id');
             // 获取可用的店铺id,去检查店铺关联的商户，是否是开启状态
@@ -679,7 +684,7 @@ class CartService
                     continue;
                 }
             }
-            $itemPic = ($itemList[$itemId]['spec_image_url'] ?? null) ? $itemList[$itemId]['spec_image_url'] : ($itemList[$itemId]['pics'] ?? null);
+            $itemPic = $this->resolveCartItemPic($itemList[$itemId]);
             if ($cartType != 'employee_purchase' &&'package' == ($cartdata['activity_type'] ?? '') && ($cartdata['items_id'] ?? null)) {
                 $packageInfo = $packageService->getPackageInfo($companyId, $cartdata['activity_id']);
                 if (!$packageInfo) {
@@ -716,7 +721,7 @@ class CartService
                 $cartdata['item_type'] = $itemList[$itemId]['item_type'];
                 $cartdata['approve_status'] = $itemList[$itemId]['approve_status'];
                 $cartdata['item_name'] = $itemList[$itemId]['itemName'];
-                $cartdata['pics'] = $itemList[$itemId]['pics'] ? reset($itemList[$itemId]['pics']) : '';
+                $cartdata['pics'] = $itemPic;
                 $cartdata['item_spec_desc'] = $itemList[$itemId]['item_spec_desc'] ?? '';
                 $cartdata['parent_id'] = 0;
                 $cartdata['is_last_price'] = true;
@@ -736,7 +741,7 @@ class CartService
                     $children['approve_status'] = $itemList[$v]['approve_status'];
                     $children['item_name'] = $itemList[$v]['itemName'];
                     $children['item_id'] = $itemList[$v]['itemId'];
-                    $children['pics'] = $itemList[$v]['pics'] ? reset($itemList[$v]['pics']) : '';
+                    $children['pics'] = $this->resolveCartItemPic($itemList[$v]);
                     $children['item_spec_desc'] = $itemList[$v]['item_spec_desc'] ?? '';
                     $children['is_last_price'] = true;
                     $cartdata['packages'][] = $children;
@@ -851,7 +856,7 @@ class CartService
                 $cartdata['item_type'] = $itemList[$itemId]['item_type'];
                 $cartdata['approve_status'] = $itemList[$itemId]['approve_status'];
                 $cartdata['item_name'] = $itemList[$itemId]['itemName'];
-                $cartdata['pics'] = (is_array($itemList[$itemId]['pics']) && $itemList[$itemId]['pics']) ? reset($itemList[$itemId]['pics']) : '';
+                $cartdata['pics'] = $itemPic;
                 $cartdata['item_spec_desc'] = $itemList[$itemId]['item_spec_desc'] ?? '';
                 $cartdata['parent_id'] = 0;
                 $cartdata['goods_id'] = $itemList[$itemId]['goods_id'] ?? $itemId;
@@ -1420,7 +1425,7 @@ class CartService
                 $cartData[] = $item;
             }
         } else {
-            $cartData = $this->__getCartBasicData($companyId, $userId, $shopId, $cartType, $shopType, $isCheckout);
+            $cartData = $this->__getCartBasicData($companyId, $userId, $isCheckout, $shopId, $cartType, $shopType);
         }
         if ($isCheckout && !$cartData) {
             return false;
@@ -1563,7 +1568,7 @@ class CartService
                 $invalidCart[] = $cartdata;
                 continue;
             }
-            $itemPic = ($itemList[$itemId]['spec_image_url'] ?? null) ? $itemList[$itemId]['spec_image_url'] : ($itemList[$itemId]['pics'] ?? null);
+            $itemPic = $this->resolveCartItemPic($itemList[$itemId]);
             if ('package' == ($cartdata['activity_type'] ?? '') && ($cartdata['items_id'] ?? null)) {
                 $packageInfo = $packageService->getPackageInfo($companyId, $cartdata['activity_id']);
                 if (!$packageInfo) {
@@ -1602,7 +1607,7 @@ class CartService
                 $cartdata['item_type'] = $itemList[$itemId]['item_type'];
                 $cartdata['approve_status'] = $itemList[$itemId]['approve_status'];
                 $cartdata['item_name'] = $itemList[$itemId]['itemName'];
-                $cartdata['pics'] = $itemList[$itemId]['pics'] ? reset($itemList[$itemId]['pics']) : '';
+                $cartdata['pics'] = $itemPic;
                 $cartdata['item_spec_desc'] = $itemList[$itemId]['item_spec_desc'] ?? '';
                 $cartdata['parent_id'] = 0;
                 $cartdata['is_last_price'] = true;
@@ -1619,7 +1624,7 @@ class CartService
                     $children['approve_status'] = $itemList[$v]['approve_status'];
                     $children['item_name'] = $itemList[$v]['itemName'];
                     $children['item_id'] = $itemList[$v]['itemId'];
-                    $children['pics'] = $itemList[$v]['pics'] ? reset($itemList[$v]['pics']) : '';
+                    $children['pics'] = $this->resolveCartItemPic($itemList[$v]);
                     $children['item_spec_desc'] = $itemList[$v]['item_spec_desc'] ?? '';
                     $children['is_last_price'] = true;
                     $cartdata['packages'][] = $children;
@@ -1697,7 +1702,7 @@ class CartService
                 $cartdata['item_type'] = $itemList[$itemId]['item_type'];
                 $cartdata['approve_status'] = $itemList[$itemId]['approve_status'];
                 $cartdata['item_name'] = $itemList[$itemId]['itemName'];
-                $cartdata['pics'] = $itemList[$itemId]['pics'] ? reset($itemList[$itemId]['pics']) : '';
+                $cartdata['pics'] = $itemPic;
                 $cartdata['item_spec_desc'] = $itemList[$itemId]['item_spec_desc'] ?? '';
                 $cartdata['parent_id'] = 0;
                 $cartdata['goods_id'] = $itemList[$itemId]['goods_id'] ?? $itemId;
@@ -1763,14 +1768,14 @@ class CartService
     /**
      * 获取购物车商品数量
      */
-    public function countCart($filter, $cartType = 'cart', $iscrossborder, $isShopScreen)
+    public function countCart($filter, $iscrossborder, $isShopScreen, $cartType = 'cart')
     {
         $cartList = $this->entityRepository->lists($filter);
         if ($cartList['total_count']) {
             $shopIds = array_unique(array_column($cartList['list'], 'shop_id'));
             $cartIds = [];
             foreach ($shopIds as $shopId) {
-                $cartData = $this->__getCartBasicData($filter['company_id'], $filter['user_id'], $shopId, $cartType, $filter['shop_type'], false);
+                $cartData = $this->__getCartBasicData($filter['company_id'], $filter['user_id'], false, $shopId, $cartType, $filter['shop_type']);
                 if ($cartData) {
                     $cartData = $this->__getValidCartList($filter['company_id'], $filter['user_id'], $cartData, $shopId, $filter['shop_type'], false, $iscrossborder, $isShopScreen);
                     if (!empty($cartData['invalid_cart'])) {
@@ -1786,6 +1791,46 @@ class CartService
         $result = $this->entityRepository->countCart($filter);
 
         return $result;
+    }
+
+    /**
+     * 购物车行展示图：优先 SKU 规格图（自定义 item_image_url，其次 spec_image_url），否则商品主图。
+     *
+     * @param array<string, mixed> $itemRow
+     */
+    public function resolveCartItemPic(array $itemRow): string
+    {
+        if (!empty($itemRow['item_spec']) && is_array($itemRow['item_spec'])) {
+            foreach ($itemRow['item_spec'] as $specRow) {
+                foreach (['item_image_url', 'spec_image_url'] as $field) {
+                    if (empty($specRow[$field])) {
+                        continue;
+                    }
+                    $url = $specRow[$field];
+                    if (is_array($url)) {
+                        $url = reset($url);
+                    }
+                    if (is_string($url) && $url !== '') {
+                        return $url;
+                    }
+                }
+            }
+        }
+        if (!empty($itemRow['spec_image_url'])) {
+            $url = $itemRow['spec_image_url'];
+            if (is_array($url)) {
+                $url = reset($url);
+            }
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        }
+        $pics = $itemRow['pics'] ?? '';
+        if (is_array($pics) && $pics) {
+            return (string) reset($pics);
+        }
+
+        return is_string($pics) ? $pics : '';
     }
 
     /**

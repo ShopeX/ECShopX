@@ -50,7 +50,7 @@ class OrderAssociationService
         return $order;
     }
 
-    public function getOrderList($cols = '*', $filter, $page, $limit)
+    public function getOrderList($filter, $page, $limit, $cols = '*')
     {
         $filter = $this->checkMobile($filter);
         // 根据达达的订单状态进行查询

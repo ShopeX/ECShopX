@@ -29,6 +29,7 @@ use PromotionsBundle\Traits\CheckPromotionsValid;
 use CompanysBundle\Ego\CompanysActivationEgo;
 use GoodsBundle\Services\MultiLang\MagicLangTrait;
 use GoodsBundle\Services\MultiLang\MultiLangService;
+use ShuyunOpenPlatformBundle\Listeners\ItemsProductSyncToShuyunOpenPlatformDispatch;
 
 class DistributorItemsService
 {
@@ -66,6 +67,10 @@ class DistributorItemsService
         }
 
         $isCanSale = $isCanSale === 'true' || $isCanSale === true;
+        $distributorSelf = $params['distributor_self'] ?? 0;
+        $isVirtualDistributor = $distributorSelf === 'true'
+            || $distributorSelf === true
+            || (int)$distributorSelf === 1;
 
         $findFilter = [
             'distributor_id' => $params['distributor_id'],
@@ -77,9 +82,13 @@ class DistributorItemsService
             $findItemIds[$relRow['item_id']] = $relRow['item_id'];
         }
 
-        $itemsService = new ItemsService();
         foreach ($itemList['list'] as $row) {
             $supplier_id = $row['supplier_id'] ?? 0;
+            $isTotalStore = $supplier_id ? true : $isVirtualDistributor;
+            if (!$supplier_id && array_key_exists('is_total_store', $params)) {
+                $ts = $params['is_total_store'];
+                $isTotalStore = ($ts === true || $ts === 'true' || $ts === 1 || $ts === '1');
+            }
             if (!$findItemIds || !in_array($row['item_id'], $findItemIds)) {
                 $insert = [
                     'distributor_id' => $params['distributor_id'],
@@ -89,7 +98,7 @@ class DistributorItemsService
                     'goods_id' => $row['goods_id'],
                     'price' => $row['price'],
                     'store' => 0,
-                    'is_total_store' => $supplier_id ? true : false,//供应商商品必须总部库存
+                    'is_total_store' => $isTotalStore, // 供应商商品与虚拟门店统一走总部库存
                     'default_item_id' => $row['default_item_id'],
                     'is_show' => $row['default_item_id'] == $row['item_id'],
                     'is_can_sale' => $isCanSale, // 关联则表示为上架
@@ -103,8 +112,13 @@ class DistributorItemsService
                     'default_item_id' => $row['default_item_id'],
                     'goods_id' => $row['goods_id'],
                     'is_show' => $row['default_item_id'] == $row['item_id'],
+                    'is_total_store' => $isTotalStore,
                     'approve_status' => $row['approve_status'] ?? 'instock', // 更新状态
                 ];
+                if (!$supplier_id && array_key_exists('is_total_store', $params)) {
+                    $ts = $params['is_total_store'];
+                    $updateData['is_total_store'] = ($ts === true || $ts === 'true' || $ts === 1 || $ts === '1');
+                }
                 $this->entityRepository->updateOneBy(['item_id' => $row['item_id'], 'distributor_id' => $params['distributor_id']], $updateData);
             }
         }
@@ -118,6 +132,22 @@ class DistributorItemsService
         //     $exist = $this->entityRepository->count(array_merge($filter, ['is_can_sale' => true]));
         //     $this->entityRepository->updateBy($filter, ['goods_can_sale' => (bool)$exist]);
         // }
+
+        $seen = [];
+        $distributorId = (int) $params['distributor_id'];
+        $companyId = (int) $params['company_id'];
+        foreach ($itemList['list'] as $row) {
+            $def = (int) ($row['default_item_id'] ?? 0);
+            if ($def < 1) {
+                continue;
+            }
+            $k = $distributorId.':'.$def;
+            if (isset($seen[$k])) {
+                continue;
+            }
+            $seen[$k] = true;
+            ItemsProductSyncToShuyunOpenPlatformDispatch::dispatchIfAuthAllows($companyId, $distributorId, $def);
+        }
 
         return true;
     }
@@ -287,33 +317,19 @@ class DistributorItemsService
             if (isset($params['price'])) {
                 $updateData['price'] = $params['price'];
             }
-            if(!empty($updateData)){
+            if (!empty($updateData)) {
                 app('log')->info('[DistributorItemsService][updateDistributorItem] 更新数据start: ' .microtime(true) . ':filter:' . json_encode($filter));
                 app('log')->info('[DistributorItemsService][updateDistributorItem] 更新数据start: ' .microtime(true) . ':updatedata:' . json_encode($updateData));
                 $this->entityRepository->updateBy($filter, $updateData);
                 app('log')->info('[DistributorItemsService][updateDistributorItem] 更新数据DONE: ' .microtime(true) . ':filter:' . json_encode($filter));
-
             }
-        
-            foreach ($itemList as $row) {
-                // $updateData = [];
-                // if (isset($params['is_can_sale'])) {
-                //     $updateData['is_can_sale'] = $params['is_can_sale'];
-                // }
-                // if (isset($params['is_total_store'])) {
-                //     $updateData['is_total_store'] = $params['is_total_store'];
-                // }
-                // if (isset($params['store'])) {
-                //     $updateData['store'] = $params['store'];
-                // }
-                // if (isset($params['price'])) {
-                //     $updateData['price'] = $params['price'];
-                // }
 
-                // $this->entityRepository->updateOneBy(['id' => $row['id']], $updateData);
-                if (isset($updateData['store'])) {
-                    $itemStoreService = new ItemStoreService();
-                    $itemStoreService->saveItemStore($row['item_id'], $updateData['store'], $row['distributor_id']);
+            if (isset($updateData['store'])) {
+                // 同步 Redis 可售库存（下单扣减走 item_store:{店铺id}_{商品id}，须与 DB 一致）
+                $storeToSave = (int) $updateData['store'];
+                $itemStoreService = new ItemStoreService();
+                foreach ($itemList as $row) {
+                    $itemStoreService->saveItemStore($row['item_id'], $storeToSave, $row['distributor_id']);
                 }
             }
 
@@ -327,6 +343,38 @@ class DistributorItemsService
             //     $this->entityRepository->updateBy($filter, ['goods_can_sale' => (bool)$exist]);
             // }
             $conn->commit();
+            // 仅改店铺库存相关（is_total_store / store）时不同步数云；改价或可售等仍入队
+            $inventoryOnlyKeys = ['is_total_store', 'store'];
+            $updatedFieldKeys = array_keys($updateData);
+            $shuyunSkipForInventoryOnly = $updatedFieldKeys !== []
+                && [] === array_diff($updatedFieldKeys, $inventoryOnlyKeys);
+
+            if ($updateData !== [] && $itemList !== [] && !$shuyunSkipForInventoryOnly) {
+                $seen = [];
+                $distributorId = (int) $params['distributor_id'];
+                $companyId = (int) $params['company_id'];
+                foreach ($itemList as $row) {
+                    $iid = (int) ($row['item_id'] ?? 0);
+                    if ($iid < 1) {
+                        continue;
+                    }
+                    $itemRow = $this->itemsRepository->getInfo(['item_id' => $iid, 'company_id' => $companyId]);
+                    if ($itemRow === [] || $itemRow === null) {
+                        continue;
+                    }
+                    $def = (int) ($itemRow['default_item_id'] ?? 0);
+                    if ($def < 1) {
+                        $def = $iid;
+                    }
+                    $k = $distributorId.':'.$def;
+                    if (isset($seen[$k])) {
+                        continue;
+                    }
+                    $seen[$k] = true;
+                    ItemsProductSyncToShuyunOpenPlatformDispatch::dispatchIfAuthAllows($companyId, $distributorId, $def);
+                }
+            }
+
             return true;
         } catch (\Exception $e) {
             $conn->rollback();
@@ -351,10 +399,8 @@ class DistributorItemsService
             // 兼容下可能存在数组$filter['distributor_id'] 2025年5月23日14:57:36 嘉实多
             $distributorId = is_array($filter['distributor_id']) ? intval($filter['distributor_id'][0]) : intval($filter['distributor_id']);
             $filter['distributor_id'] = 0;
-            // 2025年9月17日13:58:34 增加如果是虚拟店，就不进行店铺商品关联操作，取总部商品
-            $distributorService = new DistributorService();
-            $distributorInfo = $distributorService->getInfo(['company_id' => $filter['company_id'], 'distributor_id' => $distributorId]);
-            if (!$all && $distributorId > 0 && ($distributorInfo['distributor_self'] === false || $distributorInfo['distributor_self'] === 'false' || $distributorInfo['distributor_self'] === 0 || $distributorInfo['distributor_self'] === '0')) {
+            // 指定门店时统一按门店关联商品读取，虚拟门店也只展示已同步/关联的商品。
+            if (!$all && $distributorId > 0) {
                 $query->leftJoin('items', 'distribution_distributor_items', 'd_items', 'items.item_id = d_items.item_id');
                 $dFilter = [
                     'distributor_id' => $distributorId,
@@ -430,7 +476,8 @@ class DistributorItemsService
     }
 
     /**
-     * 店铺关联商品列表：多规格（nospec=false）时汇总同一 goods 下全部子规格的「有效库存」。
+     * 店铺关联商品列表：多规格（nospec=false）时汇总同一 goods 下全部子规格的「有效库存」，
+     * 并仅写入 default_item_id 对应行（SPU 主行）；其余 SKU 行保留各自库存，避免 SKU 列表误显示汇总值。
      * 与 GoodsBundle\Services\ItemsService::applyMultiSpecTotalStoreForItemList 对齐思路，
      * 并按 distribution_distributor_items.is_total_store 区分总部库存（items.store）与店铺库存（关联表 store）。
      *
@@ -509,6 +556,12 @@ class DistributorItemsService
 
         foreach ($list as $k => $v) {
             if (!$this->isMultiSpecNospecForStore($v['nospec'] ?? null)) {
+                continue;
+            }
+            $itemId = (int) ($v['item_id'] ?? 0);
+            $defaultItemId = (int) ($v['default_item_id'] ?? $itemId);
+            // 仅 SPU 主行展示汇总库存；子 SKU 行保留各自库存，避免改一个规格后列表全显示同一数字
+            if ($itemId !== $defaultItemId) {
                 continue;
             }
             $gid = $v['goods_id'] ?? null;

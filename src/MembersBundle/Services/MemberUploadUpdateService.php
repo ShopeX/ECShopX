@@ -101,10 +101,21 @@ class MemberUploadUpdateService
 
     /**
      * 获取头部标题
+     *
+     * 与 {@see UploadFileService::uploadTemplate} / 导入校验入参一致：$companyId 来自后管当前企业。
+     * 数云开放网关会员能力开启时，等级由数云侧接管，模板与导入均不包含「会员等级」列。
+     *
+     * @param  mixed  $operatorType  与 Espier 上传链路保持一致，本服务未使用
      */
-    public function getHeaderTitle()
+    public function getHeaderTitle(int $companyId = 0, $operatorType = '')
     {
-        return ['all' => $this->header, 'is_need' => $this->isNeedCols, 'headerInfo' => $this->headerInfo];
+        $header = $this->header;
+        $headerInfo = $this->headerInfo;
+        if ($companyId > 0 && $this->shouldIgnoreGradeForCompany($companyId)) {
+            unset($header['会员等级'], $headerInfo['会员等级']);
+        }
+
+        return ['all' => $header, 'is_need' => $this->isNeedCols, 'headerInfo' => $headerInfo];
     }
 
     private function validatorData($row)
@@ -122,6 +133,10 @@ class MemberUploadUpdateService
 
     public function handleRow($companyId, $row)
     {
+        if ($this->shouldIgnoreGradeForCompany((int) $companyId)) {
+            unset($row['grade_name']);
+        }
+
         $validatorData = $this->validatorData($row);
 
         $rules = [
@@ -191,9 +206,8 @@ class MemberUploadUpdateService
                 $membersInfoRepository->updateOneBy($filter, $data);
             }
 
-
-            //更新会员等级
-            if ($row['grade_name'] ?? null) {
+            // 更新会员等级（数云开放网关会员能力开启时由数云接管等级，导入忽略该列）
+            if (($row['grade_name'] ?? null) && ! $this->shouldIgnoreGradeForCompany((int) $companyId)) {
                 $params['grade_id'] = $this->getGradeIdByName($companyId, $row['grade_name']);
             }
             // 更新禁用
@@ -239,6 +253,18 @@ class MemberUploadUpdateService
             throw new BadRequestHttpException(trans('MembersBundle/Members.member_level_not_exists', ['{0}' => $gradeName]));
         }
         return $gradeId;
+    }
+
+    /**
+     * 数云开放网关会员能力开启时，会员等级以数云为准，Excel 导入不写入本地 grade_id。
+     */
+    private function shouldIgnoreGradeForCompany(int $companyId): bool
+    {
+        if ($companyId <= 0) {
+            return false;
+        }
+
+        return app(MemberService::class)->isShuyunOpenPlatformMemberEnabled($companyId);
     }
 
     private function getSex($str)

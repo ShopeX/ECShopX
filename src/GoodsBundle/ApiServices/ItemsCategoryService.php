@@ -22,6 +22,7 @@ use GoodsBundle\Entities\ItemRelAttributes;
 use PointsmallBundle\Entities\PointsmallItemRelAttributes;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Events\ItemCategoryAddEvent;
+use ShuyunOpenPlatformBundle\Listeners\ItemsCategorySyncToShuyunOpenPlatformDispatch;
 use GoodsBundle\Services\ItemsAttributesService;
 use GoodsBundle\Services\ItemsRelCatsService;
 use Doctrine\DBAL\Connection;
@@ -292,13 +293,34 @@ class ItemsCategoryService
             } else {
                 $newPath = $result['category_id'];
             }
-            $result = $this->itemsCategoryRepository->updateOneBy(['category_id' => $result['category_id']], ['path' => $newPath]);
+            $this->itemsCategoryRepository->updateOneBy(['category_id' => $result['category_id']], ['path' => $newPath]);
+            if (is_array($result)) {
+                $this->maybeDispatchShuyunOpenPlatformCategorySync($companyId, $result);
+            }
             if (isset($row['children']) && $row['children']) {
                 $this->__saveCategory($row['children'], $companyId, $distributorId, $level + 1, $result['category_id'], $result['path']);
             }
         }
 
         return true;
+    }
+
+    /**
+     * 2/3 级销售分类变更后异步同步数云（管理分类）。
+     *
+     * @param  array<string, mixed>  $categoryRow  repository 返回行（含 category_id、category_level）
+     */
+    private function maybeDispatchShuyunOpenPlatformCategorySync(int $companyId, array $categoryRow): void
+    {
+        $level = (int) ($categoryRow['category_level'] ?? 0);
+        if (! in_array($level, [2, 3], true)) {
+            return;
+        }
+        $cid = (int) ($categoryRow['category_id'] ?? 0);
+        if ($cid < 1) {
+            return;
+        }
+        ItemsCategorySyncToShuyunOpenPlatformDispatch::dispatchIfAuthAllows($companyId, $cid);
     }
 
     /**
@@ -517,7 +539,12 @@ class ItemsCategoryService
      */
     public function updateOneBy(array $filter, array $data = [])
     {
-        return $this->itemsCategoryRepository->updateOneBy($filter, $data);
+        $out = $this->itemsCategoryRepository->updateOneBy($filter, $data);
+        if (isset($filter['company_id'])) {
+            $this->maybeDispatchShuyunOpenPlatformCategorySync((int) $filter['company_id'], $out);
+        }
+
+        return $out;
     }
 
     /**

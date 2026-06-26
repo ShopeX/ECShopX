@@ -22,6 +22,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use OrdersBundle\Services\OrderInvoiceService;
+use ThirdPartyBundle\Services\FapiaoCentre\BaiwangService;
 
 class InvoiceRedQueryJob implements ShouldQueue
 {
@@ -73,6 +74,11 @@ class InvoiceRedQueryJob implements ShouldQueue
             app('log')->info('[InvoiceRedQueryJob][handle] 红冲查询结果', $queryResult);
 
         } catch (\Exception $e) {
+            if ($e->getMessage() === BaiwangService::MSG_CONFIG_NOT_READY) {
+                // 仅 OrderInvoiceService 打一条 warning，此处避免重复写文件日志
+                return;
+            }
+
             app('log')->error('[InvoiceRedQueryJob][handle] 红冲查询处理失败', [
                 'job_data' => $this->jobData,
                 'error' => $e->getMessage(),

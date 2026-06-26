@@ -38,6 +38,8 @@ class EmployeePurchaseActivityQrcodeExportService implements ExportFileInterface
             'enterprise_name' => '企业名称',
             'enterprise_sn' => '企业编码',
             'passphrase_code' => '企业口令码',
+            'participate_quota' => '可参与名额',
+            'passphrase_limitfee' => '口令码额度(元)',
             'qrcode_url' => '企业小程序码下载地址',
         ];
         $rows = [];
@@ -46,7 +48,9 @@ class EmployeePurchaseActivityQrcodeExportService implements ExportFileInterface
                 'enterprise_name' => (string) ($r[0] ?? ''),
                 'enterprise_sn' => (string) ($r[1] ?? ''),
                 'passphrase_code' => (string) ($r[2] ?? ''),
-                'qrcode_url' => (string) ($r[3] ?? ''),
+                'participate_quota' => (string) ($r[3] ?? ''),
+                'passphrase_limitfee' => (string) ($r[4] ?? ''),
+                'qrcode_url' => (string) ($r[5] ?? ''),
             ];
         }
 

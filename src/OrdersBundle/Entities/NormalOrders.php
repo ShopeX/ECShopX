@@ -698,6 +698,21 @@ class NormalOrders
     /**
      * @var int
      *
+     * @ORM\Column(name="uses_platform_item_stock", type="smallint", options={"unsigned": true, "default": 0, "comment": "是否云仓/平台SKU库存履约（店务立即购买等）"})
+     */
+    private $uses_platform_item_stock = 0;
+    
+
+    /**
+     * @var string|null
+     *
+     * @ORM\Column(name="pos_payment_voucher_url", type="string", length=2048, nullable=true, options={"comment": "POS支付凭证图片URL（可选）"})
+     */
+    private $pos_payment_voucher_url;
+
+    /**
+     * @var int
+     *
      * @ORM\Column(name="get_points", nullable=true, type="integer", options={"unsigned":true, "comment":"订单获取积分", "default": 0})
      */
     private $get_points = 0;
@@ -2850,6 +2865,46 @@ class NormalOrders
     public function getIsLogistics()
     {
         return $this->is_logistics;
+    }
+
+    /**
+     * @param int $usesPlatformItemStock
+     *
+     * @return NormalOrders
+     */
+    public function setUsesPlatformItemStock($usesPlatformItemStock)
+    {
+        $this->uses_platform_item_stock = (int) $usesPlatformItemStock;
+
+        return $this;
+    }
+
+    /**
+     * @return int
+     */
+    public function getUsesPlatformItemStock()
+    {
+        return (int) $this->uses_platform_item_stock;
+    }
+
+    /**
+     * @param string|null $url
+     *
+     * @return NormalOrders
+     */
+    public function setPosPaymentVoucherUrl($url)
+    {
+        $this->pos_payment_voucher_url = $url !== null && $url !== '' ? (string) $url : null;
+
+        return $this;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getPosPaymentVoucherUrl()
+    {
+        return $this->pos_payment_voucher_url;
     }
 
     /**

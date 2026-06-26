@@ -751,7 +751,7 @@ class Order extends Controller
             $result = $orderService->getOrderList($filter, $page, $limit, $orderBy);
         } else {
             $orderAssociationService = new OrderAssociationService();
-            $result = $orderAssociationService->getOrderList($cols = '*', $filter, $page, $limit);
+            $result = $orderAssociationService->getOrderList($filter, $page, $limit);
         }
 
         $memberList = [];
@@ -819,10 +819,10 @@ class Order extends Controller
         $orderAssociationService = new OrderAssociationService();
         $filter_association = array( 'company_id'=> $companyId, 'order_id|in'=> $ordeIds);
 
-        $result_association = $orderAssociationService->getOrderList($cols = '*', $filter_association, $page, $limit);
-        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":result_association:". json_encode( $result_association));
+        $result_association = $orderAssociationService->getOrderList($filter_association, $page, $limit);
+        // app('log')->debug("\n".__FUNCTION__."-".__LINE__.":result_association:". json_encode( $result_association));
         $promoter_user_id_list = array_column($result_association['list'],null,'order_id');
-        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":result_association:". json_encode( $promoter_user_id_list));
+        // app('log')->debug("\n".__FUNCTION__."-".__LINE__.":result_association:". json_encode( $promoter_user_id_list));
 
 
 

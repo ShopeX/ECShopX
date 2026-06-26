@@ -17,6 +17,8 @@
 
 namespace EspierBundle\Services;
 
+use DistributionBundle\Entities\Distributor;
+use DistributionBundle\Repositories\DistributorRepository;
 use Dingo\Api\Exception\ResourceException;
 use Dingo\Api\Exception\StoreResourceFailedException;
 use Illuminate\Http\Request;
@@ -35,6 +37,10 @@ use AliBundle\Factory\MiniAppFactory;
 use EmployeePurchaseBundle\Services\RelativesService;
 use ShuyunBundle\Jobs\MemberRegisterJob;
 use ShuyunBundle\Services\MembersService as ShuyunMembersService;
+use ShuyunOpenPlatformBundle\Repositories\CompanyShuyunOpenPlatformConfigRepository;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformMemberBindPushService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformMemberRegisterService;
+use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformMemberSyncState;
 use ThirdPartyBundle\Services\MarketingCenter\Request as MarketingCenterRequest;
 use DistributionBundle\Services\DistributorService;
 
@@ -132,6 +138,7 @@ class LoginService
         app('log')->info('wxappPreLogin member====>'.var_export($member, true));
         if (!$member) {
             $member = $this->register($params);
+            $this->syncShuyunOpenPlatformWxappAfterLocalRegisterIfEnabled($params, $member, $mobile, $unionId, $openId, true);
             // register push dg - 推送会员基础信息到导购端
             // $this->pushMemberBasicInfoToSalesperson($params['company_id'], $member['user_id']);
         } else {
@@ -143,20 +150,23 @@ class LoginService
                 app('log')->info('wxappPreLogin 手机号查询到member userAssociation====>'.var_export($userAssociation, true));
                 if (!$userAssociation) {
                     $member = $this->register($params);
+                    $this->syncShuyunOpenPlatformWxappAfterLocalRegisterIfEnabled($params, $member, $mobile, $unionId, $openId, false);
                 } elseif ($userAssociation && $userAssociation['unionid'] != $unionId) {
                     throw new ResourceException('该手机号已注册为会员，请更换手机号！');
                 }
-                // 去数云注册
-                $data = [
-                    'mobile' => $member['mobile'],
-                    'unionid' => $unionId,
-                    'company_id' => $member['company_id'],
-                    'user_id' => $member['user_id'],
-                ];
-                app('log')->info('file:'.__FILE__.',line:'.__LINE__);
-                app('log')->info('shuyun MemberRegisterJob data=====>'.var_export($data, true));
-                $gotoJob = (new MemberRegisterJob($member['company_id'], $member['user_id'], $data))->onQueue('default');
-                app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+                if (! $this->isShuyunOpenPlatformEnabledForCompany((int) $params['company_id'])) {
+                    // 去数云注册（仅 legacy LPEE）
+                    $data = [
+                        'mobile' => $member['mobile'],
+                        'unionid' => $unionId,
+                        'company_id' => $member['company_id'],
+                        'user_id' => $member['user_id'],
+                    ];
+                    app('log')->info('file:'.__FILE__.',line:'.__LINE__);
+                    app('log')->info('shuyun MemberRegisterJob data=====>'.var_export($data, true));
+                    $gotoJob = (new MemberRegisterJob($member['company_id'], $member['user_id'], $data))->onQueue('slow');
+                    app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+                }
             } else {
                 $membersAssociation = $memberService->getMembersAssociation($params['company_id'], $userType, $unionId, $member['user_id']);
                 if (!$membersAssociation) {
@@ -164,6 +174,18 @@ class LoginService
                 }
 
             }
+        }
+
+        // OPEN 补同步：仅依赖「公司已启用开放平台」，**不**再捆绑 legacy `oem-shuyun`；否则仅开 OPEN、未开 OEM 数云时永远不会走 member.register 补录。
+        if ($this->isShuyunOpenPlatformEnabledForCompany((int) $params['company_id'])) {
+            $member = $memberService->getInfoByMobile((int) $params['company_id'], $mobile);
+            $this->maybeSyncShuyunOpenPlatformWxappOnlineAfterPreLoginIfNeeded(
+                (int) $params['company_id'],
+                $member,
+                $mobile,
+                (string) $unionId,
+                (string) $openId
+            );
         }
 
         
@@ -704,5 +726,338 @@ class LoginService
                 'trace' => $e->getTraceAsString()
             ]);
         }
+    }
+
+    /**
+     * 双开门禁：OPEN 已启用时，会员域不再走 legacy LPEE MemberRegisterJob。
+     */
+    protected function isShuyunOpenPlatformEnabledForCompany(int $companyId): bool
+    {
+        if ($companyId <= 0) {
+            return false;
+        }
+        $openConfigRepo = app(CompanyShuyunOpenPlatformConfigRepository::class);
+        $openConfig = $openConfigRepo->findOneByCompanyId($companyId);
+
+        return $openConfig !== null && (int) $openConfig->getIsEnabled() === 1;
+    }
+
+    /**
+     * 按会员 {@see Members::$reg_distributor} 解析分销商行（用于数云 OPEN 线上 wxapp shopId）。
+     *
+     * @return array<string, mixed>
+     */
+    protected function resolveWxappOpenDistributorRowByRegDistributorId(int $companyId, int $regDistributorId): array
+    {
+        if ($companyId <= 0 || $regDistributorId <= 0) {
+            return [];
+        }
+        $distributorRepo = app('registry')->getManager('default')->getRepository(Distributor::class);
+        if (! $distributorRepo instanceof DistributorRepository) {
+            return [];
+        }
+        $row = $distributorRepo->getInfo([
+            'company_id' => $companyId,
+            'distributor_id' => $regDistributorId,
+        ]);
+
+        return is_array($row) && $row !== [] ? $row : [];
+    }
+
+    /**
+     * OPEN 已启用：数云 member.register + 卡号增强 + bind.push；成功后写入 {@see Members::$shuyun_open_online_wxapp_sync_at}。
+     *
+     * @param  array<string, mixed>  $distributorRow  distribution_distributor 行（须含 distributor_id）
+     *
+     * @throws ResourceException 当 $compensateWithLocalDeleteOnFailure 且数云失败时（与历史 wxapp 新注册一致）
+     */
+    protected function performShuyunOpenPlatformWxappOnlineSync(
+        int $companyId,
+        array $distributorRow,
+        int $userId,
+        string $mobile,
+        string $unionId,
+        string $openId,
+        bool $compensateWithLocalDeleteOnFailure
+    ): void {
+        if ($companyId <= 0) {
+            throw new ResourceException('公司参数错误，会员绑定失败');
+        }
+        if (! $this->isShuyunOpenPlatformEnabledForCompany($companyId)) {
+            return;
+        }
+        if ($userId <= 0) {
+            throw new ResourceException('会员标识异常，会员绑定失败');
+        }
+        $memberService = new MemberService();
+        $memberRow = $memberService->getMemberInfo([
+            'company_id' => $companyId,
+            'user_id' => $userId,
+        ]);
+        if (\is_array($memberRow) && (int) ($memberRow['shuyun_open_online_wxapp_sync_at'] ?? 0) > 0) {
+            return;
+        }
+        if (\is_array($memberRow) && ShuyunOpenPlatformMemberSyncState::needsWxappBindPushOnly($memberRow)) {
+            $offlineDistId = (int) ($memberRow['offline_reg_distributor'] ?? 0);
+            $offlineRow = $this->resolveWxappOpenDistributorRowByRegDistributorId($companyId, $offlineDistId);
+            if ($offlineRow === []) {
+                throw new ResourceException('注册门店无效，会员绑定失败');
+            }
+            try {
+                $this->performShuyunOpenPlatformWxappBindPushOnlySync(
+                    $companyId,
+                    $offlineRow,
+                    $userId,
+                    $unionId,
+                    $openId
+                );
+            } catch (\Throwable $e) {
+                app('log')->warning('wxapp open platform bind.push failed after store offline register.', [
+                    'company_id' => $companyId,
+                    'user_id' => $userId,
+                    'exception' => get_class($e),
+                    'message' => $e->getMessage(),
+                ]);
+                if ($compensateWithLocalDeleteOnFailure) {
+                    throw new ResourceException('会员绑定失败，请稍后重试');
+                }
+                throw $e;
+            }
+
+            return;
+        }
+        $userIdStr = (string) $userId;
+
+        $shuyunOpenMemberRegisterSucceeded = false;
+        try {
+            app(ShuyunOpenPlatformMemberRegisterService::class)->registerSingle(
+                $companyId,
+                $distributorRow,
+                $userIdStr,
+                $mobile,
+                $unionId
+            );
+            $shuyunOpenMemberRegisterSucceeded = true;
+            (new MemberService())->syncUserCardCodeFromShuyunEnhanceAfterRegister(
+                $companyId,
+                $userId,
+                $distributorRow
+            );
+            app(ShuyunOpenPlatformMemberBindPushService::class)->pushSingle(
+                $companyId,
+                $distributorRow,
+                $userIdStr,
+                $unionId,
+                $openId
+            );
+            (new MemberService())->updateMemberInfo(
+                ['shuyun_open_online_wxapp_sync_at' => time()],
+                ['user_id' => $userId, 'company_id' => $companyId]
+            );
+        } catch (\Throwable $e) {
+            app('log')->warning('wxapp open platform member.register/bind.push failed after local register.', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'mobile' => $mobile,
+                'union_id' => $unionId,
+                'open_id' => $openId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'compensate_delete' => $compensateWithLocalDeleteOnFailure,
+                'shuyun_open_member_register_succeeded' => $shuyunOpenMemberRegisterSucceeded,
+            ]);
+            if ($compensateWithLocalDeleteOnFailure) {
+                try {
+                    (new MemberService())->deleteMembers(
+                        $companyId,
+                        $userId,
+                        $mobile,
+                        null,
+                        false,
+                        ! $shuyunOpenMemberRegisterSucceeded
+                    );
+                } catch (\Throwable $deleteEx) {
+                    app('log')->error('wxapp open platform sync failure: local deleteMembers compensation failed.', [
+                        'company_id' => $companyId,
+                        'user_id' => $userId,
+                        'exception' => get_class($deleteEx),
+                        'message' => $deleteEx->getMessage(),
+                    ]);
+                }
+            }
+            throw new ResourceException('会员绑定失败，请稍后重试');
+        }
+    }
+
+    /**
+     * 店务已 member.register：仅 bind.push 并标记 wxapp 同步时间（不重复 register）。
+     *
+     * @param  array<string, mixed>  $distributorRow
+     */
+    protected function performShuyunOpenPlatformWxappBindPushOnlySync(
+        int $companyId,
+        array $distributorRow,
+        int $userId,
+        string $unionId,
+        string $openId
+    ): void {
+        app(ShuyunOpenPlatformMemberBindPushService::class)->pushSingle(
+            $companyId,
+            $distributorRow,
+            (string) $userId,
+            $unionId,
+            $openId
+        );
+        (new MemberService())->updateMemberInfo(
+            ['shuyun_open_online_wxapp_sync_at' => time()],
+            ['user_id' => $userId, 'company_id' => $companyId]
+        );
+    }
+
+    /**
+     * 老会员首次线上 OPEN 补同步（不删会员、失败不阻断登录）。
+     * 条件：`shuyun_open_online_wxapp_sync_at` 仍为空；用 **`reg_distributor`（若>0）否则 `offline_reg_distributor`** 解析门店行，能解析到有效 `distribution_distributor` 即尝试补录（**不再**要求虚拟店 `distributor_self=1`）。
+     *
+     * @param  array<string, mixed>  $member  {@see MemberService::getInfoByMobile} 行
+     */
+    protected function maybeSyncShuyunOpenPlatformWxappOnlineAfterPreLoginIfNeeded(
+        int $companyId,
+        array $member,
+        string $mobile,
+        string $unionId,
+        string $openId
+    ): void {
+        if ($companyId <= 0 || $member === [] || $mobile === '' || $unionId === '' || $openId === '') {
+            return;
+        }
+        if ((int) ($member['shuyun_open_online_wxapp_sync_at'] ?? 0) > 0) {
+            return;
+        }
+        if (ShuyunOpenPlatformMemberSyncState::needsWxappBindPushOnly($member)) {
+            $offlineDistId = (int) ($member['offline_reg_distributor'] ?? 0);
+            $distributorRow = $this->resolveWxappOpenDistributorRowByRegDistributorId($companyId, $offlineDistId);
+            if ($distributorRow === []) {
+                app('log')->warning('wxapp open platform supplement skipped: offline distributor row missing.', [
+                    'company_id' => $companyId,
+                    'user_id' => $member['user_id'] ?? null,
+                    'offline_reg_distributor' => $offlineDistId,
+                ]);
+
+                return;
+            }
+            $userId = (int) ($member['user_id'] ?? 0);
+            if ($userId <= 0) {
+                return;
+            }
+            try {
+                $this->performShuyunOpenPlatformWxappBindPushOnlySync(
+                    $companyId,
+                    $distributorRow,
+                    $userId,
+                    $unionId,
+                    $openId
+                );
+            } catch (\Throwable $e) {
+                app('log')->warning('wxapp open platform supplement bind.push failed (login continues).', [
+                    'company_id' => $companyId,
+                    'user_id' => $userId,
+                    'exception' => get_class($e),
+                    'message' => $e->getMessage(),
+                ]);
+            }
+
+            return;
+        }
+        $regDist = (int) ($member['reg_distributor'] ?? 0);
+        if ($regDist <= 0) {
+            $regDist = (int) ($member['offline_reg_distributor'] ?? 0);
+        }
+        if ($regDist <= 0) {
+            return;
+        }
+        $distributorRow = $this->resolveWxappOpenDistributorRowByRegDistributorId($companyId, $regDist);
+        if ($distributorRow === []) {
+            app('log')->warning('wxapp open platform supplement skipped: distributor row missing.', [
+                'company_id' => $companyId,
+                'user_id' => $member['user_id'] ?? null,
+                'resolved_distributor_id' => $regDist,
+                'reg_distributor' => (int) ($member['reg_distributor'] ?? 0),
+                'offline_reg_distributor' => (int) ($member['offline_reg_distributor'] ?? 0),
+            ]);
+
+            return;
+        }
+        $userId = (int) ($member['user_id'] ?? 0);
+        if ($userId <= 0) {
+            return;
+        }
+        try {
+            $this->performShuyunOpenPlatformWxappOnlineSync(
+                $companyId,
+                $distributorRow,
+                $userId,
+                $mobile,
+                $unionId,
+                $openId,
+                false
+            );
+        } catch (\Throwable $e) {
+            app('log')->warning('wxapp open platform supplement sync failed (login continues).', [
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * OPEN 已启用时：在本地 register 成功并取得 user_id 之后，事务外调用数云
+     * member.register（id=user_id）与 bind.push（platAccount=user_id；partner 见 config shuyun_open_platform.gateway_partner，默认 nnormal）。
+     * 与订单计划 A-ORD-MEMREG-01 / A-ORD-BIND-01、A-ORD-MEMREG-02（禁止 DB 长事务跨 HTTP）一致。
+     *
+     * @param  array<string, mixed>  $params
+     * @param  array<string, mixed>  $member  register 返回行，须含 user_id
+     * @param  bool  $compensateWithLocalDeleteOnFailure  true：本次为「按手机号无会员行」新注册路径，失败时尝试本地 deleteMembers 补偿
+     *
+     * @throws ResourceException
+     */
+    protected function syncShuyunOpenPlatformWxappAfterLocalRegisterIfEnabled(
+        array $params,
+        array $member,
+        string $mobile,
+        string $unionId,
+        string $openId,
+        bool $compensateWithLocalDeleteOnFailure
+    ): void {
+        $companyId = (int) ($params['company_id'] ?? 0);
+        if ($companyId <= 0) {
+            throw new ResourceException('公司参数错误，会员绑定失败');
+        }
+
+        if (! $this->isShuyunOpenPlatformEnabledForCompany($companyId)) {
+            return;
+        }
+
+        $userId = (int) ($member['user_id'] ?? 0);
+        if ($userId <= 0) {
+            throw new ResourceException('会员标识异常，会员绑定失败');
+        }
+
+        $regDist = (int) ($member['reg_distributor'] ?? 0);
+        $distributorRow = $this->resolveWxappOpenDistributorRowByRegDistributorId($companyId, $regDist);
+        if ($distributorRow === []) {
+            throw new ResourceException('注册门店无效，会员绑定失败');
+        }
+
+        $this->performShuyunOpenPlatformWxappOnlineSync(
+            $companyId,
+            $distributorRow,
+            $userId,
+            $mobile,
+            $unionId,
+            $openId,
+            $compensateWithLocalDeleteOnFailure
+        );
     }
 }

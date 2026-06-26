@@ -35,6 +35,13 @@ class CreateMemberSuccessEvent extends Event
     public $ifRegisterPromotion;
 
     /**
+     * 店务等场景：数云 OFFLINE member.register 已成功，注册赠分 point.change 须走 OFFLINE（与 §5.1.1 S7a 一致）。
+     *
+     * @var bool
+     */
+    public $shuyunOpenPointChangeForceOfflinePlat = false;
+
+    /**
      * Create a new event instance.
      *
      * @return void
@@ -56,5 +63,6 @@ class CreateMemberSuccessEvent extends Event
         if (isset($eventData['distributor_id'])) {
             $this->distributorId = $eventData['distributor_id'];
         }
+        $this->shuyunOpenPointChangeForceOfflinePlat = !empty($eventData['shuyun_open_point_change_force_offline_plat']);
     }
 }

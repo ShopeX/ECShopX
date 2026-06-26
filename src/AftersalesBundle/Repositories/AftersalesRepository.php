@@ -308,7 +308,7 @@ class AftersalesRepository extends EntityRepository
                 }
             }
         }
-        app('log')->info(':'.__CLASS__.':'.__FUNCTION__.':'.__LINE__.':sql:'.$sqlWithParams);
+        // app('log')->info(':'.__CLASS__.':'.__FUNCTION__.':'.__LINE__.':sql:'.$sqlWithParams);
 
         return $criteria;
     }

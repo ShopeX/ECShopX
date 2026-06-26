@@ -255,6 +255,8 @@ class MembersRepository extends EntityRepository
             'op_distributor' => $userEntity->getOpDistributor(),
             'login_email' => $userEntity->getLoginEmail(),
             'email_verified_at' => $userEntity->getEmailVerifiedAt(),
+            'shuyun_open_online_wxapp_sync_at' => $userEntity->getShuyunOpenOnlineWxappSyncAt(),
+            'offline_reg_distributor' => $userEntity->getOfflineRegDistributor(),
         ];
 
         return $result;
@@ -352,6 +354,13 @@ class MembersRepository extends EntityRepository
         if (isset($userData['op_distributor'])) {
             $userEntity->setOpDistributor($userData['op_distributor']);
         }
+        if (array_key_exists('shuyun_open_online_wxapp_sync_at', $userData)) {
+            $userEntity->setShuyunOpenOnlineWxappSyncAt($userData['shuyun_open_online_wxapp_sync_at']);
+        }
+        if (array_key_exists('offline_reg_distributor', $userData)) {
+            $userEntity->setOfflineRegDistributor($userData['offline_reg_distributor']);
+        }
+
         return $userEntity;
     }
 

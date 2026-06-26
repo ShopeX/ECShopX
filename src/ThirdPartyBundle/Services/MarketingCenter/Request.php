@@ -61,7 +61,7 @@ class Request
         $url = $baseUri . '/api/openapi';
         $client = new Client(['timeout' => 2]);
         try {
-            app('log')->debug('MarketingCenter:input===>' . var_export($input, 1));
+            app('log')->debug('MarketingCenter:input===>' . json_encode($input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
             $resData = $client->post($url, ['form_params' => $input])->getBody();
             app('log')->debug('MarketingCenter:result===>' . $resData);
         } catch (\Exception $e) {

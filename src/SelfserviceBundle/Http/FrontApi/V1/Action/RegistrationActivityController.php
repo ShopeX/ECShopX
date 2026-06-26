@@ -369,11 +369,11 @@ class RegistrationActivityController extends Controller
                     $params['content'][$key]['formdata'][$k]['answer'] = is_array($value['answer']) ? implode(',', $value['answer']) : $value['answer'];
                 }
                 //识别是否存在姓名字段
-                if (!$params['true_name'] && $value['field_name'] == 'username') {
+                if (!$params['true_name'] && $value['field_name'] == 'username' && $value['form_element'] == 'text') {
                     $params['true_name'] = $value['answer'] ?? '';
                 }
                 //验证手机号是否正确
-                if ($value['field_name'] == 'mobile' && $value['answer']) {
+                if ($value['field_name'] == 'mobile' && $value['answer'] && $value['form_element'] == 'text') {
                     if (!preg_match('/^1[3456789]{1}[0-9]{9}$/', $value['answer'])) {
                         throw new ResourceException(trans('SelfserviceBundle.please_enter_correct_mobile'));
                     }

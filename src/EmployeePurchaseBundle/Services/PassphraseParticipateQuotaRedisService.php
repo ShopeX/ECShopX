@@ -5,14 +5,15 @@
  * 口令企业「可参与名额」Redis 缓存：与 employee_purchase_activity_passphrase_enterprises.participate_quota 对齐。
  * 消耗口径：每次成功绑定（员工身份认证成功且记活动）扣 1；每笔未取消的内购订单在提交事务前扣 1（已在
  * {@see ActivityEnterpriseParticipateUser} 表中的用户跳过校验与扣减）。
- * 管理端保存/替换口令企业后调用 warm 重算剩余；订单关联表 participate_quota_order_consumed 标记本单是否扣过名额以便取消时释放 Redis。
+ * 管理端保存/替换口令企业后调用 syncRemainingAfterQuotaSettingChange 按配置差额更新 Redis 剩余；
+ * 订单关联表 participate_quota_order_consumed 标记本单是否扣过名额以便取消时释放 Redis。
  */
 
 namespace EmployeePurchaseBundle\Services;
 
 use Dingo\Api\Exception\ResourceException;
 use EmployeePurchaseBundle\Entities\Activities;
-use EmployeePurchaseBundle\Entities\ActivityEnterpriseBehaviorLog;
+use EmployeePurchaseBundle\Entities\ActivityEnterpriseParticipateUser;
 use EmployeePurchaseBundle\Entities\ActivityPassphraseEnterprises;
 
 class PassphraseParticipateQuotaRedisService
@@ -66,6 +67,41 @@ LUA;
     }
 
     /**
+     * 管理端保存口令企业配置：DB 存配置总额，Redis 剩余 += (新配置 - 原配置)。
+     */
+    public function syncRemainingAfterQuotaSettingChange(
+        int $companyId,
+        int $activityId,
+        int $enterpriseId,
+        int $oldQuota,
+        int $newQuota
+    ): void {
+        if ($newQuota <= 0) {
+            $this->deleteKey($companyId, $activityId, $enterpriseId);
+
+            return;
+        }
+        $key = self::redisKey($companyId, $activityId, $enterpriseId);
+        $redis = app('redis');
+        $delta = $newQuota - $oldQuota;
+        if ($oldQuota <= 0) {
+            $cur = $redis->get($key);
+            if ($cur === false || $cur === null) {
+                $redis->set($key, (string) $newQuota);
+
+                return;
+            }
+        }
+        if ($delta === 0) {
+            return;
+        }
+        $redis->incrby($key, $delta);
+        if ((int) $redis->get($key) < 0) {
+            $redis->set($key, '0');
+        }
+    }
+
+    /**
      * 从 DB 重算并写入剩余名额（不参与 Lua，仅 SET）。
      */
     public function warmEnterprise(int $companyId, int $activityId, int $enterpriseId, int $participateQuota): void
@@ -76,15 +112,18 @@ LUA;
             return;
         }
         $em = app('registry')->getManager('default');
-        /** @var \EmployeePurchaseBundle\Repositories\ActivityEnterpriseBehaviorLogRepository $logRepo */
-        $logRepo = $em->getRepository(ActivityEnterpriseBehaviorLog::class);
-        $bindUsed = $logRepo->countBindEventsForActivityEnterprise($companyId, $activityId, $enterpriseId);
-        $orderUsed = $this->countNonCancelledEmployeePurchaseOrders($companyId, $activityId, $enterpriseId);
-        $remain = $participateQuota - $bindUsed - $orderUsed;
-        if ($remain < 0) {
-            $remain = 0;
+        /** @var \EmployeePurchaseBundle\Repositories\ActivityEnterpriseParticipateUserRepository $participateUserRepo */
+        $participateUserRepo = $em->getRepository(ActivityEnterpriseParticipateUser::class);
+        $used = $participateUserRepo->countForActivityEnterprise($companyId, $activityId, $enterpriseId);
+        $calculated = $participateQuota - $used;
+        if ($calculated < 0) {
+            $calculated = 0;
         }
-        app('redis')->set(self::redisKey($companyId, $activityId, $enterpriseId), (string) $remain);
+        $key = self::redisKey($companyId, $activityId, $enterpriseId);
+        $redis = app('redis');
+        $cur = $redis->get($key);
+        $remain = ($cur !== false && $cur !== null) ? min((int) $cur, $calculated) : $calculated;
+        $redis->set($key, (string) $remain);
     }
 
     public function deleteKey(int $companyId, int $activityId, int $enterpriseId): void
@@ -147,19 +186,5 @@ LUA;
         }
         $quota = (int) ($rows[0]['participate_quota'] ?? 0);
         $this->warmEnterprise($companyId, $activityId, $enterpriseId, $quota);
-    }
-
-    private function countNonCancelledEmployeePurchaseOrders(int $companyId, int $activityId, int $enterpriseId): int
-    {
-        $conn = app('registry')->getConnection('default');
-        if ($conn->getDatabasePlatform()->getName() !== 'mysql') {
-            return 0;
-        }
-        $sql = 'SELECT COUNT(*) AS c FROM employee_purchase_orders_rel_activity r '
-            .'INNER JOIN orders_normal_orders o ON o.order_id = r.order_id AND o.company_id = r.company_id '
-            .'WHERE r.company_id = ? AND r.activity_id = ? AND r.enterprise_id = ? AND o.order_class = ? AND o.order_status <> ?';
-        $row = $conn->fetchAssoc($sql, [$companyId, $activityId, $enterpriseId, 'employee_purchase', 'CANCEL']);
-
-        return (int) ($row['c'] ?? 0);
     }
 }

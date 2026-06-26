@@ -22,6 +22,8 @@ use AftersalesBundle\Entities\AftersalesOfflineRefund;
 use AftersalesBundle\Entities\AftersalesRefund;
 use AftersalesBundle\Entities\Aftersales;
 use AftersalesBundle\Entities\AftersalesDetail;
+use PointBundle\Services\PointMemberService;
+use ThirdPartyBundle\Events\TradeRefundFinishEvent;
 
 class AftersalesOfflineRefundService
 {
@@ -41,6 +43,7 @@ class AftersalesOfflineRefundService
         if (empty($refundInfo)) {
             throw new ResourceException("未查询到退款单");
         }
+        $beforeStatus = (string) ($refundInfo['refund_status'] ?? '');
         $data = [
             'company_id' => $params['company_id'],
             'refund_bn' => $params['refund_bn'],
@@ -64,6 +67,13 @@ class AftersalesOfflineRefundService
             'refund_status' => 'SUCCESS',
         ];
         $aftersalesRefundRepository->updateOneBy($filter, $updateData);
+        $latestRefund = $aftersalesRefundRepository->getInfo([
+            'company_id' => $params['company_id'],
+            'refund_bn' => $params['refund_bn'],
+        ]);
+        if (empty($latestRefund)) {
+            throw new ResourceException("未查询到退款单");
+        }
         
         // 更新售后单状态为已完成
         if (!empty($refundInfo['aftersales_bn'])) {
@@ -84,6 +94,27 @@ class AftersalesOfflineRefundService
             // 更新售后明细表状态
             $aftersalesDetailRepository->updateBy($aftersales_filter, $aftersales_update);
         }
+
+        // 对齐 AftersalesRefundService::doRefund：线下退款成功也需要触发积分返还与退款完成事件。
+        if ($beforeStatus !== 'SUCCESS' && (string) ($latestRefund['pay_type'] ?? '') != 'point' && (int) ($latestRefund['refund_point'] ?? 0) > 0) {
+            $pointMemberService = new PointMemberService();
+            $otherParams = [
+                'point_type' => 'points_refund',
+                'refund_bn' => (string) ($latestRefund['refund_bn'] ?? ''),
+                'aftersales_bn' => (string) ($latestRefund['aftersales_bn'] ?? ''),
+            ];
+            $pointMemberService->addPoint(
+                (int) ($latestRefund['user_id'] ?? 0),
+                (int) ($latestRefund['company_id'] ?? 0),
+                (int) ($latestRefund['refund_point'] ?? 0),
+                10,
+                true,
+                '退款单号:'.(string) ($latestRefund['refund_bn'] ?? ''),
+                (string) ($latestRefund['order_id'] ?? ''),
+                $otherParams
+            );
+        }
+        event(new TradeRefundFinishEvent($latestRefund));
         
         return true;
     }

@@ -165,7 +165,7 @@ class RepositoryLangInterceptorTest extends TestCase
 
     /**
      * T5: deleteBy 多页 — 分页共 200 条。
-     * 断言：deleteLang 被调用 200 次；先 deleteLang 再 target->deleteBy。
+     * 断言：deleteAllLang 被调用 200 次；先 deleteAllLang 再 target->deleteBy。
      */
     public function testDeleteByMultiplePagesCallsDeleteLangForAllRecordsAndMultilangBeforeTarget(): void
     {
@@ -204,16 +204,16 @@ class RepositoryLangInterceptorTest extends TestCase
         $filter = ['company_id' => 1];
         $interceptor->deleteBy($filter);
 
-        $deleteLangCount = $this->countInLog($callLog, 'deleteLang');
-        $lastDeleteLang = $this->lastIndexInLog($callLog, 'deleteLang');
+        $deleteAllLangCount = $this->countInLog($callLog, 'deleteAllLang');
+        $lastDeleteAllLang = $this->lastIndexInLog($callLog, 'deleteAllLang');
         $deleteByIndex = $this->firstIndexInLog($callLog, 'targetDeleteBy');
 
-        $this->assertSame(200, $deleteLangCount, 'deleteLang 应被调用 200 次（多页总条数）');
-        $this->assertGreaterThan($lastDeleteLang, $deleteByIndex, '应先执行完所有 deleteLang 再执行 target->deleteBy');
+        $this->assertSame(200, $deleteAllLangCount, 'deleteAllLang 应被调用 200 次（多页总条数）');
+        $this->assertGreaterThan($lastDeleteAllLang, $deleteByIndex, '应先执行完所有 deleteAllLang 再执行 target->deleteBy');
     }
 
     /**
-     * T4: deleteBy ≤1 页 — Mock lists 返回 1 页；断言 deleteLang 被调用次数 = list 条数。
+     * T4: deleteBy ≤1 页 — Mock lists 返回 1 页；断言 deleteAllLang 被调用次数 = list 条数。
      */
     public function testDeleteBySinglePageCallsDeleteLangEqualToListCount(): void
     {
@@ -248,12 +248,12 @@ class RepositoryLangInterceptorTest extends TestCase
         $filter = ['company_id' => 1];
         $interceptor->deleteBy($filter);
 
-        $deleteLangCount = $this->countInLog($callLog, 'deleteLang');
-        $this->assertSame($listCount, $deleteLangCount, 'deleteLang 被调用次数应等于 list 条数');
+        $deleteAllLangCount = $this->countInLog($callLog, 'deleteAllLang');
+        $this->assertSame($listCount, $deleteAllLangCount, 'deleteAllLang 被调用次数应等于 list 条数');
     }
 
     /**
-     * T6: delete 与 deleteBy 一致 — 调用 delete($filter)，mock lists 多页；断言 deleteLang 调用次数 = 总条数，且先多语言再 target->delete。
+     * T6: delete 与 deleteBy 一致 — 调用 delete($filter)，mock lists 多页；断言 deleteAllLang 调用次数 = 总条数，且先多语言再 target->delete。
      */
     public function testDeleteMultiplePagesCallsDeleteLangForAllThenTargetDelete(): void
     {
@@ -293,12 +293,12 @@ class RepositoryLangInterceptorTest extends TestCase
         $filter = ['company_id' => 1];
         $interceptor->delete($filter);
 
-        $deleteLangCount = $this->countInLog($callLog, 'deleteLang');
-        $lastDeleteLang = $this->lastIndexInLog($callLog, 'deleteLang');
+        $deleteAllLangCount = $this->countInLog($callLog, 'deleteAllLang');
+        $lastDeleteAllLang = $this->lastIndexInLog($callLog, 'deleteAllLang');
         $deleteIndex = $this->firstIndexInLog($callLog, 'targetDelete');
 
-        $this->assertSame($totalRows, $deleteLangCount, 'deleteLang 应被调用总条数次（与 deleteBy 一致）');
-        $this->assertGreaterThan($lastDeleteLang, $deleteIndex, '应先执行完所有 deleteLang 再执行 target->delete');
+        $this->assertSame($totalRows, $deleteAllLangCount, 'deleteAllLang 应被调用总条数次（与 deleteBy 一致）');
+        $this->assertGreaterThan($lastDeleteAllLang, $deleteIndex, '应先执行完所有 deleteAllLang 再执行 target->delete');
     }
 
     /**
@@ -307,7 +307,7 @@ class RepositoryLangInterceptorTest extends TestCase
     private function createCommonLangSpy(array &$callLog, array $options = []): object
     {
         $isDefaultLang = $options['isDefaultLang'] ?? true;
-        return new class($callLog, $isDefaultLang) {
+        return new class ($callLog, $isDefaultLang) {
             private $callLog;
             private $isDefaultLang;
 
@@ -357,6 +357,11 @@ class RepositoryLangInterceptorTest extends TestCase
             public function deleteLang(int $companyId, string $tableName, int $dataId, string $module)
             {
                 $this->callLog[] = 'deleteLang';
+            }
+
+            public function deleteAllLang(int $companyId, string $tableName, int $dataId, string $module)
+            {
+                $this->callLog[] = 'deleteAllLang';
             }
         };
     }
@@ -721,7 +726,7 @@ class RepositoryLangInterceptorTest extends TestCase
         $filter = ['company_id' => 1];
         $interceptor->deleteBy($filter);
 
-        $deleteLangCount = $this->countInLog($callLog, 'deleteLang');
-        $this->assertSame($totalRows, $deleteLangCount, '分页循环下多语言同步条数应等于总条数');
+        $deleteAllLangCount = $this->countInLog($callLog, 'deleteAllLang');
+        $this->assertSame($totalRows, $deleteAllLangCount, '分页循环下多语言同步条数应等于总条数');
     }
 }

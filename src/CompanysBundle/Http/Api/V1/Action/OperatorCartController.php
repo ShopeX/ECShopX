@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Copyright 2019-2026 ShopeX
  *
@@ -21,8 +22,6 @@ use Illuminate\Http\Request;
 use Dingo\Api\Exception\ResourceException;
 use App\Http\Controllers\Controller as BaseController;
 use CompanysBundle\Services\OperatorCartService;
-use CompanysBundle\Services\OperatorPendingOrderService;
-use DistributionBundle\Services\DistributorService;
 use GoodsBundle\Services\ItemsService;
 use GoodsBundle\Entities\ItemsBarcode;
 
@@ -119,6 +118,45 @@ class OperatorCartController extends BaseController
         $isAccumulate = $request->get('is_accumulate', true);
         $operatorCartService = new OperatorCartService();
         $result = $operatorCartService->addCartdata($filter, $params, $isAccumulate);
+        return $this->response->array($result);
+    }
+
+    /**
+     * @SWG\Post(
+     *     path="/operator/cartfastbuyadd",
+     *     summary="店务立即购买（云仓分桶）",
+     *     tags={"企业"},
+     *     description="门店无库存且云仓足够时写入 Redis 立即购买桶，与普通购物车行共存、互不影响",
+     *     operationId="cartFastBuyAdd",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="item_id", in="formData", description="商品item_id", required=true, type="integer"),
+     *     @SWG\Parameter( name="num", in="formData", description="商品数量", required=true, type="integer"),
+     *     @SWG\Parameter( name="is_accumulate", in="formData", description="同 SKU 是否累加，true 累加 false 覆盖", required=false, type="boolean"),
+     *     @SWG\Parameter( name="distributor_id", in="formData", description="店铺id", required=false, type="integer"),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="cart_id", type="integer", example="0", description="立即购买无 DB 行，固定 0"),
+     *                  @SWG\Property( property="item_id", type="integer", example="5471", description="商品id"),
+     *                  @SWG\Property( property="num", type="integer", example="1", description="数量"),
+     *          ),
+     *     )),
+     *     @SWG\Response(response="default", description="错误返回结构", @SWG\Schema(type="array", @SWG\Items(ref="#/definitions/CompanysErrorRespones")))
+     * )
+     */
+    public function cartFastBuyAdd(Request $request)
+    {
+        $authInfo = app('auth')->user()->get();
+
+        $filter['item_id'] = $request->get('item_id');
+        $filter['operator_id'] = $authInfo['operator_id'];
+        $filter['distributor_id'] = $request->get('distributor_id', 0);
+        $filter['company_id'] = $authInfo['company_id'];
+        $params['num'] = $request->get('num', 0);
+        $params['is_checked'] = true;
+        $isAccumulate = $request->get('is_accumulate', true);
+        $operatorCartService = new OperatorCartService();
+        $result = $operatorCartService->addFastBuyCartdata($filter, $params, $isAccumulate);
+
         return $this->response->array($result);
     }
 
