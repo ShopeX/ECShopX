@@ -30,7 +30,7 @@ class UserCardRepository extends EntityRepository
 {
 
     public $table = "bspay_user_card";
-    public $cols = ['id','sys_id','huifu_id','user_id','req_seq_id','company_id','user_type','card_type','card_name','card_no','prov_id','area_id','bank_code','branch_name','cert_no','cert_validity_type','cert_begin_date','cert_end_date','mp','apply_no','audit_state','audit_desc','error_info','created','updated'];
+    public $cols = ['id','sys_id','huifu_id','user_id','req_seq_id','company_id','user_type','card_type','card_name','card_no','prov_id','area_id','branch_code','branch_name','cert_no','cert_validity_type','cert_begin_date','cert_end_date','mp','apply_no','audit_state','audit_desc','error_info','created','updated'];
     /**
      * 新增
      *

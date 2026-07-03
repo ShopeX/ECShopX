@@ -131,5 +131,7 @@ $api->version('v1', function($api) {
         $api->post('/dada/finance/create', ['name'=>'获取充值链接','middleware'=>'activated', 'as' => 'dada.finance.create', 'uses'=>'DadaFinance@recharge']);
     });
 
+    // 斗门国际支付
+    $api->post('/doumen-intl/notify', ['name'=>'斗门国际支付异步通知','as' => 'doumen_intl.notify', 'uses'=>'PaymentBundle\Http\Controllers\DoumenIntlNotify@handle']);
 
 });

@@ -103,6 +103,7 @@ class PaymentService
             'fee_rate' => $result['orderInfo']['fee_rate'] ?? '',
             'fee_type' => $result['orderInfo']['fee_type'] ?? '',
             'fee_symbol' => $result['orderInfo']['fee_symbol'] ?? '',
+            'auto_cancel_time' => $result['orderInfo']['auto_cancel_time'] ?? '',
             'shop_id' => $result['orderInfo']['shop_id'] ?? '',
             'distributor_id' => $result['orderInfo']['distributor_id'] ?? '',
             'trade_source_type' => $trade_source_type,
@@ -118,7 +119,7 @@ class PaymentService
             }
             $data['member_card_code'] = $authInfo['user_card_code'];
         }
-        if (in_array($params['pay_type'], ['adapay', 'bspay', 'offline_pay', 'paypal'])) {
+        if (in_array($params['pay_type'], ['adapay', 'bspay', 'offline_pay', 'paypal', 'doumen_intl'])) {
             $data['pay_channel'] = $params['pay_channel'] ?? null;
         }
         if ($params['pay_type'] == 'alipaymini') {

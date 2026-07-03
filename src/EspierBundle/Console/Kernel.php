@@ -127,6 +127,7 @@ use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformSyncRefundCommand;
 use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformAssessHistoricalSyncCommand;
 use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformRunHistoricalSyncCommand;
 use ShuyunOpenPlatformBundle\Console\ShuyunOpenPlatformTokenRefreshCommand;
+use PaymentBundle\Console\DoumenIntlTokenRefreshCommand;
 
 class Kernel extends ConsoleKernel
 {
@@ -197,6 +198,7 @@ class Kernel extends ConsoleKernel
         UpdateDesignerWorksCommand::class,
         FillDistributorLatLngCommand::class,
         ShuyunOpenPlatformTokenRefreshCommand::class,
+        DoumenIntlTokenRefreshCommand::class,
         ShuyunOpenPlatformSyncOrderTradeCommand::class,
         ShuyunOpenPlatformSyncRefundCommand::class,
         ShuyunOpenPlatformAssessHistoricalSyncCommand::class,
@@ -383,6 +385,18 @@ class Kernel extends ConsoleKernel
             ->dailyAt('4:15')
             ->withoutOverlapping()
             ->name('shuyun_open_platform_refresh_tokens');
+
+        // 斗门国际：每 115 分钟（可配置）主动 GET /authorize 刷新 token 并写入 Redis
+        $schedule->command('doumen:intl:refresh-tokens')
+            ->everyMinute()
+            ->when(function () {
+                $intervalMinutes = (int) config('doumen_intl.token_refresh_interval_minutes', 110);
+                $lastRun = (int) app('redis')->get('doumen_intl:token_refresh:last_scheduled_run');
+
+                return $lastRun <= 0 || (time() - $lastRun) >= ($intervalMinutes * 60);
+            })
+            ->withoutOverlapping()
+            ->name('doumen_intl_refresh_tokens');
 
         // 银联商务支付，划付，上传文件
         $schedule->call(function () {

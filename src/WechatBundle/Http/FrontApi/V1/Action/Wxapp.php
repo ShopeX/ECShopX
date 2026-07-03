@@ -19,6 +19,7 @@ namespace WechatBundle\Http\FrontApi\V1\Action;
 
 use App\Http\Controllers\Controller as Controller;
 use CompanysBundle\Services\CommonLangModService;
+use CompanysBundle\Services\CurrencyExchangeRateService;
 use CompanysBundle\Services\SettingService as CompanysSettingService;
 use CompanysBundle\Services\Shops\WxShopsService;
 use CompanysBundle\Services\ShopsService;
@@ -634,6 +635,16 @@ class Wxapp extends Controller
      *                  @SWG\Property( property="distributor_param_status", type="boolean", example="false", description="是否带门店参数 true:开启 false:关闭"),
      *                  @SWG\Property( property="disk_driver", type="string", example="qiniu", description="文件存储"),
      *                  @SWG\Property( property="point_rule_name", type="string", example="积分", description="积分规则名称"),
+     *                  @SWG\Property( property="currency", type="object",
+     *                      @SWG\Property( property="id", type="integer", example="1"),
+     *                      @SWG\Property( property="company_id", type="integer", example="1"),
+     *                      @SWG\Property( property="currency", type="string", example="CNY"),
+     *                      @SWG\Property( property="title", type="string", example="中国人民币"),
+     *                      @SWG\Property( property="symbol", type="string", example="￥"),
+     *                      @SWG\Property( property="rate", type="string", example="1"),
+     *                      @SWG\Property( property="is_default", type="boolean", example="true"),
+     *                      @SWG\Property( property="use_platform", type="string", example="normal"),
+     *                  ),
      *              ),
      *     )),
      *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/WechatErrorRespones") ) )
@@ -676,6 +687,9 @@ class Wxapp extends Controller
         $result['point_rule_name'] = $pointRuleInfo['name'];
         $result['category_style'] = $categoryPageSetting['style'];
         $result['dmcrm_is_open'] = $dmCrmSetting['is_open'] ?? false;
+
+        $currencyExchangeRateService = new CurrencyExchangeRateService();
+        $result['currency'] = $currencyExchangeRateService->getDefaultCurrency($companyId);
 
         return $this->response->array($result);
     }

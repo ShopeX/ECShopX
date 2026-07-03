@@ -158,6 +158,7 @@ class WxappPayment extends Controller
             $params['fee_type'] = isset($order['fee_type']) ? $order['fee_type'] : '';
             $params['fee_rate'] = isset($order['fee_rate']) ? $order['fee_rate'] : '';
             $params['fee_symbol'] = isset($order['fee_symbol']) ? $order['fee_symbol'] : '';
+            $params['auto_cancel_time'] = isset($order['auto_cancel_time']) ? $order['auto_cancel_time'] : '';
 
             $params['distributor_id'] = isset($order['distributor_id']) ? $order['distributor_id'] : '';
             $params['shop_id'] = isset($order['shop_id']) ? $order['shop_id'] : '';

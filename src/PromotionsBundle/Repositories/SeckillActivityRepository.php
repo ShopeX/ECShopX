@@ -465,7 +465,7 @@ class SeckillActivityRepository extends EntityRepository
             $ids = trim($result['distributor_id'], ',');
             $result['distributor_id'] = explode(',', $ids);
         } else {
-            $result['distributor_id'] = null;
+            $result['distributor_id'] = [];
         }
         $nowTime = time();
         if ($nowTime >= $result['activity_end_time'] || $result['disabled'] == 1) {

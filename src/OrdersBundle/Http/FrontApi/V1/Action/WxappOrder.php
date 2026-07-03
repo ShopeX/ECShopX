@@ -227,6 +227,7 @@ class WxappOrder extends Controller
                 'fee_rate' => $result['fee_rate'],
                 'fee_type' => $result['fee_type'],
                 'fee_symbol' => $result['fee_symbol'],
+                'auto_cancel_time' => $result['auto_cancel_time'] ?? '',
                 'shop_id' => $result['shop_id'] ?? 0,
                 'distributor_id' => isset($result['distributor_id']) ? $result['distributor_id'] : '',
                 'trade_source_type' => $params['order_type'],
@@ -534,6 +535,7 @@ class WxappOrder extends Controller
                 'fee_rate' => $result['fee_rate'],
                 'fee_type' => $result['fee_type'],
                 'fee_symbol' => $result['fee_symbol'],
+                'auto_cancel_time' => $result['auto_cancel_time'] ?? '',
                 'shop_id' => $result['shop_id'] ?? 0,
                 'distributor_id' => isset($result['distributor_id']) ? $result['distributor_id'] : '',
                 'trade_source_type' => $params['order_type'],
@@ -546,7 +548,7 @@ class WxappOrder extends Controller
             app('log')->info(':dkxd:'.__FUNCTION__.__LINE__.':3 dopayment createorder:params :' . json_encode($params) ) ;
 
             $pay = $service->doPayment($authorizerAppId, $wxaAppId, $data, false);
-            if($data['pay_type'] == 'paypal'){
+            if($data['pay_type'] == 'paypal' || $data['pay_type'] == 'doumen_intl'){
                 return  $pay;
             }
         }

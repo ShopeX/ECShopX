@@ -39,6 +39,7 @@ use PaymentBundle\Services\PaymentsService;
 use PaymentBundle\Services\Payments\ChinaumsPayService;
 use PaymentBundle\Services\Payments\AlipayMiniService;
 use PaymentBundle\Services\Payments\BsPayService;
+use PaymentBundle\Services\Payments\DoumenIntlService;
 use PaymentBundle\Services\Payments\PaypalService;
 
 trait GetPaymentServiceTrait
@@ -112,6 +113,9 @@ trait GetPaymentServiceTrait
             case 'paypal':
                 $service = new PaymentsService(new PaypalService($distributorId));
                 break;
+            case 'doumen_intl':
+                $service = new PaymentsService(new DoumenIntlService());
+                break;
             default:
                 throw new Exception("无此类型支付！");
         }
@@ -148,6 +152,9 @@ trait GetPaymentServiceTrait
                 break;
             case 'pos':
                 $service = new PaymentsService(new PosPayService());
+                break;
+            case 'doumen_intl':
+                $service = new PaymentsService(new DoumenIntlService());
                 break;
             default:
                 throw new Exception("无此类型支付！");
@@ -189,6 +196,9 @@ trait GetPaymentServiceTrait
                 break;
             case 'paypal':
                 $service = new PaymentsService(new PaypalService());
+                break;
+            case 'doumen_intl':
+                $service = new PaymentsService(new DoumenIntlService());
                 break;
             default:
                 throw new Exception("无此类型支付！");

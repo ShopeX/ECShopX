@@ -16,10 +16,6 @@ $api->version('v1', function($api) {
         $api->get('/sub_approve/list', ['name' => '斗拱子商户审批列表', 'as' => 'bspay.sub_approve.list', 'uses' => 'SubUser@subApproveLists']);
         $api->get('/sub_approve/info/{id}', ['name' => '子商户审批详情', 'middleware' => ['datapass'], 'as' => 'bspay.sub_approve.info', 'uses' => 'SubUser@subApproveInfo']);
         $api->post('/sub_approve/save_audit', ['name' => '斗拱子商户审批保存', 'as' => 'bspay.sub_approve.save_audit', 'uses' => 'SubUser@saveAudit']);
-        $api->post('/sub_approve/draw_limit', ['name' => '保存子商户提现限额', 'as' => 'bspay.sub_approve.draw_limit_set', 'uses' => 'SubUser@setDrawLimit']);
-        $api->get('/sub_approve/draw_limit', ['name' => '获取子商户提现限额', 'as' => 'bspay.sub_approve.draw_limit_get', 'uses' => 'SubUser@getDrawLimit']);
-        $api->post('/sub_approve/draw_cash_config', ['name' => '保存子商户提现限额', 'as' => 'bspay.sub_approve.draw_limit_set', 'uses' => 'SubUser@setDrawCashConfig']);
-        $api->get('/sub_approve/draw_cash_config', ['name' => '获取子商户提现限额', 'as' => 'bspay.sub_approve.draw_limit_get', 'uses' => 'SubUser@getDrawCashConfig']);
 
         $api->get('/regions', ['name' => '获取二级所有地区', 'as' => 'bspay.regions', 'uses' => 'User@getRegions']);
         $api->get('/regions/third', ['name' => '获取三级所有地区', 'as' => 'bspay.regions.third', 'uses' => 'User@getRegionsThird']);

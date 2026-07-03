@@ -20,6 +20,7 @@ namespace CompanysBundle\Http\Api\V1\Action;
 use App\Http\Controllers\Controller as BaseController;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use CompanysBundle\Services\CurrencyCreateValidator;
 use CompanysBundle\Services\CurrencyExchangeRateService;
 
 use Dingo\Api\Exception\StoreResourceFailedException;
@@ -87,6 +88,13 @@ class CurrencyController extends BaseController
         }
 
         $params['company_id'] = app('auth')->user()->get('company_id');
+
+        CurrencyCreateValidator::validateCurrencyCode($params['currency']);
+        $existing = $this->currencyExchangeRate->getInfo([
+            'company_id' => $params['company_id'],
+            'currency' => $params['currency'],
+        ]);
+        CurrencyCreateValidator::validateNotDuplicate($existing);
 
         $result = $this->currencyExchangeRate->create($params);
         return $this->response->array($result);

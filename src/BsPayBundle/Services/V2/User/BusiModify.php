@@ -21,6 +21,7 @@
  */
 namespace BsPayBundle\Services\V2\User;
 
+use BsPayBundle\Services\HuifuCardInfoBuilder;
 use BsPayBundle\Services\Loader;
 use BsPayBundle\Sdk\Core\BsPayClient;
 use BsPayBundle\Sdk\Request\V2UserBusiModifyRequest;
@@ -49,21 +50,7 @@ class BusiModify {
             ),
         );
         // 设置非必填字段
-        $_data['card_info'] = [
-            'card_type' => $data['card_type'],
-            'card_name' => $data['card_name'],
-            'card_no' => $data['card_no'],
-            'prov_id' => $data['prov_id'],
-            'area_id' => $data['area_id'],
-            'bank_code' => $data['bank_code'],
-            'branch_name' => $data['branch_name'],
-            'cert_type' => '00',
-            'cert_no' => $data['cert_no'],
-            'cert_validity_type' => $data['cert_validity_type'],
-            'cert_begin_date' => $data['cert_begin_date'],
-            'cert_end_date' => $data['cert_end_date'],
-            'mp' => $data['mp'],
-        ];
+        $_data['card_info'] = HuifuCardInfoBuilder::build($data);
         $extendInfoMap = $this->getExtendInfos($_data);
         $param['params'] = array_merge($param['params'], $extendInfoMap);
         // $request->setExtendInfo($extendInfoMap);

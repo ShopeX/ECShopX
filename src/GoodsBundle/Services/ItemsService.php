@@ -2033,14 +2033,11 @@ class ItemsService
     {
         $openPlatform = new OpenPlatform();
         $app = $openPlatform->getAuthorizerApplication($wxaappid);
-        try {
-            $data['page'] = 'pages/item/espier-detail';
-            $scene = 'id=' . $itemId . '&dtid=' . $distributorId;
-            $wxaCode = $app->app_code->getUnlimit($scene, $data);
-        } catch (\Exception $e) {
-            $data['page'] = 'pages/goodsdetail';
-            $scene = 'id=' . $itemId . '&dtid=' . $distributorId;
-            $wxaCode = $app->app_code->getUnlimit($scene, $data);
+        $data['page'] = 'subpages/item/espier-detail';
+        $scene = 'id=' . $itemId . '&dtid=' . $distributorId;
+        $wxaCode = $app->app_code->getUnlimit($scene, $data);
+        if (is_array($wxaCode) && isset($wxaCode['errcode']) && $wxaCode['errcode'] !== 0) {
+            throw new ResourceException($wxaCode['errmsg'] ?? trans('GoodsBundle/Controllers/Items.get_miniapp_code_params_error'));
         }
         if ($isBase64) {
             $base64 = 'data:image/jpg;base64,' . base64_encode($wxaCode);
@@ -3065,9 +3062,12 @@ class ItemsService
         }
         $openPlatform = new OpenPlatform();
         $app = $openPlatform->getAuthorizerApplication($wxaappid);
-        $data['page'] = 'pages/goodsdetail';
+        $data['page'] = 'subpages/item/espier-detail';
         $scene = 'id=' . $itemId;
         $wxaCode = $app->app_code->getUnlimit($scene, $data);
+        if (is_array($wxaCode) && isset($wxaCode['errcode']) && $wxaCode['errcode'] !== 0) {
+            throw new ResourceException($wxaCode['errmsg'] ?? trans('GoodsBundle/Controllers/Items.get_miniapp_code_params_error'));
+        }
         if ($isBase64) {
             $base64 = 'data:image/jpg;base64,' . base64_encode($wxaCode);
             return ['base64Image' => $base64];

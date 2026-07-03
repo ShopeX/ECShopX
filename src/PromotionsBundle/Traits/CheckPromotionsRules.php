@@ -394,7 +394,7 @@ trait CheckPromotionsRules
         if ($params['use_bound'] == 0) {
             $errorMessage = '相同时间内已经存在';
             foreach ($rs['list'] as $v) {
-                if ($v['source_id'] == $params['source_id'] || in_array($params['source_id'], $v['distributor_id'])) {
+                if ($v['source_id'] == $params['source_id'] || in_array($params['source_id'], $v['distributor_id'] ?? [])) {
                     $errorMessage .= $seckillTypeConf[$v['seckill_type']] ?? '';
                     $errorMessage .= ':'.$v['activity_name'];
                     throw new ResourceException($errorMessage);

@@ -39,7 +39,7 @@ class RepositoryLangInterceptor
     {
         $paramsForTarget = $params;
         $originalData = null;
-        if (!$this->commonLangModService->isDefaultLang()) {
+        /* if (!$this->commonLangModService->isDefaultLang()) {
             $langField = $this->target->langField;
             $dataIndex = count($params) === 1 ? 0 : null;
             if ($dataIndex === null) {
@@ -56,7 +56,7 @@ class RepositoryLangInterceptor
                 $paramsForTarget = $params;
                 $paramsForTarget[$dataIndex] = $dataCopy;
             }
-        }
+        } */
         $result = $this->target->create(...$paramsForTarget);
         if (!empty($result)) {
             $langSource = ($originalData !== null) ? array_merge($result, $originalData) : $result;

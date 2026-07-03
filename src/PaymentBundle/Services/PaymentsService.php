@@ -45,6 +45,7 @@ use PaymentBundle\Services\Payments\WechatPayService;
 use OrdersBundle\Services\RefundErrorLogsService;
 use PaymentBundle\Services\Payments\ChinaumsPayService;
 use OrdersBundle\Jobs\TradeRefundStatistics;
+use PaymentBundle\Services\Payments\DoumenIntlService;
 use PaymentBundle\Services\Payments\PaypalService;
 
 // 支付服务
@@ -106,6 +107,8 @@ class PaymentsService
             if ($data['pay_type'] == 'wxpay') {
                 $data['pay_type'] = 'wxpay';
                 $this->paymentService = new WechatPayService();
+            } elseif ($data['pay_type'] == 'doumen_intl') {
+                $this->paymentService = new DoumenIntlService();
             }
         }
         $this->getPayConfig($data['company_id']);
@@ -131,6 +134,9 @@ class PaymentsService
         if ($data['pay_type'] == 'paypal') {
             $this->paymentService = new PaypalService($data['distributor_id'] ?? 0);
             $payConf = $this->getPayConfig($data['company_id'], $data['distributor_id'] ?? 0);
+        } elseif ($data['pay_type'] == 'doumen_intl') {
+            $this->paymentService = new DoumenIntlService();
+            $payConf = $this->getPayConfig($data['company_id']);
         } else if ('wxpay' == substr($data['pay_type'], 0, 5)) {
             $payConf = $this->getPayConfig($data['company_id'], $data['distributor_id']);
             app('log')->info('payConf===>'.var_export($payConf,1));
@@ -197,6 +203,14 @@ class PaymentsService
             'client_ip' => $data['client_ip']??0,
         ];
 
+        if (in_array($data['pay_type'], ['paypal', 'doumen_intl'], true)) {
+            $attributes['fee_type'] = $newData['fee_type'] ?? $data['fee_type'] ?? '';
+        }
+
+        if ($data['pay_type'] === 'doumen_intl' && isset($data['auto_cancel_time']) && $data['auto_cancel_time'] !== '') {
+            $attributes['auto_cancel_time'] = (int) $data['auto_cancel_time'];
+        }
+
         if (in_array($data['pay_type'], ['adapay', 'bspay'])) {
             $attributes['pay_channel'] = $data['pay_channel'];
             $attributes['source'] = $data['source'] ?? '';
@@ -245,7 +259,9 @@ class PaymentsService
     {
         $data['company_id'] = $companyId;
 
-        if ('wxpay' == substr($data['pay_type'], 0, 5)) {
+        if ($data['pay_type'] == 'doumen_intl') {
+            $this->paymentService = new DoumenIntlService();
+        } elseif ('wxpay' == substr($data['pay_type'], 0, 5)) {
             $payConf = $this->getPayConfig($data['company_id'], $data['distributor_id']);
             if (!$payConf || !isset($payConf['cert_url']) || !isset($payConf['cert_key_url'])) {
                 $result['status'] = 'FAIL';
@@ -412,6 +428,10 @@ class PaymentsService
         $paypalSetting = $paypalService->getPaymentSetting($company_id);
         $hasPaypal = !empty($paypalSetting) && ($paypalSetting['is_open'] ?? false);
 
+        // 斗门国际支付
+        $doumenIntlService = new DoumenIntlService();
+        $hasDoumenIntl = $doumenIntlService->isConfigured($company_id);
+
         $offlinePayService = new OfflinePayService();
         $offlinePaySetting = $offlinePayService->getPaymentSetting($company_id);
         $result = [];
@@ -422,6 +442,12 @@ class PaymentsService
                 $result[] = [
                     'pay_type_code' => 'paypal',
                     'pay_type_name' => 'PayPal'
+                ];
+            }
+            if ($hasDoumenIntl) {
+                $result[] = [
+                    'pay_type_code' => 'doumen_intl',
+                    'pay_type_name' => '斗门国际'
                 ];
             }
         }

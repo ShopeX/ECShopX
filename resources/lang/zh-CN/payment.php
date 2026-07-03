@@ -17,4 +17,5 @@ return [
     'cert_file_name_error' => '请上传apiclient_cert.pem',
     'cert_key_file_name_error' => '请上传apiclient_key.pem',
     'servicer_info_required' => '开启特约商户服务商APPID和服务商商户号必填！',
+    'close_doumen_intl_first' => '请先关闭斗门国际收银台',
 ];

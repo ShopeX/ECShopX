@@ -51,9 +51,6 @@ class WorkWechatService
         if (!isset($result['bg_avatar_url'])) {
             $result['bg_avatar_url'] = '';
         }
-        if (!isset($result['show_float']) || !in_array((string)$result['show_float'], ['0', '1'], true)) {
-            $result['show_float'] = '0';
-        }
 
         // if (!isset($result['agents']['app']['appid']) || $result['agents']['app']['appid'] == '') {
         //     throw new ResourceException('您还没有配置导购企业微信app信息！');
@@ -76,7 +73,6 @@ class WorkWechatService
             $data = [
                 'avatar_url' => '',
                 'bg_avatar_url' => '',
-                'show_float' => '0',
                 'corpid' => '',
                 'agents' => [
                     'app' => [
@@ -115,9 +111,6 @@ class WorkWechatService
             }
             if (!isset($data['bg_avatar_url'])) {
                 $data['bg_avatar_url'] = '';
-            }
-            if (!isset($data['show_float']) || !in_array((string)$data['show_float'], ['0', '1'], true)) {
-                $data['show_float'] = '0';
             }
         }
         $data = $this->attachConfig($data, $companyId);
@@ -171,7 +164,6 @@ class WorkWechatService
         $redis = app('redis')->connection('default');
         $data = [
             'show' => '1',//trim($params['show']),
-            'show_float' => in_array((string)($params['show_float'] ?? '0'), ['1', '0'], true) ? (string)$params['show_float'] : '0',
             'avatar_url' => trim($params['avatar_url'] ?? ''),
             'bg_avatar_url' => trim($params['bg_avatar_url'] ?? ''),
             'corpid' => trim($params['corpid']),

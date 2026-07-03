@@ -242,20 +242,14 @@ class Distributor extends Controller
             'distribution_type.required' => trans('DistributionBundle/Controllers/Distributor.distribution_type_required'),
             'merchant_id.*' => trans('DistributionBundle/Controllers/Distributor.merchant_id_required'),
         ];
-        // 如果不是 distributor_self，lng、lat、regions_id、regions、address 需要必填验证
         if (empty($params['distributor_self']) || $params['distributor_self'] === 'false') {
-            $rules['lng'] = 'required|max:255';
-            $rules['lat'] = 'required|max:255';
-            $rules['regions_id'] = 'required';
-            $rules['regions'] = 'required';
-            $rules['address'] = 'required|max:255';
-            $msg['lng.required'] = trans('DistributionBundle/Controllers/Distributor.lng_required');
+            $rules['lng'] = 'nullable|max:255';
+            $rules['lat'] = 'nullable|max:255';
+            $rules['regions_id'] = 'nullable';
+            $rules['regions'] = 'nullable';
+            $rules['address'] = 'nullable|max:255';
             $msg['lng.max'] = trans('DistributionBundle/Controllers/Distributor.lng_max');
-            $msg['lat.required'] = trans('DistributionBundle/Controllers/Distributor.lat_required');
             $msg['lat.max'] = trans('DistributionBundle/Controllers/Distributor.lat_max');
-            $msg['regions_id.required'] = trans('DistributionBundle/Controllers/Distributor.regions_id_required');
-            $msg['regions.required'] = trans('DistributionBundle/Controllers/Distributor.regions_required');
-            $msg['address.required'] = trans('DistributionBundle/Controllers/Distributor.address_required');
             $msg['address.max'] = trans('DistributionBundle/Controllers/Distributor.address_max');
         }
         ## 没有开启达达同城配时店铺编号必填; 开启达达同城配时用户填写了店铺编号用用户填写的，没有填写店铺编号使用达达创建的
@@ -706,20 +700,14 @@ class Distributor extends Controller
                 'distribution_type.required' => trans('DistributionBundle/Controllers/Distributor.distribution_type_required_update'),
                 'merchant_id.*' => trans('DistributionBundle/Controllers/Distributor.merchant_id_required_update'),
             ];
-            // 如果不是 distributor_self，lng、lat、regions_id、regions、address 需要必填验证
             if (empty($params['distributor_self']) || $params['distributor_self'] === 'false') {
-                $rules['lng'] = 'required|max:255';
-                $rules['lat'] = 'required|max:255';
-                $rules['regions_id'] = 'required';
-                $rules['regions'] = 'required';
-                $rules['address'] = 'required|max:255';
-                $msg['lng.required'] = trans('DistributionBundle/Controllers/Distributor.lng_required_update');
+                $rules['lng'] = 'nullable|max:255';
+                $rules['lat'] = 'nullable|max:255';
+                $rules['regions_id'] = 'nullable';
+                $rules['regions'] = 'nullable';
+                $rules['address'] = 'nullable|max:255';
                 $msg['lng.max'] = trans('DistributionBundle/Controllers/Distributor.lng_max_update');
-                $msg['lat.required'] = trans('DistributionBundle/Controllers/Distributor.lat_required_update');
                 $msg['lat.max'] = trans('DistributionBundle/Controllers/Distributor.lat_max_update');
-                $msg['regions_id.required'] = trans('DistributionBundle/Controllers/Distributor.regions_id_required_update');
-                $msg['regions.required'] = trans('DistributionBundle/Controllers/Distributor.regions_required_update');
-                $msg['address.required'] = trans('DistributionBundle/Controllers/Distributor.address_required_update');
                 $msg['address.max'] = trans('DistributionBundle/Controllers/Distributor.address_max_update');
             }
             if ($params['offline_aftersales_self'] || $params['offline_aftersales_other']) {

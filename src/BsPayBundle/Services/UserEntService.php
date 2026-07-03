@@ -82,14 +82,11 @@ class UserEntService
                 'card_no' => $data['card_no'] ?? '',
                 'prov_id' => $data['prov_id'] ?? '',
                 'area_id' => $data['area_id'] ?? '',
-                'bank_code' => $data['bank_code'] ?? '',
+                'branch_code' => $data['branch_code'] ?? '',
                 'branch_name' => $data['branch_name'] ?? '',
-                'cert_no' => $data['legal_cert_no'] ?? '',
-                'cert_validity_type' => $data['legal_cert_validity_type'] ?? '',
-                'cert_begin_date' => $data['legal_cert_begin_date'] ?? '',
-                'cert_end_date' => $data['legal_cert_end_date'] ?? '',
                 'mp' => $data['mp'] ?? '',
             ];
+            $cardInfo = array_merge($cardInfo, $this->buildStoredCardCertFields($data));
             app('log')->info('file:'.__FILE__.',line:'.__LINE__."\n");
             app('log')->info('cardInfo====>'.var_export($cardInfo,1));
             // $settleAccountService = new SettleAccountService();
@@ -178,14 +175,11 @@ class UserEntService
                 'card_no' => $data['card_no'] ?? '',
                 'prov_id' => $data['prov_id'] ?? '',
                 'area_id' => $data['area_id'] ?? '',
-                'bank_code' => $data['bank_code'] ?? '',
+                'branch_code' => $data['branch_code'] ?? '',
                 'branch_name' => $data['branch_name'] ?? '',
-                'cert_no' => $data['cert_no'] ?? '',
-                'cert_validity_type' => $data['cert_validity_type'] ?? '',
-                'cert_begin_date' => $data['cert_begin_date'] ?? '',
-                'cert_end_date' => $data['cert_end_date'] ?? '',
                 'mp' => $data['mp'] ?? '',
             ];
+            $cardInfo = array_merge($cardInfo, $this->buildStoredCardCertFields($data));
 
             if ($isSuccessUpdate) {
                 unset($cardInfo['card_name']);
@@ -317,6 +311,14 @@ class UserEntService
             $params['legal_name'] = mb_substr($params['legal_name'], 0, 20);
         }
         $params['contact_name'] = $params['legal_name'];// 联系人姓名，使用法人姓名
+        // 结算卡：支行联行号
+        $params['branch_code'] = $params['branch_code'] ?? '';
+        if ($params['branch_code'] !== '') {
+            $params['branch_code'] = $this->sanitizeBranchCode($params['branch_code']);
+        }
+        if (!empty($params['card_no'])) {
+            $params['card_no'] = preg_replace('/\s+/u', '', trim($params['card_no']));
+        }
         // 结算卡
         if ($params['card_type'] == 1) {
              // 对私
@@ -344,6 +346,30 @@ class UserEntService
             unset($params['card_regions_id']);
         }
         return $params;
+    }
+
+    private function buildStoredCardCertFields(array $data): array
+    {
+        if ((int) ($data['card_type'] ?? 0) === 1) {
+            return [
+                'cert_no' => $data['cert_no'] ?? ($data['legal_cert_no'] ?? ''),
+                'cert_validity_type' => $data['cert_validity_type'] ?? ($data['legal_cert_validity_type'] ?? ''),
+                'cert_begin_date' => $data['cert_begin_date'] ?? ($data['legal_cert_begin_date'] ?? ''),
+                'cert_end_date' => $data['cert_end_date'] ?? ($data['legal_cert_end_date'] ?? ''),
+            ];
+        }
+
+        return [
+            'cert_no' => '',
+            'cert_validity_type' => '',
+            'cert_begin_date' => '',
+            'cert_end_date' => '',
+        ];
+    }
+
+    private function sanitizeBranchCode(string $branchCode): string
+    {
+        return preg_replace('/[\x{200B}-\x{200D}\x{FEFF}]/u', '', trim($branchCode));
     }
 
     /**

@@ -676,6 +676,7 @@ class NormalOrder extends Controller
             'fee_rate' => $result['fee_rate'],
             'fee_type' => $result['fee_type'],
             'fee_symbol' => $result['fee_symbol'],
+            'auto_cancel_time' => $result['auto_cancel_time'] ?? '',
             'shop_id' => $result['shop_id'] ?? 0,
             'distributor_id' => isset($result['distributor_id']) ? $result['distributor_id'] : '',
             'trade_source_type' => $params['order_type'],

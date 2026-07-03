@@ -339,10 +339,15 @@ class PackageService
             return ['list' => [], 'total_count' => 0];
         }
         // 合并其他筛选条件，并加入店铺筛选
-        if (isset($otherFilter['distributor_id']) && $otherFilter['distributor_id'] > 0) {
-            $filter['source_id'] = $otherFilter['distributor_id'];
-            $filter['source_type'] = 'distributor';
-        } 
+        if (isset($otherFilter['distributor_id'])) {
+            if ($otherFilter['distributor_id'] > 0) {
+                $filter['source_id'] = $otherFilter['distributor_id'];
+                $filter['source_type'] = 'distributor';
+            } else {
+                // 平台组合商品活动（source_id=0），不包含其他店铺自建活动
+                $filter['source_id'] = 0;
+            }
+        }
         $filter['company_id'] = $companyId;
         $filter['goods_id'] = $itemInfo['goods_id'];
         $filter['package_status'] = 'AGREE';

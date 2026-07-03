@@ -17,4 +17,5 @@ return [
     'cert_file_name_error' => 'Please upload apiclient_cert.pem',
     'cert_key_file_name_error' => 'Please upload apiclient_key.pem',
     'servicer_info_required' => 'Service provider APPID and merchant ID are required when enabling special merchant service provider',
+    'close_doumen_intl_first' => 'Please disable Doumen International checkout first',
 ];

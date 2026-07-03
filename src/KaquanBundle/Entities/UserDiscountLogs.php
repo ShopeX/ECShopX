@@ -51,9 +51,9 @@ class UserDiscountLogs
     private $company_id;
 
     /**
-     * @var string
+     * @var string|null
      *
-     * @ORM\Column(name="mobile", type="string", options={"comment":"手机号"})
+     * @ORM\Column(name="mobile", type="string", nullable=true, options={"comment":"手机号"})
      */
     private $mobile;
 
@@ -187,6 +187,12 @@ class UserDiscountLogs
      */
     public function setMobile($mobile)
     {
+        if ($mobile === null || $mobile === '') {
+            $this->mobile = null;
+
+            return $this;
+        }
+
         $this->mobile = fixedencrypt($mobile);
 
         return $this;

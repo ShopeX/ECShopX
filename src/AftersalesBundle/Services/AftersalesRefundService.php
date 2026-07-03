@@ -33,6 +33,7 @@ use PaymentBundle\Services\Payments\DepositPayService;
 use PaymentBundle\Services\Payments\HfPayService;
 use PaymentBundle\Services\Payments\PointPayService;
 use PaymentBundle\Services\Payments\PosPayService;
+use OrdersBundle\Services\OrderAssociationService;
 use OrdersBundle\Services\TradeService;
 use PaymentBundle\Services\PaymentsService;
 use PaymentBundle\Services\Payments\WechatPayService;
@@ -45,6 +46,7 @@ use DistributionBundle\Services\DistributorService;
 use PaymentBundle\Services\Payments\ChinaumsPayService;
 use PaymentBundle\Services\Payments\BsPayService;
 use PaymentBundle\Services\Payments\OfflinePayService;
+use PaymentBundle\Services\Payments\DoumenIntlService;
 
 class AftersalesRefundService
 {
@@ -159,6 +161,12 @@ class AftersalesRefundService
                     break;
                 case 'offline_pay':
                     $paymentsService = new PaymentsService(new OfflinePayService());
+                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
+                    break;
+                case 'doumen_intl':
+                    $refundData['transaction_id'] = $tradeInfo['transaction_id'];
+                    $refundData['fee_type'] = $refundData['currency'] ?? $tradeInfo['fee_type'] ?? 'CNY';
+                    $paymentsService = new PaymentsService(new DoumenIntlService());
                     $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
                     break;
                 default:
@@ -287,6 +295,7 @@ class AftersalesRefundService
             $refundFee = round($refundFee * $feeRate);
         }
 
+        $currencyFields = $this->resolveRefundCurrencyFields($orderInfo, $tradeInfo);
         $refundData = [
             'company_id' => $params['company_id'],
             'user_id' => $orderInfo['user_id'],
@@ -301,10 +310,10 @@ class AftersalesRefundService
             'refund_fee' => $refundFee,
             'return_freight' => 1,
             'pay_type' => $tradeInfo['payType'],
-            'currency' => $tradeInfo['feeType'],
-            'cur_fee_type' => isset($orderInfo['cur_fee_type']) ? $orderInfo['cur_fee_type'] : '',
-            'cur_fee_rate' => isset($orderInfo['cur_fee_rate']) ? $orderInfo['cur_fee_rate'] : '',
-            'cur_fee_symbol' => isset($orderInfo['cur_fee_symbol']) ? $orderInfo['cur_fee_symbol'] : '',
+            'currency' => $currencyFields['currency'],
+            'cur_fee_type' => $currencyFields['cur_fee_type'],
+            'cur_fee_rate' => $currencyFields['cur_fee_rate'],
+            'cur_fee_symbol' => $currencyFields['cur_fee_symbol'],
             'cur_pay_fee' => $full_refund ? (isset($tradeInfo['curPayFee']) && $tradeInfo['curPayFee'] ? $tradeInfo['curPayFee'] : $tradeInfo['payFee']) : $params['refund_fee'],
         ];
 
@@ -409,6 +418,7 @@ class AftersalesRefundService
     // 售前 创建退款单
     public function createRefund($params)
     {
+        $params = $this->applyOrderCurrencyToRefundParams($params);
         $refundData = [
             'refund_bn' => $this->__genRefundBn(),
             'company_id' => $params['company_id'],
@@ -443,6 +453,7 @@ class AftersalesRefundService
     // 售后 创建退款单
     public function createAftersalesRefund($params)
     {
+        $params = $this->applyOrderCurrencyToRefundParams($params);
         $refundData = [
             'refund_bn' => $this->__genRefundBn(),
             'aftersales_bn' => $params['aftersales_bn'],
@@ -567,5 +578,62 @@ class AftersalesRefundService
             ->andWhere($qb->expr()->eq('refund_status', $qb->expr()->literal('SUCCESS')));
         $sum = $qb->execute()->fetchColumn();
         return $sum ?? 0;
+    }
+
+    /**
+     * 退款单货币字段以订单为准，交易单仅作兜底。
+     *
+     * @return array{currency: string, cur_fee_type: string, cur_fee_rate: mixed, cur_fee_symbol: string}
+     */
+    private function resolveRefundCurrencyFields(array $orderInfo, array $tradeInfo): array
+    {
+        $payType = strtolower((string) ($tradeInfo['payType'] ?? $tradeInfo['pay_type'] ?? ''));
+        if ($payType === 'point') {
+            return [
+                'currency' => '',
+                'cur_fee_type' => '',
+                'cur_fee_rate' => $orderInfo['fee_rate'] ?? $tradeInfo['curFeeRate'] ?? $tradeInfo['cur_fee_rate'] ?? '',
+                'cur_fee_symbol' => '',
+            ];
+        }
+
+        $orderFeeType = (string) ($orderInfo['fee_type'] ?? '');
+        $tradeFeeType = (string) ($tradeInfo['feeType'] ?? $tradeInfo['fee_type'] ?? '');
+        $feeType = $orderFeeType !== '' ? $orderFeeType : $tradeFeeType;
+
+        return [
+            'currency' => $feeType,
+            'cur_fee_type' => $feeType,
+            'cur_fee_rate' => $orderInfo['fee_rate'] ?? $tradeInfo['curFeeRate'] ?? $tradeInfo['cur_fee_rate'] ?? '',
+            'cur_fee_symbol' => $orderInfo['fee_symbol'] ?? $tradeInfo['curFeeSymbol'] ?? $tradeInfo['cur_fee_symbol'] ?? '',
+        ];
+    }
+
+    /**
+     * 创建退款单前，用订单货币覆盖调用方传入的交易单货币。
+     */
+    private function applyOrderCurrencyToRefundParams(array $params): array
+    {
+        if (strtolower((string) ($params['pay_type'] ?? '')) === 'point') {
+            $params['currency'] = '';
+            $params['cur_fee_type'] = '';
+            $params['cur_fee_symbol'] = '';
+
+            return $params;
+        }
+
+        if (empty($params['order_id']) || empty($params['company_id'])) {
+            return $params;
+        }
+
+        $orderAssociationService = new OrderAssociationService();
+        $order = $orderAssociationService->getOrder($params['company_id'], $params['order_id']);
+        if (empty($order)) {
+            return $params;
+        }
+
+        $currencyFields = $this->resolveRefundCurrencyFields($order, $params);
+
+        return array_merge($params, $currencyFields);
     }
 }

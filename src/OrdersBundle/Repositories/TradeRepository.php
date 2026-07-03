@@ -36,7 +36,7 @@ class TradeRepository extends EntityRepository
     {
         $data['time_start'] = time();
         $data['trade_state'] = 'NOTPAY';
-        $data['fee_type'] = isset($data['fee_type']) ?: 'CNY';
+        $data['fee_type'] = isset($data['fee_type']) ? $data['fee_type'] : 'CNY';
         // 如果为微信支付
         if ($data['pay_type'] == 'wxpay') {
             if (!$data['mch_id'] || !$data['open_id']) {

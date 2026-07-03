@@ -28,8 +28,10 @@ use PaymentBundle\Services\Payments\AlipayService;
 use PaymentBundle\Services\Payments\HfPayService;
 use PaymentBundle\Services\Payments\IcbcPayService;
 use PaymentBundle\Services\Payments\OfflinePayService;
+use PaymentBundle\Services\Payments\DoumenIntlService;
 use PaymentBundle\Services\Payments\PaypalService;
 use PaymentBundle\Services\Payments\WechatPayService;
+use PaymentBundle\Services\PaymentDoumenIntlMutualExclusionService;
 use PaymentBundle\Services\PaymentsService;
 use PaymentBundle\Services\Payments\ChinaumsPayService;
 use PaymentBundle\Services\Payments\BsPayService;
@@ -65,6 +67,13 @@ class Payment extends Controller
     {
         $companyId = app('auth')->user()->get('company_id');
         $distributorId = $request->input('distributor_id', 0);
+        $payType = (string) $request->input('pay_type');
+        $isOpening = $this->resolvePaymentIsOpening($request, $payType);
+        $doumenExclusionService = new PaymentDoumenIntlMutualExclusionService();
+
+        if ($payType !== 'point_pay') {
+            $doumenExclusionService->validateBeforeSave((int) $companyId, $payType, $isOpening);
+        }
 
         if ($request->input('pay_type') == 'wxpay') {
             $paymentsService = new WechatPayService($distributorId);
@@ -94,6 +103,13 @@ class Payment extends Controller
             $config['sandbox'] = $request->input('sandbox') === 'true' ? true : false;
             $config['webhook_id'] = $request->input('webhook_id');
             $config['is_open'] = $request->input('is_open') === 'true' ? true : false;
+        } elseif ($request->input('pay_type') == 'doumen_intl') {
+            $paymentsService = new DoumenIntlService();
+            $config['is_open'] = $request->input('is_open') === 'true' ? true : false;
+            $config['X-AccessCode'] = $request->input('X-AccessCode');
+            $config['X-SecretKey'] = $request->input('X-SecretKey');
+            $config['appId'] = $request->input('appId');
+            $config['return_url'] = $request->input('return_url');
         } elseif ($request->input('pay_type') == 'point_pay') {
             $point_pay_first = intval($request->input('point_pay_first', 0));
             $pointRule = (new PointMemberRuleService())->savePointRule($companyId, ['point_pay_first' => $point_pay_first]);
@@ -203,7 +219,43 @@ class Payment extends Controller
         $service = new PaymentsService($paymentsService);
         $service->setPaymentSetting($companyId, $config);
 
+        // 需求：打开斗门国际支付时，关闭其他支付方式
+        if ($payType === 'doumen_intl' && $isOpening) {
+            $doumenExclusionService->closeAllOtherPaymentMethods((int) $companyId);
+        }
+
         return $this->response->array(['status' => true]);
+    }
+
+    private function resolvePaymentIsOpening(Request $request, string $payType): bool
+    {
+        if ($payType === 'point_pay') {
+            return false;
+        }
+
+        $raw = $request->input('is_open');
+
+        if ($payType === 'icbcpay') {
+            return $raw === 'true' || $raw === true || $raw === 1 || $raw === '1';
+        }
+
+        if (in_array($payType, ['alipay', 'adapay', 'bspay', 'chinaumspay', 'paypal', 'doumen_intl'], true)) {
+            return $raw === 'true' || $raw === true;
+        }
+
+        if (is_bool($raw)) {
+            return $raw;
+        }
+
+        if (is_string($raw)) {
+            return in_array(strtolower($raw), ['true', '1', 'yes', 'on'], true);
+        }
+
+        if (is_numeric($raw)) {
+            return (bool) $raw;
+        }
+
+        return false;
     }
 
     /**
@@ -250,6 +302,8 @@ class Payment extends Controller
             $paymentsService = new IcbcPayService();
         }  elseif ($request->input('pay_type') == 'paypal') {
             $paymentsService = new PaypalService($distributorId);
+        }  elseif ($request->input('pay_type') == 'doumen_intl') {
+            $paymentsService = new DoumenIntlService();
         }  elseif ($request->input('pay_type') == 'chinaumspay') {
             $operatorType = app('auth')->user()->get('operator_type');
             if ($operatorType == 'dealer') {

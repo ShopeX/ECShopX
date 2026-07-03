@@ -29,7 +29,7 @@ class ArticleRepository extends EntityRepository
     public $module = 'companys_article'; // 多语言对应的模块
     public $primaryKey = 'article_id'; // 主键，对应data_id
     public $langField = [
-        'title','summary','content|json','author','province','city','area','regions',
+        'title','summary','content|json','author','province','city','area','regions|json',
     ]; // 多语言字段
     
     public function getEntity()

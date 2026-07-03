@@ -2241,11 +2241,12 @@ class Items extends BaseController
         if (!$wxaappid) {
             throw new ResourceException(trans('GoodsBundle/Controllers/Items.miniapp_not_opened'), $validator->errors());
         }
-        $operate_source = $request->input('operate_source', '');
-        if($operate_source == 'platform'){
-            $itemsService = new ItemsService();
-        }elseif ($operate_source == 'supplier'){
+        // operate_source 未传时默认走平台商品（与同文件 setItemsSort 等接口一致）
+        $operate_source = $request->input('operate_source', 'platform');
+        if ($operate_source == 'supplier') {
             $itemsService = new SupplierItemsService();
+        } else {
+            $itemsService = new ItemsService();
         }
         $result = $itemsService->getDistributionGoodsWxaCode($wxaappid, $params['item_id'], $params['distributor_id']);
         return response($result)->header('content-type', 'image/jpeg');

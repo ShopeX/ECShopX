@@ -70,6 +70,7 @@ $app->configure('app');
 $app->configure('bank');
 $app->configure('common');
 $app->configure('crm');
+$app->configure('doumen_intl');
 $app->configure('licensegateway');
 $app->configure('openapi');
 $app->configure('order');

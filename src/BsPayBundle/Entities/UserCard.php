@@ -131,9 +131,9 @@ class UserCard
     /**
      * @var string
      *
-     * @ORM\Column(name="bank_code", type="string", nullable=true, length=12, options={"comment":"结算卡银行号，对公必填","default":""})
+     * @ORM\Column(name="branch_code", type="string", nullable=true, length=12, options={"comment":"支行联行号，对公必填","default":""})
      */
-    private $bank_code;
+    private $branch_code;
 
     /**
      * @var string
@@ -500,27 +500,27 @@ class UserCard
     }
 
     /**
-     * Set bankCode.
+     * Set branchCode.
      *
-     * @param string|null $bankCode
+     * @param string|null $branchCode
      *
      * @return UserCard
      */
-    public function setBankCode($bankCode = null)
+    public function setBranchCode($branchCode = null)
     {
-        $this->bank_code = $bankCode;
+        $this->branch_code = $branchCode;
 
         return $this;
     }
 
     /**
-     * Get bankCode.
+     * Get branchCode.
      *
      * @return string|null
      */
-    public function getBankCode()
+    public function getBranchCode()
     {
-        return $this->bank_code;
+        return $this->branch_code;
     }
 
     /**

@@ -161,7 +161,7 @@ class ArticleController extends BaseController
      */
     public function createDataArticle(Request $request)
     {
-        $params = $request->all('title', 'author', 'summary', 'content', 'sort', 'share_image_url', 'image_url', 'article_type', 'release_status', 'head_portrait', 'category_id', 'regions_id', 'regions', 'region_id', 'region_name', 'share_image_url');
+        $params = $request->all('title', 'author', 'summary', 'content', 'sort', 'share_image_url', 'image_url', 'article_type', 'release_status', 'head_portrait', 'category_id', 'regions_id', 'regions', 'share_image_url');
 
         if (!isset($params['content']) || empty($params['content'])) {
             throw new StoreResourceFailedException('文章内容不能为空');
@@ -179,14 +179,6 @@ class ArticleController extends BaseController
         if (!$request->get('content')) {
             throw new StoreResourceFailedException('文章内容必填');
         }
-        // 兼容 region_id/region_name 和 regions_id/regions 两种字段名
-        if (!isset($params['regions_id']) && isset($params['region_id'])) {
-            $params['regions_id'] = $params['region_id'];
-        }
-        if (!isset($params['regions']) && isset($params['region_name'])) {
-            $params['regions'] = $params['region_name'];
-        }
-
         if ($params['article_type'] == 'bring') {
             if (!$request->get('content')) {
                 throw new StoreResourceFailedException('文章内容必填');
@@ -198,13 +190,14 @@ class ArticleController extends BaseController
             //     throw new StoreResourceFailedException('文章作者头像必填');
             // }
 
-            if (isset($params['regions_id']) && isset($params['regions'])) {
+            if (!empty($params['regions_id']) && !empty($params['regions'])) {
                 foreach ($params['regions'] as $k => $value) {
-                    $params[$this->regions[$k]] = $value;
+                    if (isset($this->regions[$k])) {
+                        $params[$this->regions[$k]] = $value;
+                    }
                 }
             }
         }
-
 
         $auth = app('auth')->user()->get();
         $params['company_id'] = $auth['company_id'];
@@ -326,7 +319,7 @@ class ArticleController extends BaseController
      */
     public function updateDataArticle($article_id, Request $request)
     {
-        $params = $request->all('title', 'author', 'summary', 'content', 'sort', 'image_url', 'share_image_url', 'article_type', 'release_status', 'head_portrait', 'category_id', 'regions_id', 'regions', 'region_id', 'region_name', 'share_image_url');
+        $params = $request->all('title', 'author', 'summary', 'content', 'sort', 'image_url', 'share_image_url', 'article_type', 'release_status', 'head_portrait', 'category_id', 'regions_id', 'regions', 'share_image_url');
         if (!array_filter($params)) {
             throw new StoreResourceFailedException('文章编辑出错');
         }
@@ -335,21 +328,15 @@ class ArticleController extends BaseController
             throw new StoreResourceFailedException('文章内容不能为空');
         }
 
-        // 兼容 region_id/region_name 和 regions_id/regions 两种字段名
-        if (!isset($params['regions_id']) && isset($params['region_id'])) {
-            $params['regions_id'] = $params['region_id'];
-        }
-        if (!isset($params['regions']) && isset($params['region_name'])) {
-            $params['regions'] = $params['region_name'];
-        }
-
-        if (isset($params['regions_id']) && isset($params['regions'])) {
+        if (!empty($params['regions_id']) && !empty($params['regions'])) {
             foreach ($params['regions'] as $k => $value) {
-                $params[$this->regions[$k]] = $value;
+                if (isset($this->regions[$k])) {
+                    $params[$this->regions[$k]] = $value;
+                }
             }
-        }
-        if (isset($params['regions']) && count($params['regions']) == 2) {
-            $params['area'] = '';
+            if (count($params['regions']) == 2) {
+                $params['area'] = '';
+            }
         }
 
         $auth = app('auth')->user()->get();

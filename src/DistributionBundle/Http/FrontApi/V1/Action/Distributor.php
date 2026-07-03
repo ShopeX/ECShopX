@@ -1183,8 +1183,7 @@ class Distributor extends BaseController
      *                 @SWG\Property(property="work_qrcode", type="string", example="https://example.com/qrcode/xxx", description="导购二维码"),
      *                 @SWG\Property(property="work_qrcode_configid", type="string", example="cfg_123", description="导购二维码配置ID"),
      *                 @SWG\Property(property="salesperson_name", type="string", example="张三", description="导购姓名"),
-     *                 @SWG\Property(property="salesperson_avatar", type="string", example="https://example.com/avatar/xxx.jpg", description="导购头像"),
-     *                 @SWG\Property(property="show_float", type="string", example="1", description="是否展示浮层：0关闭，1打开（来自企业微信配置）")
+     *                 @SWG\Property(property="salesperson_avatar", type="string", example="https://example.com/avatar/xxx.jpg", description="导购头像")
      *             )
      *         )
      *     ),
@@ -1210,16 +1209,14 @@ class Distributor extends BaseController
             $unionid = (string)($wechatUserService->getUnionidByUserId($userId, $companyId) ?? '');
         }
 
-        // 获取导购背景图、默认导购头像及是否展示浮层（与 workwechat/config 接口一致）
+        // 获取导购背景图、默认导购头像（与企业微信配置一致）
         $bgAvatarUrl = '';
         $defaultSalespersonAvatar = '';
-        $showFloat = '0';
         try {
             $workWechatService = new WorkWechatService();
             $workWechatConfig = $workWechatService->getViewConfig($companyId);
             $bgAvatarUrl = $workWechatConfig['bg_avatar_url'] ?? '';
             $defaultSalespersonAvatar = $workWechatConfig['avatar_url'] ?? '';
-            $showFloat = in_array((string)($workWechatConfig['show_float'] ?? '0'), ['0', '1'], true) ? (string)$workWechatConfig['show_float'] : '0';
         } catch (\Exception $e) {
             app('log')->warning('获取企业微信配置失败', [
                 'company_id' => $companyId,
@@ -1241,7 +1238,6 @@ class Distributor extends BaseController
                 'salesperson_avatar' => '',
                 'salesperson_common_name' => '',
                 'bg_avatar_url' => $bgAvatarUrl,
-                'show_float' => $showFloat,
             ]);
         }
 
@@ -1252,7 +1248,6 @@ class Distributor extends BaseController
             'salesperson_avatar' => '',
             'salesperson_common_name' => '',
             'bg_avatar_url' => $bgAvatarUrl,
-            'show_float' => $showFloat,
         ];
         try {
             $marketingCenterRequest = new MarketingCenterRequest();
@@ -1275,9 +1270,6 @@ class Distributor extends BaseController
         if (!empty($data['work_qrcode']) && empty($data['salesperson_avatar'])) {
             $data['salesperson_avatar'] = $defaultSalespersonAvatar;
             $data['salesperson_common_name'] = '客服';
-        }
-        if (!isset($data['show_float'])) {
-            $data['show_float'] = $showFloat;
         }
         return $this->response->array($data);
     }

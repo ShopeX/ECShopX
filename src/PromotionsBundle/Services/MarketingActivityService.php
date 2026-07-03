@@ -457,8 +457,12 @@ class MarketingActivityService
             }
 
             $company = (new CompanysActivationEgo())->check($companyId);
-            //店铺和平台只能使用各自的活动
-            if ($company['product_model'] == 'platform' && $distributorId >= 0 && $distributorId != $value['source_id']) {
+            // 店铺和平台的促销各自独立，与商品列表活动标签逻辑保持一致
+            if ($shopId > 0 && (int) $shopId != (int) ($value['source_id'] ?? 0)) {
+                continue;
+            }
+            // 平台模式下总部仅展示平台活动
+            if ($company['product_model'] == 'platform' && $shopId == 0 && (int) ($value['source_id'] ?? 0) != 0) {
                 continue;
             }
 

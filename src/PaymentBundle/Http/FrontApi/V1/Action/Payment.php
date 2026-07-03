@@ -112,11 +112,13 @@ class Payment extends BaseController
         $result_type = array_column($result,null,'pay_type_code');
         $is_adapay = isset($result_type['adapay']) ? true : false; 
         $is_wxpay = isset($result_type['wxpay']) ? true : false; 
-        $is_paypal = isset($result_type['paypal']) ? true : false; 
+        $is_paypal = isset($result_type['paypal']) ? true : false;
+        $is_doumen_intl = isset($result_type['doumen_intl']) ? true : false;
         $data = array('list' => $result );
         $data['is_adapay'] = $is_adapay;
         $data['is_wxpay']  = $is_wxpay;
         $data['is_paypal'] = $is_paypal;
+        $data['is_doumen_intl'] = $is_doumen_intl;
         return $this->response->array($data);
     }
 

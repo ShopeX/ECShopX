@@ -35,7 +35,7 @@ class DefaultService implements MiniProgramInterface
             'pathParams' => [],
         ],
         [
-            'page' => 'pages/item/espier-detail',
+            'page' => 'subpages/item/espier-detail',
             'label' => '商品详情页',
             'pathParams' => [
                 [

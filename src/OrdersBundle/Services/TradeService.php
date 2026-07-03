@@ -87,6 +87,8 @@ class TradeService implements InterfacesTrade
      */
     public function create(array $data, $isDiscount = false)
     {
+        $data = $this->syncTradeCurrencyFromOrder($data);
+
         $discountService = new DiscountService();
         if ($isDiscount) {
             $countDiscount = $discountService->discount($data);
@@ -120,7 +122,14 @@ class TradeService implements InterfacesTrade
                 }
             }
         }
-        unset($data['fee_rate'], $data['fee_symbol'], $data['fee_type']);
+        $tradeFeeType = $data['fee_type'] ?? ($data['cur_fee_type'] ?? '');
+        unset($data['fee_rate'], $data['fee_symbol']);
+        if (! in_array($data['pay_type'] ?? '', ['paypal', 'doumen_intl'], true)) {
+            unset($data['fee_type']);
+        }
+        if ($tradeFeeType !== '' && $tradeFeeType !== null) {
+            $data['fee_type'] = $tradeFeeType;
+        }
 
         //若设置了店铺号，则在产生的交易单拼接店铺号
         if ($data['distributor_id'] ?? 0) {
@@ -158,6 +167,34 @@ class TradeService implements InterfacesTrade
             $data = $this->syncTradeUserIdFromOrderWhenMissing($data);
             $this->finishEvents($data);
         }
+        return $data;
+    }
+
+    /**
+     * 创建交易单时与订单货币保持一致（fee_type / fee_rate / fee_symbol）。
+     */
+    private function syncTradeCurrencyFromOrder(array $data): array
+    {
+        if (empty($data['order_id']) || empty($data['company_id'])) {
+            return $data;
+        }
+
+        $orderAssociationService = new OrderAssociationService();
+        $order = $orderAssociationService->getOrder($data['company_id'], $data['order_id']);
+        if (empty($order)) {
+            return $data;
+        }
+
+        if (!empty($order['fee_type'])) {
+            $data['fee_type'] = $order['fee_type'];
+        }
+        if (!empty($order['fee_rate']) && empty($data['fee_rate'])) {
+            $data['fee_rate'] = $order['fee_rate'];
+        }
+        if (!empty($order['fee_symbol']) && empty($data['fee_symbol'])) {
+            $data['fee_symbol'] = $order['fee_symbol'];
+        }
+
         return $data;
     }
 
