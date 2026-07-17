@@ -889,8 +889,9 @@ class ActivitiesService
     {
         $distributorId = $filter['distributor_id'] ?? 0;
         $shelfStatus = $filter['shelf_status'] ?? null;
+        $itemIds = $filter['item_id'] ?? [];
         unset($filter['distributor_id'], $filter['shelf_status']);
-        $result = $this->goodsEntityRepository->getActivityGoodsList($filter, $page, $pageSize);
+        $result = $this->goodsEntityRepository->getActivityGoodsList($filter, $page, $pageSize, $orderBy);
         if ($result['list']) {
             $result['list'] = $this->itemsEntityRepository->getActivityItemsList(
                 $filter['company_id'],
@@ -901,6 +902,17 @@ class ActivitiesService
                 $orderBy,
                 $shelfStatus
             );
+            if ($itemIds) {
+                $itemIds = array_map('intval', (array) $itemIds);
+                foreach ($result['list'] as &$item) {
+                    if (!empty($item['spec_items'])) {
+                        $item['spec_items'] = array_values(array_filter($item['spec_items'], static function ($specItem) use ($itemIds) {
+                            return in_array((int) $specItem['item_id'], $itemIds, true);
+                        }));
+                    }
+                }
+                unset($item);
+            }
             if ($distributorId > 0) {
                 // 查询店铺商品的是否为总库库存、店铺库存字段
                 $itemIds = array_column($result['list'], 'item_id');

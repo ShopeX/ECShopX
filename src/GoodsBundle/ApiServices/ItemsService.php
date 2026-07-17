@@ -900,10 +900,10 @@ class ItemsService
     /**
      * 实体类商品获取sku
      */
-    public function getSkuItemsList($filter, $page = 1, $pageSize = 2000, $orderBy = ['item_id' => 'DESC'])
+    public function getSkuItemsList($filter, $page = 1, $pageSize = 500, $orderBy = ['item_id' => 'DESC'])
     {
         $page = ($page < 1) ? 1 : $page;
-        $pageSize = ($pageSize > 2000) ? 2000 : $pageSize;
+        $pageSize = ($pageSize > 500) ? 500 : $pageSize;
         $itemsList = $this->itemsRepository->list($filter, $orderBy, $pageSize, $page);
         if ($itemsList['total_count'] <= 0) {
             return $itemsList;

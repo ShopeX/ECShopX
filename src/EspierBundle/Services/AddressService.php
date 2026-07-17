@@ -59,11 +59,44 @@ class AddressService
                     $address[$k]['children'][$k1]['children'] = $b['list'];
                 }
             }
-            $address = json_encode($address);
+            $address = json_encode($this->normalizeAddressTree($address));
             app('redis')->connection('default')->set('address', $address);
         }
 
-        return json_decode($address, 1);
+        return $this->normalizeAddressTree(json_decode($address, true));
+    }
+
+    private function normalizeAddressTree(array $address): array
+    {
+        foreach ($address as $k => $v) {
+            if (!empty($v['children'])) {
+                $address[$k]['children'] = $this->expandDirectCountyAddresses($v['children']);
+            }
+        }
+
+        return $address;
+    }
+
+    /**
+     * 将「省直辖县级行政区划」展开为多个二级地区，名称取自其下级地区
+     */
+    private function expandDirectCountyAddresses(array $children): array
+    {
+        $result = [];
+        foreach ($children as $child) {
+            if ($child['label'] === '省直辖县级行政区划' && !empty($child['children'])) {
+                foreach ($child['children'] as $grandChild) {
+                    $result[] = array_merge($child, [
+                        'label' => $grandChild['label'],
+                        'children' => [$grandChild],
+                    ]);
+                }
+            } else {
+                $result[] = $child;
+            }
+        }
+
+        return $result;
     }
 
     private function getTree($data, $pId)

@@ -63,18 +63,23 @@ class SettingService
      * @return string
      */
     function getSetting($companyId, $keyname){
-        if(app('redis')->hget('ugc_setting:'.$companyId, $keyname)??null){
-            return app('redis')->hget('ugc_setting:'.$companyId,$keyname);
+        $redisKey = 'ugc_setting:'.$companyId;
+        if (app('redis')->hexists($redisKey, $keyname)) {
+            return app('redis')->hget($redisKey, $keyname);
         }
-        else{
-            $result=$this->entityRepository->getInfo(['keyname'=>$keyname]);
-            if($result ?? null){
-                return $result['value'];
-            }
-            else{
-                return '';
-            }
+
+        $result = $this->entityRepository->getInfo([
+            'company_id' => $companyId,
+            'keyname' => $keyname,
+        ]);
+        if ($result ?? null) {
+            $value = $result['value'];
+            $this->saveSettingToRedis($companyId, $keyname, $value);
+
+            return $value;
         }
+
+        return '';
     }
     function saveSettingToRedis($companyId, $keyname, $value){
         return app('redis')->hset('ugc_setting:'.$companyId, $keyname, $value);

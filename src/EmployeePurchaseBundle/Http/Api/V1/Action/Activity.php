@@ -892,6 +892,72 @@ class Activity extends Controller
         return $this->response->array($result);
     }
 
+    public function exportActivityItems(Request $request)
+    {
+        $params = $request->all('activity_id', 'main_cat_id', 'category', 'item_name', 'item_bn', 'item_id', 'shelf_status');
+        $error = validator_params($params, [
+            'activity_id' => ['required|integer', '活动ID必填'],
+            'item_id' => ['sometimes|array', '商品ID格式错误'],
+            'item_id.*' => ['integer|min:1', '商品ID格式错误'],
+        ]);
+        if ($error) {
+            throw new ResourceException($error);
+        }
+
+        $authInfo = app('auth')->user()->get();
+        $companyId = (int) $authInfo['company_id'];
+        $filter = [
+            'company_id' => $companyId,
+            'activity_id' => (int) $params['activity_id'],
+            'operator_id' => (int) ($authInfo['operator_id'] ?? 0),
+        ];
+        $activityFilter = ['company_id' => $companyId, 'id' => $filter['activity_id']];
+        if (($authInfo['operator_type'] ?? '') == 'distributor') {
+            $filter['distributor_id'] = (int) $authInfo['distributor_id'];
+            $activityFilter['distributor_id'] = $filter['distributor_id'];
+        } else {
+            $filter['distributor_id'] = (int) $request->get('distributor_id', 0);
+        }
+
+        $activitiesService = new ActivitiesService();
+        $activitiesService->getInfo($activityFilter);
+        $itemsCategoryService = new ItemsCategoryService();
+        if (!empty($params['main_cat_id'])) {
+            $mainCatId = is_array($params['main_cat_id']) ? end($params['main_cat_id']) : $params['main_cat_id'];
+            $filter['main_cat_id'] = $itemsCategoryService->getMainCatChildIdsBy($mainCatId, $companyId);
+        }
+        if (!empty($params['category'])) {
+            $filter['category'] = $itemsCategoryService->getItemsCategoryIds($params['category'], $companyId);
+        }
+        if (!empty($params['item_name'])) {
+            $filter['item_name'] = $params['item_name'];
+        }
+        if (!empty($params['item_bn'])) {
+            $filter['item_bn'] = $params['item_bn'];
+        }
+        if (!empty($params['item_id'])) {
+            $filter['item_id'] = array_values(array_unique(array_map('intval', $params['item_id'])));
+        }
+        if (array_key_exists('shelf_status', $params) && $params['shelf_status'] !== '' && $params['shelf_status'] !== null) {
+            $filter['shelf_status'] = (int) $params['shelf_status'];
+        }
+
+        $result = $activitiesService->getActivityItemList($filter, 1, 1, true, false);
+        if (empty($result['total_count'])) {
+            throw new ResourceException('导出有误,暂无数据导出');
+        }
+
+        $gotoJob = (new ExportFileJob(
+            'employee_purchase_activity_items',
+            $companyId,
+            $filter,
+            $filter['operator_id']
+        ))->onQueue('slow');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($gotoJob);
+
+        return response()->json(['status' => true]);
+    }
+
     /**
      * @SWG\Post(
      *     path="/employeepurchase/activity/items",

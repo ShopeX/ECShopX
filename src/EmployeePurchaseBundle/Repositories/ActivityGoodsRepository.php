@@ -311,10 +311,11 @@ class ActivityGoodsRepository extends EntityRepository
         return $conn->executeUpdate($sql);
     }
 
-    public function getActivityGoodsList($filter, $page = 1, $pageSize = -1)
+    public function getActivityGoodsList($filter, $page = 1, $pageSize = -1, $orderBy = [])
     {
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder();
+        $activityItemsJoined = false;
         $qb = $qb->select('count(distinct g.goods_id)')
             ->from('employee_purchase_activity_goods', 'g')
             ->leftJoin('g', 'items', 'i', 'g.goods_id = i.goods_id')
@@ -351,6 +352,17 @@ class ActivityGoodsRepository extends EntityRepository
                 'g.goods_id = epai.goods_id AND g.activity_id = epai.activity_id AND g.company_id = epai.company_id'
             );
             $qb = $qb->andWhere($qb->expr()->eq('epai.shelf_status', (int) $filter['shelf_status']));
+            $activityItemsJoined = true;
+        }
+
+        if (isset($orderBy['sort']) && !$activityItemsJoined) {
+            $qb = $qb->innerJoin(
+                'g',
+                'employee_purchase_activity_items',
+                'epai',
+                'g.goods_id = epai.goods_id AND g.activity_id = epai.activity_id AND g.company_id = epai.company_id'
+            );
+            $activityItemsJoined = true;
         }
 
         // 商品名称 / 关键字：与 GoodsBundle\Services\ItemsService::_filter 一致（多语言 item_name + 编号/条码）
@@ -391,6 +403,10 @@ class ActivityGoodsRepository extends EntityRepository
             $qb = $qb->andWhere($qb->expr()->eq('i.item_bn', $qb->expr()->literal($filter['item_bn'])));
         }
 
+        if (!empty($filter['item_id'])) {
+            $qb = $qb->andWhere($qb->expr()->in('i.item_id', array_map('intval', (array) $filter['item_id'])));
+        }
+
         if (isset($filter['main_cat_id']) && $filter['main_cat_id']) {
             if (is_array($filter['main_cat_id'])) {
                 $qb = $qb->andWhere($qb->expr()->in('i.item_category', $filter['main_cat_id']));
@@ -410,15 +426,19 @@ class ActivityGoodsRepository extends EntityRepository
         }
 
         $qb = $qb->andWhere($qb->expr()->isNotNull('i.goods_id'));
+        if (isset($orderBy['sort']) && $activityItemsJoined) {
+            $qb = $qb->addOrderBy('MAX(epai.sort)', strtoupper($orderBy['sort']) === 'ASC' ? 'ASC' : 'DESC');
+        }
         $qb = $qb->addOrderBy('g.goods_id', 'DESC');
 
         $result['total_count'] = (int)$qb->execute()->fetchColumn();
         if ($result['total_count'] > 0) {
+            $qb->groupBy('g.goods_id');
             if ($pageSize > 0) {
                 $qb->setFirstResult(($page - 1) * $pageSize)
                   ->setMaxResults($pageSize);
             }
-            $lists = $qb->select('distinct g.goods_id as goods_id')->execute()->fetchAll();
+            $lists = $qb->select('g.goods_id as goods_id')->execute()->fetchAll();
         }
         $result['list'] = $lists ?? [];
         return $result;

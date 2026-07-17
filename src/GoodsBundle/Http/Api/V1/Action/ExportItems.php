@@ -24,6 +24,7 @@ use EspierBundle\Jobs\ExportFileJob;
 use GoodsBundle\Services\ItemsCategoryService;
 use GoodsBundle\Services\ItemsService;
 use GoodsBundle\Services\ItemsTagsService;
+use SupplierBundle\Services\SupplierItemsAttrService;
 use SupplierBundle\Services\SupplierItemsService;
 use SupplierBundle\Services\SupplierService;
 use WechatBundle\Services\WeappService;
@@ -210,8 +211,17 @@ class ExportItems extends BaseController
 
                 case 'category'://商品销售分类
                     if (!$value) break;
-                    $itemsCategoryService = new ItemsCategoryService();
-                    $ids = $itemsCategoryService->getItemIdsByCatId($value, $params['company_id']);
+                    if ($params['operator_type'] == 'supplier') {
+                        $supplierItemsAttrService = new SupplierItemsAttrService();
+                        $ids = $supplierItemsAttrService->getItemIdsByCatId(
+                            $value,
+                            $params['company_id'],
+                            $authdata['operator_id'] ?? null
+                        );
+                    } else {
+                        $itemsCategoryService = new ItemsCategoryService();
+                        $ids = $itemsCategoryService->getItemIdsByCatId($value, $params['company_id']);
+                    }
                     if (!$ids) {
                         throw new resourceexception('指定的分类下没有商品');
                     }

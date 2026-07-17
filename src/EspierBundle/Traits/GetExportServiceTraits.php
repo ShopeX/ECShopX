@@ -61,6 +61,7 @@ use EspierBundle\Services\Export\StatementDetailsExportService;
 use EspierBundle\Services\Export\DivisionExportService;
 use EspierBundle\Services\Export\DivisionDetailExportService;
 use EspierBundle\Services\Export\PurchaseEmployeesExportService;
+use EspierBundle\Services\Export\EmployeePurchaseActivityItemsExportService;
 use EspierBundle\Services\Export\EmployeePurchaseActivityQrcodeExportService;
 use EspierBundle\Services\Export\EmployeePurchaseActivityScanStatsExportService;
 use BsPayBundle\Services\Export\BspayTradeExportService;
@@ -208,6 +209,9 @@ trait GetExportServiceTraits
                 break;
             case 'employee_purchase_employees':
                 $exportService = new PurchaseEmployeesExportService();
+                break;
+            case 'employee_purchase_activity_items':
+                $exportService = new EmployeePurchaseActivityItemsExportService();
                 break;
             case 'employee_purchase_activity_qrcode':
                 $exportService = new EmployeePurchaseActivityQrcodeExportService();

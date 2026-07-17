@@ -55,11 +55,14 @@ services:
     container_name: ecshopx-web-frontend
     restart: unless-stopped
     working_dir: /data/httpd/ECShopX_web-frontend
-    command: sh -c "tail -f /dev/null"
+    command: sh /data/httpd/ECShopX/docker-dev/web-entrypoint.sh
     volumes:
       - ..:/data/httpd
     environment:
       - TZ=Asia/Shanghai
+      - NUXT_WAIT_INTERVAL=10
+      # SSR 走容器内网访问 API，不影响管理后台
+      - NUXT_API_BASE=http://ecshopx-dev:8080/api/h5app
     networks:
       - ecshopx-dev-network
 

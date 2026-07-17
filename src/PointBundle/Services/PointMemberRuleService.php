@@ -271,7 +271,10 @@ class PointMemberRuleService
             //     $totalMoneyToPoint += $moneyToPoint;
             //     $totalMaxMoney += $maxMoney;
             // }
-            $totalMaxMoney = $orderData['total_fee'] - $freightFee;
+            $totalMaxMoney = bcmul(
+                bcdiv($this->rule['deduct_proportion_limit'], 100, 2),
+                $orderData['total_fee'] - $freightFee
+            );
             app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':totalMaxMoney:' . json_encode($totalMaxMoney));
             $moneyToPoint = $this->moneyToPoint($companyId, $totalMaxMoney);// 本商品最大抵扣积分数
             app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':moneyToPoint:' . json_encode($moneyToPoint));

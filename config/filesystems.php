@@ -55,6 +55,7 @@ return [
         'community_chief'               => \CommunityBundle\Services\CommunityChiefUploadService::class,
         'employee_purchase_employees'   => \EmployeePurchaseBundle\Services\EmployeesUploadService::class,
         'employee_purchase_activity_items'   => \EmployeePurchaseBundle\Services\ActivityItemsUploadService::class,
+        'employee_purchase_activity_items_sort' => \EmployeePurchaseBundle\Services\ActivityItemsSortUploadService::class,
         'upload_distributor_white'      => \DistributionBundle\Services\UploadWhiteListService::class,
         'distributor_info'              => \DistributionBundle\Services\UploadDistributor::class,
         'upload_tb_items'               => \GoodsBundle\Services\Upload\UploadTbItems::class,

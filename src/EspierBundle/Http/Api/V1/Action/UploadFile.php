@@ -75,7 +75,7 @@ class UploadFile extends Controller
         $distributorId = $request->input('distributor_id', 0);
         $relationId = $request->input('relation_id', 0);
         $fileType = $request->input('file_type');
-        if ($fileType == 'employee_purchase_activity_items') {
+        if (in_array($fileType, ['employee_purchase_activity_items', 'employee_purchase_activity_items_sort'], true)) {
             if (empty($relationId)) {
                 throw new ResourceException('关联id不能为空');
             }
@@ -221,7 +221,7 @@ class UploadFile extends Controller
             throw new ResourceException("文件名称不能为空！");
         }
         $relationId = $request->input('relation_id', 0);
-        if ($fileType == 'employee_purchase_activity_items' && empty($relationId)) {
+        if (in_array($fileType, ['employee_purchase_activity_items', 'employee_purchase_activity_items_sort'], true) && empty($relationId)) {
             throw new ResourceException('关联id不能为空');
         }
 

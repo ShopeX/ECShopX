@@ -29,7 +29,6 @@ class ActivityItemsUploadService
         '活动价格' => 'activity_price',
         '限购数量' => 'limit_num',
         '限购金额' => 'limit_fee',
-        '排序' => 'sort',
         '状态' => 'shelf_status',
     ];
 
@@ -42,7 +41,6 @@ class ActivityItemsUploadService
         '活动价格' => ['size' => 20, 'remarks' => '活动价格', 'is_need' => true],
         '限购数量' => ['size' => 20, 'remarks' => '限购数量', 'is_need' => false],
         '限购金额' => ['size' => 20, 'remarks' => '限购金额', 'is_need' => false],
-        '排序' => ['size' => 5, 'remarks' => '排序', 'is_need' => false],
         '状态' => ['size' => 5, 'remarks' => '1-上架，0-下架，留空默认上架', 'is_need' => false],
     ];
 

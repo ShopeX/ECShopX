@@ -254,7 +254,7 @@ class CompanysActivationEgo
         $authorizerAppid = app('registry')->getManager('default')
             ->getRepository(WechatAuth::class)
             ->getAuthorizerAppid($operator['company_id']);
-        
+
         // 移除激活验证
         // $activateInfo = $this->checkValid($operator['company_id']);
 
@@ -269,6 +269,7 @@ class CompanysActivationEgo
             'operator_type' => $operator['operator_type'],
             'is_authorizer' => $authorizerAppid ? true : false,
             'logintype' => $operator['logintype'],
+            'employee_id' => $operator['login_name'] ?? '',
         ];
 
         // 移除license_authorize设置
@@ -858,13 +859,13 @@ class CompanysActivationEgo
         // 开源版本：直接返回成功，不进行任何验证
         $companysRepository = app('registry')->getManager('default')->getRepository(Companys::class);
         $company = $companysRepository->getInfo(['company_id' => $companyId]);
-        
+
         // 获取当前商户的产品类型，没有就用.env配置的
         $productModel = config('common.product_model', 'platform');
         if ($company && isset($company['menu_type'])) {
             $productModel = ShopMenuService::MENU_TYPE[$company['menu_type']] ?? $productModel;
         }
-        
+
         return [
             'company_id' => $companyId,
             'product_model' => $productModel,

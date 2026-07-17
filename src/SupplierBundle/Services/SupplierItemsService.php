@@ -256,10 +256,10 @@ class SupplierItemsService
         return $result;
     }
 
-    public function getSkuItemsList($filter, $page = 1, $pageSize = 2000, $orderBy = ['item_id' => 'DESC'])
+    public function getSkuItemsList($filter, $page = 1, $pageSize = 500, $orderBy = ['item_id' => 'DESC'])
     {
         $page = ($page < 1) ? 1 : $page;
-        $pageSize = ($pageSize > 2000) ? 2000 : $pageSize;
+        $pageSize = ($pageSize > 500) ? 500 : $pageSize;
         $itemsList = $this->repository->lists($filter, '*', $page, $pageSize, $orderBy);
         $itemsList = $this->replaceSkuSpec($itemsList);
         return $itemsList;

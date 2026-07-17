@@ -314,7 +314,7 @@ class ActivityItemsRepository extends EntityRepository
     {
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder();
-        $qb = $qb->select('ai.*,it.item_name,it.item_bn,it.nospec,it.store,it.price,it.pics,it.default_item_id,it.is_medicine,it.is_prescription')
+        $qb = $qb->select('ai.*,it.item_name,it.goods_bn,it.item_bn,it.nospec,it.store,it.price,it.pics,it.default_item_id,it.is_medicine,it.is_prescription')
             ->from('employee_purchase_activity_items', 'ai')
             ->leftJoin('ai', 'items', 'it', 'ai.item_id = it.item_id')
             ->andWhere($qb->expr()->eq('ai.company_id', $companyId))

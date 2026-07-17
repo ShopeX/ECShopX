@@ -701,25 +701,31 @@ class ShippingTemplatesService
     {
         $addressService = new AddressService();
         $areaInfo = $addressService->getInfo(['parent_id' => 0, 'label' => $province]);
-        $province = $areaInfo['id'] ?? 1;
-        if ($city) {
-            $cityInfo = $addressService->getInfo(['parent_id' => $areaInfo['id'], 'label' => $city]);
-            if (!$cityInfo) {
-                $cityInfo = $addressService->getInfo(['parent_id' => $areaInfo['id'], 'label' => str_replace(['市'], [''], $city)]);
-            }
-            $city = $cityInfo['id'] ?? 1;
-            if ($region) {
-                $regionInfo = $addressService->getInfo(['parent_id' => $cityInfo['id'], 'label' => $region]);
-                if (!$regionInfo) {
-                    $regionInfo = $addressService->getInfo(['parent_id' => $cityInfo['id'], 'label' => str_replace(['区'], [''], $region)]);
-                }
-                $region = $regionInfo['id'] ?? 1;
-            } else {
-                $region = 1;
-            }
-        } else {
-            $city = 1;
+        if (!$areaInfo) {
+            throw new \Exception('地区不存在');
         }
+        $province = $areaInfo['id'];
+
+        $cityInfo = $addressService->getInfo(['parent_id' => $areaInfo['id'], 'label' => $city]);
+        if (!$cityInfo) {
+            $cityInfo = $addressService->getInfo(['parent_id' => $areaInfo['id'], 'label' => str_replace(['市'], [''], $city)]);
+        }
+        if (!$cityInfo && $city == $region) {
+            $cityInfo = $addressService->getInfo(['parent_id' => $areaInfo['id'], 'label' => '省直辖县级行政区划']);
+        }
+        if (!$cityInfo) {
+            throw new \Exception('地区不存在');
+        }
+        $city = $cityInfo['id'];
+
+        $regionInfo = $addressService->getInfo(['parent_id' => $cityInfo['id'], 'label' => $region]);
+        if (!$regionInfo) {
+            $regionInfo = $addressService->getInfo(['parent_id' => $cityInfo['id'], 'label' => str_replace(['区', '市', '县'], [''], $region)]);
+        }
+        if (!$regionInfo) {
+            throw new \Exception('地区不存在');
+        }
+        $region = $regionInfo['id'];
     }
 
     public function getLocalRegion(&$city, &$district, $area)

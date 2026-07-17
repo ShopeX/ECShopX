@@ -18,6 +18,7 @@
 namespace SupplierBundle\Services;
 
 use Dingo\Api\Exception\ResourceException;
+use GoodsBundle\Services\ItemsCategoryService;
 use SupplierBundle\Entities\SupplierItemsAttr;
 
 class SupplierItemsAttrService
@@ -149,6 +150,71 @@ class SupplierItemsAttrService
             $rsAttr = $this->repository->create($filter);
         }
         return $rsAttr;
+    }
+
+    /**
+     * 根据销售分类获取供应商商品 default_item_id 列表
+     */
+    public function getItemIdsByCatId($categoryId, $companyId, $supplierId = null)
+    {
+        $itemsCategoryService = new ItemsCategoryService();
+        $categoryIds = $itemsCategoryService->getItemsCategoryIds($categoryId, $companyId);
+        $categoryIds = array_values(array_unique(array_map('intval', (array)$categoryIds)));
+        if (!$categoryIds) {
+            return [];
+        }
+
+        $targetCategoryIds = array_fill_keys($categoryIds, true);
+        $itemIds = [];
+        $conn = app('registry')->getConnection('default');
+        $lastId = 0;
+        $batchSize = 500;
+
+        while (true) {
+            $qb = $conn->createQueryBuilder();
+            $qb->select('sa.id, sa.item_id, sa.attr_data')
+                ->from('supplier_items_attr', 'sa')
+                ->innerJoin('sa', 'supplier_items', 'si', 'sa.item_id = si.item_id AND si.company_id = :company_id')
+                ->where('sa.company_id = :company_id')
+                ->andWhere('sa.attribute_type = :attribute_type')
+                ->andWhere('sa.is_del = 0')
+                ->andWhere('sa.id > :last_id')
+                ->orderBy('sa.id', 'ASC')
+                ->setMaxResults($batchSize)
+                ->setParameter('company_id', $companyId)
+                ->setParameter('attribute_type', 'category')
+                ->setParameter('last_id', $lastId);
+
+            if ($supplierId) {
+                $qb->andWhere('si.supplier_id = :supplier_id')
+                    ->setParameter('supplier_id', $supplierId);
+            }
+
+            $rows = $qb->execute()->fetchAll();
+            if (!$rows) {
+                break;
+            }
+
+            foreach ($rows as $row) {
+                $lastId = (int)$row['id'];
+                if (empty($row['attr_data'])) {
+                    continue;
+                }
+                $attrData = json_decode($row['attr_data'], true);
+                $saleCategoryIds = $attrData['category'] ?? [];
+                if (!is_array($saleCategoryIds) || !$saleCategoryIds) {
+                    continue;
+                }
+                foreach ($saleCategoryIds as $saleCategoryId) {
+                    if (isset($targetCategoryIds[(int)$saleCategoryId])) {
+                        $itemIds[] = (int)$row['item_id'];
+                        break;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($itemIds));
     }
 
     public function __call($method, $parameters)

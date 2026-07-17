@@ -48,6 +48,7 @@ $api->version('v1', function($api) {
 
         // 获取活动商品列表
         $api->get('/employeepurchase/activity/items', ['name'=> '获取活动商品列表','middleware'=>'activated', 'as' => 'employeepurchase.activity.items.list', 'uses' =>'Activity@getActivityItemList']);
+        $api->get('/employeepurchase/activity/items/export', ['name'=> '导出活动商品','middleware'=>'activated', 'as' => 'employeepurchase.activity.items.export', 'uses' =>'Activity@exportActivityItems']);
         // 添加活动商品
         $api->post('/employeepurchase/activity/items', ['name'=> '添加活动商品','middleware'=>'activated', 'as' => 'employeepurchase.activity.items.add', 'uses' =>'Activity@addActivityItems']);
         // 选择活动商品规格

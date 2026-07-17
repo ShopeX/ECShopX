@@ -21,7 +21,7 @@ use Dingo\Api\Exception\StoreResourceFailedException;
 
 class CurrencyCreateValidator
 {
-    public const ALLOWED_CURRENCY_CODES = ['CNY', 'HKD', 'USD'];
+    public const ALLOWED_CURRENCY_CODES = ['CNY', 'HKD', 'USD', 'TWD'];
 
     public static function validateCurrencyCode(string $currency): void
     {

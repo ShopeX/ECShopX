@@ -1544,7 +1544,18 @@ class Items extends BaseController
 
         $itemsRepository = app('registry')->getManager('default')->getRepository(\GoodsBundle\Entities\Items::class);
         $cols = 'item_id,item_name,price,pics';
-        $result = $itemsRepository->getLists(['item_id' => $itemIds], $cols, 1, -1, []);
+        $filter = [
+            'company_id' => $authInfo['company_id'],
+            'item_id' => $itemIds,
+        ];
+        $result = $itemsRepository->getLists($filter, $cols, 1, -1, []);
+
+        foreach ($result as &$item) {
+            if (isset($item['item_name']) && !isset($item['itemName'])) {
+                $item['itemName'] = $item['item_name'];
+            }
+        }
+        unset($item);
 
         return $this->response->array($result);
     }

@@ -32,6 +32,7 @@ use Illuminate\Validation\Rule;
 use PointBundle\Services\PointMemberRuleService;
 use PopularizeBundle\Services\SettingService;
 use SupplierBundle\Services\ItemsCommissionService;
+use SupplierBundle\Services\SupplierItemsAttrService;
 use SupplierBundle\Services\SupplierItemsService;
 use SupplierBundle\Services\SupplierService;
 use WechatBundle\Services\WeappService;
@@ -1597,8 +1598,17 @@ class Items extends BaseController
             } else {
                 $itemCategory = $inputData['category'];
             }
-            $itemsCategoryService = new ItemsCategoryService();
-            $ids = $itemsCategoryService->getItemIdsByCatId($itemCategory, $params['company_id']);
+            if ($operate_source == 'supplier') {
+                $supplierItemsAttrService = new SupplierItemsAttrService();
+                $ids = $supplierItemsAttrService->getItemIdsByCatId(
+                    $itemCategory,
+                    $params['company_id'],
+                    $params['supplier_id'] ?? null
+                );
+            } else {
+                $itemsCategoryService = new ItemsCategoryService();
+                $ids = $itemsCategoryService->getItemIdsByCatId($itemCategory, $params['company_id']);
+            }
             if (isset($params['item_id'])) {
                 $params['item_id'] = array_intersect((array)$params['item_id'], $ids);
             } else {
@@ -1748,8 +1758,12 @@ class Items extends BaseController
                     $pageSize = -1;
                 }
             }
-            unset($params['distributor_id']);
-            $result = $itemsService->getSkuItemsList($params, $page, $pageSize);
+            $company = (new CompanysActivationEgo())->check($params['company_id']);
+            if ($company['product_model'] == 'platform' || empty($params['distributor_id'])) {
+                $result = $itemsService->getSkuItemsList($params, $page, $pageSize);
+            } else {
+                $result = $itemsService->getDistributorSkuItemsList($params, $page, $pageSize);
+            }
         } else {
             $pageSize = ($pageSize <= 0) ? 10 : $pageSize;
             $result = $itemsService->getItemsList($params, $page, $pageSize);
