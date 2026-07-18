@@ -38,9 +38,16 @@ ECShopX is an open-source e-commerce system developed by ShopeX, leveraging 23 y
 * Open API: Provide a rich set of RESTful APIs to facilitate integration with third-party systems such as ERP, WMS, CRM, etc.
 * Modular design: The core functions are highly modular, making it easy to perform secondary development and extend functionalities.
 
+### Project Structure
+The project adopts a front-end and back-end separated architecture, consisting of multiple repositories, including the PHP backend service, the admin panel frontend, the mobile storefront frontend, and the PC storefront frontend.
+
+- [Admin Panel Frontend >](https://github.com/ShopeX/ECShopX_admin-frontend)
+- [Mobile Storefront (WeChat Mini Program / H5) >](https://github.com/ShopeX/ECShopX_mobile-frontend)
+- [Web Storefront >](https://github.com/ShopeX/ECShopX_web-frontend)
+
 ## Docker Deployment (Recommended)
 
-Use the automated deployment script to quickly set up a development environment, including PHP, Nginx, MySQL, Redis, and other services.
+Quickly build the development environment with the automated deployment script, which supports one-click deployment of the backend service and all frontend applications for a fast and convenient setup experience.
 
 ### Prerequisites
 - Software: Docker and Docker Compose (Docker Desktop is recommended for macOS)
@@ -100,6 +107,8 @@ docker-compose -f docker-compose.dev.yml restart
 - Ensure ports 8080, 8081, 8082, 3306, and 6379 are not in use
 
 ## Manual Deployment
+
+For self-hosted deployment, you need to set up the backend service and deploy the required frontend applications from their respective repositories. Please refer to the Project Structure section for more details.
 
 ### System Requirements
 - php >= 8.2
