@@ -20,6 +20,9 @@ CONTAINER_NAME="ecshopx-dev"
 WEB_CONTAINER_NAME="ecshopx-web-frontend"
 DOCKER_COMPOSE_FILE="$PROJECT_ROOT/docker-compose.dev.yml"
 
+# 公开前端仓库地址；默认使用 Gitee 方便国内用户，如需 GitHub 可在运行脚本前导出 PUBLIC_REPO_BASE_URL 覆盖
+PUBLIC_REPO_BASE_URL="${PUBLIC_REPO_BASE_URL:-https://gitee.com/ShopeX}"
+
 # 数据库配置
 MYSQL_ROOT_PWD="rootpassword"
 MYSQL_DATABASE="ecshopx"
@@ -48,12 +51,19 @@ PC_URL="http://localhost:8082"
 QIANKUN_ENTRY_URL="http://localhost:8080/newpc/"
 MOBILE_API_URL="http://localhost:8080/api/h5app/wxapp"
 PC_API_URL="http://localhost:8080/api/h5app"
+ADMIN_HOST_PORT="8080"
+H5_HOST_PORT="8081"
+PC_HOST_PORT="8082"
+NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS="http://localhost:8080"
 
 # 业务模式（全局变量，在 build_admin 中设置，build_vshop 中复用）
 SELECTED_PLATFORM=""
 
 # 默认语言（全局变量，在第一个编译的项目中设置，后续项目复用）
 SELECTED_LANG=""
+
+# 最近一次前端 .env 配置是否发生变化（build_* 中用于决定已有产物能否跳过编译）
+FRONTEND_ENV_CHANGED=false
 
 # 语言/业务模式等交互必须从 /dev/tty 读取：若仅从 stdin 读，在「管道、重定向、部分 IDE 集成终端」下会立即 EOF，
 # 空变量会触发 ${VAR:-1}，表现为未确认就选用默认项 1。
@@ -130,6 +140,53 @@ validate_public_url() {
     esac
 }
 
+extract_host_port_from_url() {
+    local url=$1
+    local default_port=$2
+    local without_scheme=""
+    local authority=""
+    local port=""
+
+    without_scheme=${url#*://}
+    authority=${without_scheme%%/*}
+
+    case "$authority" in
+        *:*)
+            port=${authority##*:}
+            ;;
+        *)
+            port=$default_port
+            ;;
+    esac
+
+    case "$port" in
+        ''|*[!0-9]*)
+            log_error "访问地址端口无效: $url"
+            exit 1
+            ;;
+    esac
+
+    if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then
+        log_error "访问地址端口超出范围: $url"
+        exit 1
+    fi
+
+    echo "$port"
+}
+
+configure_docker_host_ports() {
+    ADMIN_HOST_PORT=$(extract_host_port_from_url "$ADMIN_URL" "8080")
+    H5_HOST_PORT=$(extract_host_port_from_url "$H5_URL" "8081")
+    PC_HOST_PORT=$(extract_host_port_from_url "$PC_URL" "8082")
+
+    export ADMIN_HOST_PORT H5_HOST_PORT PC_HOST_PORT
+
+    log_info "Docker 宿主机端口映射："
+    log_info "  管理后台/API: ${ADMIN_HOST_PORT}->8080"
+    log_info "  H5前端:       ${H5_HOST_PORT}->8081"
+    log_info "  PC前端:       ${PC_HOST_PORT}->8082"
+}
+
 set_url_defaults_from_site_url() {
     local normalized_site_url
     normalized_site_url=$(trim_trailing_slashes "$SITE_URL")
@@ -146,6 +203,36 @@ derive_api_base_from_admin_url() {
     API_BASE_URL="$normalized_api_url/"
     MOBILE_API_URL="$normalized_api_url/h5app/wxapp"
     PC_API_URL="$normalized_api_url/h5app"
+}
+
+origin_from_url() {
+    local url=$1
+    local scheme=""
+    local without_scheme=""
+    local authority=""
+
+    scheme=${url%%://*}
+    without_scheme=${url#*://}
+    authority=${without_scheme%%/*}
+
+    echo "${scheme}://${authority}"
+}
+
+read_env_value() {
+    local env_file=$1
+    local key=$2
+    local value=""
+
+    if [ ! -f "$env_file" ]; then
+        return 0
+    fi
+
+    value=$(grep -m 1 "^${key}=" "$env_file" 2>/dev/null | cut -d'=' -f2- || true)
+    value=${value%\"}
+    value=${value#\"}
+    value=${value%\'}
+    value=${value#\'}
+    echo "$value"
 }
 
 configure_public_urls() {
@@ -187,6 +274,10 @@ configure_public_urls() {
     fi
     
     derive_api_base_from_admin_url
+    export NUXT_PUBLIC_API_BASE="$PC_API_URL"
+    NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=$(origin_from_url "$ADMIN_URL")
+    export NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS="$NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS"
+    configure_docker_host_ports
     
     log_info "访问地址配置完成："
     log_info "  管理后台: $ADMIN_URL"
@@ -504,7 +595,7 @@ check_and_clone_frontend() {
     
     # 检查 ECShopX_web-frontend
     PC_DIR="$PARENT_DIR/ECShopX_web-frontend"
-    PC_REPO="https://gitee.com/ShopeX/ECShopX_web-frontend.git"
+    PC_REPO="$PUBLIC_REPO_BASE_URL/ECShopX_web-frontend.git"
     
     if [ ! -d "$PC_DIR" ] || [ ! -f "$PC_DIR/package.json" ]; then
         if [ ! -d "$PC_DIR" ]; then
@@ -560,7 +651,7 @@ check_and_clone_frontend() {
     
     # 检查 ECShopX_admin-frontend
     ADMIN_DIR="$PARENT_DIR/ECShopX_admin-frontend"
-    ADMIN_REPO="https://gitee.com/ShopeX/ECShopX_admin-frontend.git"
+    ADMIN_REPO="$PUBLIC_REPO_BASE_URL/ECShopX_admin-frontend.git"
     
     if [ ! -d "$ADMIN_DIR" ] || [ ! -f "$ADMIN_DIR/package.json" ]; then
         if [ ! -d "$ADMIN_DIR" ]; then
@@ -620,7 +711,7 @@ check_and_clone_frontend() {
     
     # 检查 ECShopX_mobile-frontend
     VSHOP_DIR="$PARENT_DIR/ECShopX_mobile-frontend"
-    VSHOP_REPO="https://gitee.com/ShopeX/ECShopX_mobile-frontend.git"
+    VSHOP_REPO="$PUBLIC_REPO_BASE_URL/ECShopX_mobile-frontend.git"
     
     if [ ! -d "$VSHOP_DIR" ] || [ ! -f "$VSHOP_DIR/package.json" ]; then
         if [ ! -d "$VSHOP_DIR" ]; then
@@ -915,6 +1006,104 @@ read_product_model_from_env() {
     fi
 }
 
+preserve_existing_product_model() {
+    local product_model=""
+
+    product_model=$(read_env_value "$PROJECT_ROOT/.env" "PRODUCT_MODEL")
+
+    if [ -z "$product_model" ] && docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$" 2>/dev/null; then
+        product_model=$(docker exec "$CONTAINER_NAME" sh -c \
+            "cd /data/httpd/ECShopX && grep '^PRODUCT_MODEL=' .env 2>/dev/null | cut -d'=' -f2" 2>/dev/null || true)
+    fi
+
+    if [ "$product_model" = "standard" ]; then
+        SELECTED_PLATFORM="standard"
+        log_info "检测到现有 PRODUCT_MODEL=standard，保留 B2C 业务模式"
+        return 0
+    fi
+
+    if [ "$product_model" = "platform" ]; then
+        SELECTED_PLATFORM="platform"
+        log_info "检测到现有 PRODUCT_MODEL=platform，保留 BBC 业务模式"
+        return 0
+    fi
+
+    return 1
+}
+
+load_existing_frontend_lang() {
+    if [ -n "$SELECTED_LANG" ]; then
+        return 0
+    fi
+
+    local lang=""
+    lang=$(read_env_value "$PARENT_DIR/ECShopX_admin-frontend/.env" "VUE_APP_DEFAULT_LANG")
+    if [ -z "$lang" ]; then
+        lang=$(read_env_value "$PARENT_DIR/ECShopX_web-frontend/.env" "NUXT_PUBLIC_DEFAULT_COUNTRY_CODE")
+    fi
+    if [ -z "$lang" ]; then
+        lang=$(read_env_value "$PARENT_DIR/ECShopX_mobile-frontend/.env" "APP_I18N_ORIGIN_LANG")
+    fi
+
+    if [ "$lang" = "zh-CN" ]; then
+        SELECTED_LANG="zhcn"
+        log_info "从现有前端 .env 读取默认语言: $SELECTED_LANG"
+    elif [ "$lang" = "en-CN" ]; then
+        SELECTED_LANG="en"
+        log_info "从现有前端 .env 读取默认语言: $SELECTED_LANG"
+    elif [ "$lang" = "zhcn" ] || [ "$lang" = "en" ]; then
+        SELECTED_LANG="$lang"
+        log_info "从现有前端 .env 读取默认语言: $SELECTED_LANG"
+    fi
+}
+
+ensure_selected_lang() {
+    load_existing_frontend_lang
+
+    if [ -n "$SELECTED_LANG" ]; then
+        log_info "复用默认语言: $SELECTED_LANG"
+        return 0
+    fi
+
+    echo ""
+    log_info "请选择默认语言："
+    log_info "  1) 中文 (zhcn)"
+    log_info "  2) 英文 (en)"
+    echo ""
+    while true; do
+        read -r -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE < /dev/tty
+        LANG_CHOICE=${LANG_CHOICE:-1}
+        if [ "$LANG_CHOICE" = "1" ] || [ "$LANG_CHOICE" = "zhcn" ] || [ "$LANG_CHOICE" = "zh" ]; then
+            SELECTED_LANG="zhcn"
+            break
+        elif [ "$LANG_CHOICE" = "2" ] || [ "$LANG_CHOICE" = "en" ] || [ "$LANG_CHOICE" = "english" ]; then
+            SELECTED_LANG="en"
+            break
+        else
+            log_error "无效的选项，请输入 1 或 2"
+        fi
+    done
+    echo ""
+    log_info "已选择默认语言: $SELECTED_LANG"
+    echo ""
+}
+
+pc_api_country_code_for_lang() {
+    local lang=$1
+
+    case "$lang" in
+        en|en-CN|en_US|en-US)
+            echo "en-CN"
+            ;;
+        zhcn|zh|zh-CN|zh_CN|"")
+            echo "zh-CN"
+            ;;
+        *)
+            echo "$lang"
+            ;;
+    esac
+}
+
 # ===========================================
 # 配置 PHP 应用
 # ===========================================
@@ -952,28 +1141,30 @@ configure_application() {
         (grep -q '^SHOP_ADMIN_URL=' .env && sed -i 's|^SHOP_ADMIN_URL=.*|SHOP_ADMIN_URL=$ADMIN_URL/|' .env || echo 'SHOP_ADMIN_URL=$ADMIN_URL/' >> .env) && \
         (grep -q '^API_BASE_URL=' .env && sed -i 's|^API_BASE_URL=.*|API_BASE_URL=$API_BASE_URL|' .env || echo 'API_BASE_URL=$API_BASE_URL' >> .env)" 2>/dev/null || true
     
-    # 选择业务模式并写入 PRODUCT_MODEL
-    echo ""
-    log_info "请选择业务模式："
-    log_info "  1) BBC (多商户入驻电商平台模式)"
-    log_info "  2) B2C (线上商城、O2O云店、内购商城、供应链线上商城等模式)"
-    echo ""
-    while true; do
-        read -r -p "请输入选项 (1 或 2，默认: 1): " BIZ_MODE_CHOICE < /dev/tty
-        BIZ_MODE_CHOICE=${BIZ_MODE_CHOICE:-1}
-        if [ "$BIZ_MODE_CHOICE" = "1" ] || [ "$BIZ_MODE_CHOICE" = "bbc" ]; then
-            SELECTED_PLATFORM="platform"
-            log_info "已选择业务模式: BBC (B2B2C)"
-            break
-        elif [ "$BIZ_MODE_CHOICE" = "2" ] || [ "$BIZ_MODE_CHOICE" = "b2c" ]; then
-            SELECTED_PLATFORM="standard"
-            log_info "已选择业务模式: B2C"
-            break
-        else
-            log_error "无效的选项，请输入 1 或 2"
-        fi
-    done
-    echo ""
+    # 选择业务模式并写入 PRODUCT_MODEL；重跑脚本时优先保留已有安装模式
+    if ! preserve_existing_product_model; then
+        echo ""
+        log_info "请选择业务模式："
+        log_info "  1) BBC (多商户入驻电商平台模式)"
+        log_info "  2) B2C (线上商城、O2O云店、内购商城、供应链线上商城等模式)"
+        echo ""
+        while true; do
+            read -r -p "请输入选项 (1 或 2，默认: 1): " BIZ_MODE_CHOICE < /dev/tty
+            BIZ_MODE_CHOICE=${BIZ_MODE_CHOICE:-1}
+            if [ "$BIZ_MODE_CHOICE" = "1" ] || [ "$BIZ_MODE_CHOICE" = "bbc" ]; then
+                SELECTED_PLATFORM="platform"
+                log_info "已选择业务模式: BBC (B2B2C)"
+                break
+            elif [ "$BIZ_MODE_CHOICE" = "2" ] || [ "$BIZ_MODE_CHOICE" = "b2c" ]; then
+                SELECTED_PLATFORM="standard"
+                log_info "已选择业务模式: B2C"
+                break
+            else
+                log_error "无效的选项，请输入 1 或 2"
+            fi
+        done
+        echo ""
+    fi
 
     # 将 PRODUCT_MODEL 写入 ECShopX 的 .env
     docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX && \
@@ -1337,6 +1528,7 @@ configure_frontend_env() {
     local pc_url=${6:-"$PC_URL"}
     local qiankun_entry_url=${7:-"$QIANKUN_ENTRY_URL"}
     local target_container="$CONTAINER_NAME"
+    FRONTEND_ENV_CHANGED=false
     
     # 检查主机目录是否存在
     if [ ! -d "$project_dir" ]; then
@@ -1362,6 +1554,9 @@ configure_frontend_env() {
     if ! docker ps --format '{{.Names}}' | grep -q "^${target_container}$" 2>/dev/null; then
         log_info "容器 $target_container 未运行，配置主机目录的 .env 文件..."
         local env_file="$project_dir/.env"
+        local env_before=""
+        local env_after=""
+        env_before=$(cat "$env_file" 2>/dev/null || true)
         
         # 如果 .env 不存在，尝试从 .env.example 复制
         if [ ! -f "$env_file" ]; then
@@ -1481,6 +1676,8 @@ configure_frontend_env() {
         
         # 配置 ECShopX_web-frontend
         if [ "$project_name" = "ECShopX_web-frontend" ]; then
+            local pc_default_country_code=""
+
             # 使用 sed 修改或添加 NUXT_PUBLIC_API_BASE
             if grep -q "^NUXT_PUBLIC_API_BASE=" "$env_file" 2>/dev/null; then
                 # macOS 和 Linux 兼容的 sed 命令
@@ -1493,34 +1690,48 @@ configure_frontend_env() {
                 echo "NUXT_PUBLIC_API_BASE=$api_base_url" >> "$env_file"
             fi
             log_success "已配置 NUXT_PUBLIC_API_BASE=$api_base_url"
-            
-            # 配置 NUXT_PUBLIC_COMPANY_ID（默认值为1）
-            if grep -q "^NUXT_PUBLIC_COMPANY_ID=" "$env_file" 2>/dev/null; then
-                # macOS 和 Linux 兼容的 sed 命令
+
+            # 配置 PC 装修预览允许接收的后台 origin
+            if grep -q "^NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=" "$env_file" 2>/dev/null; then
                 if [[ "$OSTYPE" == "darwin"* ]]; then
-                    sed -i '' "s|^NUXT_PUBLIC_COMPANY_ID=.*|NUXT_PUBLIC_COMPANY_ID=1|" "$env_file"
+                    sed -i '' "s|^NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=.*|NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=$NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS|" "$env_file"
                 else
-                    sed -i "s|^NUXT_PUBLIC_COMPANY_ID=.*|NUXT_PUBLIC_COMPANY_ID=1|" "$env_file"
+                    sed -i "s|^NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=.*|NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=$NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS|" "$env_file"
                 fi
             else
-                echo "NUXT_PUBLIC_COMPANY_ID=1" >> "$env_file"
+                echo "NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=$NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS" >> "$env_file"
             fi
-            log_success "已配置 NUXT_PUBLIC_COMPANY_ID=1"
+            log_success "已配置 NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=$NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS"
+            
+            # 配置 NUXT_PUBLIC_COMPANY_ID（默认值为1）：已有值可能对应已安装店铺，重跑脚本时不覆盖
+            if grep -q "^NUXT_PUBLIC_COMPANY_ID=" "$env_file" 2>/dev/null; then
+                log_info "NUXT_PUBLIC_COMPANY_ID 已存在，保留当前值"
+            else
+                echo "NUXT_PUBLIC_COMPANY_ID=1" >> "$env_file"
+                log_success "NUXT_PUBLIC_COMPANY_ID 不存在，已配置默认值 1"
+            fi
             
             # 配置 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE（如果提供）
             if [ -n "$default_lang" ]; then
+                pc_default_country_code=$(pc_api_country_code_for_lang "$default_lang")
                 if grep -q "^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=" "$env_file" 2>/dev/null; then
                     # macOS 和 Linux 兼容的 sed 命令
                     if [[ "$OSTYPE" == "darwin"* ]]; then
-                        sed -i '' "s|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang|" "$env_file"
+                        sed -i '' "s|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$pc_default_country_code|" "$env_file"
                     else
-                        sed -i "s|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang|" "$env_file"
+                        sed -i "s|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$pc_default_country_code|" "$env_file"
                     fi
                 else
-                    echo "NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang" >> "$env_file"
+                    echo "NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$pc_default_country_code" >> "$env_file"
                 fi
-                log_success "已配置 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang"
+                log_success "已配置 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$pc_default_country_code"
             fi
+        fi
+
+        env_after=$(cat "$env_file" 2>/dev/null || true)
+        if [ "$env_before" != "$env_after" ]; then
+            FRONTEND_ENV_CHANGED=true
+            log_info "$project_name .env 已更新"
         fi
     else
         # 容器运行中，配置容器内的 .env 文件
@@ -1529,6 +1740,10 @@ configure_frontend_env() {
             log_warning "容器 $target_container 内 $container_path 目录不存在，跳过配置"
             return 0
         fi
+
+        local env_before=""
+        local env_after=""
+        env_before=$(docker exec "$target_container" sh -c "cd $container_path && [ -f .env ] && cat .env" 2>/dev/null || true)
         
         # 在容器内配置 .env 文件
         docker exec "$target_container" sh -c "
@@ -1633,6 +1848,8 @@ configure_frontend_env() {
         
         # 配置 ECShopX_web-frontend
         if [ "$project_name" = "ECShopX_web-frontend" ]; then
+            local pc_default_country_code=""
+
             docker exec "$target_container" sh -c "
                 cd $container_path && \
                 if grep -q '^NUXT_PUBLIC_API_BASE=' .env 2>/dev/null; then
@@ -1642,30 +1859,51 @@ configure_frontend_env() {
                 fi
             " 2>/dev/null || true
             log_success "已配置容器内 NUXT_PUBLIC_API_BASE=$api_base_url"
+
+            docker exec "$target_container" sh -c "
+                cd $container_path && \
+                if grep -q '^NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=' .env 2>/dev/null; then
+                    sed -i 's|^NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=.*|NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=$NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS|' .env
+                else
+                    echo 'NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=$NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS' >> .env
+                fi
+            " 2>/dev/null || true
+            log_success "已配置容器内 NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS=$NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS"
             
-            # 配置 NUXT_PUBLIC_COMPANY_ID（默认值为1）
+            # 配置 NUXT_PUBLIC_COMPANY_ID（默认值为1）：已有值可能对应已安装店铺，重跑脚本时不覆盖
             docker exec "$target_container" sh -c "
                 cd $container_path && \
                 if grep -q '^NUXT_PUBLIC_COMPANY_ID=' .env 2>/dev/null; then
-                    sed -i 's|^NUXT_PUBLIC_COMPANY_ID=.*|NUXT_PUBLIC_COMPANY_ID=1|' .env
+                    true
                 else
                     echo 'NUXT_PUBLIC_COMPANY_ID=1' >> .env
                 fi
             " 2>/dev/null || true
-            log_success "已配置容器内 NUXT_PUBLIC_COMPANY_ID=1"
+            if docker exec "$target_container" sh -c "cd $container_path && grep -q '^NUXT_PUBLIC_COMPANY_ID=' .env" 2>/dev/null; then
+                log_info "容器内 NUXT_PUBLIC_COMPANY_ID 已存在或已配置默认值"
+            else
+                log_warning "容器内 NUXT_PUBLIC_COMPANY_ID 配置失败"
+            fi
             
             # 配置 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE（如果提供）
             if [ -n "$default_lang" ]; then
+                pc_default_country_code=$(pc_api_country_code_for_lang "$default_lang")
                 docker exec "$target_container" sh -c "
                     cd $container_path && \
                     if grep -q '^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=' .env 2>/dev/null; then
-                        sed -i 's|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang|' .env
+                        sed -i 's|^NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=.*|NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$pc_default_country_code|' .env
                     else
-                        echo 'NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang' >> .env
+                        echo 'NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$pc_default_country_code' >> .env
                     fi
                 " 2>/dev/null || true
-                log_success "已配置容器内 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$default_lang"
+                log_success "已配置容器内 NUXT_PUBLIC_DEFAULT_COUNTRY_CODE=$pc_default_country_code"
             fi
+        fi
+
+        env_after=$(docker exec "$target_container" sh -c "cd $container_path && [ -f .env ] && cat .env" 2>/dev/null || true)
+        if [ "$env_before" != "$env_after" ]; then
+            FRONTEND_ENV_CHANGED=true
+            log_info "$project_name .env 已更新"
         fi
     fi
 }
@@ -1695,48 +1933,29 @@ build_admin() {
         log_error "ECShopX_admin-frontend/package.json 不存在"
         return 1
     fi
-    
-    # 检查是否已有编译产物
-    if [ -d "$ADMIN_DIR/dist" ] && [ -f "$ADMIN_DIR/dist/index.html" ]; then
-        log_info "检测到已有编译产物，跳过编译"
-        log_info "如需重新编译，请删除 ECShopX_admin-frontend/dist 目录"
-        return 0
-    fi
-    
+
     # 检查容器内目录是否存在并确保正确挂载
     log_info "检查容器内目录挂载状态..."
     if ! check_container_directory "/data/httpd/ECShopX_admin-frontend" "$ADMIN_DIR" "ECShopX_admin-frontend"; then
         return 1
     fi
-    
-    # 确认默认语言（如果还未选择）
-    if [ -z "$SELECTED_LANG" ]; then
-        echo ""
-        log_info "请选择默认语言："
-        log_info "  1) 中文 (zhcn)"
-        log_info "  2) 英文 (en)"
-        echo ""
-        while true; do
-            read -r -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE < /dev/tty
-            LANG_CHOICE=${LANG_CHOICE:-1}
-            if [ "$LANG_CHOICE" = "1" ] || [ "$LANG_CHOICE" = "zhcn" ] || [ "$LANG_CHOICE" = "zh" ]; then
-                SELECTED_LANG="zhcn"
-                break
-            elif [ "$LANG_CHOICE" = "2" ] || [ "$LANG_CHOICE" = "en" ] || [ "$LANG_CHOICE" = "english" ]; then
-                SELECTED_LANG="en"
-                break
-            else
-                log_error "无效的选项，请输入 1 或 2"
-            fi
-        done
-        echo ""
-        log_info "已选择默认语言: $SELECTED_LANG"
-        echo ""
-    else
-        log_info "复用已选择的默认语言: $SELECTED_LANG"
+
+    load_existing_frontend_lang
+    log_info "配置 ECShopX_admin-frontend 的 .env 文件..."
+    configure_frontend_env "$ADMIN_DIR" "ECShopX_admin-frontend" "$API_BASE_URL" "" "$SELECTED_LANG" "$PC_URL" "$QIANKUN_ENTRY_URL"
+
+    # 检查是否已有编译产物；前端 .env 变化时必须重新编译
+    if [ -d "$ADMIN_DIR/dist" ] && [ -f "$ADMIN_DIR/dist/index.html" ]; then
+        if [ "$FRONTEND_ENV_CHANGED" = true ]; then
+            log_info "检测到已有编译产物，但前端 .env 已变化，需要重新编译"
+        else
+            log_info "检测到已有编译产物，跳过编译"
+            log_info "如需重新编译，请删除 ECShopX_admin-frontend/dist 目录"
+            return 0
+        fi
     fi
-    
-    # 配置前端项目的 .env 文件
+
+    ensure_selected_lang
     log_info "配置 ECShopX_admin-frontend 的 .env 文件..."
     configure_frontend_env "$ADMIN_DIR" "ECShopX_admin-frontend" "$API_BASE_URL" "" "$SELECTED_LANG" "$PC_URL" "$QIANKUN_ENTRY_URL"
     
@@ -1859,22 +2078,31 @@ build_pc() {
     if ! ensure_web_container_running; then
         return 1
     fi
-    
-    # 检查是否已有可启动的 Nuxt 生产产物（.nuxt 可能由 pnpm install/postinstall 生成，不能代表已编译完成）
-    if docker exec "$WEB_CONTAINER_NAME" sh -c "[ -f /data/httpd/ECShopX_web-frontend/.output/server/index.mjs ]" 2>/dev/null || \
-       [ -f "$PC_DIR/.output/server/index.mjs" ]; then
-        log_info "检测到已有 Nuxt 生产编译产物，跳过编译"
-        log_info "如需重新编译，请删除 ECShopX_web-frontend/.output 目录"
-        # 即使跳过编译，也需要启动Nuxt服务
-        need_build=false
-    else
-        need_build=true
-    fi
-    
+
     # 检查容器内目录是否存在并确保正确挂载
     log_info "检查容器内目录挂载状态..."
     if ! check_container_directory "/data/httpd/ECShopX_web-frontend" "$PC_DIR" "ECShopX_web-frontend"; then
         return 1
+    fi
+
+    load_existing_frontend_lang
+    log_info "配置 ECShopX_web-frontend 的 .env 文件..."
+    configure_frontend_env "$PC_DIR" "ECShopX_web-frontend" "$PC_API_URL" "" "$SELECTED_LANG"
+
+    # 检查是否已有可启动的 Nuxt 生产产物（.nuxt 可能由 pnpm install/postinstall 生成，不能代表已编译完成）
+    if docker exec "$WEB_CONTAINER_NAME" sh -c "[ -f /data/httpd/ECShopX_web-frontend/.output/server/index.mjs ]" 2>/dev/null || \
+       [ -f "$PC_DIR/.output/server/index.mjs" ]; then
+        if [ "$FRONTEND_ENV_CHANGED" = true ]; then
+            log_info "检测到已有 Nuxt 生产编译产物，但前端 .env 已变化，需要重新编译"
+            need_build=true
+        else
+            log_info "检测到已有 Nuxt 生产编译产物，跳过编译"
+            log_info "如需重新编译，请删除 ECShopX_web-frontend/.output 目录"
+            # 即使跳过编译，也需要启动Nuxt服务
+            need_build=false
+        fi
+    else
+        need_build=true
     fi
     
     # 如果跳过编译，直接启动Nuxt服务，不需要确认语言
@@ -1903,34 +2131,7 @@ build_pc() {
     
     # 只有在需要编译时才确认默认语言和配置.env
     if [ "$need_build" = true ]; then
-        # 确认默认语言（如果还未选择）
-        if [ -z "$SELECTED_LANG" ]; then
-            echo ""
-            log_info "请选择默认语言："
-            log_info "  1) 中文 (zhcn)"
-            log_info "  2) 英文 (en)"
-            echo ""
-            while true; do
-                read -r -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE < /dev/tty
-                LANG_CHOICE=${LANG_CHOICE:-1}
-                if [ "$LANG_CHOICE" = "1" ] || [ "$LANG_CHOICE" = "zhcn" ] || [ "$LANG_CHOICE" = "zh" ]; then
-                    SELECTED_LANG="zhcn"
-                    break
-                elif [ "$LANG_CHOICE" = "2" ] || [ "$LANG_CHOICE" = "en" ] || [ "$LANG_CHOICE" = "english" ]; then
-                    SELECTED_LANG="en"
-                    break
-                else
-                    log_error "无效的选项，请输入 1 或 2"
-                fi
-            done
-            echo ""
-            log_info "已选择默认语言: $SELECTED_LANG"
-            echo ""
-        else
-            log_info "复用已选择的默认语言: $SELECTED_LANG"
-        fi
-        
-        # 配置前端项目的 .env 文件
+        ensure_selected_lang
         log_info "配置 ECShopX_web-frontend 的 .env 文件..."
         configure_frontend_env "$PC_DIR" "ECShopX_web-frontend" "$PC_API_URL" "" "$SELECTED_LANG"
         
@@ -2102,14 +2303,7 @@ build_vshop() {
         log_error "ECShopX_mobile-frontend/package.json 不存在"
         return 1
     fi
-    
-    # 检查是否已有编译产物
-    if [ -d "$VSHOP_DIR/dist" ]; then
-        log_info "检测到已有编译产物，跳过编译"
-        log_info "如需重新编译，请删除 ECShopX_mobile-frontend/dist 目录"
-        return 0
-    fi
-    
+
     # 检查容器内目录是否存在并确保正确挂载
     log_info "检查容器内目录挂载状态..."
     if ! check_container_directory "/data/httpd/ECShopX_mobile-frontend" "$VSHOP_DIR" "ECShopX_mobile-frontend"; then
@@ -2125,37 +2319,28 @@ build_vshop() {
         BUILD_MODE_NAME="BBC (B2B2C)"
     fi
     log_info "使用业务模式: $BUILD_MODE_NAME"
-    
-    # 确认默认语言（如果还未选择）
-    if [ -z "$SELECTED_LANG" ]; then
-        echo ""
-        log_info "请选择默认语言："
-        log_info "  1) 中文 (zhcn)"
-        log_info "  2) 英文 (en)"
-        echo ""
-        while true; do
-            read -r -p "请输入选项 (1 或 2，默认: 1): " LANG_CHOICE < /dev/tty
-            LANG_CHOICE=${LANG_CHOICE:-1}
-            if [ "$LANG_CHOICE" = "1" ] || [ "$LANG_CHOICE" = "zhcn" ] || [ "$LANG_CHOICE" = "zh" ]; then
-                SELECTED_LANG="zhcn"
-                break
-            elif [ "$LANG_CHOICE" = "2" ] || [ "$LANG_CHOICE" = "en" ] || [ "$LANG_CHOICE" = "english" ]; then
-                SELECTED_LANG="en"
-                break
-            else
-                log_error "无效的选项，请输入 1 或 2"
-            fi
-        done
-        echo ""
-        log_info "已选择默认语言: $SELECTED_LANG"
-        echo ""
-    else
-        log_info "复用已选择的默认语言: $SELECTED_LANG"
-    fi
-    
-    # 配置前端项目的 .env 文件
+
+    ensure_selected_lang
     log_info "配置 ECShopX_mobile-frontend 的 .env 文件..."
     configure_frontend_env "$VSHOP_DIR" "ECShopX_mobile-frontend" "$MOBILE_API_URL" "$SELECTED_PLATFORM" "$SELECTED_LANG"
+
+    # 检查是否已有编译产物；前端 .env 变化时必须重新编译
+    if [ -d "$VSHOP_DIR/dist" ]; then
+        if [ "$FRONTEND_ENV_CHANGED" = true ]; then
+            log_info "检测到已有编译产物，但前端 .env 已变化，需要重新编译 H5"
+        else
+            log_info "检测到已有编译产物，跳过编译"
+            log_info "如需重新编译，请删除 ECShopX_mobile-frontend/dist 目录"
+            return 0
+        fi
+    fi
+
+    if [ "$FRONTEND_ENV_CHANGED" = true ]; then
+        log_info "复用已更新的 ECShopX_mobile-frontend .env 配置"
+    else
+        log_info "配置 ECShopX_mobile-frontend 的 .env 文件..."
+        configure_frontend_env "$VSHOP_DIR" "ECShopX_mobile-frontend" "$MOBILE_API_URL" "$SELECTED_PLATFORM" "$SELECTED_LANG"
+    fi
     
     log_info "安装 npm 依赖..."
     # 使用绝对路径并先验证目录存在

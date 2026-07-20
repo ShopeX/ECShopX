@@ -157,11 +157,110 @@ class ThemePcTemplateContentServices
             return $this->emptyDecorationContent();
         }
 
+        $config = $row['params'] ?? $row['config'] ?? '';
+
         return [
             'id' => $row['theme_pc_template_content_id'] ?? $row['id'] ?? 0,
             'name' => $row['name'] ?? '',
-            'config' => $row['params'] ?? $row['config'] ?? '',
+            'config' => self::normalizeStorageUrlsForCurrentAppUrl($config),
         ];
+    }
+
+    public static function normalizeStorageUrlsForCurrentAppUrl($config, $currentAppUrl = null)
+    {
+        if (!is_string($config) || $config === '') {
+            return $config;
+        }
+
+        $currentOrigin = self::normalizeAppOrigin($currentAppUrl ?: config('app.url'));
+        if ($currentOrigin === '') {
+            return $config;
+        }
+
+        $decoded = json_decode($config, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $decoded = self::normalizeStorageUrlsInValue($decoded, $currentOrigin);
+            return json_encode($decoded, JSON_UNESCAPED_UNICODE);
+        }
+
+        return self::normalizeStorageUrlsInString($config, $currentOrigin);
+    }
+
+    private static function normalizeStorageUrlsInValue($value, $currentOrigin)
+    {
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $value[$key] = self::normalizeStorageUrlsInValue($item, $currentOrigin);
+            }
+            return $value;
+        }
+
+        if (is_string($value)) {
+            return self::normalizeStorageUrlsInString($value, $currentOrigin);
+        }
+
+        return $value;
+    }
+
+    private static function normalizeStorageUrlsInString($value, $currentOrigin)
+    {
+        return preg_replace_callback(
+            '#https?://[^\s"\'<>()]+/storage/[^\s"\'<>()]+#',
+            function ($matches) use ($currentOrigin) {
+                return self::normalizeOneStorageUrl($matches[0], $currentOrigin);
+            },
+            $value
+        );
+    }
+
+    private static function normalizeOneStorageUrl($url, $currentOrigin)
+    {
+        $oldParts = parse_url($url);
+        $currentParts = parse_url($currentOrigin);
+        if (empty($oldParts['host']) || empty($oldParts['path']) || empty($currentParts['host'])) {
+            return $url;
+        }
+
+        if (strpos($oldParts['path'], '/storage/') !== 0) {
+            return $url;
+        }
+
+        $oldHost = strtolower($oldParts['host']);
+        $currentHost = strtolower($currentParts['host']);
+        $localHosts = ['localhost', '127.0.0.1', '::1'];
+        if (!in_array($oldHost, $localHosts, true) && $oldHost !== $currentHost) {
+            return $url;
+        }
+
+        $next = rtrim($currentOrigin, '/').$oldParts['path'];
+        if (isset($oldParts['query'])) {
+            $next .= '?'.$oldParts['query'];
+        }
+        if (isset($oldParts['fragment'])) {
+            $next .= '#'.$oldParts['fragment'];
+        }
+
+        return $next;
+    }
+
+    private static function normalizeAppOrigin($url)
+    {
+        $url = trim((string)$url);
+        if ($url === '') {
+            return '';
+        }
+
+        $parts = parse_url($url);
+        if (empty($parts['scheme']) || empty($parts['host'])) {
+            return rtrim($url, '/');
+        }
+
+        $origin = $parts['scheme'].'://'.$parts['host'];
+        if (isset($parts['port'])) {
+            $origin .= ':'.$parts['port'];
+        }
+
+        return $origin;
     }
 
     private function emptyDecorationContent()
