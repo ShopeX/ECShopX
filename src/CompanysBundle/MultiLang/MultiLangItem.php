@@ -19,6 +19,12 @@ namespace CompanysBundle\MultiLang;
 
 class MultiLangItem
 {
+    private const LEGACY_TABLE_LANGUAGE_SUFFIXES = [
+        'zh-CN' => 'zhCN',
+        'en-CN' => 'enCN',
+        'ar-SA' => 'arSA',
+    ];
+
     protected  $lang;
 
 //    private $module = 'item';
@@ -33,9 +39,14 @@ class MultiLangItem
             $moduleNew = 'outside_item';
         }
         $this->moduleNew = $moduleNew;
-        $tableLang = str_replace('-','',$lang);
-        $tableLang = strtolower($tableLang);
+        $tableLang = $this->normalizeTableLanguage($lang);
         $this->table = $moduleNew."_multi_lang_mod_lang_$tableLang";
+    }
+
+    private function normalizeTableLanguage(string $lang): string
+    {
+        return self::LEGACY_TABLE_LANGUAGE_SUFFIXES[$lang]
+            ?? strtolower(str_replace('-', '', $lang));
     }
 
     //创建语言表
