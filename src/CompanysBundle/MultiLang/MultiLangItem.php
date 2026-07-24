@@ -34,6 +34,7 @@ class MultiLangItem
         }
         $this->moduleNew = $moduleNew;
         $tableLang = str_replace('-','',$lang);
+        $tableLang = strtolower($tableLang);
         $this->table = $moduleNew."_multi_lang_mod_lang_$tableLang";
     }
 
