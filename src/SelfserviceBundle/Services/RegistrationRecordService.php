@@ -238,22 +238,18 @@ class RegistrationRecordService
 
         $activityIds = array_column($lists['list'], 'activity_id');
         $registrationActivityService = new RegistrationActivityService();
-        $ayList = $registrationActivityService->entityRepository->getLists(['activity_id' => $activityIds], 'activity_id, activity_name,start_time,end_time,join_limit,is_sms_notice,is_wxapp_notice,pics,intro,is_allow_duplicate,address,place,area');
+        $ayList = $registrationActivityService->entityRepository->getLists(['activity_id' => $activityIds], 'activity_id, activity_name,start_time,end_time,join_limit,is_sms_notice,is_wxapp_notice,pics,intro,is_allow_duplicate,address,place,area,show_fields');
         $aylist = array_column($ayList, null, 'activity_id');
 
-        $week_data = ['日', '一', '二', '三', '四', '五', '六'];
         $addressService = new AddressService();
         foreach ($lists['list'] as &$v) {
             $activity_info = $aylist[$v['activity_id']] ?? [];
             if ($activity_info) {
                 $registrationActivityService->getStatusName($activity_info);
-                //活动开始时间
-                $start_time = '';
-                if ($activity_info['start_time']) {
-                    $week_no = date('w', $activity_info['start_time']);
-                    $week_name = $week_data[$week_no];
-                    $start_time = date("Y-m-d {$week_name} H:i", $activity_info['start_time']);
-                }
+                //活动开始时间（与 start_date 一致：Y-m-d H:i:s）
+                $start_time = $activity_info['start_time']
+                    ? date('Y-m-d H:i:s', $activity_info['start_time'])
+                    : '';
                 
                 $area_name = $addressService->getAreaName($activity_info['area']);
                 
@@ -268,6 +264,7 @@ class RegistrationRecordService
                     'status_name' => $activity_info['status_name'],
                     'area' => $activity_info['area'],
                     'area_name' => $area_name,
+                    'show_fields' => $activity_info['show_fields'],
                 ];
             }
             $v['record_no'] = str_pad($v['record_no'], 4, '0', STR_PAD_LEFT);
@@ -343,6 +340,7 @@ class RegistrationRecordService
                 'status_name' => $activity_info['status_name'],
                 'area' => $activity_info['area'],
                 'area_name' => $area_name,
+                'show_fields' => $activity_info['show_fields'],
             ];
         }
         

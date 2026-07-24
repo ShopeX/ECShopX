@@ -7,6 +7,6 @@
  * 兼容：若仍按纯数组读取，请使用 config('langue.list') 或由 CommonLangModService 解析。
  */
 return [
-    'list'    => ['zh-CN', 'en-CN', 'ar-SA'],
+    'list'    => ['zh-CN', 'en-CN', 'ar-SA','zh-TW'],
     'default' => 'zh-CN',
 ];
