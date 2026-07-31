@@ -254,10 +254,21 @@ class BrokerageController extends Controller
 
         $companyId = app('auth')->user()->get('company_id');
 
+        $params = $request->all('user_id', 'distributor_id');
+        $rules = [
+            'user_id' => ['nullable|integer', 'user_id参数错误'],
+            'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+        ];
+        $error = validator_params($params, $rules);
+        if ($error) {
+            throw new ResourceException($error);
+        }
+
         $userId = $request->input('user_id');
         $distributor_id = $request->input('distributor_id', 0);
         if ($distributor_id) {
             $brokerageService = new BrokerageService();
+            $filter['company_id'] = $companyId;
             $filter['dIds']    = [$distributor_id]; 
             $filter['user_id'] = $userId; 
             $countDataShop = $brokerageService->getSalesmanBrokerageCount($filter, 1 ,1000);
@@ -349,11 +360,13 @@ class BrokerageController extends Controller
      */
     public function getBrokerageList(Request $request)
     {
-        $params = $request->all('pageSize', 'page');
+        $params = $request->all('pageSize', 'page', 'user_id', 'distributor_id');
 
         $rules = [
             'page' => ['required|integer|min:1','分页参数错误'],
             'pageSize' => ['required|integer|min:1|max:50','每页最多查询50条数据'],
+            'user_id' => ['nullable|integer', 'user_id参数错误'],
+            'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
         ];
 
         $error = validator_params($params, $rules);

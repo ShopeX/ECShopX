@@ -132,6 +132,13 @@ class LoginController extends Controller
                     'alipay_user_id' => $preLoginInfo['alipay_user_id'],
                 ];
                 break;
+            case 'social_oauth':
+                $credentials = array_merge($request->input(), [
+                    'company_id' => $companyId,
+                    'auth_type' => 'social_oauth',
+                    'origin' => app('request')->header('origin'),
+                ]);
+                break;
             default:
                 throw new ResourceException('缺少参数，登录失败！');
         }

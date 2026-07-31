@@ -25,6 +25,7 @@ use CompanysBundle\Entities\Roles;
 use CompanysBundle\Jobs\EmployeeJob;
 
 use DistributionBundle\Entities\SelfDeliveryStaff;
+use DistributionBundle\Services\DistributorService;
 use MerchantBundle\Services\MerchantService;
 
 use Exception;
@@ -237,10 +238,19 @@ class EmployeeService
             }
 
         }
+        $distributorService = new DistributorService();
         foreach ($operator['list'] as &$value) {
             $value['role_data'] = $this->getRoleData($value['company_id'], $value['operator_id']);
             if(isset($selfDeliveryStaffs[$value['operator_id']])){
                 $value = array_merge($value,$selfDeliveryStaffs[$value['operator_id']]);
+            }
+            // 列表返回：为 distributor_ids 每项补充 shop_code（店铺号）、distributor_name（店铺名）
+            if ($value['distributor_ids']) {
+                $distributorService->getListAddDistributorFields(
+                    $value['company_id'],
+                    array_column($value['distributor_ids'], 'distributor_id'),
+                    $value['distributor_ids']
+                );
             }
         }
         return $operator;

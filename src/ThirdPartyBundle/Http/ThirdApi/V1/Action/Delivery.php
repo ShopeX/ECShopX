@@ -119,8 +119,8 @@ class Delivery extends Controller
                 }
                 $delivery_num[$row['product_bn']] += $row['number'];
             }
-            $ship_mobile = $data['ship_mobile'];
-            $logi_name = $data['logi_name'];
+            $ship_mobile = $data['ship_mobile'] ?? null;
+            $logi_name = $data['logi_name'] ?? null;
             $delivery_code = $data['logi_no'];
             $delivery_corp = $data['logi_code'];
             unset($data);

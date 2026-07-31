@@ -80,7 +80,18 @@ class BrokerageController extends Controller
 
         $filter['is_close'] = true;
         $isSalesmanPage = $request->input('isSalesmanPage', 0);
-        if($isSalesmanPage){
+        if ($isSalesmanPage) {
+            $validateParams = $request->all('distributor_id', 'mobile', 'order_id');
+            $validateRules = [
+                'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+                'mobile' => ['nullable|string', 'mobile参数错误'],
+                'order_id' => ['nullable|string', 'order_id参数错误'],
+            ];
+            $error = validator_params($validateParams, $validateRules);
+            if ($error) {
+                throw new ResourceException($error);
+            }
+
             $shopName = $request->input('shopName', 0);
             $mobile   = $request->input('mobile', 0);
             $order_id   = $request->input('order_id', 0);
@@ -157,6 +168,15 @@ class BrokerageController extends Controller
         $isSalesmanPage = $request->input('isSalesmanPage', 0);
 
         if($isSalesmanPage){
+            $validateParams = $request->all('distributor_id');
+            $validateRules = [
+                'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+            ];
+            $error = validator_params($validateParams, $validateRules);
+            if ($error) {
+                throw new ResourceException($error);
+            }
+
             $distributor_id = $request->input('distributor_id', 0);
             $isSalesmanPage = $request->input('isSalesmanPage', 0);
 

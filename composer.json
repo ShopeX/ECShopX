@@ -1,6 +1,6 @@
 {
     "name": "laravel/lumen",
-    "version": "4.10.0",
+    "version": "4.11.0",
     "description": "The Laravel Lumen Framework.",
     "keywords": [
         "framework",
@@ -20,7 +20,9 @@
         "dingo/api": "^3.0",
         "doctrine/orm": "2.13.*",
         "doctrine/persistence": "^2.2",
+        "elasticsearch/elasticsearch": "^8.0",
         "facile-it/doctrine-mysql-come-back": "^1.10",
+        "freyo/flysystem-qcloud-cos-v5": "^2.0",
         "gedmo/doctrine-extensions": "^3.1",
         "gregwar/captcha": "^1.1",
         "hashids/hashids": "^4.1",
@@ -36,10 +38,13 @@
         "milon/barcode": "^8.0",
         "onex/espier-swoole": "^2.0.0",
         "overtrue/laravel-filesystem-qiniu": "^1.0",
+        "overtrue/pinyin": "^4.1",
+        "overtrue/socialite": "4.14.2",
         "paypal/paypal-server-sdk": "1.1.0",
         "predis/predis": "^1.1",
         "sentry/sentry-laravel": "^2.8",
         "shopex/prism": "^3.0",
+        "swiftmailer/swiftmailer": "^6.0",
         "symfony/process": "^5.3",
         "symfony/property-access": "^5.3",
         "tymon/jwt-auth": "^1.0",
@@ -47,11 +52,7 @@
         "w7corp/easywechat": "^5.0",
         "yansongda/pay": "^2.6",
         "yly-openapi/yly-openapi-sdk": "^1.0",
-        "yurunsoft/yurun-oauth-login": "^3.0",
-        "freyo/flysystem-qcloud-cos-v5": "^2.0",
-        "elasticsearch/elasticsearch": "^8.0",
-        "swiftmailer/swiftmailer": "^6.0",
-        "overtrue/pinyin": "^4.1"
+        "yurunsoft/yurun-oauth-login": "^3.0"
     },
     "require-dev": {
         "brainmaestro/composer-git-hooks": "^2.8",
@@ -119,7 +120,7 @@
     "repositories": {
         "packagist": {
             "type": "composer",
-            "url": "https://mirrors.aliyun.com/composer/"
+            "url": "https://repo.packagist.org"
         },
         "0": {
             "type": "composer",

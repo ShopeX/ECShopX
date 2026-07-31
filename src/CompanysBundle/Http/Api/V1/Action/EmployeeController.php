@@ -601,7 +601,7 @@ class EmployeeController extends BaseController
      */
     public function getListData(Request $request)
     {
-        $params = $request->all('operator_id', 'mobile', 'username', 'role_id', 'page', 'pageSize', 'login_name', 'payment_method','staff_type', 'distributor_id', 'is_disable', 'supplier_name');
+        $params = $request->all('operator_id', 'mobile', 'username', 'role_id', 'page', 'pageSize', 'login_name', 'payment_method','staff_type', 'distributor_id', 'is_disable', 'supplier_name', 'shop_code', 'shop_name');
         $filter['company_id'] = app('auth')->user()->get('company_id');
         $merchantId = app('auth')->user()->get('merchant_id');
         $operatorType = app('auth')->user()->get('operator_type');
@@ -692,6 +692,51 @@ class EmployeeController extends BaseController
                 $filter['distributor_ids'] =$distributor_ids;
                 unset($filter['merchant_id']);
             }
+        }
+
+        // 按店铺号 shop_code / 店铺名称 shop_name 筛选员工（仅 operator_type=distributor 等关联店铺账号场景常用）
+        // 流程：店铺表模糊查 distributor_id → 转成 operators.distributor_ids JSON 匹配串 → 筛员工列表
+        $shopCode = trim((string) $request->input('shop_code', ''));
+        $shopName = trim((string) $request->input('shop_name', ''));
+        if ($shopCode !== '' || $shopName !== '') {
+            $distributorFilter = ['company_id' => $filter['company_id']];
+            if ($shopCode !== '') {
+                $distributorFilter['shop_code|contains'] = $shopCode; // 店铺号模糊匹配
+            }
+            if ($shopName !== '') {
+                $distributorFilter['name|contains'] = $shopName; // 店铺名称模糊匹配（店铺表 name 字段）
+            }
+            // 商户账号登录时，只在当前商户下的店铺里搜（用 $merchantId，因配送员分支可能已 unset filter['merchant_id']）
+            if ($merchantId > 0 && in_array($operatorType, ['merchant', 'staff', 'admin'])) {
+                $distributorFilter['merchant_id'] = $merchantId;
+            }
+            $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
+            $distributors = $distributorRepository->getLists($distributorFilter, 'distributor_id');
+            $matchedDistributorIds = array_column($distributors ?: [], 'distributor_id');
+            // 若同时有 distributor_id（店铺后台或参数传入），与店铺筛选结果取交集
+            if ($distributor_id) {
+                $matchedDistributorIds = array_values(array_intersect(
+                    $matchedDistributorIds,
+                    [(int) $distributor_id]
+                ));
+            }
+            // 没有匹配的店铺 → 直接返回空列表，避免误查全部员工
+            if (!$matchedDistributorIds) {
+                return $this->response->array([
+                    'total_count' => 0,
+                    'list' => [],
+                    'datapass_block' => $request->get('x-datapass-block', 0),
+                    'filter' => $filter,
+                ]);
+            }
+            // 员工表 distributor_ids 存的是 JSON，需转成 contains 用的子串模式（见 distributorIdsJsonContainsPatterns）
+            $patterns = [];
+            foreach ($matchedDistributorIds as $matchedDistributorId) {
+                foreach ($this->distributorIdsJsonContainsPatterns($matchedDistributorId) as $pattern) {
+                    $patterns[] = $pattern;
+                }
+            }
+            $filter['distributor_ids'] = array_values(array_unique($patterns));
         }
 
         $page = $params['page'] ?: 1;

@@ -19,6 +19,12 @@ namespace SupplierBundle\Repositories;
 
 use SupplierBundle\Entities\SupplierItemsAttrDraft;
 
+/**
+ * supplier_items_attr_draft 表 Repository。
+ *
+ * 与 supplier_items_attr 结构对称，staging 期间分类/品牌/规格/参数写此表，
+ * mergeDraftToMain 时再同步到主表 attr。
+ */
 class SupplierItemsAttrDraftRepository extends BaseRepository
 {
     public $table = 'supplier_items_attr_draft';

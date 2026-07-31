@@ -97,6 +97,16 @@ class PromoterController extends Controller
         $promoterService = new PromoterService();
 
         $companyId = app('auth')->user()->get('company_id');
+
+        $validateParams = $request->all('distributor_id');
+        $validateRules = [
+            'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+        ];
+        $error = validator_params($validateParams, $validateRules);
+        if ($error) {
+            throw new ResourceException($error);
+        }
+
         if ($request->input('mobile', null)) {
             $filter['mobile'] = $request->input('mobile');
         }
@@ -710,6 +720,16 @@ class PromoterController extends Controller
         //存储导出操作账号者
         $operator_id = app('auth')->user()->get('operator_id');
         $params['company_id'] = app('auth')->user()->get('company_id');
+
+        $validateParams = $request->all('distributor_id');
+        $validateRules = [
+            'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+        ];
+        $error = validator_params($validateParams, $validateRules);
+        if ($error) {
+            throw new ResourceException($error);
+        }
+
         if ($inputData['mobile'] ?? '') {
             $params['mobile'] = $inputData['mobile'] ?? '';
         }
@@ -787,6 +807,16 @@ class PromoterController extends Controller
         //存储导出操作账号者
         $operator_id = app('auth')->user()->get('operator_id');
         $params['company_id'] = app('auth')->user()->get('company_id');
+
+        $validateParams = $request->all('distributor_id');
+        $validateRules = [
+            'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+        ];
+        $error = validator_params($validateParams, $validateRules);
+        if ($error) {
+            throw new ResourceException($error);
+        }
+
         if ($inputData['mobile'] ?? '') {
             $params['mobile'] = $inputData['mobile'] ?? '';
         }

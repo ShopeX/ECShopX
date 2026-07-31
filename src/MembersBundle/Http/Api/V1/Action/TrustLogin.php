@@ -20,6 +20,7 @@ namespace MembersBundle\Http\Api\V1\Action;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 use MembersBundle\Services\TrustLoginService;
+use MembersBundle\Services\SocialTrustLoginService;
 
 class TrustLogin extends Controller
 {
@@ -74,9 +75,17 @@ class TrustLogin extends Controller
         $params = $request->input();
         $companyId = app('auth')->user()->get('company_id');
 
-        $result = [];
         $result = $this->trustLoginService->getTrustLoginList($companyId);
-        // $result = array_values($result);
+        $socialService = new SocialTrustLoginService();
+        foreach (['standard', 'touch'] as $version) {
+            if (!isset($result[$version])) {
+                continue;
+            }
+            foreach ($result[$version] as &$row) {
+                $row = $socialService->sanitizeConfigRow($row);
+            }
+            unset($row);
+        }
 
         return $this->response->array($result);
     }
@@ -101,6 +110,7 @@ class TrustLogin extends Controller
      *     @SWG\Parameter( name="secret", in="query", description="secret", required=true, type="string"),
      *     @SWG\Parameter( name="loginversion", in="query", description="配置版本：标准版 standard 触屏版 touch", required=true, type="string"),
      *     @SWG\Parameter( name="status", in="query", description="启用状态：启用 true  关闭 false", required=true, type="string"),
+     *     @SWG\Parameter( name="extra_config", in="query", description="扩展配置 JSON（可选，Apple 等）", required=false, type="string"),
      *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
      *          @SWG\Property( property="data", type="string", example="true", description=""),
      *     )),
@@ -111,7 +121,8 @@ class TrustLogin extends Controller
     {
         $params = $request->input();
         $companyId = app('auth')->user()->get('company_id');
-        $params['status'] = ($params['status'] ?? false) === true;
+        $status = $params['status'] ?? false;
+        $params['status'] = $status === true || $status === 'true' || $status === 1 || $status === '1';
         $result = $this->trustLoginService->saveStatusSetting($params, $companyId);
 
         return $this->response->array(['data' => $result]);

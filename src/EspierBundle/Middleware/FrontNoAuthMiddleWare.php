@@ -40,6 +40,10 @@ class FrontNoAuthMiddleWare
      */
     public function handle($request, Closure $next, $apiFrom)
     {
+        if ($apiFrom === 'h5app' && $this->isAppleTrustLoginCallback($request)) {
+            return $next($request);
+        }
+
         $mid_params = [];
         if ($apiFrom == 'h5app') {
             config(['auth.defaults.guard' => 'h5api']);
@@ -139,6 +143,14 @@ class FrontNoAuthMiddleWare
         }
         $request->attributes->add($mid_params); // 添加参数
         return $next($request);
+    }
+
+    private function isAppleTrustLoginCallback($request): bool
+    {
+        $path = ltrim((string) $request->path(), '/');
+
+        return str_ends_with($path, 'wxapp/trustlogin/apple/callback')
+            || str_contains($path, 'trustlogin/apple/callback');
     }
 
     /**

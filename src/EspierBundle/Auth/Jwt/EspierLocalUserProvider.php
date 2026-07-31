@@ -23,6 +23,7 @@ use Dingo\Api\Exception\StoreResourceFailedException;
 use MembersBundle\Repositories\MembersInfoRepository;
 use MembersBundle\Repositories\MembersRepository;
 use MembersBundle\Services\MemberService;
+use MembersBundle\Services\MemberSyntheticMobileService;
 use Symfony\Component\HttpKernel\Exception\UnauthorizedHttpException;
 use Illuminate\Contracts\Auth\UserProvider;
 use Illuminate\Contracts\Auth\Authenticatable as UserContract;
@@ -37,6 +38,8 @@ use MembersBundle\Services\UserService;
 use MembersBundle\Services\WechatUserService;
 use MembersBundle\Services\MemberEmailVerificationService;
 use MembersBundle\Services\MemberRegSettingService;
+use MembersBundle\Services\SocialTrustLoginService;
+use MembersBundle\Services\TrustLoginService;
 use WechatBundle\Services\OfficialAccountService;
 use WechatBundle\Services\OpenPlatform;
 
@@ -129,6 +132,9 @@ class EspierLocalUserProvider implements UserProvider
                 break;
             case "aliapp":
                 $user = $this->preAliMiniAppLogin($credentials);
+                break;
+            case "social_oauth":
+                $user = $this->preSocialOAuthLogin($credentials);
                 break;
             default:
                 $user = [];
@@ -635,6 +641,113 @@ class EspierLocalUserProvider implements UserProvider
                 'mobile' => $user['mobile'] ?? '',
                 'user_card_code' => $user['user_card_code'] ?? '',
                 'offline_card_code' => $user['offline_card_code'] ?? '',
+            ]);
+        }
+
+        return $result;
+    }
+
+    private function preSocialOAuthLogin($inputData)
+    {
+        $companyId = (int)($inputData['company_id'] ?? 0);
+        $trustloginTag = (string)($inputData['trustlogin_tag'] ?? '');
+        $code = (string)($inputData['code'] ?? '');
+        $versionTag = (string)($inputData['version_tag'] ?? 'touch');
+
+        if (!$companyId || $trustloginTag === '' || $code === '') {
+            throw new ResourceException('缺少参数！');
+        }
+
+        $socialService = new SocialTrustLoginService();
+        if (!$socialService->isSocialProvider($trustloginTag)) {
+            throw new ResourceException('不支持的第三方登录方式');
+        }
+
+        $configRow = (new TrustLoginService())->getConfigRow($trustloginTag, $versionTag, $companyId);
+        if (empty($configRow) || !($configRow['status'] === true || $configRow['status'] === 'true' || $configRow['status'] === 1 || $configRow['status'] === '1')) {
+            throw new ResourceException('该登录方式未开启');
+        }
+
+        $h5Host = $socialService->resolveH5Host(['origin' => $inputData['origin'] ?? '']);
+        if ($h5Host === '') {
+            throw new ResourceException('缺少 H5 域名配置');
+        }
+
+        $redirectUri = $socialService->buildRedirectUri($h5Host, $trustloginTag);
+        $socialUser = $socialService->resolveUserFromCode($trustloginTag, $configRow, $code, $redirectUri);
+        $unionid = $socialUser['unionid'];
+        $userType = $socialUser['user_type'];
+
+        $membersAssociationsRepository = app('registry')->getManager('default')->getRepository(MembersAssociations::class);
+        $assoc = $membersAssociationsRepository->get([
+            'company_id' => $companyId,
+            'user_type' => $userType,
+            'unionid' => $unionid,
+        ]);
+
+        $result = [
+            'id' => '0_espier_' . $trustloginTag . '_espier_' . $unionid,
+            'user_id' => 0,
+            'disabled' => 0,
+            'company_id' => $companyId,
+            'unionid' => $unionid,
+            'openid' => $trustloginTag,
+            'nickname' => $socialUser['nickname'] ?? '',
+            'mobile' => '',
+            'username' => $socialUser['nickname'] ?? '',
+            'sex' => 0,
+            'user_card_code' => '',
+            'offline_card_code' => '',
+            'operator_type' => 'user',
+            'user_type' => $userType,
+            'trustlogin_tag' => $trustloginTag,
+            'is_new' => 1,
+        ];
+
+        if (!empty($assoc['user_id'])) {
+            $memberInfo = $this->getMemberInfo(['user_id' => $assoc['user_id'], 'company_id' => $companyId]);
+            if (!empty($memberInfo['user_id'])) {
+                $result = array_merge($result, [
+                    'id' => $memberInfo['user_id'] . '_espier_companyid_espier_' . $companyId,
+                    'user_id' => $memberInfo['user_id'],
+                    'disabled' => $memberInfo['disabled'] ?? 0,
+                    'mobile' => $memberInfo['mobile'] ?? '',
+                    'user_card_code' => $memberInfo['user_card_code'] ?? '',
+                    'offline_card_code' => $memberInfo['offline_card_code'] ?? '',
+                    'is_new' => 0,
+                ]);
+            }
+        } else {
+            // 与邮箱注册一致：分配占位手机号并直接建会员，不强绑真实手机
+            $mobile = (new MemberSyntheticMobileService())->allocateUnique($companyId);
+            $nickname = trim((string)($socialUser['nickname'] ?? ''));
+            $memberInfo = $this->memberService->createMember([
+                'mobile' => $mobile,
+                'region_mobile' => $mobile,
+                'mobile_country_code' => '86',
+                'company_id' => $companyId,
+                'wxa_appid' => '',
+                'authorizer_appid' => '',
+                'sex' => 0,
+                'username' => $nickname !== '' ? $nickname : randValue(8),
+                'avatar' => (string)($socialUser['avatar'] ?? ''),
+                'email' => (string)($socialUser['email'] ?? ''),
+                'api_from' => 'h5app',
+                'auth_type' => 'social_oauth',
+                'user_type' => $userType,
+                'unionid' => $unionid,
+                'open_id' => $unionid,
+                'force_password' => 0,
+            ], false);
+
+            $result = array_merge($result, [
+                'id' => $memberInfo['user_id'] . '_espier_companyid_espier_' . $companyId,
+                'user_id' => $memberInfo['user_id'],
+                'disabled' => $memberInfo['disabled'] ?? 0,
+                'mobile' => $memberInfo['mobile'] ?? '',
+                'user_card_code' => $memberInfo['user_card_code'] ?? '',
+                'offline_card_code' => $memberInfo['offline_card_code'] ?? '',
+                'is_new' => 0,
             ]);
         }
 

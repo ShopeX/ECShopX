@@ -17,6 +17,14 @@
 
 namespace SupplierBundle\Repositories;
 
+/**
+ * supplier_items_draft 表访问层。
+ *
+ * 表结构要点：
+ * - source_item_id：对应主表 supplier_items.item_id
+ * - goods_id：SPU 维度，便于按整组商品查询/删除
+ * - content_json：SKU 待审内容（decodeRow 时 merge 到行内供业务层使用）
+ */
 class SupplierItemsDraftRepository
 {
     public $table = 'supplier_items_draft';
@@ -66,6 +74,7 @@ class SupplierItemsDraftRepository
         return (int)$qb->execute()->fetchColumn() > 0;
     }
 
+    /** 新建 draft 行，content 数组自动序列化为 content_json。 */
     public function create(array $data)
     {
         $now = time();
@@ -102,6 +111,7 @@ class SupplierItemsDraftRepository
         return $this->getInfo(['draft_id' => $row['draft_id']]);
     }
 
+    /** 审核驳回或 merge 完成后，按 goods_id 删除整 SPU 的 SKU draft。 */
     public function deleteByGoodsId($goodsId, $companyId = null)
     {
         $conn = $this->connection();
@@ -115,6 +125,7 @@ class SupplierItemsDraftRepository
         return $qb->execute();
     }
 
+    /** 将 content_json 解码并 merge 到行数组，供 overlay/merge 使用。 */
     public function decodeRow(array $row)
     {
         if (!empty($row['content_json'])) {

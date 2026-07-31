@@ -42,23 +42,23 @@ class MemberSyntheticMobileService
     }
 
     /**
+     * 店铺端会员列表/详情/导出：占位手机号不展示（与前台 H5 一致）。
+     * 邮箱注册、社交 OAuth 自动注册等场景分配的 `10`/`199` 占位号均置空；真实手机号不受影响。
+     */
+    public static function stripSyntheticMobileForShopApi(array &$member): void
+    {
+        self::stripSyntheticMobileForFrontApi($member);
+    }
+
+    /**
      * 店铺端 / 导出等：已绑定登录邮箱且 mobile 为占位号时，不在接口结果中返回手机号（置空）。
      * 有真实手机号的会员（即使填写了 login_email）不受影响。
+     *
+     * @deprecated 请使用 {@see stripSyntheticMobileForShopApi}，社交 OAuth 等无 login_email 的占位号也需隐藏
      */
     public static function stripPlaceholderMobileForEmailRegisteredMember(array &$member): void
     {
-        if (trim((string) ($member['login_email'] ?? '')) === '') {
-            return;
-        }
-        foreach (['mobile', 'region_mobile'] as $key) {
-            if (!array_key_exists($key, $member)) {
-                continue;
-            }
-            $v = (string) $member[$key];
-            if ($v !== '' && self::isAllocatedSyntheticMobile($v)) {
-                $member[$key] = '';
-            }
-        }
+        self::stripSyntheticMobileForShopApi($member);
     }
 
     /**

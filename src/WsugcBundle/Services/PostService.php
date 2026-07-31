@@ -61,7 +61,7 @@ class PostService
     /**
      * 多语言列表前：将 PostController 组装的复合 content|contains 转为 post_id，避免进入 RepositoryLangInterceptor 时把数组传给 filterByLang。
      * 与 PostRepository::_filter 语义对齐：title OR content（多语言映射表）OR keyword_topics_post_id。
-     * 若已有 post_id（话题/收藏等），与关键字解析结果取并集并去重；ID 规范为 int，有真实 ID 时剔除 -1 占位。
+     * 若已有 post_id（话题/收藏等），与关键字解析结果取交集（AND）；两侧经 normalizePostIds 规范为 int，有真实 ID 时剔除 -1 占位；空交集 → [-1]。
      *
      * @param array $filter
      * @return array
@@ -137,12 +137,12 @@ class PostService
         $hasPostId = array_key_exists('post_id', $filter) && $filter['post_id'] !== '' && $filter['post_id'] !== null;
         if ($hasPostId) {
             $existing = $normalizePostIds((array) $filter['post_id']);
-            // 与「关键字 OR 话题」一致：与已有 post_id（话题/收藏等）取并集，避免 intersect 与多语言 ID 对不上导致永远无数据
+            // 与已有 post_id（话题/收藏等）取交集：关键字内部仍为 title OR content OR keyword_topics（UNION），再与 scope 限定 AND
             if ($existing === []) {
                 $filter['post_id'] = $mergedIds !== [] ? $mergedIds : [-1];
             } else {
-                $union = array_values(array_unique(array_merge($existing, $mergedIds), SORT_REGULAR));
-                $filter['post_id'] = $union !== [] ? $union : [-1];
+                $intersect = array_values(array_intersect($existing, $mergedIds));
+                $filter['post_id'] = $intersect !== [] ? $intersect : [-1];
             }
         } else {
             $filter['post_id'] = $mergedIds !== [] ? $mergedIds : [-1];

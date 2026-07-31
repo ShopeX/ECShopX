@@ -587,8 +587,27 @@ class ShopSalespersonController extends Controller
     public function brokagestaticlist(Request $request){
         $authInfo = $request->get('auth');
         $inputData = $request->all();
-        // $filter = array();
         $inputData['company_id'] = $authInfo['company_id'];
+
+        if (isset($inputData['groupby']) && $inputData['groupby'] !== 'distributor_id') {
+            throw new ResourceException('Invalid groupby');
+        }
+        if (isset($inputData['groupby'])) {
+            $inputData['groupby'] = 'distributor_id';
+        }
+
+        $validateParams = $request->all('distributor_id', 'page', 'pageSize');
+        $validateRules = [
+            'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+            'page' => ['nullable|integer|min:1', '分页参数错误'],
+            'pageSize' => ['nullable|integer|min:1', '每页数量参数错误'],
+        ];
+        $error = validator_params($validateParams, $validateRules);
+        if ($error) {
+            throw new ResourceException($error);
+        }
+
+        // $filter = array();
         // $filter['distributor_id']    = $inputData['distributor_id'];
 
         //

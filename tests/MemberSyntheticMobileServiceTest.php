@@ -41,6 +41,14 @@ class MemberSyntheticMobileServiceTest extends TestCase
 
         $row3 = ['mobile' => '10123456789'];
         MemberSyntheticMobileService::stripPlaceholderMobileForEmailRegisteredMember($row3);
-        $this->assertSame('10123456789', $row3['mobile']);
+        $this->assertSame('', $row3['mobile']);
+    }
+
+    public function testStripShopApiClearsSyntheticForSocialOAuthWithoutLoginEmail(): void
+    {
+        $row = ['mobile' => '10258463264', 'region_mobile' => '10258463264'];
+        MemberSyntheticMobileService::stripSyntheticMobileForShopApi($row);
+        $this->assertSame('', $row['mobile']);
+        $this->assertSame('', $row['region_mobile']);
     }
 }

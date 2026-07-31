@@ -996,8 +996,18 @@ class PromoterController extends Controller
     {
         $authInfo = $request->get('auth');
         $inputData = $request->input();
+        $inputData['company_id'] = $authInfo['company_id'];
 
-        $brokerageService = new BrokerageService();
+        $validateParams = $request->all('date', 'distributor_id', 'datetype');
+        $validateRules = [
+            'date' => ['nullable|string', 'date参数错误'],
+            'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+            'datetype' => ['nullable|in:y,m,d', 'datetype参数错误'],
+        ];
+        $error = validator_params($validateParams, $validateRules);
+        if ($error) {
+            throw new ResourceException($error);
+        }
 
         $promoterService = new PromoterService();
 
@@ -1154,7 +1164,18 @@ class PromoterController extends Controller
     {
         $authInfo = $request->get('auth');
         $inputData   =  $request->input();
-        $brokerageService = new BrokerageService();
+        $inputData['company_id'] = $authInfo['company_id'];
+
+        $validateParams = $request->all('date', 'distributor_id', 'datetype');
+        $validateRules = [
+            'date' => ['nullable|string', 'date参数错误'],
+            'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
+            'datetype' => ['nullable|in:y,m,d', 'datetype参数错误'],
+        ];
+        $error = validator_params($validateParams, $validateRules);
+        if ($error) {
+            throw new ResourceException($error);
+        }
 
         $promoterService = new PromoterService();
 

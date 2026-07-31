@@ -122,6 +122,8 @@ $api->version('v1', function ($api) {
         $api->post('/wxapp/member/bind',  ['as' => 'front.h5app.member.bindMember',  'uses' => 'Members@bindMember']);
     });
     $api->group(['prefix' => 'h5app', 'namespace' => 'MembersBundle\Http\FrontApi\V1\Action'], function ($api) {
+        // Apple form_post 回调：外部 POST 无 company_id/Origin，不能走 frontnoauth 中间件
+        $api->match(['get', 'post'], '/wxapp/trustlogin/apple/callback', ['as' => 'front.h5app.trustlogin.apple.callback', 'uses' => 'TrustLogin@appleOAuthCallback', 'name' => 'Apple OAuth form_post 回调']);
         // 获取地区json
         $api->get('/wxapp/member/addressarea',  ['as' => 'front.h5app.member.address.area',  'uses' => 'Members@getAddressArea']);
         $api->get('/wxapp/member/decryptPhone', ['as' => 'front.wxapp.member.decryptPhone',      'uses' => 'Members@getNoAuthDecryptPhoneNumber']);

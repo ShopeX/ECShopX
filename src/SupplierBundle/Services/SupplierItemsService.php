@@ -46,13 +46,13 @@ class SupplierItemsService
     public $repository;
     public $supplierItemsAttrRepository;
 
-    /** @var bool */
+    /** @var bool 当前 addItems/batch 请求是否走 staging（内容写 draft，主表仅更新 audit 等） */
     private $stagingActive = false;
 
-    /** @var int|null */
+    /** @var int|null 当前 staging 上下文对应的 SPU goods_id */
     private $stagingGoodsId = null;
 
-    /** @var SupplierItemsDraftService|null */
+    /** @var SupplierItemsDraftService|null staging 草稿服务（懒加载） */
     private $draftService;
 
     public function __construct()
@@ -61,6 +61,7 @@ class SupplierItemsService
         $this->supplierItemsAttrRepository = app('registry')->getManager('default')->getRepository(SupplierItemsAttr::class);
     }
 
+    /** 懒加载 SupplierItemsDraftService，避免非 staging 请求无谓实例化。 */
     private function getDraftService()
     {
         if (!$this->draftService) {
@@ -69,6 +70,12 @@ class SupplierItemsService
         return $this->draftService;
     }
 
+    /**
+     * 按 goods_id 判定并设置本次请求的 staging 上下文。
+     *
+     * 在 addItems 解析出 goods_id 后、createItems 循环前调用。
+     * 若 SPU 曾 approved 或已有平台映射，则 stagingActive=true，后续 SKU 更新走 saveStagedItemUpdate。
+     */
     private function resolveStagingForGoods($goodsId)
     {
         $this->stagingActive = false;
@@ -330,6 +337,7 @@ class SupplierItemsService
                 $goodsId = $updateItemInfo['goods_id'];
             }
 
+            // staging 入口：确定 goods_id 后判定本请求是否写 draft（见 resolveStagingForGoods）
             if ($goodsId) {
                 $this->resolveStagingForGoods($goodsId);
             } else {
@@ -475,6 +483,9 @@ class SupplierItemsService
         return $itemsResult;
     }
 
+    /**
+     * 关联销售分类。staging 时写 supplier_items_attr_draft，merge/驳回前不污染主表 attr。
+     */
     private function itemsRelCats($params, $defaultItemId)
     {
         if (isset($params['company_id']) && isset($params['item_category']) && $params['item_category'] && $defaultItemId) {
@@ -498,7 +509,7 @@ class SupplierItemsService
     }
 
     /**
-     * 商品关联品牌 如果为单规格关联当前商品ID，多规格关联默认商品ID
+     * 商品关联品牌。staging 时写 attr_draft。
      */
     private function itemsRelBrand($params, $defaultItemId)
     {
@@ -522,7 +533,7 @@ class SupplierItemsService
     }
 
     /**
-     * 商品关联参数 如果为单规格关联当前商品ID，多规格关联默认商品ID
+     * 商品关联参数。staging 时走 attr_draft 的软删+重建模式（与主表 attr 一致）。
      */
     private function itemsRelParams($params, $defaultItemId)
     {
@@ -578,9 +589,11 @@ class SupplierItemsService
                 $data['audit_reason'] = '';
                 $data['audit_date'] = '';
             }
+            // staging 分支：已审核/已上线商品，内容进 draft，主表仅更新 audit_status 等 MAIN_ONLY 字段
             if ($this->stagingActive) {
                 $itemsResult = $this->saveStagedItemUpdate($data, $spec_params);
             } else {
+                // 从未 approved 且无平台映射：直写 supplier_items 主表
                 $itemsResult = $this->repository->updateOneBy(['item_id' => $spec_params['item_id']], $data);
             }
         } else {
@@ -595,6 +608,7 @@ class SupplierItemsService
             $this->stagingActive,
             $this->getDraftService()->hasPendingDraft($itemsResult['goods_id'] ?? 0, $data['company_id'] ?? null)
         );
+        // 待审期间禁止向平台 items 同步名称/图片/销售状态等内容字段
         if ($rsItem && !$blockContentSync) {
             $upData = [
                 'store' => $data['store'],
@@ -680,6 +694,12 @@ class SupplierItemsService
         return $itemsResult;
     }
 
+    /**
+     * staging 模式下更新单个 SKU：主表写 MAIN_ONLY，内容写 supplier_items_draft。
+     *
+     * 由 createItems（编辑）或 batchUpdateItems（批量开售/停售）调用。
+     * 主表 approve_status/is_market 在 merge 前保持不变，保护已通过版本。
+     */
     private function saveStagedItemUpdate(array $data, array $spec_params)
     {
         $sourceItemId = $spec_params['item_id'];
@@ -1143,6 +1163,7 @@ class SupplierItemsService
         $goodsId = $itemsInfo['goods_id'];
         $hasDraft = $draftService->hasPendingDraft($goodsId, $itemsInfo['company_id']);
         $operatorType = app('auth')->user()->get('operator_type') ?? 'supplier';
+        // 关键读分流：供应商待审读 draft；驳回读主表；平台仅 processing 读 draft
         $readDraft = SupplierItemsDetailStaging::resolveReadDraft(
             $itemsInfo['audit_status'] ?? '',
             $hasDraft,
@@ -1154,6 +1175,8 @@ class SupplierItemsService
         }
         
         $itemsInfo['data_source'] = 'supplier_goods';
+        // 非待审读 draft 时清空 approve_status：供应商端 UI 以 SPU 级 is_market 为准
+        // readDraft=true 时保留 overlay 后的 approve_status（含待审销售状态变更）
         if (!$readDraft) {
             $itemsInfo['approve_status'] = '';
         }
@@ -1398,11 +1421,13 @@ class SupplierItemsService
         $this->repository->updateBy(['goods_id' => $supplierGoods['goods_id']], $saveData);
 
         $draftService = $this->getDraftService();
+        // 驳回：删 draft，主表内容保持编辑前已通过版本
         if (SupplierItemsReviewStaging::shouldDeleteDraftOnReject($params['audit_status'])) {
             $draftService->deleteDraftByGoodsId($supplierGoods['goods_id'], $companyId);
             return $itemId;
         }
 
+        // 通过：draft merge 到主表后再 sync 平台池（下方 approved 分支读的是 merge 后的主表）
         if (SupplierItemsReviewStaging::shouldMergeDraftOnApprove($params['audit_status'])) {
             $draftService->mergeDraftToMain($supplierGoods['goods_id'], $this->repository, $companyId);
         }
@@ -1426,6 +1451,7 @@ class SupplierItemsService
             }
             foreach ($supplierGoodsList as $v) {
                 $v['supplier_item_id'] = $v['item_id'];
+                // merge 后主表已有 draft 中的 approve_status；仅缺失时按 is_market 推导
                 if (empty($v['approve_status'])) {
                     $v['approve_status'] = $v['is_market'] ? 'onsale' : 'instock';
                 }
@@ -1643,8 +1669,13 @@ class SupplierItemsService
     }
 
     /**
-     * 供应商端目前只支持
-     *  1.批量提交审核，2.批量设置停售和开售
+     * 供应商端批量操作：提交审核 / 批量开售停售。
+     *
+     * 开售停售（is_market）分流规则：
+     * - 已审核/已上线 SPU：is_market + approve_status 写 draft，主表 audit_status=processing
+     * - 从未 approved：直写主表（与历史行为一致）
+     * 库存 updateItemsStore 不在此方法，始终直写主表。
+     *
      * @param array $filter 更新条件
      * @param array $params 更新数据
      * @return
@@ -1677,6 +1708,7 @@ class SupplierItemsService
         $draftService = $this->getDraftService();
         foreach ($byGoods as $goodsId => $skuRows) {
             if ($draftService->shouldUseStagingForGoods($skuRows)) {
+                // 已上线商品：每个 SKU 走 saveStagedItemUpdate，销售状态进 draft
                 $this->resolveStagingForGoods($goodsId);
                 foreach ($skuRows as $row) {
                     $stagedData = [

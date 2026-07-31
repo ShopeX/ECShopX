@@ -227,8 +227,14 @@ class MemberService
                 // 微信来源的用户，如果force_password不为1，会默认生成随机密码
                 // H5微信授权登录后，新用户需要手动输入密码才能创建用户
                 $forcePassword = (int)($params["force_password"] ?? 0);
-                if (($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'aliapp') && $forcePassword === 0) {
+                if (
+                    ($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'aliapp' || $params['auth_type'] == 'social_oauth')
+                    && $forcePassword === 0
+                ) {
                     $params['password'] = substr(str_shuffle('QWERTYUIOPASDFGHJKLZXCVBNM1234567890qwertyuiopasdfghjklzxcvbnm'), 5, 10); // 生成随机密码
+                }
+                if ($params['auth_type'] == 'social_oauth' && ($params['password'] ?? '') === '') {
+                    $params['password'] = substr(str_shuffle('QWERTYUIOPASDFGHJKLZXCVBNM1234567890qwertyuiopasdfghjklzxcvbnm'), 5, 10);
                 }
                 $memberInfo['password'] = password_hash($params['password'], PASSWORD_DEFAULT);
 
@@ -345,7 +351,7 @@ class MemberService
             }
 
             //关联表
-            if ($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'wx_offiaccount' || $params['auth_type'] == 'aliapp') { // 本地注册会员则不用创建关联信息
+            if ($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'wx_offiaccount' || $params['auth_type'] == 'aliapp' || $params['auth_type'] == 'social_oauth') { // 本地注册会员则不用创建关联信息
                 $this->createMemberAssociations((int)$params['company_id'], (int)$result['user_id'], (string)$params['unionid'], $params['user_type'] ?? 'wechat');
             }
 
@@ -589,8 +595,14 @@ class MemberService
                 // 微信来源的用户，如果force_password不为1，会默认生成随机密码
                 // H5微信授权登录后，新用户需要手动输入密码才能创建用户
                 $forcePassword = (int)($params["force_password"] ?? 0);
-                if (($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'aliapp') && $forcePassword === 0) {
+                if (
+                    ($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'aliapp' || $params['auth_type'] == 'social_oauth')
+                    && $forcePassword === 0
+                ) {
                     $params['password'] = substr(str_shuffle('QWERTYUIOPASDFGHJKLZXCVBNM1234567890qwertyuiopasdfghjklzxcvbnm'), 5, 10); // 生成随机密码
+                }
+                if ($params['auth_type'] == 'social_oauth' && ($params['password'] ?? '') === '') {
+                    $params['password'] = substr(str_shuffle('QWERTYUIOPASDFGHJKLZXCVBNM1234567890qwertyuiopasdfghjklzxcvbnm'), 5, 10);
                 }
                 $memberInfo['password'] = password_hash($params['password'], PASSWORD_DEFAULT);
 
@@ -690,7 +702,7 @@ class MemberService
             }
 
             //关联表
-            if ($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'wx_offiaccount' || $params['auth_type'] == 'aliapp') { // 本地注册会员则不用创建关联信息
+            if ($params['api_from'] == 'wechat' || $params['auth_type'] == 'wxapp' || $params['auth_type'] == 'wx_offiaccount' || $params['auth_type'] == 'aliapp' || $params['auth_type'] == 'social_oauth') { // 本地注册会员则不用创建关联信息
                 $this->createMemberAssociations((int)$params['company_id'], (int)$result['user_id'], (string)$params['unionid'], $params['user_type'] ?? 'wechat');
             }
 
@@ -1030,7 +1042,7 @@ class MemberService
 //            $result["requestFields"] = $requestFields;
         }
         if (is_array($result)) {
-            MemberSyntheticMobileService::stripPlaceholderMobileForEmailRegisteredMember($result);
+            MemberSyntheticMobileService::stripSyntheticMobileForShopApi($result);
         }
         return $result;
     }
@@ -1879,7 +1891,7 @@ class MemberService
                 isset($value['mobile']) and $result[$key]['mobile'] = fixeddecrypt($value['mobile']);
                 isset($value['username']) and $result[$key]['username'] = fixeddecrypt($value['username']);
                 isset($value['nickname']) and $result[$key]['nickname'] = fixeddecrypt($value['nickname']);
-                MemberSyntheticMobileService::stripPlaceholderMobileForEmailRegisteredMember($result[$key]);
+                MemberSyntheticMobileService::stripSyntheticMobileForShopApi($result[$key]);
             }
         }
         return $result;
@@ -2558,7 +2570,13 @@ class MemberService
         }
         $result['list'] = $criteria->select($row)->execute()->fetchAll();
         foreach ($result['list'] as &$listRow) {
-            MemberSyntheticMobileService::stripPlaceholderMobileForEmailRegisteredMember($listRow);
+            if (isset($listRow['mobile'])) {
+                $listRow['mobile'] = fixeddecrypt($listRow['mobile']);
+            }
+            if (isset($listRow['region_mobile'])) {
+                $listRow['region_mobile'] = fixeddecrypt($listRow['region_mobile']);
+            }
+            MemberSyntheticMobileService::stripSyntheticMobileForShopApi($listRow);
         }
         unset($listRow);
 
@@ -2788,6 +2806,11 @@ class MemberService
      */
     public function bindMember(array $params): ?string
     {
+        $userType = (string)($params['user_type'] ?? 'wechat');
+        if (in_array($userType, SocialTrustLoginService::SOCIAL_TYPES, true)) {
+            return $this->bindSocialMember($params, $userType);
+        }
+
         $companyId = (int)$params['company_id'];
         $mobile = (string)$params['username'];
         $unionid = (string)$params['union_id'];
@@ -2879,6 +2902,92 @@ class MemberService
         } catch (\Throwable $throwable) {
             $conn->rollback();
             app("log")->info(sprintf("user_bind_member_error:%s", jsonEncode([
+                "message" => $throwable->getMessage(),
+                "file" => $throwable->getFile(),
+                "line" => $throwable->getLine(),
+            ])));
+            throw new ResourceException(trans('MembersBundle/Members.unknown_error'));
+        }
+    }
+
+    /**
+     * 第三方 OAuth 绑定会员（Apple/Google/Facebook/Line）
+     */
+    private function bindSocialMember(array $params, string $userType): ?string
+    {
+        $companyId = (int)$params['company_id'];
+        $mobile = (string)$params['username'];
+        $unionid = (string)$params['union_id'];
+        $checkType = $params['check_type'] ?? '';
+        $password = $params['password'] ?? '';
+
+        if (!empty($checkType) && !(new MemberRegSettingService())->checkSmsVcode($mobile, $companyId, $params['vcode'], $checkType)) {
+            throw new ResourceException(trans('MembersBundle/Members.sms_code_error_service'));
+        }
+
+        $conn = app('registry')->getConnection('default');
+        $conn->beginTransaction();
+        try {
+            $userFilter = [
+                "company_id" => $companyId,
+                "mobile" => fixedencrypt($mobile)
+            ];
+            $userEntity = $this->membersRepository->findOneBy($userFilter);
+            if (!$userEntity) {
+                $userInfo = $this->createMember([
+                    "mobile" => $mobile,
+                    "region_mobile" => $mobile,
+                    "mobile_country_code" => "86",
+                    "company_id" => $companyId,
+                    "wxa_appid" => "",
+                    "authorizer_appid" => "",
+                    "sex" => 0,
+                    "username" => (string)($params['nickname'] ?? ''),
+                    "avatar" => (string)($params['avatar'] ?? ''),
+                    "email" => "",
+                    "password" => $password,
+                    "api_from" => "h5app",
+                    "auth_type" => "social_oauth",
+                    "user_type" => $userType,
+                    "unionid" => $unionid,
+                    "open_id" => $unionid,
+                    "force_password" => 0
+                ]);
+                $userInfo["is_new"] = 1;
+            } else {
+                if (!empty($password) && !$this->checkPassword($password, $userEntity->getPassword())) {
+                    throw new ResourceException(trans('MembersBundle/Members.account_or_password_error'));
+                }
+                $userInfo = $this->membersRepository->getDataByEntity($userEntity);
+                $userInfo["is_new"] = 0;
+                $this->createMemberAssociations($companyId, (int)$userInfo["user_id"], $unionid, $userType);
+            }
+
+            $conn->commit();
+
+            $user = $this->getTokenData($userInfo);
+
+            $protocols = (new ProtocolService($user['company_id']))->get([ProtocolService::TYPE_MEMBER_REGISTER, ProtocolService::TYPE_PRIVACY]);
+            $membersProtocolLogService = new MembersProtocolLogService();
+            foreach ($protocols as $protocol) {
+                if (!isset($protocol['digest'])) {
+                    continue;
+                }
+                $acceptLog = [
+                    'company_id' => $user['company_id'],
+                    'user_id' => $user['user_id'],
+                    'digest' => $protocol['digest'],
+                ];
+                $membersProtocolLogService->create($acceptLog);
+            }
+
+            return app('auth')->guard('h5api')->login(new GenericUser($user));
+        } catch (ResourceException $resourceException) {
+            $conn->rollback();
+            throw $resourceException;
+        } catch (\Throwable $throwable) {
+            $conn->rollback();
+            app("log")->info(sprintf("user_bind_social_member_error:%s", jsonEncode([
                 "message" => $throwable->getMessage(),
                 "file" => $throwable->getFile(),
                 "line" => $throwable->getLine(),

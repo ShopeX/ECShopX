@@ -90,6 +90,7 @@ $api->version('v1', function($api) {
         //信任登录列表
         $api->post('/members/trustlogin/list',['name'=>'获取信任登录列表','middleware'=>'activated', 'as' => 'member.trustlogin.list', 'uses' =>'TrustLogin@getTrustLoginList']);
         $api->put('/members/trustlogin/setting',['name'=>'保存信任登录状态','middleware'=>'activated', 'as' => 'member.trustlogin.setting', 'uses' =>'TrustLogin@saveStatusSetting']);
+        $api->post('/members/trustlogin/setting',['name'=>'保存信任登录状态POST','middleware'=>'activated', 'as' => 'member.trustlogin.setting.post', 'uses' =>'TrustLogin@saveStatusSetting']);
 
 
         //标签组相关路由

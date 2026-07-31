@@ -657,70 +657,92 @@ class BrokerageService
     }
 
     public function getSalesmanBrokeragelistsBySql($params,  $limit, $page){
-        $userId = $params['user_id'] ?? 0;
-        $start = $limit * ($page - 1);
+        $companyId = $params['company_id'] ?? null;
+        if (empty($companyId)) {
+            throw new ResourceException('company_id is required');
+        }
+        $companyId = (int) $companyId;
 
-        $sqlWhereShopId = ' ';
-        //is_close
+        $userId = isset($params['user_id']) ? (int) $params['user_id'] : 0;
+        $start = (int) ($limit * ($page - 1));
+        $limit = (int) $limit;
+
+        $bindParams = ['company_id' => $companyId];
+        $types = [];
+        $sqlWhereParts = [' AND bb.company_id = :company_id '];
+
         if(isset($params['is_close']) ){
             $is_close = $params['is_close'] ? 1 : 0;
-            $sqlWhereIsClose = " and bb.is_close = {$is_close}  ";
+            $bindParams['is_close'] = $is_close;
+            $sqlWhereParts[] = ' and bb.is_close = :is_close ';
         }
         if(isset($params['mobile']) && $params['mobile'] ){
-            $sqlWhereIsMobile = " and oo.mobile = '{$params['mobile']}'  ";
+            $bindParams['mobile'] = $params['mobile'];
+            $sqlWhereParts[] = ' and oo.mobile = :mobile ';
         }
         if(isset($params['order_id']) && $params['order_id'] ){
-            $sqlWhereIsOrderId = " and bb.order_id = '{$params['order_id']}'  ";
+            $bindParams['order_id'] = $params['order_id'];
+            $sqlWhereParts[] = ' and bb.order_id = :order_id ';
         }
 
-        if(isset($params['distributor_id']) ){
-            $dIds_str = $params['distributor_id'];
-            $sqlWhereShopId = " and oo.distributor_id in  ( {$dIds_str} )  ";
+        $dIds = [];
+        if (isset($params['dIds']) && is_array($params['dIds'])) {
+            $dIds = array_values(array_filter(array_map('intval', $params['dIds']), function ($v) {
+                return $v > 0;
+            }));
+        } elseif (isset($params['distributor_id']) && !empty($params['distributor_id'])) {
+            if (is_array($params['distributor_id'])) {
+                $dIds = array_values(array_filter(array_map('intval', $params['distributor_id']), function ($v) {
+                    return $v > 0;
+                }));
+            } else {
+                $dIds = array_values(array_filter(array_map('intval', explode(',', (string) $params['distributor_id'])), function ($v) {
+                    return $v > 0;
+                }));
+            }
         }
 
-        if(isset($params['dIds']) ){
-            $dIds_str = implode($params['dIds'], ",");
-            $sqlWhereShopId = " and oo.distributor_id in  ( {$dIds_str} )  ";
+        if ($dIds) {
+            $placeholders = [];
+            foreach ($dIds as $index => $dId) {
+                $key = 'distributor_id_' . $index;
+                $placeholders[] = ':' . $key;
+                $bindParams[$key] = $dId;
+            }
+            $sqlWhereParts[] = ' and oo.distributor_id in (' . implode(', ', $placeholders) . ') ';
         }
-
 
         if(isset($params['date_start']) ){
-            $date_str = strtotime($params['date_start']." 00:00:00");
-            $sqlWhereStart = " and bb.created >=  ( {$date_str} )  ";
+            $bindParams['date_start'] = strtotime($params['date_start']." 00:00:00");
+            $sqlWhereParts[] = ' and bb.created >= :date_start ';
         }
-        
+
         if(isset($params['date_end']) ){
-            $date_str =   strtotime($params['date_end']." 23:59:59");
-            $sqlWhereEnd = " and bb.created <= ( {$date_str} )  ";
+            $bindParams['date_end'] = strtotime($params['date_end']." 23:59:59");
+            $sqlWhereParts[] = ' and bb.created <= :date_end ';
         }
 
         $conn = app("registry")->getConnection('default');
-        $qb = $conn->createQueryBuilder();
-        $sql_total = "SELECT  count(1)  as total";  
+        $sql_total = "SELECT  count(1)  as total";
         $sql_cls   = "SELECT  bb.*,oo.distributor_id,oo.title ,oo.total_fee ,ss.name, ss.mobile ,dd.name as store_name ,if(ss.user_id >0,'业务员','推广员')  as promote_type  ,ss.salesperson_id ";
         $countSql = " FROM popularize_brokerage as bb left join orders_normal_orders oo ON bb.order_id = oo.order_id left join aftersales as aa ON bb.order_id = aa.order_id  left join shop_salesperson as ss ON bb.user_id = ss.user_id and  oo.distributor_id = ss.shop_id  left join distribution_distributor as dd ON oo.distributor_id = dd.distributor_id WHERE 1 and source = 'order' and ss.salesperson_id is not null  ";
-        // $countSql .= $sqlWhereDate ;
         if($userId){
-            $countSql .= " AND bb.user_id =  {$userId} ";
+            $bindParams['user_id'] = $userId;
+            $countSql .= " AND bb.user_id = :user_id ";
         }
-        $countSql .= $sqlWhereShopId ?? ' ';
-        $countSql .= $sqlWhereIsClose ?? ' ';
-        $countSql .= $sqlWhereIsMobile ?? ' ';
-        $countSql .= $sqlWhereStart ?? ' '; 
-        $countSql .= $sqlWhereEnd ?? ' '; 
-        $countSql .= $sqlWhereIsOrderId ?? ' '; 
-        // $countSql .= $sqlTab ?? ' ';
+        $countSql .= implode('', $sqlWhereParts);
         $countSql .= " order by bb.created desc ";
 
-        $countBrolage = $conn->executeQuery( $sql_total . $countSql)->fetch();
+        $countBrolage = $conn->executeQuery($sql_total . $countSql, $bindParams, $types)->fetch();
 
-        $countSql .= " limit {$start} , {$limit}";
-        $conn = app('registry')->getConnection('default');
-        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-countSql:". json_encode($countSql));
+        $listBindParams = $bindParams;
+        $listBindParams['offset'] = $start;
+        $listBindParams['limit'] = $limit;
+        $listSql = $countSql . " limit :offset , :limit";
+        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-countSql:". json_encode($listSql));
 
-
-        $listBrokerage = $conn->executeQuery($sql_cls . $countSql)->fetchAll();
-        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listBrokerage:". json_encode($sql_cls . $countSql));
+        $listBrokerage = $conn->executeQuery($sql_cls . $listSql, $listBindParams, $types)->fetchAll();
+        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listBrokerage:". json_encode($sql_cls . $listSql));
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listBrokerage:". json_encode($listBrokerage));
         // 统计推广员增加人数
         // $listPromoter = $this->getSalesPromotersStatic($userId, $dateLen , $sqlWhereDate, $sqlWhereShopId ) ;
@@ -733,7 +755,8 @@ class BrokerageService
 
 
 
-        $salesperson_id_arr = array_column($countDataShopList['list'],'salesperson_id'); 
+        $salesperson_id_arr = array_column($countDataShopList['list'],'salesperson_id');
+        $data_alesperson_id_arr = [];
         if($salesperson_id_arr){
             $filter_salesperson = array(
                 'salesperson_id' => $salesperson_id_arr,
@@ -741,7 +764,7 @@ class BrokerageService
             $salespersonService = new SalespersonService();
 
             $data_alesperson = $salespersonService->salesperson->lists($filter_salesperson);
-            $data_alesperson_id_arr = array_column($data_alesperson['list'],null,'salesperson_id'); 
+            $data_alesperson_id_arr = array_column($data_alesperson['list'],null,'salesperson_id');
 
             $countDataShopList['data_alesperson'] = $data_alesperson;
 
@@ -758,65 +781,81 @@ class BrokerageService
 
 
     public function getSalesmanBrokerageCount($params,  $limit, $page){
-        $userId = $params['user_id'] ?? 0;
-        $start = $limit * ($page - 1);
+        $companyId = $params['company_id'] ?? null;
+        if (empty($companyId)) {
+            throw new ResourceException('company_id is required');
+        }
+        $companyId = (int) $companyId;
 
-        $sqlWhereShopId = ' ';
-        //is_close
+        $userId = isset($params['user_id']) ? (int) $params['user_id'] : 0;
+
+        $bindParams = ['company_id' => $companyId];
+        $types = [];
+        $sqlWhereParts = [' AND bb.company_id = :company_id '];
+
         if(isset($params['is_close']) ){
             $is_close = $params['is_close'] ? 1 : 0;
-            $sqlWhereIsClose = " and bb.is_close = {$is_close}  ";
+            $bindParams['is_close'] = $is_close;
+            $sqlWhereParts[] = ' and bb.is_close = :is_close ';
         }
         if(isset($params['mobile']) && $params['mobile'] ){
-            $sqlWhereIsMobile = " and oo.mobile = '{$params['mobile']}'  ";
+            $bindParams['mobile'] = $params['mobile'];
+            $sqlWhereParts[] = ' and oo.mobile = :mobile ';
         }
         if(isset($params['order_id']) && $params['order_id'] ){
-            $sqlWhereIsOrderId = " and bb.order_id = '{$params['order_id']}'  ";
+            $bindParams['order_id'] = $params['order_id'];
+            $sqlWhereParts[] = ' and bb.order_id = :order_id ';
         }
 
-        if(isset($params['distributor_id']) && !empty($params['distributor_id'])){
-            $dIds_str = $params['distributor_id'];
-            $sqlWhereShopId = " and oo.distributor_id in  ( {$dIds_str} )  ";
+        $dIds = [];
+        if (isset($params['dIds']) && is_array($params['dIds'])) {
+            $dIds = array_values(array_filter(array_map('intval', $params['dIds']), function ($v) {
+                return $v > 0;
+            }));
+        } elseif (isset($params['distributor_id']) && !empty($params['distributor_id'])) {
+            if (is_array($params['distributor_id'])) {
+                $dIds = array_values(array_filter(array_map('intval', $params['distributor_id']), function ($v) {
+                    return $v > 0;
+                }));
+            } else {
+                $dIds = array_values(array_filter(array_map('intval', explode(',', (string) $params['distributor_id'])), function ($v) {
+                    return $v > 0;
+                }));
+            }
         }
 
-        if(isset($params['dIds']) ){//dIds
-            $dIds_str = implode($params['dIds'], ",");
-            $sqlWhereShopId = " and oo.distributor_id in  ( {$dIds_str} )  ";
+        if ($dIds) {
+            $placeholders = [];
+            foreach ($dIds as $index => $dId) {
+                $key = 'distributor_id_' . $index;
+                $placeholders[] = ':' . $key;
+                $bindParams[$key] = $dId;
+            }
+            $sqlWhereParts[] = ' and oo.distributor_id in (' . implode(', ', $placeholders) . ') ';
         }
-
 
         if(isset($params['date_start']) ){
-            $date_str = strtotime($params['date_start']." 00:00:00");
-            $sqlWhereStart = " and bb.created >=  ( {$date_str} )  ";
+            $bindParams['date_start'] = strtotime($params['date_start']." 00:00:00");
+            $sqlWhereParts[] = ' and bb.created >= :date_start ';
         }
-        
+
         if(isset($params['date_end']) ){
-            $date_str =   strtotime($params['date_end']." 23:59:59");
-            $sqlWhereEnd = " and bb.created <= ( {$date_str} )  ";
+            $bindParams['date_end'] = strtotime($params['date_end']." 23:59:59");
+            $sqlWhereParts[] = ' and bb.created <= :date_end ';
         }
 
         $conn = app("registry")->getConnection('default');
-        $qb = $conn->createQueryBuilder();
-        // $sql_total = "SELECT  count(1)  as total";  
-        // $sql_cls   = "SELECT  bb.*,oo.distributor_id,oo.title ,oo.total_fee ,ss.name, ss.mobile ";
-
         $sql_sum   = "SELECT  sum(if(is_close=0,bb.rebate,0)) as rebate_sum_noclose,
         sum(if(is_close=1,bb.rebate,0)) as rebate_sum_close,
         sum(bb.rebate)  as rebate_sum,  sum(price) as price_sum,oo.total_fee ,ss.name, ss.mobile ";
         $countSql = " FROM popularize_brokerage as bb left join orders_normal_orders oo ON bb.order_id = oo.order_id left join aftersales as aa ON bb.order_id = aa.order_id  left join shop_salesperson as ss ON bb.user_id = ss.user_id and  oo.distributor_id = ss.shop_id  WHERE 1  and bb.source = 'order'  and ss.salesperson_id is not null   ";
-        // $countSql .= $sqlWhereDate ;
         if($userId){
-            $countSql .= " AND bb.user_id =  {$userId} ";
+            $bindParams['user_id'] = $userId;
+            $countSql .= " AND bb.user_id = :user_id ";
         }
-        $countSql .= $sqlWhereShopId ?? ' ';
-        $countSql .= $sqlWhereIsClose ?? ' ';
-        $countSql .= $sqlWhereIsMobile ?? ' ';
-        $countSql .= $sqlWhereStart ?? ' '; 
-        $countSql .= $sqlWhereEnd ?? ' '; 
-        $countSql .= $sqlWhereIsOrderId ?? ' '; 
-        // $countSql .= $sqlTab ?? ' ';
+        $countSql .= implode('', $sqlWhereParts);
         $countSql .= " order by bb.created desc ";
-        $countBrolage = $conn->executeQuery( $sql_sum . $countSql)->fetch();
+        $countBrolage = $conn->executeQuery($sql_sum . $countSql, $bindParams, $types)->fetch();
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-sql_sum:". json_encode( $sql_sum . $countSql));
 
         return $countBrolage;
@@ -824,123 +863,136 @@ class BrokerageService
 
 
     public function getSalesmanBrokerageCountList($params,  $limit = 1000, $page = 1){
+        $companyId = $params['company_id'] ?? null;
+        if (empty($companyId)) {
+            throw new ResourceException('company_id is required');
+        }
+        $companyId = (int) $companyId;
+
+        $allowedGroupBy = ['distributor_id'];
+        if (isset($params['groupby']) && !in_array($params['groupby'], $allowedGroupBy, true)) {
+            throw new ResourceException('Invalid groupby');
+        }
+
         $userId = $params['user_id'] ?? 0;
-        $start = $limit * ($page - 1);
+        $start = (int) ($limit * ($page - 1));
+        $limit = (int) $limit;
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-userId:". json_encode($userId));
-        // app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-userId:". var_export($userId));
-        $is_list_user = is_array($userId );
 
-        // // app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-$is_list_user:". var_export($is_list_user));
-        // if( is_array($userId ) ){
-        //     $userId = false;
-        //     $userIdArray = $userId;
-        // app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-userIdArray:". json_encode(($userIdArray ?? [])) );
+        $bindParams = ['company_id' => $companyId];
+        $types = [];
+        $sqlWhereParts = [' AND bb.company_id = :company_id '];
 
-        // }
-        // app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-userIdArray:". json_encode(($userIdArray ?? [])) );
-
-        $sqlWhereShopId = ' ';
-        //is_close
         if(isset($params['is_close']) ){
             $is_close = $params['is_close'] ? 1 : 0;
-            $sqlWhereIsClose = " and bb.is_close = {$is_close}  ";
+            $bindParams['is_close'] = $is_close;
+            $sqlWhereParts[] = ' and bb.is_close = :is_close ';
         }
         if(isset($params['mobile']) && $params['mobile'] ){
-            $sqlWhereIsMobile = " and oo.mobile = '{$params['mobile']}'  ";
+            $bindParams['mobile'] = $params['mobile'];
+            $sqlWhereParts[] = ' and oo.mobile = :mobile ';
         }
         if(isset($params['order_id']) && $params['order_id'] ){
-            $sqlWhereIsOrderId = " and bb.order_id = '{$params['order_id']}'  ";
+            $bindParams['order_id'] = $params['order_id'];
+            $sqlWhereParts[] = ' and bb.order_id = :order_id ';
         }
 
-        if(isset($params['distributor_id']) &&  $params['distributor_id']){
-            $dIds_str = $params['distributor_id'];
-            $sqlWhereShopId = " and oo.distributor_id in  ( {$dIds_str} )  ";
+        $dIds = [];
+        if (isset($params['dIds']) && is_array($params['dIds'])) {
+            $dIds = array_values(array_filter(array_map('intval', $params['dIds']), function ($v) {
+                return $v > 0;
+            }));
+        } elseif (isset($params['distributor_id']) && !empty($params['distributor_id'])) {
+            if (is_array($params['distributor_id'])) {
+                $dIds = array_values(array_filter(array_map('intval', $params['distributor_id']), function ($v) {
+                    return $v > 0;
+                }));
+            } else {
+                $dIds = array_values(array_filter(array_map('intval', explode(',', (string) $params['distributor_id'])), function ($v) {
+                    return $v > 0;
+                }));
+            }
         }
 
-        if(isset($params['dIds']) ){
-            $dIds_str = implode($params['dIds'], ",");
-            $sqlWhereShopId = " and oo.distributor_id in  ( {$dIds_str} )  ";
+        if ($dIds) {
+            $placeholders = [];
+            foreach ($dIds as $index => $dId) {
+                $key = 'distributor_id_' . $index;
+                $placeholders[] = ':' . $key;
+                $bindParams[$key] = $dId;
+            }
+            $sqlWhereParts[] = ' and oo.distributor_id in (' . implode(', ', $placeholders) . ') ';
         }
-        // if($userIdArray){
-        //     $userIdArray_str = implode($userIdArray, ",");
-        //     $sqlWhereUseridArray = " and bb.user_id in  ( {$userIdArray_str} )  ";
-        // }
-        if( is_array($userId ) && $userId ){
-            $userIdArray_str = implode($userId, ",");
-            $sqlWhereUseridArray = " and bb.user_id in  ( {$userIdArray_str} )  ";
+
+        $userIdArray = [];
+        if (is_array($userId) && $userId) {
+            $userIdArray = array_values(array_filter(array_map('intval', $userId), function ($v) {
+                return $v > 0;
+            }));
             $userId = 0;
+        } elseif (!is_array($userId)) {
+            $userId = (int) $userId;
+        }
 
-        }        
-        // year: 2024
-        // month: 2024-07
-        // day: 2024-07-30
+        if ($userIdArray) {
+            $placeholders = [];
+            foreach ($userIdArray as $index => $uid) {
+                $key = 'user_id_' . $index;
+                $placeholders[] = ':' . $key;
+                $bindParams[$key] = $uid;
+            }
+            $sqlWhereParts[] = ' and bb.user_id in (' . implode(', ', $placeholders) . ') ';
+        }
+
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-params:ymd:". json_encode($params));
-        $sqlWhereDate = ' '; 
-        if(isset($params['year']) && !empty($params['year'])) {
-            $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,4) = '".$params['year']."' ";
-        }
-        if(isset($params['month']) && !empty($params['month']) ) {
-            $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,7) = '".$params['month']."' ";
-        }
         if(isset($params['day'])  && !empty($params['day'])) {
-            $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,10) = '".$params['day']."' ";
+            $bindParams['day'] = $params['day'];
+            $sqlWhereParts[] = ' and substr(from_unixtime(bb.created),1,10) = :day ';
+        } elseif(isset($params['month']) && !empty($params['month']) ) {
+            $bindParams['month'] = $params['month'];
+            $sqlWhereParts[] = ' and substr(from_unixtime(bb.created),1,7) = :month ';
+        } elseif(isset($params['year']) && !empty($params['year'])) {
+            $bindParams['year'] = $params['year'];
+            $sqlWhereParts[] = ' and substr(from_unixtime(bb.created),1,4) = :year ';
         }
 
         if(isset($params['date_start']) ){
-            $date_str = strtotime($params['date_start']." 00:00:00");
-            $sqlWhereStart = " and bb.created >=  ( {$date_str} )  ";
-        }
-        
-        if(isset($params['date_end']) ){
-            $date_str =   strtotime($params['date_end']." 23:59:59");
-            $sqlWhereEnd = " and bb.created <= ( {$date_str} )  ";
+            $bindParams['date_start'] = strtotime($params['date_start']." 00:00:00");
+            $sqlWhereParts[] = ' and bb.created >= :date_start ';
         }
 
-        $sqlGroupBy = " group by bb.user_id,oo.distributor_id ";
-        // groupby
-        if(isset($params['groupby']) ){
-            $sqlGroupBy .= " , oo.{$params['groupby']}  ";
+        if(isset($params['date_end']) ){
+            $bindParams['date_end'] = strtotime($params['date_end']." 23:59:59");
+            $sqlWhereParts[] = ' and bb.created <= :date_end ';
+        }
+
+        $sqlGroupBy = ' group by bb.user_id,oo.distributor_id ';
+        if(isset($params['groupby']) && $params['groupby'] === 'distributor_id'){
+            $sqlGroupBy .= ' , oo.distributor_id ';
         }
 
         $conn = app("registry")->getConnection('default');
-        $qb = $conn->createQueryBuilder();
-        $sql_total = "SELECT  count(1)  as total FROM ";  
-        // $sql_cls   = "SELECT  bb.*,oo.distributor_id,oo.title ,oo.total_fee ,ss.name, ss.mobile ";
-
         $sql_sum   = "SELECT ss.salesperson_id,SUM(if(rebate > 0,1,0)) as order_num, SUM(if(rebate < 0,1,0)) as order_num_refund,  bb.order_id, bb.user_id, sum(if(is_close=0,bb.rebate,0)) as rebate_sum_noclose,sum(bb.rebate)  as rebate_sum,  sum(price) as price_sum,oo.total_fee ,ss.name as username, ss.mobile,dd.name as store_name,dd.distributor_id ";
 
         $countSql = " FROM popularize_brokerage as bb left join orders_normal_orders oo ON bb.order_id = oo.order_id left join aftersales as aa ON bb.order_id = aa.order_id  left join distribution_distributor as dd ON oo.distributor_id = dd.distributor_id left join shop_salesperson as ss ON bb.user_id = ss.user_id and  oo.distributor_id = ss.shop_id and ss.user_id > 0 WHERE 1 and oo.distributor_id > 0  AND ss.salesperson_id is not null  and bb.source = 'order'  and ss.salesperson_id is not null   ";
-        $countSql .= $sqlWhereDate ;
         if($userId){
-            $countSql .= " AND bb.user_id =  {$userId} ";
+            $bindParams['user_id'] = $userId;
+            $countSql .= " AND bb.user_id = :user_id ";
         }
 
+        $countSql .= implode('', $sqlWhereParts);
+        $countSql .= $sqlGroupBy;
+        $countSql .= " order by rebate_sum desc ";
 
-        $countSql .= $sqlWhereShopId ?? ' ';
-        $countSql .= $sqlWhereIsClose ?? ' ';
-        $countSql .= $sqlWhereIsMobile ?? ' ';
-        $countSql .= $sqlWhereStart ?? ' '; 
-        $countSql .= $sqlWhereEnd ?? ' '; 
-        $countSql .= $sqlWhereIsOrderId ?? ' '; 
-        $countSql .= $sqlWhereUseridArray ?? ' ';
-        $countSql .= $sqlGroupBy ?? ' ';
-
-        // $countSql .= $sqlTab ?? ' ';
-        $countSql .= " order by rebate_sum desc ";//bb.created
-
-        // $countBrolage = $conn->executeQuery( $sql_total ." ( ". $sql_sum . $countSql . " )   as da ")->fetch();
-        // app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-sql_total:".  $sql_total ." ( ". $countSql . " )  as da " );
-
-        $countSql .= " limit {$start} , {$limit}  ";
-        $countListBrolage = $conn->executeQuery( $sql_sum . $countSql)->fetchAll();
-        // $listBrokerage = $conn->executeQuery($sql_cls . $countSql)->fetchAll();
+        $listBindParams = $bindParams;
+        $listBindParams['offset'] = $start;
+        $listBindParams['limit'] = $limit;
+        $countSql .= " limit :offset , :limit  ";
+        $countListBrolage = $conn->executeQuery($sql_sum . $countSql, $listBindParams, $types)->fetchAll();
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-sql_sum:". json_encode( $sql_sum . $countSql));
 
-
-        // $countDataShopList =  array('total_count' =>  intval($countBrolage['total'] ?? 0),    'list'=> $countListBrolage ,'isSalesmanPage' => 1 );
-
-
-        $salesperson_id_arr = array_column($countListBrolage, 'salesperson_id'); 
+        $salesperson_id_arr = array_column($countListBrolage, 'salesperson_id');
+        $data_alesperson_id_arr = [];
         if($salesperson_id_arr){
             $filter_salesperson = array(
                 'salesperson_id' => $salesperson_id_arr,
@@ -948,9 +1000,7 @@ class BrokerageService
             $salespersonService = new SalespersonService();
 
             $data_alesperson = $salespersonService->salesperson->lists($filter_salesperson);
-            $data_alesperson_id_arr = array_column($data_alesperson['list'],null,'salesperson_id'); 
-
-            // $countDataShopList['data_alesperson'] = $data_alesperson;
+            $data_alesperson_id_arr = array_column($data_alesperson['list'],null,'salesperson_id');
 
         }
         foreach($countListBrolage as $k => &$v_salesperson){

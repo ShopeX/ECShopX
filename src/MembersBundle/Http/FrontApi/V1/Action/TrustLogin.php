@@ -24,6 +24,7 @@ use Illuminate\Http\Response;
 
 
 use MembersBundle\Services\MemberService;
+use MembersBundle\Services\SocialTrustLoginService;
 use MembersBundle\Services\TrustLoginService;
 
 class TrustLogin extends Controller
@@ -133,9 +134,42 @@ class TrustLogin extends Controller
         $authInfo = $request->get('auth');
         $companyId = $authInfo['company_id'];
         $version_tag = $request->get('version_tag', 'standard');
-        $result = [];
+        $socialService = new SocialTrustLoginService();
         $data = $this->trustLoginService->getTrustLoginList($companyId);
-        $result = !empty($data) ? $data[$version_tag] : [];
+        $result = !empty($data) ? ($data[$version_tag] ?? []) : [];
+        foreach ($result as &$row) {
+            $row = $socialService->sanitizeConfigRow($row, true);
+        }
+        unset($row);
         return $this->response->array($result);
+    }
+
+    /**
+     * Apple Sign in with Apple 使用 form_post，授权结果 POST 到此接口后 302 回 H5（静态 nginx 无法直接接收 POST）。
+     */
+    public function appleOAuthCallback(Request $request)
+    {
+        $socialService = new SocialTrustLoginService();
+        $h5Host = $socialService->resolveAppleCallbackH5Host([
+            'h5_host' => (string) $request->query('h5_host', ''),
+            'state' => (string) $request->input('state', ''),
+        ]);
+        if ($h5Host === '') {
+            return response('Missing H5_BASE_URL configuration', 500);
+        }
+
+        if ($request->filled('error')) {
+            return redirect($socialService->buildAppleH5LandingUrl($h5Host, '', [
+                'error' => (string) $request->input('error'),
+                'error_description' => (string) $request->input('error_description', ''),
+            ]));
+        }
+
+        $code = $socialService->normalizeOAuthCode((string) $request->input('code', ''));
+        if ($code === '') {
+            return response('Missing authorization code', 400);
+        }
+
+        return redirect($socialService->buildAppleH5LandingUrl($h5Host, $code));
     }
 }

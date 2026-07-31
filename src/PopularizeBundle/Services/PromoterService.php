@@ -731,41 +731,49 @@ class PromoterService
     // FROM popularize_brokerage as bb left join orders_normal_orders oo ON bb.order_id = oo.order_id left join aftersales as aa ON bb.order_id = aa.order_id WHERE bb.user_id = 168
 
     public function getSalesmanCount($authInfo,$params){
-        $userId = $authInfo['user_id'];
+        $companyId = $params['company_id'] ?? $authInfo['company_id'] ?? null;
+        if (empty($companyId)) {
+            throw new ResourceException('company_id is required');
+        }
+        $companyId = (int) $companyId;
+
+        $userId = (int) $authInfo['user_id'];
 
         if(env('DEBUG_SALESMAN_USERID',false) ){
-            $userId = env('DEBUG_SALESMAN_USERID');
+            $userId = (int) env('DEBUG_SALESMAN_USERID');
             
         }
-        $sqlWhereDate = ' ';
+
+        $bindParams = [
+            'company_id' => $companyId,
+            'user_id' => $userId,
+        ];
+        $sqlWhereParts = [' AND bb.company_id = :company_id '];
         $dateLen = 1;
  
         if(isset($params['date']) && $params['date']){
-            switch($params['datetype']){
+            $bindParams['date_val'] = $params['date'];
+            switch($params['datetype'] ?? ''){
                 case 'y':
-                    $date = $params['date'];
-                    $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,4) = '".$date."' ";
+                    $sqlWhereParts[] = ' AND substr(from_unixtime(bb.created),1,4) = :date_val ';
                     $dateLen = 7;
                     break;
                 case 'm':
-                    $date = $params['date'];
-                    $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,7) = '".$date."' ";
+                    $sqlWhereParts[] = ' AND substr(from_unixtime(bb.created),1,7) = :date_val ';
                     $dateLen = 10;
                     break;
                 case 'd':
-                    $date = $params['date'];
-                    $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,10) = '".$date."' ";
+                    $sqlWhereParts[] = ' AND substr(from_unixtime(bb.created),1,10) = :date_val ';
                     $dateLen = 10;
                     break;
                 }            
         }
 
-        $sqlWhereShopId = ' ';
         if(isset($params['distributor_id']) && $params['distributor_id'] ){
-            $sqlWhereShopId = " and oo.distributor_id = ".$params['distributor_id'] . ' ';
+            $bindParams['distributor_id'] = (int) $params['distributor_id'];
+            $sqlWhereParts[] = ' AND oo.distributor_id = :distributor_id ';
         }
-        // $conn = app("registry")->getConnection('default');
-        // $qb = $conn->createQueryBuilder();
+
         $countSql = "SELECT    if(count(1)>0 ,  sum(if(price > 0,1 ,0) ),0) AS order_num,
         SUM(if(price > 0,total_fee,0)) AS total_Fee,
         SUM(if(price < 0,total_fee,0)) AS refund_Fee,
@@ -777,15 +785,13 @@ class PromoterService
                         FROM popularize_brokerage as bb 
                         left join orders_normal_orders oo ON bb.order_id = oo.order_id 
                         left join aftersales as aa ON bb.order_id = aa.order_id 
-                        WHERE bb.user_id =  {$userId} ";
-
-        $countSql .= $sqlWhereDate ;
-        $countSql .= $sqlWhereShopId ;
+                        WHERE bb.user_id = :user_id ";
+        $countSql .= implode('', $sqlWhereParts);
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-countSql:". json_encode($countSql));
 
         $conn = app('registry')->getConnection('default');
 
-        $relContents = $conn->executeQuery($countSql)->fetch();
+        $relContents = $conn->executeQuery($countSql, $bindParams)->fetch();
 
         return $relContents;
 
@@ -795,12 +801,29 @@ class PromoterService
     public function getSalesmanStatic($authInfo,$params){
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-params:". json_encode($params));
 
-        // datetype： y/m/d
-        // date:   2024/2024-05/2024-05-23
-        $sqlWhereDate = ' ';
+        $companyId = $params['company_id'] ?? $authInfo['company_id'] ?? null;
+        if (empty($companyId)) {
+            throw new ResourceException('company_id is required');
+        }
+        $companyId = (int) $companyId;
+
+        $userId = (int) $authInfo['user_id'];
+
+        if(env('DEBUG_SALESMAN_USERID',false) ){
+            $userId = (int) env('DEBUG_SALESMAN_USERID');
+            
+        }
+
+        $bindParams = [
+            'company_id' => $companyId,
+            'user_id' => $userId,
+        ];
+        $sqlWhereParts = [' AND bb.company_id = :company_id '];
+        $sqlWhereDatePlaceholders = '';
         $dateLen = 1;
 
         $level_config = array('all' => "'first_level', 'second_level' ", 'lv1' => "'first_level'", 'lv2' => "'second_level'");
+        $sqlTab = '';
         if( isset($params['tab']) 
             && isset($level_config[$params['tab']]) 
             && $level_config[$params['tab']]  )
@@ -809,52 +832,45 @@ class PromoterService
         }
 
         $params['datetype'] = $params['datetype'] ?? '';
-        switch($params['datetype']){
-            case 'y':
-                $date = $params['date'];
-                $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,4) = '".$date."' ";
-                $dateLen = 7;
-                break;
-            case 'm':
-                $date = $params['date'];
-                $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,7) = '".$date."' ";
-                $dateLen = 10;
-                break;
-            case 'd':
-                $date = $params['date'];
-                $sqlWhereDate = " and   substr(from_unixtime(bb.created),1,10) = '".$date."' ";
-                $dateLen = 10;
-                break;
+        if(isset($params['date']) && $params['date']){
+            $bindParams['date_val'] = $params['date'];
+            switch($params['datetype']){
+                case 'y':
+                    $sqlWhereDatePlaceholders = ' AND substr(from_unixtime(bb.created),1,4) = :date_val ';
+                    $dateLen = 4;
+                    break;
+                case 'm':
+                    $sqlWhereDatePlaceholders = ' AND substr(from_unixtime(bb.created),1,7) = :date_val ';
+                    $dateLen = 7;
+                    break;
+                case 'd':
+                    $sqlWhereDatePlaceholders = ' AND substr(from_unixtime(bb.created),1,10) = :date_val ';
+                    $dateLen = 10;
+                    break;
+                }
+            if ($sqlWhereDatePlaceholders) {
+                $sqlWhereParts[] = $sqlWhereDatePlaceholders;
             }
-
-        $userId = $authInfo['user_id'];
-
-        if(env('DEBUG_SALESMAN_USERID',false) ){
-            $userId = env('DEBUG_SALESMAN_USERID');
-            
         }
 
-        $sqlWhereShopId = ' ';
         if(isset($params['distributor_id']) && $params['distributor_id'] ){
-            $sqlWhereShopId = " and oo.distributor_id = ".$params['distributor_id'] . ' ';
+            $bindParams['distributor_id'] = (int) $params['distributor_id'];
+            $sqlWhereParts[] = ' AND oo.distributor_id = :distributor_id ';
         }
 
-        $conn = app("registry")->getConnection('default');
-        $qb = $conn->createQueryBuilder();
         $countSql = "SELECT oo.distributor_id,substr(from_unixtime(bb.created) ,1,{$dateLen}) as date_brokerage ,    sum(if(price > 0,1 ,0) ) AS order_num,
         SUM(if(price > 0,total_fee,0)) AS total_Fee,
-        SUM(if(price < 0,total_fee,0)) AS refund_Fee, if(count(1)>0,sum(bb.rebate),0 ) as total_rebate, if(count(1)>0 ,sum(if(aftersales_bn > 0, 1, 0)),0) as aftersales_num, if(count(1)>0 ,sum(refund_fee),0) as aftersale_Fee, if(count(1)>0,sum(total_fee) /count(1),0) as price_fee, count(distinct oo.user_id) as buy_member_num , concat( oo.user_id) FROM popularize_brokerage as bb left join orders_normal_orders oo ON bb.order_id = oo.order_id left join aftersales as aa ON bb.order_id = aa.order_id WHERE bb.user_id =  {$userId} ";
-        $countSql .= $sqlWhereDate ;
-        $countSql .= $sqlWhereShopId ;
-        $countSql .= $sqlTab ?? ' ';
-        $countSql .= "group by substr(from_unixtime(created) ,1,{$dateLen}) order by created desc";
+        SUM(if(price < 0,total_fee,0)) AS refund_Fee, if(count(1)>0,sum(bb.rebate),0 ) as total_rebate, if(count(1)>0 ,sum(if(aftersales_bn > 0, 1, 0)),0) as aftersales_num, if(count(1)>0 ,sum(refund_fee),0) as aftersale_Fee, if(count(1)>0,sum(total_fee) /count(1),0) as price_fee, count(distinct oo.user_id) as buy_member_num , concat( oo.user_id) FROM popularize_brokerage as bb left join orders_normal_orders oo ON bb.order_id = oo.order_id left join aftersales as aa ON bb.order_id = aa.order_id WHERE bb.user_id = :user_id ";
+        $countSql .= implode('', $sqlWhereParts);
+        $countSql .= $sqlTab;
+        $countSql .= "group by substr(from_unixtime(bb.created) ,1,{$dateLen}) order by bb.created desc";
         $conn = app('registry')->getConnection('default');
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-countSql:". json_encode($countSql));
 
-        $listBrokerage = $conn->executeQuery($countSql)->fetchAll();
+        $listBrokerage = $conn->executeQuery($countSql, $bindParams)->fetchAll();
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listBrokerage:". json_encode($listBrokerage));
         // 统计推广员增加人数
-        $listPromoter = $this->getSalesPromotersStatic($userId, $dateLen , $sqlWhereDate, $sqlWhereShopId ) ;
+        $listPromoter = $this->getSalesPromotersStatic($userId, $companyId, $dateLen, $sqlWhereDatePlaceholders, $bindParams) ;
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listPromoter:". json_encode($listPromoter));
 
         // 合并数据
@@ -865,16 +881,14 @@ class PromoterService
 
     }
 
-    public function getSalesPromotersStatic($userId, $dateLen , $sqlWhereDate, $sqlWhereShopId ) {
+    public function getSalesPromotersStatic($userId, $companyId, $dateLen, $sqlWhereDatePlaceholders, array $bindParams) {
         $conn = app("registry")->getConnection('default');
-        $qb = $conn->createQueryBuilder();
-        $countSql = "select substr(from_unixtime(created)  ,1,{$dateLen})  as date_brokerage , count(1) as  member_num from popularize_promoter bb WHERE bb.pid =  {$userId} ";
-        $countSql .= $sqlWhereDate ;
-        $countSql .= "group by substr(from_unixtime(created) ,1,{$dateLen}) order by created desc";
-        $conn = app('registry')->getConnection('default');
+        $countSql = "select substr(from_unixtime(bb.created) ,1,{$dateLen})  as date_brokerage , count(1) as  member_num from popularize_promoter bb WHERE bb.pid = :user_id AND bb.company_id = :company_id ";
+        $countSql .= $sqlWhereDatePlaceholders;
+        $countSql .= "group by substr(from_unixtime(bb.created) ,1,{$dateLen}) order by bb.created desc";
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-countSql:". json_encode($countSql));
 
-        $listPromoter = $conn->executeQuery($countSql)->fetchAll();
+        $listPromoter = $conn->executeQuery($countSql, $bindParams)->fetchAll();
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listPromoter:". json_encode($listPromoter));
 
         return is_array($listPromoter) ? $listPromoter : array();

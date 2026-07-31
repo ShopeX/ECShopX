@@ -43,7 +43,7 @@ class MembersAssociations
      * @var integer
      *
      * @ORM\Id
-     * @ORM\Column(name="unionid", type="string", length=40, options={"comment":"第三方unionid"})
+     * @ORM\Column(name="unionid", type="string", length=128, options={"comment":"第三方unionid"})
      */
     private $unionid;
 
@@ -59,7 +59,7 @@ class MembersAssociations
      * @var string
      *
      * @ORM\Id
-     * @ORM\Column(name="user_type", type="string", length=30, options={"comment":"用户类型，可选值有 wechat:微信;ali:支付宝"})
+     * @ORM\Column(name="user_type", type="string", length=30, options={"comment":"用户类型，可选值有 wechat:微信;ali:支付宝;apple;google;facebook;line"})
      */
     private $user_type;
 
