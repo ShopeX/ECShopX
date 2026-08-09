@@ -3008,7 +3008,10 @@ class AbstractNormalOrder implements OrderInterface
         // $supplierOrderService->noPayOrderCancel($orderInfo);
 
         //退还积分
-        (new PointMemberService())->cancelOrderReturnBackPoints($orderInfo);
+        // 仅当非积分商城时按 point_use 退还；积分商城由子类 backPoint(order.point) 退还
+        if (($orderInfo['order_class'] ?? '') !== 'pointsmall') {
+            (new PointMemberService())->cancelOrderReturnBackPoints($orderInfo);
+        }
         return $res;
     }
 

@@ -167,6 +167,105 @@ class ItemsCategoryService
     }
 
     /**
+     * FrontApi 分类列表 is_main_category 解析。
+     * platform 且 distributor_id=0 时固定为 true；其余与 request is_main_category 等价。
+     */
+    public function resolveFrontCategoryListIsMainCategory(
+        string $productModel,
+        int $requestDistributorId,
+        $requestIsMainCategory
+    ): bool {
+        if ($productModel === 'platform' && $requestDistributorId === 0) {
+            return true;
+        }
+
+        return filter_var($requestIsMainCategory, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * FrontApi 分类列表是否回退到默认 is_main_category 逻辑。
+     * platform 且 distributor_id=0 时不回退；其余在 resolved 为 false 时回退。
+     */
+    public function shouldFallbackFrontCategoryList(
+        string $productModel,
+        int $requestDistributorId,
+        bool $resolvedIsMainCategory
+    ): bool {
+        if ($productModel === 'platform' && $requestDistributorId === 0) {
+            return false;
+        }
+
+        return $resolvedIsMainCategory === false;
+    }
+
+    /**
+     * FrontApi 分类列表：递归注入 is_main_category（fallback 后的最终数据源标识）。
+     */
+    public function injectFrontCategoryListIsMainCategoryFlag(array $categories, bool $isMainCategory): array
+    {
+        if (isset($categories['category_id']) && !array_key_exists(0, $categories)) {
+            $categories['is_main_category'] = $isMainCategory;
+            if (!empty($categories['children'])) {
+                $categories['children'] = $this->injectFrontCategoryListIsMainCategoryFlag(
+                    $categories['children'],
+                    $isMainCategory
+                );
+            }
+
+            return $categories;
+        }
+
+        foreach ($categories as &$category) {
+            $category['is_main_category'] = $isMainCategory;
+            if (!empty($category['children'])) {
+                $category['children'] = $this->injectFrontCategoryListIsMainCategoryFlag(
+                    $category['children'],
+                    $isMainCategory
+                );
+            }
+        }
+        unset($category);
+
+        return $categories;
+    }
+
+    /**
+     * 自定义分类页绑定：仅 platform 绑定一级管理分类，其余版本绑定一级销售分类。
+     */
+    public function isCustomizePageBindMainCategory(string $productModel): bool
+    {
+        return $productModel === 'platform';
+    }
+
+    /**
+     * 自定义分类页绑定分类校验失败时的提示语。
+     */
+    public function getCustomizePageBindCategoryErrorMessage(string $productModel): string
+    {
+        return $this->isCustomizePageBindMainCategory($productModel)
+            ? '只能绑定一级管理分类'
+            : '只能绑定一级销售分类';
+    }
+
+    /**
+     * 校验分类是否满足自定义分类页绑定要求。
+     *
+     * @return string|null 不满足时返回错误提示，满足时返回 null
+     */
+    public function validateCustomizePageBindCategory(array $categoryInfo, string $productModel): ?string
+    {
+        $requiresMainCategory = $this->isCustomizePageBindMainCategory($productModel);
+        $isMainCategory = filter_var($categoryInfo['is_main_category'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $categoryLevel = (int) ($categoryInfo['category_level'] ?? 0);
+
+        if ($categoryLevel !== 1 || $isMainCategory !== $requiresMainCategory) {
+            return $this->getCustomizePageBindCategoryErrorMessage($productModel);
+        }
+
+        return null;
+    }
+
+    /**
      * 获取店铺可售商品对应的一级销售分类 ID 列表（用于 categorylevel 等扁平接口）。
      */
     public function getSaleableTopLevelCategoryIds(int $companyId, int $distributorId): array

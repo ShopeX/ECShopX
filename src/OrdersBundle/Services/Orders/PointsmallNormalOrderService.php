@@ -450,6 +450,31 @@ class PointsmallNormalOrderService extends AbstractNormalOrder
     }
 
     /**
+     * 订单事务提交前扣减 order.point（混合支付积分部分）
+     *
+     * @param array<string,mixed> $orderData
+     * @param array<string,mixed> $params
+     */
+    public function beforeOrderCreateCommit($orderData, $params)
+    {
+        if (empty($orderData['point']) || $orderData['point'] <= 0) {
+            return;
+        }
+        $pointMemberService = new PointMemberService();
+        $otherParams = ['point_type' => 'points_off_cash'];
+        $pointMemberService->addPoint(
+            $orderData['user_id'],
+            $orderData['company_id'],
+            $orderData['point'],
+            6,
+            false,
+            '购物扣减积分',
+            $orderData['order_id'],
+            $otherParams
+        );
+    }
+
+    /**
      * Dynamically call the KaquanService instance.
      *
      * @param  string $method

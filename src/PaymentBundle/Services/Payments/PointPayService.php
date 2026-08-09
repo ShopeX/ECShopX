@@ -66,6 +66,8 @@ class PointPayService implements Payment
 
     public function doPay($authorizerAppId, $wxaAppId, array $data)
     {
+        $isPointsmall = ($data['trade_source_type'] ?? '') === 'normal_pointsmall';
+
         $pointMemberService = new PointMemberService();
         $pointMemberInfo = $pointMemberService->getInfo(['user_id' => $data['user_id'], 'company_id' => $data['company_id']]);
         // 达摩crm, 会员积分
@@ -84,7 +86,7 @@ class PointPayService implements Payment
             $point = $pointService->getPoint($paramsData);
             $pointMemberInfo['point'] = $point['integral'] ?? 0;
         }
-        if (!isset($pointMemberInfo['point']) || $pointMemberInfo['point'] < $data['pay_fee']) {
+        if (!$isPointsmall && (!isset($pointMemberInfo['point']) || $pointMemberInfo['point'] < $data['pay_fee'])) {
             throw new StoreResourceFailedException("积分不足！");
         }
 
@@ -92,7 +94,7 @@ class PointPayService implements Payment
         $deposit = (int)$depositTrade->getUserDepositTotal($data['company_id'], $data['user_id']);
         $pointMemberRuleService = new PointMemberRuleService();
         $money = ($pointMemberRuleService->getUsePointRule($data['company_id']));
-        if ($deposit < $money) {
+        if (!$isPointsmall && $deposit < $money) {
             $money /= 100;
             throw new StoreResourceFailedException("充值满{$money}元才能使用积分！");
         }
@@ -101,8 +103,10 @@ class PointPayService implements Payment
         try {
             $options['bank_type'] = '积分';
             $options['pay_type'] = 'point';
-            $otherParams = ['point_type' => 'points_off_cash'];
-            $pointMemberService->addPoint($data['user_id'], $data['company_id'], $data['pay_fee'], 6, false, '支付单号:' . $data['trade_id'] . '消耗积分', $data['order_id'], $otherParams);
+            if (!$isPointsmall) {
+                $otherParams = ['point_type' => 'points_off_cash'];
+                $pointMemberService->addPoint($data['user_id'], $data['company_id'], $data['pay_fee'], 6, false, '支付单号:' . $data['trade_id'] . '消耗积分', $data['order_id'], $otherParams);
+            }
             $tradeService = new TradeService();
             $tradeService->updateStatus($data['trade_id'], 'SUCCESS', $options);
             $conn->commit();

@@ -229,7 +229,12 @@ class RegistrationRecordService
         return $statusConf[$status] ?? $status;
     }
 
-    public function getRocordList($filter, $page = 1, $pageSize = -1, $orderBy = ['record_id' => 'DESC'])
+    /**
+     * 报名记录列表（附带活动信息）
+     *
+     * @param bool $onlyVisibleActivity 为 true 时（仅 C 端调用）：跳过 is_show=0 的隐藏活动记录；管理端/导出保持默认 false
+     */
+    public function getRocordList($filter, $page = 1, $pageSize = -1, $orderBy = ['record_id' => 'DESC'], $onlyVisibleActivity = false)
     {
         $lists = $this->entityRepository->lists($filter, '*', $page, $pageSize, $orderBy);
         if (!$lists['list']) {
@@ -238,12 +243,19 @@ class RegistrationRecordService
 
         $activityIds = array_column($lists['list'], 'activity_id');
         $registrationActivityService = new RegistrationActivityService();
-        $ayList = $registrationActivityService->entityRepository->getLists(['activity_id' => $activityIds], 'activity_id, activity_name,start_time,end_time,join_limit,is_sms_notice,is_wxapp_notice,pics,intro,is_allow_duplicate,address,place,area,show_fields');
+        $ayList = $registrationActivityService->entityRepository->getLists(['activity_id' => $activityIds], 'activity_id, activity_name,start_time,end_time,join_limit,is_sms_notice,is_wxapp_notice,pics,intro,is_allow_duplicate,address,place,area,show_fields,is_show');
         $aylist = array_column($ayList, null, 'activity_id');
 
         $addressService = new AddressService();
-        foreach ($lists['list'] as &$v) {
+        $skipped = 0;
+        $filteredList = [];
+        foreach ($lists['list'] as $v) {
             $activity_info = $aylist[$v['activity_id']] ?? [];
+            // C 端严格模式：活动已隐藏则整条报名记录不返回
+            if ($onlyVisibleActivity && (!$activity_info || intval($activity_info['is_show'] ?? 1) !== 1)) {
+                $skipped++;
+                continue;
+            }
             if ($activity_info) {
                 $registrationActivityService->getStatusName($activity_info);
                 //活动开始时间（与 start_date 一致：Y-m-d H:i:s）
@@ -279,6 +291,12 @@ class RegistrationRecordService
             $v['content'] = (array)json_decode($v['content'], true);
             $v['create_date'] = date('Y-m-d H:i:s', $v['created']);
             $v['status_name'] = $this->getStatusName($v['status']);
+            $filteredList[] = $v;
+        }
+        $lists['list'] = $filteredList;
+        // 过滤后同步减少 total_count，避免分页总数不准
+        if ($onlyVisibleActivity && $skipped > 0) {
+            $lists['total_count'] = max(0, $lists['total_count'] - $skipped);
         }
         return $lists;
     }
@@ -307,22 +325,32 @@ class RegistrationRecordService
         if ($record['form_id'] && in_array($record['status'], ['pending', 'rejected'])) {
             $action['edit'] = 1;
         }
-        if ($record['activity_info']['is_allow_duplicate']) {
+        // activity_info 可能为空，用 ?? 0 避免报错
+        if ($record['activity_info']['is_allow_duplicate'] ?? 0) {
             $action['apply'] = 1;
         }
         return $action;
     }
 
-    public function getRocordInfo($id)
+    /**
+     * 单条报名记录详情
+     *
+     * @param bool $onlyVisibleActivity 为 true 时（仅 C 端）：关联活动 is_show=0 则返回空数组
+     */
+    public function getRocordInfo($id, $onlyVisibleActivity = false)
     {
         $info = $this->entityRepository->getInfoById($id);
         if (!$info) {
             return [];
         }
         $registrationActivityService = new RegistrationActivityService();
-        $aylist = $registrationActivityService->getInfo(['activity_id' => $info['activity_id']], 'activity_id, activity_name,start_time,end_time,join_limit,is_sms_notice,is_wxapp_notice,address,place,intro,pics,is_allow_duplicate,area,is_offline_verify');
+        $aylist = $registrationActivityService->getInfo(['activity_id' => $info['activity_id']], 'activity_id, activity_name,start_time,end_time,join_limit,is_sms_notice,is_wxapp_notice,address,place,intro,pics,is_allow_duplicate,area,is_offline_verify,is_show');
 
         $activity_info = $aylist ?? [];
+        // C 端：隐藏活动不返回任何报名/活动数据
+        if ($onlyVisibleActivity && (!$activity_info || intval($activity_info['is_show'] ?? 1) !== 1)) {
+            return [];
+        }
         if ($activity_info) {
             $registrationActivityService->getStatusName($activity_info);
             

@@ -28,7 +28,7 @@ class RegistrationActivityRepository extends EntityRepository
 {
     use MagicLangTrait;
     public $table = "selfservice_registration_activity";
-    public $cols = ['activity_id','temp_id','activity_name','start_time','end_time','join_limit','is_sms_notice','is_wxapp_notice','created','updated','company_id', 'area', 'place', 'address', 'intro', 'show_fields', 'pics', 'gift_points', 'is_allow_duplicate', 'is_allow_cancel', 'is_offline_verify', 'is_need_check', 'is_white_list', 'enterprise_ids', 'group_no', 'member_level', 'distributor_ids', 'join_tips', 'submit_form_tips', 'content', 'distributor_id'];
+    public $cols = ['activity_id','temp_id','activity_name','start_time','end_time','join_limit','is_sms_notice','is_wxapp_notice','created','updated','company_id', 'area', 'place', 'address', 'intro', 'show_fields', 'pics', 'gift_points', 'is_allow_duplicate', 'is_allow_cancel', 'is_offline_verify', 'is_need_check', 'is_white_list', 'is_show', 'enterprise_ids', 'group_no', 'member_level', 'distributor_ids', 'join_tips', 'submit_form_tips', 'content', 'distributor_id'];
     public $prk = 'activity_id';
     private $multiLangField = [
         'activity_name',

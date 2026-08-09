@@ -147,6 +147,15 @@ class RegistrationActivity
     private $is_white_list;
 
     /**
+     * 是否在前台展示（与 show_fields 不同：show_fields 控制详情页展示哪些字段，is_show 控制活动是否对 C 端可见）
+     *
+     * @var integer
+     *
+     * @ORM\Column(name="is_show", type="integer", options={"comment":"是否展示(1展示 0隐藏)", "default":1})
+     */
+    private $is_show = 1;
+
+    /**
      * @var string
      *
      * @ORM\Column(name="enterprise_ids", type="text", nullable=true, options={"comment":"内购白名单企业ID", "default":""})
@@ -633,6 +642,17 @@ class RegistrationActivity
     public function getIsWhiteList()
     {
         return $this->is_white_list;
+    }
+
+    public function setIsShow($is_show)
+    {
+        $this->is_show = $is_show;
+        return $this;
+    }
+
+    public function getIsShow()
+    {
+        return $this->is_show;
     }
     
     public function setEnterpriseIds($enterprise_ids)

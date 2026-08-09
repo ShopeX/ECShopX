@@ -109,6 +109,11 @@ class RegistrationActivityService
             $err_msg = trans('SelfserviceBundle.activity_not_exist_err');
             return false;
         }
+        // is_show=0 的活动在 C 端视为不存在，禁止报名/参与
+        if (intval($rsActivity['is_show'] ?? 1) !== 1) {
+            $err_msg = trans('SelfserviceBundle.activity_not_exist_err');
+            return false;
+        }
         if ($rsActivity['start_time']>time() or $rsActivity['end_time']<time()) {
             $err_msg = trans('SelfserviceBundle.activity_not_started_or_ended');
             return false;
@@ -190,6 +195,8 @@ class RegistrationActivityService
         foreach ($checkFields as $v) {
             $params[$v] = intval($params[$v] ?? 0);
         }
+        // 未传 is_show 时默认展示（1），避免新增活动被误设为隐藏
+        $params['is_show'] = intval($params['is_show'] ?? 1);
 
         $arrFields = ['area', 'show_fields', 'pics'];
         foreach ($arrFields as $v) {

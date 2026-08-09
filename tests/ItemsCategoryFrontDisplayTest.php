@@ -6,6 +6,7 @@
  * TC7（后台列表不过滤）、TC8（迁移历史数据）为手工或后续补充。
  */
 
+use CompanysBundle\Entities\Companys;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use GoodsBundle\Entities\ItemsCategory;
@@ -250,11 +251,43 @@ class ItemsCategoryFrontDisplayTest extends TestCase
 
     private function bindMockRegistryToAvoidDb(): void
     {
-        $mockRepo = $this->getMockBuilder(ItemsCategoryRepository::class)->disableOriginalConstructor()->getMock();
-        $mockManager = $this->getMockBuilder(\stdClass::class)->addMethods(['getRepository'])->getMock();
-        $mockManager->method('getRepository')->with(ItemsCategory::class)->willReturn($mockRepo);
-        $mockRegistry = $this->getMockBuilder(\stdClass::class)->addMethods(['getManager'])->getMock();
-        $mockRegistry->method('getManager')->with('default')->willReturn($mockManager);
+        $mockCompanysRepo = $this->getMockBuilder(\stdClass::class)
+            ->addMethods(['getInfo'])
+            ->getMock();
+        $mockCompanysRepo->method('getInfo')
+            ->willReturnCallback(function (array $filter) {
+                return [
+                    'company_id' => $filter['company_id'],
+                    'menu_type' => 3,
+                ];
+            });
+
+        $mockItemsCategoryRepo = $this->getMockBuilder(ItemsCategoryRepository::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $mockManager = $this->getMockBuilder(\stdClass::class)
+            ->addMethods(['getRepository'])
+            ->getMock();
+        $mockManager->method('getRepository')
+            ->willReturnCallback(function ($class) use ($mockCompanysRepo, $mockItemsCategoryRepo) {
+                if ($class === Companys::class) {
+                    return $mockCompanysRepo;
+                }
+                if ($class === ItemsCategory::class) {
+                    return $mockItemsCategoryRepo;
+                }
+
+                return null;
+            });
+
+        $mockRegistry = $this->getMockBuilder(\stdClass::class)
+            ->addMethods(['getManager'])
+            ->getMock();
+        $mockRegistry->method('getManager')
+            ->with('default')
+            ->willReturn($mockManager);
+
         $this->app->instance('registry', $mockRegistry);
     }
 }

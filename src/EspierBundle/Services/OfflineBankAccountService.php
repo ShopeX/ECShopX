@@ -70,7 +70,7 @@ class OfflineBankAccountService
     {
         // 如果is_default=1,其他的设置为0
         if ($params['is_default'] == 1) {
-            $this->updateBy(['company_id' => $params['company_id'], 'is_default' => 1], ['is_default' => 0]);
+            $this->clearOtherDefaults($params['company_id']);
         }
         return $this->create($params);
     }
@@ -79,9 +79,18 @@ class OfflineBankAccountService
     {
         // TS: 53686f704578
         if ($params['is_default'] == 1) {
-            $this->updateBy(['company_id' => $params['company_id'], 'is_default' => 1], ['is_default' => 0]);
+            $this->clearOtherDefaults($params['company_id']);
         }
         return $this->updateBy($filter, $params);
+    }
+
+    private function clearOtherDefaults($companyId)
+    {
+        $list = $this->findBy(['company_id' => $companyId, 'is_default' => 1]);
+        if (!$list) {
+            return;
+        }
+        $this->updateBy(['company_id' => $companyId, 'is_default' => 1], ['is_default' => 0]);
     }
 
     /**

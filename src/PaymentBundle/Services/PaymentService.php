@@ -81,11 +81,11 @@ class PaymentService
             $distributorInfo = $result['distributor'] ?? [];
         }
 
-        // 区分订单类型
-        $trade_source_type = $params['order_type'];
-        if (($result['orderInfo']['order_class'] ?? '') == 'pointsmall') {
-            $trade_source_type = $params['order_type'].'_'.$result['orderInfo']['order_class'];
-        }
+        // 区分订单类型（对齐 getOrderServiceByOrderInfo，避免重复拼接 _pointsmall）
+        $trade_source_type = self::resolveTradeSourceType(
+            $params['order_type'],
+            $result['orderInfo']['order_class'] ?? ''
+        );
         $data = [
             'company_id' => $authInfo['company_id'],
             'user_id' => $authInfo['user_id'] ?? 0,
@@ -221,5 +221,14 @@ class PaymentService
         $data = $payResult;
 
         return $data;
+    }
+
+    public static function resolveTradeSourceType(string $orderType, string $orderClass): string
+    {
+        if ($orderClass === 'pointsmall' && strpos($orderType, '_pointsmall') === false) {
+            return $orderType.'_pointsmall';
+        }
+
+        return $orderType;
     }
 }

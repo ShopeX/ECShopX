@@ -254,8 +254,11 @@ class PickupLocation extends Controller
         }
 
         if (isset($params['rel_distributor_id']) && $params['rel_distributor_id']) {
-            $filter['rel_distributor_id'] = $params['rel_distributor_id'];
-            if ($operatorType != 'distributor') {
+            if ($operatorType == 'distributor') {
+                $filter['rel_distributor_id'] = $request->get('distributor_id');
+                unset($filter['distributor_id']);
+            } else {
+                $filter['rel_distributor_id'] = $params['rel_distributor_id'];
                 unset($filter['distributor_id']);
             }
         }

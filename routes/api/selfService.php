@@ -36,6 +36,7 @@ $api->version('v1', function($api) {
 
         $api->post('/selfhelp/registrationActivity/create', ['name'=>'新增报名活动',  'middleware'=>'activated',  'as' => 'selfhelp.registrationActivity.add',  'uses'=>'RegistrationActivityController@createData']);
         $api->put('/selfhelp/registrationActivity/update', [ 'name'=>'更新报名活动', 'middleware'=>'activated',  'as' => 'selfhelp.registrationActivity.edit',  'uses'=>'RegistrationActivityController@updateData']);
+        $api->put('/selfhelp/registrationActivity/setIsShow', ['name'=>'设置报名活动展示状态', 'middleware'=>'activated', 'as' => 'selfhelp.registrationActivity.setIsShow', 'uses'=>'RegistrationActivityController@setIsShow']); // 单独改 is_show，不走 update
         $api->get('/selfhelp/registrationActivity/list', ['name'=>'获取报名活动列表', 'middleware'=>'activated',  'as' => 'selfhelp.registrationActivity.list',  'uses'=>'RegistrationActivityController@getDatalist']);
         $api->get('/selfhelp/registrationActivity/get', [ 'name'=>'获取报名活动详情','middleware'=>'activated',  'as' => 'selfhelp.registrationActivity.info',  'uses'=>'RegistrationActivityController@getDataInfo']);
         $api->post('/selfhelp/registrationActivity/del', ['name'=>'删除报名活动',  'middleware'=>'activated',  'as' => 'selfhelp.registrationActivity.delete',  'uses'=>'RegistrationActivityController@deleteData']);

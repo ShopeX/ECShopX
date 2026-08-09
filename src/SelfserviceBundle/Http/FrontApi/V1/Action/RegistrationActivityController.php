@@ -121,6 +121,10 @@ class RegistrationActivityController extends Controller
         if (!$activity_info) {
             throw new ResourceException(trans('SelfserviceBundle.activity_not_exist'));
         }
+        // 管理端设为隐藏（is_show=0）时，C 端详情与「活动不存在」表现一致
+        if (intval($activity_info['is_show'] ?? 1) !== 1) {
+            throw new ResourceException(trans('SelfserviceBundle.activity_not_exist'));
+        }
         //获取活动状态
         $registrationActivityService->getStatusName($activity_info);
 
@@ -172,6 +176,7 @@ class RegistrationActivityController extends Controller
         $authInfo = $request->get('auth');
         $filter = [
             'company_id' => $authInfo['company_id'],
+            'is_show' => 1, // C 端列表只查「展示中」的活动，前端无需传此参数
         ];
         if ($status == 1) $filter['end_time|gte'] = time();
         if ($status == 2) $filter['end_time|lte'] = time();
@@ -254,7 +259,8 @@ class RegistrationActivityController extends Controller
             $filter['status'] = $status;
         }
         
-        $result = $registrationRecordService->getRocordList($filter, $page, $pageSize);
+        // 最后一个参数 true：C 端「我的报名」列表，过滤掉关联活动已隐藏的记录
+        $result = $registrationRecordService->getRocordList($filter, $page, $pageSize, ['record_id' => 'DESC'], true);
         if ($result['list']) {
             foreach ($result['list'] as $k => $v) {
                 //获取当前报名记录可以执行的操作按钮
@@ -511,7 +517,11 @@ class RegistrationActivityController extends Controller
         $authInfo = $request->get('auth');
         $id = $request->get('record_id');
         $registrationRecordService = new RegistrationRecordService();
-        $result = $registrationRecordService->getRocordInfo($id);
+        $result = $registrationRecordService->getRocordInfo($id, true);
+        // 关联活动 is_show=0 时 getRocordInfo 返回空数组，直接返回，避免后面访问不存在的字段
+        if (!$result) {
+            return $this->response->array([]);
+        }
         if ($result['user_id'] != $authInfo['user_id']) {
             throw new ResourceException(trans('SelfserviceBundle.information_error'));
         }

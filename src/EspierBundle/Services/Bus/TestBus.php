@@ -13,6 +13,12 @@ class TestBus implements ServiceBusInterface
     /** @var array|null last $data passed to post() */
     public static $lastPostData = null;
 
+    /** @var array<int, array> history of $data passed to post() */
+    public static $postHistory = [];
+
+    /** @var array<int, array> queue of return values for post() */
+    public static $postReturnQueue = [];
+
     public function version($version)
     {
         return $this;
@@ -39,6 +45,12 @@ class TestBus implements ServiceBusInterface
     public function post($uri, array $data = [], array $headers = [])
     {
         self::$lastPostData = $data;
+        self::$postHistory[] = $data;
+
+        if (!empty(self::$postReturnQueue)) {
+            return array_shift(self::$postReturnQueue);
+        }
+
         return [];
     }
 
@@ -62,8 +74,30 @@ class TestBus implements ServiceBusInterface
         return self::$lastPostData;
     }
 
-    public static function resetLastPostData(): void
+    public static function getPostCount(): int
+    {
+        return count(self::$postHistory);
+    }
+
+    public static function getPostHistory(): array
+    {
+        return self::$postHistory;
+    }
+
+    public static function setPostReturnQueue(array $returns): void
+    {
+        self::$postReturnQueue = $returns;
+    }
+
+    public static function reset(): void
     {
         self::$lastPostData = null;
+        self::$postHistory = [];
+        self::$postReturnQueue = [];
+    }
+
+    public static function resetLastPostData(): void
+    {
+        self::reset();
     }
 }

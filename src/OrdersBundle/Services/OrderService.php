@@ -260,7 +260,7 @@ class OrderService
             $this->orderInterface->minusItemStore($orderData);
             //扣减积分
             $pointMemberService = new PointMemberService();
-            if ($orderData['point_use'] && $orderData['pay_type'] != 'point') {
+            if ($orderData['point_use'] && $orderData['pay_type'] != 'point' && ($orderData['order_class'] ?? '') !== 'pointsmall') {
                 app('log')->debug('订单使用了积分 order_id:'.$orderData['order_id']);
                 $otherParams = ['point_type' => 'points_off_cash'];
                 $pointMemberService = new PointMemberService();
@@ -939,7 +939,7 @@ class OrderService
             'bind_salesman_distributor_id' => $bindSalesmanData['bind_salesman_distributor_id'] ?? 0,// 绑定导购店铺id
             'chat_id' => $params['chat_id'] ?? 0,// 客户群ID
             'third_params' => $thirdParams,
-            'point_use' => $params['point_use'] ?? 0,
+            'point_use' => ($this->orderInterface->orderClass === 'pointsmall') ? 0 : ($params['point_use'] ?? 0),
             'point_fee' => 0,
             'get_point_type' => 1,
             'is_profitsharing' => $is_profitsharing,

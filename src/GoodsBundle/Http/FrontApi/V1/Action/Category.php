@@ -134,8 +134,6 @@ class Category extends BaseController
         $company_id = $authInfo['company_id'];
         $filter['company_id'] = $company_id;
 
-        $filter['is_main_category'] = $request->input('is_main_category', false);
-
         // 小程序端仅返回前台展示的分类
         $filter['is_show_front'] = 1;
 
@@ -143,6 +141,11 @@ class Category extends BaseController
         $company = (new CompanysActivationEgo())->check($company_id);
         $productModel = $company['product_model'] ?? 'platform';
         $itemsCategoryService = new ItemsCategoryService();
+        $filter['is_main_category'] = $itemsCategoryService->resolveFrontCategoryListIsMainCategory(
+            $productModel,
+            $distributorId,
+            $request->input('is_main_category', false)
+        );
         $categoryDistributorId = $itemsCategoryService->resolveCategoryDistributorIdForFront($productModel, $distributorId);
         if ($productModel !== 'standard' && $categoryDistributorId > 0) {
             $filter['distributor_id'] = $categoryDistributorId;
@@ -157,7 +160,7 @@ class Category extends BaseController
         $result = $itemsCategoryService->getItemsCategory($filter, true, 1, -1, ['sort' => 'DESC', 'created' => 'ASC'], 'category_id,category_name,category_level,parent_id,image_url,customize_page_id');
 
         // 分类获取不到获取商城主类目
-        if (false == $filter['is_main_category'] && !$result) {
+        if ($itemsCategoryService->shouldFallbackFrontCategoryList($productModel, $distributorId, (bool)$filter['is_main_category']) && !$result) {
             $filter['is_main_category'] = true;
             if (isset($filter['distributor_id'])) {
                 unset($filter['distributor_id']);
@@ -191,7 +194,14 @@ class Category extends BaseController
             $result = $itemsCategoryService->filterCategoryTreeBySaleableItems($company_id, $distributorId, $result);
         }
 
-        return $this->response->array($result);
+        if ($result) {
+            $result = $itemsCategoryService->injectFrontCategoryListIsMainCategoryFlag(
+                $result,
+                (bool) $filter['is_main_category']
+            );
+        }
+
+        return $this->response->array($result ?: []);
     }
     /**
      * @SWG\Get(

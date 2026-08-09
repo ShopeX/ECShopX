@@ -68,7 +68,7 @@ class RegistrationActivityController extends Controller
 
     public function createData(Request $request)
     {
-        $params = $request->all('temp_id', 'activity_name', 'start_time', 'end_time', 'join_limit', 'is_sms_notice', 'is_wxapp_notice', 'area', 'place', 'address', 'intro', 'show_fields', 'pics', 'gift_points', 'is_allow_duplicate', 'is_allow_cancel', 'is_offline_verify', 'is_need_check', 'is_white_list', 'enterprise_ids', 'group_no', 'member_level', 'distributor_ids', 'join_tips', 'submit_form_tips', 'content');
+        $params = $request->all('temp_id', 'activity_name', 'start_time', 'end_time', 'join_limit', 'is_sms_notice', 'is_wxapp_notice', 'area', 'place', 'address', 'intro', 'show_fields', 'pics', 'gift_points', 'is_allow_duplicate', 'is_allow_cancel', 'is_offline_verify', 'is_need_check', 'is_white_list', 'is_show', 'enterprise_ids', 'group_no', 'member_level', 'distributor_ids', 'join_tips', 'submit_form_tips', 'content');
         $rules = [
             // 'temp_id' => ['required', trans('SelfserviceBundle.template_required')],
             'activity_name' => ['required', trans('SelfserviceBundle.activity_name_required')],
@@ -114,7 +114,7 @@ class RegistrationActivityController extends Controller
      */
     public function updateData(Request $request)
     {
-        $params = $request->all('activity_id', 'temp_id', 'activity_name', 'start_time', 'end_time', 'join_limit', 'is_sms_notice', 'is_wxapp_notice', 'area', 'place', 'address', 'intro', 'show_fields', 'pics', 'gift_points', 'is_allow_duplicate', 'is_allow_cancel', 'is_offline_verify', 'is_need_check', 'is_white_list', 'enterprise_ids', 'group_no', 'member_level', 'distributor_ids', 'join_tips', 'submit_form_tips', 'content');
+        $params = $request->all('activity_id', 'temp_id', 'activity_name', 'start_time', 'end_time', 'join_limit', 'is_sms_notice', 'is_wxapp_notice', 'area', 'place', 'address', 'intro', 'show_fields', 'pics', 'gift_points', 'is_allow_duplicate', 'is_allow_cancel', 'is_offline_verify', 'is_need_check', 'is_white_list', 'is_show', 'enterprise_ids', 'group_no', 'member_level', 'distributor_ids', 'join_tips', 'submit_form_tips', 'content');
         $rules = [
             'activity_id' => ['required', trans('SelfserviceBundle.activity_id_required')],
             // 'temp_id' => ['required', trans('SelfserviceBundle.template_required')],
@@ -446,6 +446,67 @@ class RegistrationActivityController extends Controller
     }
 
     /**
+     * @SWG\Put(
+     *     path="/selfhelp/registrationActivity/setIsShow",
+     *     summary="设置报名活动展示状态",
+     *     tags={"报名"},
+     *     description="单独修改活动 is_show：1 展示，0 隐藏",
+     *     operationId="setIsShow",
+     *     @SWG\Parameter( name="Authorization", in="header", description="JWT验证token", required=true, type="string"),
+     *     @SWG\Parameter( name="activity_id", in="query", description="活动ID", required=true, type="integer"),
+     *     @SWG\Parameter( name="is_show", in="query", description="是否展示(1展示 0隐藏)", required=true, type="integer"),
+     *     @SWG\Response( response=200, description="成功返回结构", @SWG\Schema(
+     *          @SWG\Property( property="data", type="object",
+     *                  @SWG\Property( property="status", type="boolean", example="true", description="操作结果"),
+     *                  @SWG\Property( property="is_show", type="integer", example="1", description="当前展示状态"),
+     *          ),
+     *     )),
+     *     @SWG\Response( response="default", description="错误返回结构", @SWG\Schema( type="array", @SWG\Items(ref="#/definitions/SelfserviceErrorResponse") ) )
+     * )
+     *
+     * 单独修改报名活动的展示/隐藏状态（不走完整 update 接口）
+     * 接口：PUT /api/selfhelp/registrationActivity/setIsShow
+     */
+    public function setIsShow(Request $request)
+    {
+        // 活动 ID，转成整数；没有则报错
+        $activityId = intval($request->input('activity_id', 0));
+        if (!$activityId) {
+            throw new StoreResourceFailedException(trans('SelfserviceBundle.activity_id_required'));
+        }
+        // 必须显式传 is_show（允许传 0 表示隐藏）
+        if (!$request->has('is_show')) {
+            throw new StoreResourceFailedException(trans('SelfserviceBundle.parameter_error', ['status' => 'is_show']));
+        }
+        $isShow = intval($request->input('is_show'));
+        // 只允许 0 或 1，其他值非法
+        if (!in_array($isShow, [0, 1], true)) {
+            throw new StoreResourceFailedException(trans('SelfserviceBundle.parameter_error', ['status' => 'is_show']));
+        }
+
+        // 只能改当前登录商户下的活动
+        $companyId = app('auth')->user()->get('company_id');
+        $activity = $this->service->entityRepository->getInfo([
+            'activity_id' => $activityId,
+            'company_id' => $companyId,
+        ]);
+        if (!$activity) {
+            throw new StoreResourceFailedException(trans('SelfserviceBundle.activity_not_exist_err'));
+        }
+
+        // 只更新 is_show 一个字段
+        $result = $this->service->entityRepository->updateOneBy(
+            ['activity_id' => $activityId, 'company_id' => $companyId],
+            ['is_show' => $isShow]
+        );
+
+        return $this->response->array([
+            'status' => (bool) $result,
+            'is_show' => $isShow,
+        ]);
+    }
+
+    /**
      * @SWG\Get(
      *     path="/selfhelp/registrationActivity/easylist",
      *     summary="报名活动列表",
@@ -487,7 +548,7 @@ class RegistrationActivityController extends Controller
         if (!$filter) {
             return $this->response->array($result);
         }
-        $result = $this->service->entityRepository->lists($filter, 'activity_id,activity_name,temp_id', $page, $size, $orderBy);
+        $result = $this->service->entityRepository->lists($filter, 'activity_id,activity_name,temp_id,is_show', $page, $size, $orderBy);
         if ($result['list']) {
             $activity_ids = array_column($result['list'], 'activity_id');
             $temp_ids = array_column($result['list'], 'temp_id');

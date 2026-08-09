@@ -23,6 +23,7 @@ use App\Http\Controllers\Controller as Controller;
 use WechatBundle\Services\Wxapp\CustomizePageService;
 use WechatBundle\Entities\WeappSetting;
 use GoodsBundle\Services\ItemsCategoryService;
+use CompanysBundle\Ego\CompanysActivationEgo;
 use CompanysBundle\Services\RegionauthService;
 
 class CustomizePage extends Controller
@@ -286,11 +287,13 @@ class CustomizePage extends Controller
             if ($filter['page_type'] == 'category') {
                 $pageIds = array_column($result['list'], 'id');
                 $categoryService = new ItemsCategoryService();
+                $company = (new CompanysActivationEgo())->check($companyId);
+                $productModel = $company['product_model'] ?? config('common.product_model', 'platform');
                 $categoryFilter['company_id'] = $companyId;
                 $categoryFilter['customize_page_id'] = $pageIds;
                 $categoryFilter['parent_id'] = 0;
                 $categoryFilter['category_level'] = 1;
-                $categoryFilter['is_main_category'] = false;
+                $categoryFilter['is_main_category'] = $categoryService->isCustomizePageBindMainCategory($productModel);
                 $categoryList = $categoryService->getItemsCategory($categoryFilter, false);
                 $categoryList = array_column($categoryList, null, 'customize_page_id');
             }
@@ -464,6 +467,8 @@ class CustomizePage extends Controller
         }
 
         $categoryService = new ItemsCategoryService();
+        $company = (new CompanysActivationEgo())->check($companyId);
+        $productModel = $company['product_model'] ?? config('common.product_model', 'platform');
         $categoryFilter['company_id'] = $companyId;
         $categoryFilter['regionauth_id'] = $regionauthId;
         $categoryFilter['category_id'] = $params['category_id'];
@@ -472,8 +477,9 @@ class CustomizePage extends Controller
             throw new ResourceException('分类不存在');
         }
 
-        if ($categoryInfo['category_level'] != 1 || $categoryInfo['is_main_category'] != false) {
-            throw new ResourceException('只能绑定一级销售分类');
+        $bindCategoryError = $categoryService->validateCustomizePageBindCategory($categoryInfo, $productModel);
+        if ($bindCategoryError !== null) {
+            throw new ResourceException($bindCategoryError);
         }
 
         $resetFilter['company_id'] = $companyId;
