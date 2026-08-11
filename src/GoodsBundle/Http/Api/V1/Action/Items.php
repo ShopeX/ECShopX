@@ -1833,8 +1833,12 @@ class Items extends BaseController
                 $value['distributor_id'] = $value['distributor_id'] ?? 0;
                 $value['rebate'] = (string)($value['rebate'] ?? '');
                 $value['tagList'] = $newTags[$value['item_id']] ?? [];
-                $categoryInfo = $itemsCategoryService->getInfoById($value['item_main_cat_id']);
-                $value['itemMainCatName'] = $categoryInfo['category_name'] ?? '';
+                $mainCatId = $value['item_category'] ?? $value['item_main_cat_id'] ?? '';
+                $value['itemMainCatName'] = '';
+                if ($mainCatId !== '' && $mainCatId !== null) {
+                    $categoryInfo = $itemsCategoryService->getInfoById($mainCatId);
+                    $value['itemMainCatName'] = $categoryInfo['category_name'] ?? '';
+                }
                 $value['operator_name'] = $operators[$value['supplier_id']]['username'] ?? '';
                 $value['distributor_name'] = $distributorData[$value['distributor_id']] ?? [];
                 $value['item_holder'] = $value['supplier_id'] ? 'supplier' : 'self';
@@ -2199,8 +2203,12 @@ class Items extends BaseController
 
             foreach ($result['list'] as &$value) {
                 $value['tagList'] = $newTags[$value['item_id']] ?? [];
-                $categoryInfo = $itemsCategoryService->getInfoById($value['item_main_cat_id']);
-                $value['itemMainCatName'] = $categoryInfo['category_name'] ?? '';
+                $mainCatId = $value['item_category'] ?? $value['item_main_cat_id'] ?? '';
+                $value['itemMainCatName'] = '';
+                if ($mainCatId !== '' && $mainCatId !== null) {
+                    $categoryInfo = $itemsCategoryService->getInfoById($mainCatId);
+                    $value['itemMainCatName'] = $categoryInfo['category_name'] ?? '';
+                }
 
                 $cat_arr = [];
                 foreach (($value['item_cat_id'] ?? []) as &$v) {

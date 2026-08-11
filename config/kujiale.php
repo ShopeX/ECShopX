@@ -1,5 +1,5 @@
 <?php
-$wap_base = env("WAP_BASE_URL","https://wap.kukahome.com");
+$wap_base = env("WAP_BASE_URL");
 
 return [
     'appKey' => env('KUJIALE_APPKEY',''),

@@ -952,6 +952,9 @@ class DistributorItemsService
 
             $result['list'] = $em->select('i.*')->execute()->fetchAll();
             $result['list'] = $this->getDistributorSkuReplace($companyId, $distributorId, $result['list'], true);
+            foreach ($result['list'] as $key => &$v) {
+                $v['item_main_cat_id'] = $v['item_category'] ?? '';
+            }
             // 多语言
             $service = new MultiLangService();
             $result['list'] = $service->getListAddLang($result['list'],['item_name'],'items',$this->getLang(),'item_id');

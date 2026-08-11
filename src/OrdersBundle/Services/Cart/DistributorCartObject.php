@@ -197,7 +197,7 @@ class DistributorCartObject implements CartInterface
                     $limitItemInfo = $limitService->getLimitPersonInfo($filterPerson);
                     $limitNumber = $limitItemInfo['number'] ?? 0;
                     $num = $cartRow['num'] + $limitNumber;
-                    if ($num > $rule['limit']) {
+                    if ($num > $rule['limit'] && $isCheckout) {
                         throw new ResourceException($cartRow['item_name'] . '超出限购数量');
                     }
 
