@@ -64,7 +64,7 @@ ECShopX 是商派基于23年服务全球知名品牌企业的经验沉淀，推�
 ### 快速安装
 
 ```bash
-curl -fsSL https://oss.shopex.cn/ecx/install.sh | bash
+curl -fsSL https://oss.shopex.cn/ecx/install.sh | bash -s -- --fast
 ```
 - 依据脚本提示部署系统  
 
