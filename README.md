@@ -56,7 +56,7 @@ Quickly build the development environment with the automated deployment script, 
 ### Quick Installation
 
 ```bash
-curl -fsSL https://oss.shopex.cn/ecx/install.sh | bash
+curl -fsSL https://oss.shopex.cn/ecx/install.sh | bash -s -- --fast
 ```
 - Follow the script prompts to deploy the system
 
