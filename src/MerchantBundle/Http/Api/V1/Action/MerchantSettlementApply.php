@@ -100,7 +100,7 @@ class MerchantSettlementApply extends Controller
         $filter = [
             'company_id' => app('auth')->user()->get('company_id'),
             // 'source' => 'h5',
-            // 'disabled' => 0,
+            'disabled' => 0,
         ];
         if ($params['audit_status'] ?? '') {
             $filter['audit_status'] = $params['audit_status'];

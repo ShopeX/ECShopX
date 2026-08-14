@@ -26,6 +26,7 @@ use OrdersBundle\Traits\GetPaymentServiceTrait;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use OrdersBundle\Services\TradeService;
 use OrdersBundle\Entities\NormalOrders;
+use PaymentBundle\Services\PaymentOrderOwnershipGuard;
 
 class PaymentService
 {
@@ -56,6 +57,7 @@ class PaymentService
 
         $orderAssociationService = new OrderAssociationService();
         $orderInfo = $orderAssociationService->getOrder($authInfo['company_id'], $params['order_id']);
+        PaymentOrderOwnershipGuard::assertBelongsToAuthUser($orderInfo, $authInfo);
         if (!in_array($orderInfo['order_status'], ['NOTPAY', 'PART_PAYMENT'])) {
             throw new BadRequestHttpException('当前订单不需要支付');
         }

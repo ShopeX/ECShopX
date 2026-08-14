@@ -24,6 +24,7 @@ use PaymentBundle\Services\Payments\HfPayService;
 use OrdersBundle\Traits\GetOrderServiceTrait;
 use OrdersBundle\Traits\GetPaymentServiceTrait;
 use PaymentBundle\Services\PaymentService;
+use PaymentBundle\Services\PaymentOrderOwnershipGuard;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 use OrdersBundle\Services\OrderAssociationService;
@@ -150,6 +151,7 @@ class WxappPayment extends Controller
             $params['order_id'] = $request->input('order_id');
             $orderAssociationService = new OrderAssociationService();
             $order = $orderAssociationService->getOrder($authInfo['company_id'], $params['order_id']);
+            PaymentOrderOwnershipGuard::assertBelongsToAuthUser($order, $authInfo);
 
             if (!in_array($order['order_status'], ['NOTPAY', 'PART_PAYMENT'])) {
                 throw new BadRequestHttpException('当前订单不需要支付');

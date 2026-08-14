@@ -1,0 +1,95 @@
+# ECShopX 宝塔站点伪静态（API + /admin + /mobile + /web + /images|/assets）
+# ===========================================================================
+# 运行目录 = /public。宝塔「伪静态」只能写 location 等指令，不能写 server{}。
+# 打包时由 pack.sh 放到 zip 根目录 nginx.rewrite，面板自动加载。
+# ===========================================================================
+
+# --- 跨域（API 需要，按需收紧 Allow-Origin）---
+add_header 'Access-Control-Allow-Origin' '*' always;
+add_header 'Access-Control-Allow-Headers' 'Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With' always;
+add_header 'Access-Control-Expose-Headers' 'Authorization' always;
+add_header 'Access-Control-Allow-Methods' 'DELETE, GET, HEAD, POST, PUT, OPTIONS, TRACE, PATCH' always;
+
+if ($request_method = OPTIONS) {
+    return 200;
+}
+
+# --- 后端 API / 资源（优先于静态前端）---
+location ^~ /api/ {
+    try_files $uri /index.php$is_args$args;
+}
+
+location ^~ /storage/ {
+    try_files $uri /index.php$is_args$args;
+}
+
+location ^~ /wechatAuth/ {
+    try_files $uri /index.php$is_args$args;
+}
+
+# --- 管理后台 SPA（public/admin，构建时 VUE_APP_PUBLIC_PATH=/admin/）---
+location = /admin {
+    return 302 /admin/;
+}
+location ^~ /admin/ {
+    try_files $uri $uri/ /admin/index.html;
+}
+
+# --- H5 商城 SPA（public/mobile，构建时 APP_PUBLIC_PATH=/mobile/）---
+location = /mobile {
+    return 302 /mobile/;
+}
+location ^~ /mobile/ {
+    try_files $uri $uri/ /mobile/index.html;
+}
+
+# --- PC 静态资源（前端写死 /images、/assets，需映射到 Nuxt public）---
+location ^~ /images/ {
+    proxy_pass http://127.0.0.1:3000/web/images/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+}
+location ^~ /assets/ {
+    proxy_pass http://127.0.0.1:3000/web/assets/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+}
+
+# --- PC Nuxt SSR（站点根 web/.output，进程监听 127.0.0.1:3000）---
+location = /web {
+    return 301 /web/;
+}
+location ^~ /web/ {
+    proxy_pass http://127.0.0.1:3000;   # 注意：后面不要加 /
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+
+# --- 根路径默认进管理后台 ---
+location = / {
+    return 302 /admin/;
+}
+
+# --- 其余回落到 PHP（兼容其它后端路由）---
+location / {
+    try_files $uri $uri/ /index.php$is_args$args;
+}
+
+# --- 安全限制 ---
+location ~ /\.ht {
+    deny all;
+}
+location ~* \.(ini|sql|conf|bak|env)$ {
+    return 404;
+}
+location ~* ^/(themes|images|logs|data|demo|wap_themes)/.*\.(php|php5)$ {
+    deny all;
+}
+location ~ /\.(svn|git) {
+    deny all;
+}

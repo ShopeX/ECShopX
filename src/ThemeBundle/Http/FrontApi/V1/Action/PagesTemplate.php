@@ -112,6 +112,7 @@ class PagesTemplate extends Controller
         $params = $request->all('regionauth_id', 'distributor_id', 'data_type', 'data_value', 'num', 'page', 'pageSize', 'sort_gte', 'e_activity_id');
         $params['company_id'] = $authInfo['company_id'];
         $params['user_id'] = $authInfo['user_id'] ?? 0;
+        $params['apply_store_onsale_filter'] = true;
         $eActivityId = (int) ($params['e_activity_id'] ?? 0);
         $pages_template_services = new PagesTemplateServices();
         $result = $pages_template_services->getWidgetItems($params);

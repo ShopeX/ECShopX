@@ -19,6 +19,7 @@ namespace CommunityBundle\Services;
 
 use CommunityBundle\Entities\CommunityItems;
 use GoodsBundle\Services\ItemsService;
+use GoodsBundle\Services\MultiLang\MultiLangService;
 use Dingo\Api\Exception\ResourceException;
 
 class CommunityItemsService
@@ -81,13 +82,54 @@ class CommunityItemsService
         $pageSize = ($pageSize <= 0) ? 10 : $pageSize;
         $itemsList = $this->entityRepository->joinItemsList($filter, $page, $pageSize, $orderBy);
 
+        return $this->applyItemsListPostProcessing($itemsList);
+    }
+
+    public function getItemsListForStandardStore($filter, $storeDistributorId, $page = 1, $pageSize = 2000, $orderBy = ['item_id' => 'DESC'])
+    {
+        $page = ($page < 1) ? 1 : $page;
+        $pageSize = ($pageSize > 2000) ? 2000 : $pageSize;
+        $pageSize = ($pageSize <= 0) ? 10 : $pageSize;
+        $itemsList = $this->entityRepository->joinItemsListForStandardStore(
+            $filter,
+            $storeDistributorId,
+            $page,
+            $pageSize,
+            $orderBy
+        );
+
+        return $this->applyItemsListPostProcessing($itemsList);
+    }
+
+    private function applyItemsListPostProcessing(array $itemsList): array
+    {
+        if (empty($itemsList['list'])) {
+            return $itemsList;
+        }
+
+        $itemIdsByCompany = [];
+        foreach ($itemsList['list'] as $row) {
+            $itemIdsByCompany[$row['company_id']][] = $row['item_id'];
+        }
+
         $itemsService = new ItemsService();
+        $categoryMap = [];
+        foreach ($itemIdsByCompany as $companyId => $itemIds) {
+            $categoryMap += $itemsService->getCategoryByItemIds(array_values(array_unique($itemIds)), $companyId);
+        }
+
         foreach ($itemsList['list'] as $key => &$v) {
             $v['item_main_cat_id'] = $v['item_category'] ?? '';
-            $v['item_cat_id'] = $itemsService->getCategoryByItemId($v['item_id'], $v['company_id']);
+            $v['item_cat_id'] = $categoryMap[$v['item_id']] ?? [];
             // 规格转成bool
             $v['nospec'] = (isset($v['nospec']) && ($v['nospec'] === 'true' || $v['nospec'] === true || $v['nospec'] === 1 || $v['nospec'] === '1')) ? true : false;
             $v['pics'] = json_decode($v['pics'], true);
+        }
+
+        $multiLang = new MultiLangService();
+        $itemsList['list'] = $multiLang->getListAddLang($itemsList['list'], ['item_name'], 'items', $multiLang->getLang(), 'item_id');
+        foreach ($itemsList['list'] as $key => $row) {
+            $itemsList['list'][$key]['itemName'] = $row['item_name'] ?? '';
         }
 
         return $itemsList;

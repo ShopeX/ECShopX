@@ -922,6 +922,7 @@ class AbstractNormalOrder implements OrderInterface
         if (config('common.oem-shuyun')) {
             $filter = $this->getOrderIdByPromoter($filter);
         }
+        $filter = $this->expandVirtualStoreDistributorFilter($filter);
         $offset = ($page - 1) * $limit;
         $result['list'] = [];
         $fs = [];
@@ -2303,6 +2304,7 @@ class AbstractNormalOrder implements OrderInterface
 
     public function getOrderItemList($filter, $offset = 0, $limit = -1, $orderBy = ['create_time' => 'DESC'])
     {
+        $filter = $this->expandVirtualStoreDistributorFilter($filter);
         $conn = app('registry')->getConnection('default');
         $criteria = $conn->createQueryBuilder();
         $criteria->select('count(*)')
@@ -2370,6 +2372,7 @@ class AbstractNormalOrder implements OrderInterface
 
     public function getOrderItemCount($filter)
     {
+        $filter = $this->expandVirtualStoreDistributorFilter($filter);
         $conn = app('registry')->getConnection('default');
         $criteria = $conn->createQueryBuilder();
         $criteria->select('count(*)')
@@ -3490,8 +3493,83 @@ class AbstractNormalOrder implements OrderInterface
 
     public function countOrderNum($filter)
     {
+        $filter = $this->expandVirtualStoreDistributorFilter($filter);
         $count = $this->normalOrdersRepository->count($filter);
         return intval($count);
+    }
+
+    /**
+     * 虚拟门店 distributor_id 筛选展开：标量 virtual id → [0, id]；|in 含 virtual → 追加 0。
+     *
+     * @param array<string, mixed> $filter
+     * @return array<string, mixed>
+     */
+    private function expandVirtualStoreDistributorFilter(array $filter): array
+    {
+        if (isset($filter['distributor_id|neq'])) {
+            return $filter;
+        }
+
+        $companyId = $filter['company_id'] ?? null;
+        if (!$companyId) {
+            return $filter;
+        }
+
+        $distributorService = new DistributorService();
+
+        if (isset($filter['distributor_id|in']) && is_array($filter['distributor_id|in'])) {
+            $inList = $filter['distributor_id|in'];
+            foreach ($inList as $id) {
+                if ($this->isVirtualStoreDistributor($distributorService, $companyId, $id)) {
+                    $filter['distributor_id|in'] = array_values(array_unique(array_merge($inList, [0])));
+                    break;
+                }
+            }
+
+            return $filter;
+        }
+
+        if (!isset($filter['distributor_id'])) {
+            return $filter;
+        }
+
+        $distributorId = $filter['distributor_id'];
+        if ($distributorId === 0 || $distributorId === '0') {
+            return $filter;
+        }
+
+        if (!is_scalar($distributorId) || !is_numeric($distributorId) || (int) $distributorId <= 0) {
+            return $filter;
+        }
+
+        $distributorId = (int) $distributorId;
+        if ($this->isVirtualStoreDistributor($distributorService, $companyId, $distributorId)) {
+            $filter['distributor_id'] = [0, $distributorId];
+        }
+
+        return $filter;
+    }
+
+    /**
+     * @param int|string $companyId
+     * @param mixed $distributorId
+     */
+    private function isVirtualStoreDistributor(DistributorService $distributorService, $companyId, $distributorId): bool
+    {
+        if (!is_numeric($distributorId) || (int) $distributorId <= 0) {
+            return false;
+        }
+
+        $info = $distributorService->getInfoSimple([
+            'distributor_id' => (int) $distributorId,
+            'company_id' => $companyId,
+        ]);
+
+        if (empty($info) || !isset($info['distributor_self'])) {
+            return false;
+        }
+
+        return (int) $info['distributor_self'] === 1;
     }
 
     public function setInvoiced($params)

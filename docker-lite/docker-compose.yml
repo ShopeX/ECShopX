@@ -1,0 +1,98 @@
+# Offline release stack: app (OpenResty + FPM + cron + queues + Nuxt) + mysql + redis.
+# Host parent dir → /data/httpd (four sibling projects).
+
+services:
+  mysql:
+    image: ${MYSQL_IMAGE:-mysql:5.7}
+    container_name: ecshopx-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ecshopx}
+      MYSQL_USER: ${MYSQL_USER:-ecshopx}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-ecshopx}
+    ports:
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      - ecshopx_mysql_data:/var/lib/mysql
+    networks:
+      - ecshopx-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7.0}
+    container_name: ecshopx-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redispassword}"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - ecshopx_redis_data:/data
+    networks:
+      - ecshopx-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${APP_BASE_IMAGE:-registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.29-fpm-alpine3.22-openresty-node-20.19}
+    image: ${APP_IMAGE:-ecshopx:local}
+    container_name: ecshopx
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      TZ: Asia/Shanghai
+      FPM_LISTEN: 127.0.0.1:9000
+      FPM_PM: dynamic
+      FPM_PM_MAX_CHILDREN: "40"
+      FPM_PM_MIN_SPARE_SERVERS: "5"
+      FPM_PM_MAX_SPARE_SERVERS: "10"
+      FPM_PHP_ADMIN_VALUE_MEMORY_LIMIT: 128M
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: ${MYSQL_DATABASE:-ecshopx}
+      DB_USERNAME: ${MYSQL_USER:-ecshopx}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-ecshopx}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
+      REDIS_DATABASE: "0"
+      NUXT_API_BASE: http://127.0.0.1:8090/api/h5app
+      NUXT_INTERNAL_API_BASE: http://127.0.0.1:8090/api/h5app
+      NUXT_API_BASE_INTERNAL: http://127.0.0.1:8090/api/h5app
+      # Relative path: PC nginx :8082 proxies /api → PHP (no host/IP in config)
+      NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-/api/h5app}
+      NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS: ${NUXT_PUBLIC_DECORATION_ADMIN_ORIGINS:-}
+    ports:
+      - "${ADMIN_HOST_PORT:-8080}:8080"
+      - "${H5_HOST_PORT:-8081}:8081"
+      - "${PC_HOST_PORT:-8082}:8082"
+    volumes:
+      - ../..:/data/httpd
+    working_dir: /data/httpd/ECShopX
+    networks:
+      - ecshopx-net
+
+volumes:
+  ecshopx_mysql_data:
+    name: ecshopx-mysql-data
+  ecshopx_redis_data:
+    name: ecshopx-redis-data
+
+networks:
+  ecshopx-net:
+    name: ecshopx-net

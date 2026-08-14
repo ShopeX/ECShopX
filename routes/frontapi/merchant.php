@@ -15,5 +15,10 @@ $api->version('v1', function ($api) {
         $api->get('/wxapp/merchant/settlementapply/auditstatus', ['name' => '获取商户入驻信息审核结果','as' => 'merchant.settlementapply.auditstatus',   'uses' => 'Merchant@getSettlementApplyAuditstatus']);
         $api->post('/wxapp/merchant/password/reset', ['name' => '重置商户登录密码','as' => 'merchant.password.reset',   'uses' => 'Merchant@resetMerchantPassword']);
     });
+
+    // 商家鉴权下的上传：须使用 Espier namespace，避免 MerchantBundle namespace 与 FQCN 拼接错误
+    $api->group(['prefix' => 'h5app', 'namespace' => 'EspierBundle\Http\FrontApi\V1\Action', 'middleware' => ['frontmerchantauth:h5app', 'api.auth'], 'providers' => 'jwt'], function ($api) {
+        $api->get('/wxapp/merchant/espier/image_upload_token', ['name' => '获取商户图片上传token', 'as' => 'merchant.h5app.image.uptoken.get', 'uses' => 'UploadFile@getPicUploadToken']);
+    });
 });
 /* ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ taro小程序、h5、app、pc端 ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ ↑↑↑↑↑ */

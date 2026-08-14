@@ -23,6 +23,7 @@ use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Request;
 use OrdersBundle\Services\CartService;
 use OrdersBundle\Traits\GetCartTypeServiceTrait;
+use SalespersonBundle\Services\SalespersonProxyAuthorizationService;
 
 class CartController extends BaseController
 {
@@ -186,7 +187,6 @@ class CartController extends BaseController
         $authInfo = $request->get('auth');
         $params = $request->all();
         $params['company_id'] = $authInfo['company_id'];
-        $params['user_id'] = $authInfo['user_id'];
         $params['promoter_user_id'] = $params['promoter_user_id'] ?? 0;
         $params['wxa_appid'] = $authInfo['wxapp_appid'] ?? '';
         $params['shop_id'] = $params['shop_id'] ?? 0;
@@ -207,9 +207,12 @@ class CartController extends BaseController
         }
 
 
-        if($params['promoter_user_id'] &&  $authInfo['user_id'] == $params['promoter_user_id'] ){
-            $params['user_id'] = $params['buy_user_id'] ;
-        }
+        $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $params,
+            $params['shop_id'] ?: ($params['distributor_id'] ?? null)
+        );
+        $params['user_id'] = $actingUserId;
 
         $cartService = new CartService();
         $result = $cartService->addCart($params);
@@ -444,16 +447,22 @@ class CartController extends BaseController
         if ((!isset($authInfo['user_id']) || !$authInfo['user_id']) && $cartType != 'offline') {
             return $this->response->array($result);
         }
-        $inputData['user_id'] = $authInfo['user_id'];
-
-        if($buy_user_id && $promoter_user_id == $authInfo['user_id']){
-            $inputData['user_id'] = $buy_user_id;
-        }
-
         $shopId = $request->input('shop_id', 0);
         if (!$shopId) {
             $shopId = $request->input('distributor_id', 0);
         }
+
+        $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            [
+                'promoter_user_id' => $promoter_user_id,
+                'buy_user_id' => $buy_user_id,
+                'distributor_id' => $request->input('distributor_id', 0),
+                'shop_id' => $request->input('shop_id', 0),
+            ],
+            $shopId ?: null
+        );
+        $inputData['user_id'] = $actingUserId;
 
         $cartService = new CartService();
         $result['invalid_cart'] = [];
@@ -463,7 +472,7 @@ class CartController extends BaseController
                 return $this->response->array($result);
             }
 
-            $cartData = $cartService->getCartList($authInfo['company_id'], $authInfo['user_id'], $shopId, $cartType, $shopType, false, $iscrossborder, $isShopScreen, $userDevice, $items);
+            $cartData = $cartService->getCartList($authInfo['company_id'], $actingUserId, $shopId, $cartType, $shopType, false, $iscrossborder, $isShopScreen, $userDevice, $items);
             if ($cartData['valid_cart']) {
                 $result['valid_cart'][] = $cartData['valid_cart'][0];
             }
@@ -598,11 +607,14 @@ class CartController extends BaseController
         if ($shopId) {
             $filter['shop_id'] = $shopId;
         }
-        $buy_user_id = $request->input('buy_user_id',0);
-
         $authInfo = $request->get('auth');
-        $filter['user_id'] = $authInfo['user_id'];
-        if($buy_user_id) $filter['user_id'] = $buy_user_id;
+        $distributorId = $request->input('distributor_id', 0) ?: $request->input('shop_id', 0);
+        $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $request->all(),
+            $distributorId ?: null
+        );
+        $filter['user_id'] = $actingUserId;
         $filter['company_id'] = $authInfo['company_id'];
         $cartService = new CartService();
         $result['status'] = $cartService->deleteBy($filter);
@@ -648,10 +660,14 @@ class CartController extends BaseController
 
             $filter['cart_id'] = $cartIdListData;
          }
-         $buy_user_id = $request->input('buy_user_id');
-
          $authInfo = $request->get('auth');
-         if($buy_user_id) $filter['user_id'] = $buy_user_id;
+         $distributorId = $request->input('distributor_id', 0) ?: $request->input('shop_id', 0);
+         $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+             $authInfo,
+             $request->all(),
+             $distributorId ?: null
+         );
+         $filter['user_id'] = $actingUserId;
          $filter['company_id'] = $authInfo['company_id'];
          $cartService = new CartService();
 
@@ -696,11 +712,14 @@ class CartController extends BaseController
             throw new ResourceException(trans('OrdersBundle/Order.cart_param_error'));
         }
         $authInfo = $request->get('auth');
-        $filter['user_id'] = $authInfo['user_id'];
         $filter['company_id'] = $authInfo['company_id'];
-
-        $buy_user_id = $request->input('buy_user_id',0);
-        if($buy_user_id) $filter['user_id'] = $buy_user_id;
+        $distributorId = $request->input('distributor_id', 0) ?: $request->input('shop_id', 0);
+        $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $request->all(),
+            $distributorId ?: null
+        );
+        $filter['user_id'] = $actingUserId;
 
         if (!$request->input('is_checked') || $request->input('is_checked') === 'false') {
             $params['is_checked'] = false;
@@ -819,14 +838,18 @@ class CartController extends BaseController
         $authInfo = $request->get('auth');
         $cartService = new CartService();
 
-        $buy_user_id = $request->input('buy_user_id',0);
+        $distributorId = $request->input('distributor_id', 0) ?: $request->input('shop_id', 0);
+        $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $request->all(),
+            $distributorId ?: null
+        );
 
         $filter = [
             'cart_id' => $cartId,
             'company_id' => $authInfo['company_id'],
-            'user_id' => $authInfo['user_id']
         ];
-        if($buy_user_id) $filter['user_id'] = $buy_user_id;
+        $filter['user_id'] = $actingUserId;
 
         $cartInfo = $cartService->getInfo($filter);
         if (!$cartInfo) {
@@ -927,15 +950,19 @@ class CartController extends BaseController
         }
 
         $shopType = $request->input('shop_type', 'distributor');
+        $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $params,
+            $shopId ?: null
+        );
         $filter = [
             'company_id' => $authInfo['company_id'],
-            'user_id' => $authInfo['user_id'],
             'shop_type' => $shopType,
             // 'shop_id' => $shopId,
         ];
-        if($params['promoter_user_id'] && $params['buy_user_id']){
-            $filter['user_id'] =  $params['buy_user_id'];
-            $filter['promoter_user_id'] =  $params['promoter_user_id'];
+        $filter['user_id'] = $actingUserId;
+        if ($params['promoter_user_id'] && (int) $actingUserId !== (int) $authInfo['user_id']) {
+            $filter['promoter_user_id'] = $params['promoter_user_id'];
         }
 
         $isShopScreen = $request->input('isShopScreen', 0);

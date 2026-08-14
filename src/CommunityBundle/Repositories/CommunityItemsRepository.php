@@ -247,56 +247,101 @@ class CommunityItemsRepository extends EntityRepository
     public function joinItemsList($filter, $page = 1, $pageSize = -1, $orderBy = array())
     {
         $conn = app('registry')->getConnection('default');
-        $qb = $conn->createQueryBuilder();
-        $qb = $qb->select('count(i.item_id)')
-            ->from('community_items', 'c')
-            ->leftJoin('c', 'items', 'i', 'i.goods_id = c.goods_id');
+        $qb = $this->createCommunityItemsJoinQueryBuilder($conn);
 
         if ((isset($filter['in_activity']) && $filter['in_activity']) || (isset($filter['activity_id']) && $filter['activity_id'] > 0)) {
-            $qb = $qb->leftJoin('i', '(select min(item_id) as item_id,goods_id,activity_id from community_activity_item group by activity_id,goods_id)', 't', 'c.goods_id = t.goods_id')
-                     ->leftJoin('t', 'community_activity', 'a', 't.activity_id = a.activity_id');
-            if (isset($filter['in_activity'])) {
-                $qb = $qb->andWhere(
-                    $qb->expr()->andX(
-                        $qb->expr()->lt('a.start_time', time()),
-                        $qb->expr()->gt('a.end_time', time()),
-                        $qb->expr()->notin('a.activity_status', [$qb->expr()->literal('fail'), $qb->expr()->literal('success')])
-                    )
-                );
-                unset($filter['in_activity']);
-            }
-
-            if (isset($filter['activity_id'])) {
-                $qb = $qb->andWhere($qb->expr()->eq('a.activity_id', $filter['activity_id']));
-                unset($filter['activity_id']);
-            }
+            $qb = $this->applyActivityJoins($qb, $filter);
         }
 
-        $qb = $qb->andWhere($qb->expr()->isNotNull('i.item_id'));
-        $qb = $this->_filter($filter, $qb, 'i');
+        $qb = $this->applyJoinItemsBaseFilters($qb, $filter);
 
-        $result['total_count'] = intval($qb->execute()->fetchColumn());
-        $qb->select('i.*,c.min_delivery_num,c.sort');
+        return $this->executeJoinItemsCountAndList($qb, $page, $pageSize, $orderBy);
+    }
+
+    public function joinItemsListForStandardStore($filter, $storeDistributorId, $page = 1, $pageSize = -1, $orderBy = array())
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $this->createCommunityItemsJoinQueryBuilder($conn);
+
+        $filter['distributor_id'] = 0;
+
+        $qb = $this->applyJoinItemsBaseFilters($qb, $filter);
+        $qb = $this->applyStandardStoreExists($qb, $storeDistributorId);
+
+        return $this->executeJoinItemsCountAndList($qb, $page, $pageSize, $orderBy);
+    }
+
+    private function createCommunityItemsJoinQueryBuilder($conn)
+    {
+        return $conn->createQueryBuilder()
+            ->select('count(i.item_id)')
+            ->from('community_items', 'c')
+            ->leftJoin('c', 'items', 'i', 'i.goods_id = c.goods_id');
+    }
+
+    private function applyActivityJoins($qb, &$filter)
+    {
+        $qb = $qb->leftJoin('i', '(select min(item_id) as item_id,goods_id,activity_id from community_activity_item group by activity_id,goods_id)', 't', 'c.goods_id = t.goods_id')
+                 ->leftJoin('t', 'community_activity', 'a', 't.activity_id = a.activity_id');
+        if (isset($filter['in_activity'])) {
+            $qb = $qb->andWhere(
+                $qb->expr()->andX(
+                    $qb->expr()->lt('a.start_time', time()),
+                    $qb->expr()->gt('a.end_time', time()),
+                    $qb->expr()->notin('a.activity_status', [$qb->expr()->literal('fail'), $qb->expr()->literal('success')])
+                )
+            );
+            unset($filter['in_activity']);
+        }
+
+        if (isset($filter['activity_id'])) {
+            $qb = $qb->andWhere($qb->expr()->eq('a.activity_id', $filter['activity_id']));
+            unset($filter['activity_id']);
+        }
+
+        return $qb;
+    }
+
+    private function applyJoinItemsBaseFilters($qb, $filter)
+    {
+        $qb = $qb->andWhere($qb->expr()->isNotNull('i.item_id'));
+
+        return $this->_filter($filter, $qb, 'i');
+    }
+
+    private function applyStandardStoreExists($qb, $storeDistributorId)
+    {
+        return $qb->andWhere(
+            'EXISTS (SELECT 1 FROM distribution_distributor_items d WHERE d.goods_id = c.goods_id AND d.distributor_id = '
+            . intval($storeDistributorId) . ')'
+        );
+    }
+
+    private function executeJoinItemsCountAndList($qb, $page, $pageSize, $orderBy)
+    {
+        $countQb = clone $qb;
+        $result['total_count'] = intval($countQb->execute()->fetchColumn());
+
+        $listQb = clone $qb;
+        $listQb->select('i.*,c.min_delivery_num,c.sort');
 
         if ($orderBy) {
             foreach ($orderBy as $field => $val) {
                 if (in_array($field, ['min_delivery_num', 'sort'])) {
-                    $qb->addOrderBy('c.'.$field, $val);
+                    $listQb->addOrderBy('c.'.$field, $val);
                 } else {
-                    $qb->addOrderBy('i.'.$field, $val);
+                    $listQb->addOrderBy('i.'.$field, $val);
                 }
             }
         }
 
         if ($pageSize > 0) {
-            $qb->setFirstResult(($page - 1) * $pageSize)
+            $listQb->setFirstResult(($page - 1) * $pageSize)
                 ->setMaxResults($pageSize);
         }
-        $lists = $qb->execute()->fetchAll();
+        $result['list'] = $listQb->execute()->fetchAll();
 
-        $result['list'] = $lists;
         return $result;
-
     }
 
     /**

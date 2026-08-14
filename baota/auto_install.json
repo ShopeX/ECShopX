@@ -1,0 +1,22 @@
+{
+    "php_ext": "redis,opcache,fileinfo,zip,bcmath,exif,pcntl,sodium",
+    "chmod": [
+        {"mode": 755, "path": "/storage"}
+    ],
+    "success_url": "/admin/",
+    "php_versions": "82,83",
+    "db_config": ".env",
+    "admin_username": "admin",
+    "admin_password": "EcShopX@2026",
+    "run_path": "/public",
+    "remove_file": [],
+    "enable_functions": [
+        "putenv",
+        "proc_open",
+        "pcntl_signal",
+        "pcntl_alarm",
+        "pcntl_async_signals",
+        "exec",
+        "shell_exec"
+    ]
+}

@@ -55,6 +55,7 @@ use CompanysBundle\Services\SettingService;
 use OrdersBundle\Traits\GetOrderServiceTrait;
 use CompanysBundle\Traits\GetDefaultCur;
 use SalespersonBundle\Services\SalespersonService;
+use SalespersonBundle\Services\SalespersonProxyAuthorizationService;
 use OrdersBundle\Traits\OrderSettingTrait;
 use OrdersBundle\Traits\GetOrderSourceFrom;
 
@@ -493,11 +494,14 @@ class WxappOrder extends Controller
 
         app('log')->info(':dkxd:'.__FUNCTION__.__LINE__.':1 createorder:params :' . json_encode($params) ) ;
 
-        if(isset($params['promoter_user_id'])
-        && $params['promoter_user_id']
-        &&  $authInfo['user_id'] == $params['promoter_user_id'] ){
-            $params['user_id'] = $params['buy_user_id'] ;
-            $params['order_source'] = 'salesperson' ;
+        $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $params,
+            $params['distributor_id'] ?? null
+        );
+        $params['user_id'] = $actingUserId;
+        if ((int) $actingUserId !== (int) $authInfo['user_id']) {
+            $params['order_source'] = 'salesperson';
             $params['mobile'] = $params['receiver_mobile'] ?? 0;
             $params['salesman_id'] = $params['promoter_user_id'] ?? 0;
         }
@@ -759,11 +763,12 @@ class WxappOrder extends Controller
         $params['user_device'] = $request->get('user_device');
         // $promoter_user_id = $params['promoter_user_id'] ?? 0;
 
-        if(isset($params['promoter_user_id'])
-        && $params['promoter_user_id']
-        &&  $authInfo['user_id'] == $params['promoter_user_id'] ){
-            $params['user_id'] = $params['buy_user_id'] ;
-        }
+        $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $params,
+            $params['distributor_id'] ?? null
+        );
+        $params['user_id'] = $actingUserId;
         if(!empty($params['distributor_id'])){
             if((new DistributorWhiteListService())->checkUserValidCommon($params['distributor_id'],$params['user_id'],$params['company_id']) === false){
                 throw new ResourceException(trans('OrdersBundle/Order.non_shop_member_cannot_order'));

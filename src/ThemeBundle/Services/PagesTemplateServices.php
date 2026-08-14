@@ -17,6 +17,7 @@
 
 namespace ThemeBundle\Services;
 
+use CompanysBundle\Ego\CompanysActivationEgo;
 use CompanysBundle\Services\CommonLangModService;
 use Dingo\Api\Exception\ResourceException;
 use DistributionBundle\Entities\Distributor;
@@ -1683,6 +1684,14 @@ class PagesTemplateServices
         $page = $params['page'] ?? 1;
         if (!empty($params['pageSize'])) {
             $pageSize = intval($params['pageSize']);
+        }
+
+        if (!empty($params['apply_store_onsale_filter'])
+            && !empty($filter['distributor_id'])) {
+            $company = (new CompanysActivationEgo())->check($params['company_id']);
+            if (($company['product_model'] ?? '') === 'standard') {
+                $filter['is_can_sale'] = true;
+            }
         }
 
         $itemsService = new ItemsService();

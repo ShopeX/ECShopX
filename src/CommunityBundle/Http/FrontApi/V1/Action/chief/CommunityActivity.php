@@ -25,6 +25,8 @@ use GoodsBundle\Services\ItemsService;
 use CommunityBundle\Services\CommunityItemsService;
 use Illuminate\Http\Request;
 use CommunityBundle\Services\CommunitySettingService;
+use CompanysBundle\Ego\CompanysActivationEgo;
+use DistributionBundle\Services\DistributorService;
 
 class CommunityActivity extends BaseController
 {
@@ -255,8 +257,36 @@ class CommunityActivity extends BaseController
             $filter['distributor_id'] = $default_distributor_id;
         }
 
+        $finalDistributorId = $filter['distributor_id'];
+        $productModel = (new CompanysActivationEgo())->check($authInfo['company_id'])['product_model'] ?? '';
+
         $communityItemsService = new CommunityItemsService();
-        $list = $communityItemsService->getItemsList($filter, $page, $page_size);
+        if ($productModel === 'standard') {
+            $storeId = $finalDistributorId;
+            if ($storeId <= 0) {
+                $storeId = (new DistributorService())->getDistributorSelf($authInfo['company_id'], false);
+            }
+            if ($storeId > 0) {
+                $standardFilter = [
+                    'distributor_id' => 0,
+                    'approve_status' => 'onsale',
+                    'audit_status' => 'approved',
+                    'is_default' => true,
+                    'item_type' => 'normal',
+                    'company_id' => $authInfo['company_id'],
+                ];
+                $list = $communityItemsService->getItemsListForStandardStore(
+                    $standardFilter,
+                    $storeId,
+                    $page,
+                    $page_size
+                );
+            } else {
+                $list = $communityItemsService->getItemsList($filter, $page, $page_size);
+            }
+        } else {
+            $list = $communityItemsService->getItemsList($filter, $page, $page_size);
+        }
         // $itemService = new ItemsService();
         // $list = $itemService->getSkuItemsList($filter, $page, $page_size);
 

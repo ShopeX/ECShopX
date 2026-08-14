@@ -281,6 +281,13 @@ class MerchantSettlementApplyService
         if (!$info) {
             throw new ResourceException(trans('MerchantBundle.settlement_apply_query_failed'));
         }
+        if (!$info['merchant_type_id']) {
+            return array_merge($info, [
+                'merchant_type_parent_id' => '',
+                'merchant_type_parent_name' => '',
+                'merchant_type_name' => '',
+            ]);
+        }
         $settingService = new MerchantSettingService();
         $typeName = $settingService->getTypeNameById($info['company_id'], $info['merchant_type_id']);
         return array_merge($info, $typeName);

@@ -313,6 +313,7 @@ class CommunityNormalOrderService extends AbstractNormalOrder
             $v['total_num'] = array_sum(array_column($v['items'], 'num'));
             $v['member']    = $members[$v['user_id']] ?? [];
             $v['auto_cancel_seconds'] = $v['auto_cancel_time'] - time();
+            $v['community_info'] = $this->normalizeCommunityInfoTradeNo($v['community_info']);
         });
 
         return $data;
@@ -327,9 +328,20 @@ class CommunityNormalOrderService extends AbstractNormalOrder
         ];
         $relService                          = new CommunityOrderRelActivityService();
         $orderRel                            = $relService->getInfo($relFilter);
-        $data['orderInfo']['community_info'] = $orderRel;
+        $data['orderInfo']['community_info'] = $this->normalizeCommunityInfoTradeNo(
+            is_array($orderRel) ? $orderRel : []
+        );
 
         return $data;
+    }
+
+    public function normalizeCommunityInfoTradeNo(array $info): array
+    {
+        if (!isset($info['activity_trade_no']) || $info['activity_trade_no'] === null) {
+            $info['activity_trade_no'] = '';
+        }
+
+        return $info;
     }
 
     private function getActivityTradeNo($companyId, $activityId, $orderId)

@@ -2469,7 +2469,7 @@ import_demo_data() {
                     return 0
                     ;;
                 1)
-                    sql_file="bc_beauty.sql"
+                    sql_file="b2c_beauty.sql"
                     break
                     ;;
                 2)

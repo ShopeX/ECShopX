@@ -988,6 +988,14 @@ class EspierLocalUserProvider implements UserProvider
         if (empty($userEntity)) {
             // 如果是自动创建，则直接创建用户
             if ($autoRegister) {
+                if ($check_type === 'password' && !$isEmail) {
+                    if (empty($vcode)) {
+                        throw new ResourceException('短信验证码错误');
+                    }
+                    if (!(new MemberRegSettingService())->checkSmsVcode($mobile, $company_id, $vcode, 'login')) {
+                        throw new ResourceException('短信验证码错误');
+                    }
+                }
                 $userInfo = (new MemberService())->createMember([
                     "mobile" => $mobile,
                     "region_mobile" => $mobile,
@@ -1011,20 +1019,7 @@ class EspierLocalUserProvider implements UserProvider
                 if (!$silent) {
                     throw new ResourceException('手机号码未注册，请注册后登陆');
                 }
-                $userInfo = [
-                    "user_id" => null,
-                    "company_id" => $company_id,
-                    "grade_id" => null,
-                    "mobile" => null,
-                    "user_card_code" => null,
-                    "offline_card_code" => null,
-                    "disabled" => null,
-                    "inviter_id" => null,
-                    "source_id" => null,
-                    "monitor_id" => null,
-                    "latest_source_id" => null,
-                    "latest_monitor_id" => null,
-                ];
+                return [];
             }
             $userInfo["is_new"] = 1;
         } else {

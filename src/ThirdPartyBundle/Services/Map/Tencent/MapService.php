@@ -215,8 +215,8 @@ class MapService extends BaseRequest implements MapInterface
     public function handleLatAndLngByPosition(array $dataFromGetLatAndLngByPosition): array
     {
         $item = new MapData();
-        $item->setLng($dataFromGetLatAndLngByPosition["location"]["lng"] ?? null);
-        $item->setLat($dataFromGetLatAndLngByPosition["location"]["lat"] ?? null);
+        $item->setLng($dataFromGetLatAndLngByPosition["result"]["location"]["lng"] ?? null);
+        $item->setLat($dataFromGetLatAndLngByPosition["result"]["location"]["lat"] ?? null);
 
         return [$item];
     }

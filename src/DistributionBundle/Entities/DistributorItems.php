@@ -26,6 +26,7 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * @ORM\Table(name="distribution_distributor_items", options={"comment":"店铺导购员表"},indexes={
  *         @ORM\Index(name="idx_defaultitemid_companyid", columns={"default_item_id", "company_id"}),
  *         @ORM\Index(name="idx_companyid_istotalstore_goodscansale_defaultitemid", columns={"company_id", "is_total_store", "goods_can_sale", "default_item_id"}),
+ *         @ORM\Index(name="idx_distributor_id_goods_id", columns={"distributor_id", "goods_id"}),
  *     },uniqueConstraints={
  *    @ORM\UniqueConstraint(name="distributor_items", columns={"distributor_id", "item_id"}),
  * })

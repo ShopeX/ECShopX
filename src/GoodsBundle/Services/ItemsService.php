@@ -1661,6 +1661,31 @@ class ItemsService
         return [];
     }
 
+    public function getCategoryByItemIds(array $itemIds, $companyId): array
+    {
+        if (empty($itemIds)) {
+            return [];
+        }
+
+        $itemsRelCatsService = new ItemsRelCatsService();
+        $filter = [
+            'company_id' => $companyId,
+            'item_id' => $itemIds,
+        ];
+        $list = $itemsRelCatsService->getList($filter, '*', 1, -1, ['created' => 'DESC']);
+
+        $categoryMap = [];
+        foreach ($list as $row) {
+            $itemId = $row['item_id'];
+            if (!isset($categoryMap[$itemId])) {
+                $categoryMap[$itemId] = [];
+            }
+            $categoryMap[$itemId][] = $row['category_id'];
+        }
+
+        return $categoryMap;
+    }
+
     /**
      * 更新销量
      * @param $itemId 商品id

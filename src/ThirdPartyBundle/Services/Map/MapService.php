@@ -252,7 +252,7 @@ class MapService extends BaseService
             "region" => $region
         ]);
         
-        $result = $this->thirdPartyMapService->handleLatAndLngByPosition($response['result']);
+        $result = $this->thirdPartyMapService->handleLatAndLngByPosition($response);
         app("log")->info(sprintf("%s_%s:%s", static::class, __METHOD__, jsonEncode([
             "result" => $result
         ])));

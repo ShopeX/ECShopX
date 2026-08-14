@@ -2,7 +2,7 @@
 
 // Error Messages
 $error = [
-    'address_recognition_error' => 'Address recognition error, please check Amap configuration',
+    'address_recognition_error' => 'Address recognition error, please check Tencent Map configuration',
 ];
 
 // Default Values

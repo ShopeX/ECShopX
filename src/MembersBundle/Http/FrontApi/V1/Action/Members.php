@@ -40,6 +40,7 @@ use PopularizeBundle\Services\PromoterService;
 use KaquanBundle\Services\VipGradeOrderService;
 use MembersBundle\Entities\MembersAssociations;
 use MembersBundle\Services\MemberAddressService;
+use SalespersonBundle\Services\SalespersonProxyAuthorizationService;
 use PointBundle\Services\PointMemberRuleService;
 use MembersBundle\Services\MemberItemsFavService;
 use ThirdPartyBundle\Services\DmCrm\PointService;
@@ -1617,12 +1618,12 @@ class Members extends Controller
             $filter['city|contains'] = mb_trim($request->input('city'), '市');
         }
 
-
-        if(isset($inputData['promoter_user_id'])
-        && $inputData['promoter_user_id']
-        &&  $authInfo['user_id'] == $inputData['promoter_user_id'] ){
-            $filter['user_id'] = $inputData['buy_user_id'] ;
-        }
+        $distributorId = $inputData['distributor_id'] ?? null;
+        $filter['user_id'] = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $inputData,
+            $distributorId
+        );
 
         $pageSize = $request->input('pageSize', 20);
         $page = $request->input('page', 1);
@@ -1732,13 +1733,13 @@ class Members extends Controller
 
         $authInfo = $request->get('auth');
         $params['company_id'] = $authInfo['company_id'];
-        $params['user_id'] = $authInfo['user_id'];
 
-        if(isset($params['promoter_user_id']) && $params['promoter_user_id'] == $authInfo['user_id']
-        && $params['buy_user_id']){
-            $params['user_id'] =  $params['buy_user_id'];
-            // $filter['promoter_user_id'] =  $params['promoter_user_id'];
-        }
+        $distributorId = $params['distributor_id'] ?? null;
+        $params['user_id'] = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+            $authInfo,
+            $params,
+            $distributorId
+        );
 
         $memberAddressService = new MemberAddressService();
         $result = $memberAddressService->createAddress($params);

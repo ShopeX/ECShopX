@@ -84,9 +84,12 @@ class UploadFile extends BaseController
         // fe10e2f6 module
         $user = $request->get('auth');
         $companyId = $user['company_id'];
-        $user_id = $user['user_id'];
+        $rateLimitId = $user['user_id'] ?? $user['account_id'] ?? null;
+        if ($rateLimitId === null || $rateLimitId === '') {
+            throw new ResourceException('用户信息异常，无法获取上传凭证');
+        }
 
-        $key = $this->getRedisKey($companyId,$user_id);
+        $key = $this->getRedisKey($companyId, $rateLimitId);
         $num = env('USER_UPLOAD_IMAGE_NUM',10);
         $redis = app('redis')->connection('members');
         $count =  $redis->get($key);

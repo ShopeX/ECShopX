@@ -194,8 +194,10 @@ class MemberTagsService
     {
         $conn = app('registry')->getConnection('default');
         if (!empty($data['tag_id'])) {
-            $sql = "UPDATE members_tags SET self_tag_count=self_tag_count+" . $cout . " WHERE tag_id=" . $data['tag_id'] . " AND company_id=" . $data['company_id'];
-            $id = $conn->executeUpdate($sql);
+            $conn->executeUpdate(
+                'UPDATE members_tags SET self_tag_count=self_tag_count+? WHERE tag_id=? AND company_id=?',
+                [(int) $cout, (int) $data['tag_id'], (int) $data['company_id']]
+            );
         }
     }
 
@@ -206,8 +208,10 @@ class MemberTagsService
     {
         $conn = app('registry')->getConnection('default');
         if (!empty($data['tag_id'])) {
-            $sql = "UPDATE members_tags SET self_tag_count=self_tag_count-" . $cout . " WHERE tag_id=" . $data['tag_id'] . " AND company_id=" . $data['company_id'];
-            $id = $conn->executeUpdate($sql);
+            $conn->executeUpdate(
+                'UPDATE members_tags SET self_tag_count=self_tag_count-? WHERE tag_id=? AND company_id=?',
+                [(int) $cout, (int) $data['tag_id'], (int) $data['company_id']]
+            );
         }
     }
 
