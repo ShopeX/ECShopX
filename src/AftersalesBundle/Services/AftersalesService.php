@@ -362,7 +362,8 @@ class AftersalesService
             app('log')->info('aftersales::__createAftersales::orderInfo===>'.json_encode($orderInfo,JSON_UNESCAPED_UNICODE));
             app('log')->info('aftersales::__createAftersales::aftersales_data===>'.json_encode($aftersales_data,JSON_UNESCAPED_UNICODE));
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
-            if (!$aftersales_data['is_partial_cancel']) {
+            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货
+            if (in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
                 $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
                 if ($left_aftersales_num < 0) {
                     throw new ResourceException('超出可申请数量');
@@ -686,7 +687,7 @@ class AftersalesService
                 $aftersales_data['supplier_id'] = $subOrderInfo['supplier_id'] ?? 0;
                 $aftersales_data['item_bn'] = $subOrderInfo['item_bn'];
 
-                $is_refund_freight_flag = $this->isRefundFinishByNum($data['order_id'], $data['company_id'], $v['id'], $v['num']);
+                $is_refund_freight_flag = $this->isRefundFinishByNum($data['order_id'], $data['company_id'], $v['id']);
             }
 
              if ($sub_item_fee > $total_refund_fee) {
@@ -700,7 +701,9 @@ class AftersalesService
             // 判断是否是最后一个售后数据了
             $freight = 0;
             $original_freight = 0; // 保存原始运费值，用于判断是否退运费
-            if ($is_refund_freight && $is_refund_freight_flag) {
+            // 仅退款不涉及退货，不退运费；只有退货退款/换货允许退运费
+            $refund_freight_type = in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS']);
+            if ($is_refund_freight && $is_refund_freight_flag && $refund_freight_type) {
                 // 根据运费类型处理运费（与订单表逻辑一致：freight_fee根据freight_type存储现金或积分值）
                 if ($orderInfo['freight_type'] == 'cash') {
                     // 现金运费（分）
@@ -730,7 +733,8 @@ class AftersalesService
             }
             // 创建售后主单据
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
-            if (!$aftersales_data['is_partial_cancel']) {
+            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货
+            if (in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
                 $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
                 if ($left_aftersales_num < 0) {
                     throw new ResourceException('超出可申请数量');
@@ -934,13 +938,16 @@ class AftersalesService
                 if ($aftersales['is_partial_cancel']) {
                     $orderService->partailCancelRestore($aftersales['order_id'], false);
                 } else {
-                    // 记录可申请售后的商品数量
-                    $aftersalesDetailList = $this->aftersalesDetailRepository->getList($filter);
-                    $can_aftersales_num = array_sum(array_column($aftersalesDetailList['list'], 'num'));
-                    $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
-                    $order = $normalOrdersRepository->get($aftersales['company_id'], $aftersales['order_id']);
-                    $left_aftersales_num = $order->getLeftAftersalesNum() + $can_aftersales_num;
-                    $normalOrdersRepository->update(['company_id' => $aftersales['company_id'], 'order_id' => $aftersales['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+                    // 仅退款不占用订单级可申请售后数量，仅退货退款/换货恢复
+                    if (in_array($aftersales['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
+                        // 记录可申请售后的商品数量
+                        $aftersalesDetailList = $this->aftersalesDetailRepository->getList($filter);
+                        $can_aftersales_num = array_sum(array_column($aftersalesDetailList['list'], 'num'));
+                        $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+                        $order = $normalOrdersRepository->get($aftersales['company_id'], $aftersales['order_id']);
+                        $left_aftersales_num = $order->getLeftAftersalesNum() + $can_aftersales_num;
+                        $normalOrdersRepository->update(['company_id' => $aftersales['company_id'], 'order_id' => $aftersales['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+                    }
                 }
 
                 $update = [
@@ -1326,13 +1333,16 @@ class AftersalesService
             ];
 
             if (!$param['check_refund']) {
-                // 记录可申请售后的商品数量
-                $aftersalesDetailList = $this->aftersalesDetailRepository->getList($filter);
-                $can_aftersales_num = array_sum(array_column($aftersalesDetailList['list'], 'num'));
-                $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
-                $order = $normalOrdersRepository->get($aftersales['company_id'], $aftersales['order_id']);
-                $left_aftersales_num = $order->getLeftAftersalesNum() + $can_aftersales_num;
-                $normalOrdersRepository->update(['company_id' => $aftersales['company_id'], 'order_id' => $aftersales['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+                // 仅退款不占用订单级可申请售后数量，仅退货退款/换货恢复
+                if (in_array($aftersales['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
+                    // 记录可申请售后的商品数量
+                    $aftersalesDetailList = $this->aftersalesDetailRepository->getList($filter);
+                    $can_aftersales_num = array_sum(array_column($aftersalesDetailList['list'], 'num'));
+                    $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+                    $order = $normalOrdersRepository->get($aftersales['company_id'], $aftersales['order_id']);
+                    $left_aftersales_num = $order->getLeftAftersalesNum() + $can_aftersales_num;
+                    $normalOrdersRepository->update(['company_id' => $aftersales['company_id'], 'order_id' => $aftersales['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+                }
             }
 
             //社区订单积分处理 @todo
@@ -2282,12 +2292,15 @@ class AftersalesService
             ];
             $this->aftersalesRefundRepository->updateOneBy($filter, $refundUpdate);
 
-            // 还原可申请售后的商品数量
-            $canAftersalesNum = array_sum(array_column($aftersales['detail'], 'num'));
-            $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
-            $order = $normalOrdersRepository->get($params['company_id'], $aftersales['order_id']);
-            $leftAftersalesNum = $order->getLeftAftersalesNum() + $canAftersalesNum;
-            $normalOrdersRepository->update(['company_id' => $params['company_id'], 'order_id' => $aftersales['order_id']], ['left_aftersales_num' => $leftAftersalesNum]);
+            // 仅退款不占用订单级可申请售后数量，仅退货退款/换货恢复
+            if (in_array($aftersales['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
+                // 还原可申请售后的商品数量
+                $canAftersalesNum = array_sum(array_column($aftersales['detail'], 'num'));
+                $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+                $order = $normalOrdersRepository->get($params['company_id'], $aftersales['order_id']);
+                $leftAftersalesNum = $order->getLeftAftersalesNum() + $canAftersalesNum;
+                $normalOrdersRepository->update(['company_id' => $params['company_id'], 'order_id' => $aftersales['order_id']], ['left_aftersales_num' => $leftAftersalesNum]);
+            }
 
             $orderProcessLog = [
                 'order_id' => $aftersales['order_id'],
@@ -2412,11 +2425,14 @@ class AftersalesService
                     $params['detail_id'] = $v['detail_id'];
                     $this->aftersalesDetailRepository->update($params, $update);
 
-                    // 记录可申请售后的商品数量
-                    $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
-                    $order = $normalOrdersRepository->get($v['company_id'], $aftersales['order_id']);
-                    $left_aftersales_num = $order->getLeftAftersalesNum() + $v['num'];
-                    $normalOrdersRepository->update(['company_id' => $v['company_id'], 'order_id' => $aftersales['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+                    // 仅退款不占用订单级可申请售后数量，仅退货退款/换货恢复
+                    if (in_array($aftersales['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
+                        // 记录可申请售后的商品数量
+                        $normalOrdersRepository = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+                        $order = $normalOrdersRepository->get($v['company_id'], $aftersales['order_id']);
+                        $left_aftersales_num = $order->getLeftAftersalesNum() + $v['num'];
+                        $normalOrdersRepository->update(['company_id' => $v['company_id'], 'order_id' => $aftersales['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+                    }
 
                     //更新子订单售后信息
                     // $itemFilter = [
@@ -2567,7 +2583,8 @@ class AftersalesService
         // }
 
         // 检查自填运费是否已经超过总运费
-        if (isset($data['freight']) && !empty($data['freight']) && $data['freight'] > 0) {
+        // 仅退款不涉及退货，不允许退运费
+        if (!in_array($data['aftersales_type'] ?? '', ['ONLY_REFUND']) && isset($data['freight']) && !empty($data['freight']) && $data['freight'] > 0) {
             // 判断是否是最后一次申请（整单都申请售后）
             // 先判断数量是否满足最后一次申请的条件（不考虑运费）
             // 调整：当一次提交多个SKU时，需要基于本次提交后的整体状态来判断，而不是逐个SKU判断
@@ -2691,11 +2708,20 @@ class AftersalesService
             }
 
             if (!($data['is_partial_cancel'] ?? false)) {
-                // 判断单个子订单历史申请数量总和
-                $applied_num = $this->getAppliedNum($data['company_id'], $data['order_id'], $v['id']); // 已申请数量
-                //如果是自提订单发货数量等于子订单商品数量
+                // 自提订单发货数量等于子订单商品数量
                 $subOrderInfo['delivery_item_num'] = $orderInfo['receipt_type'] == 'ziti' ? $subOrderInfo['num'] : $subOrderInfo['delivery_item_num'];
-                $left_num = $subOrderInfo['delivery_item_num'] + $subOrderInfo['cancel_item_num'] - $applied_num; // 剩余申请数量
+                $delivery_item_num = min(intval($subOrderInfo['delivery_item_num']), intval($subOrderInfo['num']));
+                $cancel_item_num = intval($subOrderInfo['cancel_item_num']);
+
+                if ($data['aftersales_type'] == 'ONLY_REFUND') {
+                    // 仅退款按未发货数量扣减已申请仅退款数量
+                    $applied_num = $this->getAppliedNumByType($data['company_id'], $data['order_id'], $v['id'], 'ONLY_REFUND'); // 已申请数量
+                    $left_num = intval($subOrderInfo['num']) - $cancel_item_num - $delivery_item_num - intval($applied_num); // 剩余申请数量
+                } else {
+                    // 退货退款/换货按已发货数量扣减已申请数量
+                    $applied_num = $this->getAppliedNumByType($data['company_id'], $data['order_id'], $v['id'], ['REFUND_GOODS', 'EXCHANGING_GOODS']); // 已申请数量
+                    $left_num = $delivery_item_num - intval($applied_num); // 剩余申请数量
+                }
                 if ($v['num'] > $left_num) {
                     throw new ResourceException($subOrderInfo['item_name'] . ' 剩余可申请售后的数量为' . $left_num . ',申请售后数量为' . $v['num']. ",已申请售后数量为:".$applied_num);
                 }
@@ -2821,6 +2847,49 @@ class AftersalesService
             ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2])); // 0未处理，1处理中，2已处理，5申请中
         $sum = $qb->execute()->fetchColumn();
         return $sum ?? 0;
+    }
+
+    // 获取子订单指定售后类型已申请的商品数量，$aftersales_type 支持字符串或字符串数组
+    public function getAppliedNumByType($company_id, $order_id, $sub_order_id, $aftersales_type)
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('sum(num)')
+            ->from('aftersales_detail')
+            ->where($qb->expr()->eq('company_id', $company_id))
+            ->andWhere($qb->expr()->eq('order_id', $qb->expr()->literal($order_id)))
+            ->andWhere($qb->expr()->eq('sub_order_id', $sub_order_id))
+            ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2])); // 0未处理，1处理中，2已处理，5申请中
+        if (is_array($aftersales_type)) {
+            $qb->andWhere($qb->expr()->in('aftersales_type', array_map([$qb->expr(), 'literal'], $aftersales_type)));
+        } else {
+            $qb->andWhere($qb->expr()->eq('aftersales_type', $qb->expr()->literal($aftersales_type)));
+        }
+        $sum = $qb->execute()->fetchColumn();
+        return $sum ?? 0;
+    }
+
+    // 批量获取子订单按售后类型统计的有效申请数量，返回 [sub_order_id][aftersales_type] => sum
+    public function getAppliedNumMapBySubOrders($sub_order_ids)
+    {
+        if (empty($sub_order_ids)) {
+            return [];
+        }
+        $sub_order_ids = array_map('intval', array_unique($sub_order_ids));
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('sub_order_id, aftersales_type, sum(num) as total')
+            ->from('aftersales_detail')
+            ->where($qb->expr()->in('sub_order_id', $sub_order_ids))
+            ->andWhere($qb->expr()->in('aftersales_status', [0, 5, 1, 2]))
+            ->groupBy('sub_order_id')
+            ->addGroupBy('aftersales_type');
+        $rows = $qb->execute()->fetchAll();
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['sub_order_id']][$row['aftersales_type']] = intval($row['total']);
+        }
+        return $map;
     }
 
     // 计算售后单上是否挂了运费
@@ -3364,8 +3433,11 @@ class AftersalesService
 
             // 创建售后主单据
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
-            $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
-            $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货
+            if (in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
+                $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
+                $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+            }
 
             $tradeService = new TradeService();
             $trade = $tradeService->getInfo(['company_id' => $data['company_id'], 'order_id' => $data['order_id'], 'trade_state' => 'SUCCESS']);
@@ -3614,7 +3686,7 @@ class AftersalesService
                 $aftersales_data['supplier_id'] = $subOrderInfo['supplier_id'];
                 $aftersales_data['item_bn'] = $subOrderInfo['item_bn'];
 
-                $is_refund_freight_flag = $this->isRefundFinishByNum($data['order_id'], $data['company_id'],$v['id'], $v['num']);
+                $is_refund_freight_flag = $this->isRefundFinishByNum($data['order_id'], $data['company_id'], $v['id']);
             }
             if ($sub_item_fee > $total_refund_fee) {
                 throw new ResourceException('售后申请金额不能超过剩余金额! '.$sub_item_fee.' > '.$total_refund_fee);
@@ -3627,41 +3699,40 @@ class AftersalesService
 
             // 判断是否是最后一个售后数据了
             $freight = 0;
-            $freight_point = 0;
-            if ($is_refund_freight && $is_refund_freight_flag) {
-                // 根据运费类型处理运费
+            // 仅退款不涉及退货，不退运费；只有退货退款/换货允许退运费
+            $refund_freight_type = in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS']);
+            if ($is_refund_freight && $is_refund_freight_flag && $refund_freight_type) {
+                // 根据运费类型处理运费（freight 字段根据 freight_type 存储现金分或积分值，与订单表一致）
                 if ($orderInfo['freight_type'] == 'cash') {
-                    // 现金运费
+                    // 现金运费（分）
                     $max_freight = $orderInfo['freight_fee'];
                     $refunded_freight = $this->getAppliedTotalRefundFreight($data['company_id'], $data['order_id']);
                     $remain_freight = $max_freight - $refunded_freight;
                     $max_freight = min($max_freight, $remain_freight);
                     $freight = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $max_freight ? $data['freight'] : $max_freight;
-                    $aftersales_data['freight'] = $freight;
-                    $aftersales_data['freight_point'] = 0;
                 } else if ($orderInfo['freight_type'] == 'point') {
-                    // 积分运费
-                    $max_freight_point = $orderInfo['freight_point'];
-                    $refunded_freight_point = $this->getAppliedTotalRefundFreightPoint($data['company_id'], $data['order_id']);
-                    $remain_freight_point = $max_freight_point - $refunded_freight_point;
-                    $max_freight_point = min($max_freight_point, $remain_freight_point);
-                    $freight_point = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $max_freight_point ? $data['freight'] : $max_freight_point;
-                    // 积分运费单独存储，不加到 refund_point 中（在退款时 doRefund() 会处理）
-                    $aftersales_data['freight'] = 0;
-                    $aftersales_data['freight_point'] = $freight_point;
+                    // 积分运费（积分值，订单表的 freight_fee 存储的是积分值）
+                    $max_freight = $orderInfo['freight_fee'];
+                    $refunded_freight = $this->getAppliedTotalRefundFreightPoint($data['company_id'], $data['order_id']);
+                    $remain_freight = $max_freight - $refunded_freight;
+                    $max_freight = min($max_freight, $remain_freight);
+                    $freight = isset($data['freight']) && $data['freight'] > 0 && $data['freight'] <= $max_freight ? $data['freight'] : $max_freight;
                 }
-                // 设置运费类型
+                // 统一写入 freight 字段，doRefund() 会按 freight_type 分流到 refund_fee 或 refund_point
+                $aftersales_data['freight'] = $freight;
                 $aftersales_data['freight_type'] = $orderInfo['freight_type'];
             } else {
                 // 未申请运费时，设置默认值
                 $aftersales_data['freight_type'] = $orderInfo['freight_type'] ?? 'cash';
                 $aftersales_data['freight'] = 0;
-                $aftersales_data['freight_point'] = 0;
             }
             // 创建售后主单据
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
-            $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
-            $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货
+            if (in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
+                $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
+                $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+            }
             // 创建售后退款单
             $aftersalesRefundService = new AftersalesRefundService();
             $refundData = [
@@ -3747,7 +3818,7 @@ class AftersalesService
     }   
     
     // 判断售后单是否按num拆单全部完成
-    public function isRefundFinishByNum($order_id, $company_id, $nowId, $nowNum)
+    public function isRefundFinishByNum($order_id, $company_id, $nowId)
     {
         /**
          *  判断所有商品是否已经退到最后一件
@@ -3763,8 +3834,9 @@ class AftersalesService
         if (!empty($orderItems['list'])) {
             foreach ($orderItems['list'] as $v) {
                 if ($v['id'] == $nowId) {
+                    // 注意：调用前本次售后明细已落库，getAppliedNumByNum 已包含本次申请数量，无需再加 nowNum
                     $applied_num = $this->getAppliedNumByNum($company_id, $order_id, $v['id']); // 已申请数量（只统计有效状态的售后单）
-                    if ($nowNum + $applied_num < $v['num']) {
+                    if ($applied_num < $v['num']) {
                         $flag = false;
                         break;
                     }

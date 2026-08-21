@@ -262,7 +262,7 @@ class PointMemberRuleService
     */
     public function orderMaxPoint($companyId, $memberPoint, $payFee, $orderData, $freightFee = 0)
     {
-        $totalPoint = $totalMaxMoney = $totalMoneyToPoint = $totalPointZiti = 0;
+        $totalPoint = $totalMaxMoney = $totalMoneyToPoint = $totalPointZiti = $totalPointMerchant = 0;
         if ($this->rule['deduct_point']) {
             // 订单可用多少积分不按照总支付金额计算，使用每个订单商品单独计算
             // foreach ($orderData['items'] as $item) {
@@ -298,12 +298,33 @@ class PointMemberRuleService
             }
             $useLimit = $useLimit > 0 ? $useLimit : 0;// 本地，当前会员，最大可使用积分数
             $totalPoint = $useLimit;
+
+            // 商家自配送：商品金额 + 商家运费（若可抵扣）对应的最大可抵扣积分
+            if (isset($orderData['merchant_freight_fee']) && $orderData['merchant_freight_fee'] !== null) {
+                $merchantGoodsMaxMoney = bcmul(
+                    bcdiv($this->rule['deduct_proportion_limit'], 100, 2),
+                    $orderData['total_fee'] - $freightFee
+                );
+                $merchantTotalMoneyToPoint = $this->moneyToPoint($companyId, $merchantGoodsMaxMoney);
+                if ($canDeductFreight) {
+                    $merchantFreightMaxMoney = bcmul(bcdiv($this->rule['deduct_proportion_limit'], 100, 2), $orderData['merchant_freight_fee']);
+                    $merchantTotalMoneyToPoint += $this->moneyToPoint($companyId, $merchantFreightMaxMoney);
+                }
+
+                if ($memberPoint > $merchantTotalMoneyToPoint) {
+                    $totalPointMerchant = $merchantTotalMoneyToPoint;
+                } else {
+                    $totalPointMerchant = $this->moneyToPoint($companyId, $this->pointToMoney($memberPoint));
+                }
+                $totalPointMerchant = $totalPointMerchant > 0 ? $totalPointMerchant : 0;
+            }
         }
 
         return [
             'limit_point' => $totalMoneyToPoint,
             'max_point' => $totalPoint,
             'max_point_ziti' => $totalPointZiti,
+            'max_point_merchant' => $totalPointMerchant,
             'max_money' => $totalMaxMoney,
         ];
     }

@@ -103,7 +103,7 @@ class MemberUploadConsumService
             throw new BadRequestHttpException(trans('MembersBundle/Members.validation_error', ['{0}' => $errorMessage]));
         }
 
-        $consumption = round($row['consumption']);
+        $consumption = bcmul($row['consumption'], 100);
         $memberService = new MemberService();
         $userId = $memberService->getUserIdByMobile($row['mobile'], $companyId);
         if (!$userId) {

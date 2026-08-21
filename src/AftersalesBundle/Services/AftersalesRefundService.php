@@ -129,8 +129,10 @@ class AftersalesRefundService
                     break;
                 // 0元订单
                 case 'localpay':
-                    // 直接退款完成
-                    throw new ResourceException("0元订单不支持退款");
+                    // 0元订单无第三方支付渠道可退，标记退款异常，避免队列任务无限重试
+                    $res = [
+                        'status' => 'FAIL',
+                    ];
                     break;
                 // 预存款
                 case 'deposit':

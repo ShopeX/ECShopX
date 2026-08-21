@@ -34,6 +34,8 @@ use MembersBundle\Entities\MembersInfo;
 use OrdersBundle\Entities\NormalOrdersItems;
 use OrdersBundle\Services\Orders\CommunityNormalOrderService;
 use CommunityBundle\Services\CommunitySettingService;
+use CompanysBundle\Ego\CompanysActivationEgo;
+use DistributionBundle\Entities\DistributorItems;
 
 class CommunityActivityService
 {
@@ -141,11 +143,10 @@ class CommunityActivityService
             if (!$activity) {
                 throw new ResourceException('活动创建失败');
             }
+            $productModel = (string)((new CompanysActivationEgo())->check((int)($activity['company_id'] ?? 0))['product_model'] ?? '');
             $batchInsertItems = [];
             foreach ($itemsList['list'] as $value) {
-                if ($value['distributor_id'] != $activity['distributor_id']) {
-                    throw new ResourceException('只能选择一个店铺的商品开团');   
-                }
+                $this->assertItemBelongsToActivityStore($value, $activity, $productModel);
 
                 $batchInsertItems[] = [
                     'activity_id' => $activity['activity_id'],
@@ -186,6 +187,35 @@ class CommunityActivityService
         }
 
         return $activity;
+    }
+
+    /**
+     * 校验商品是否属于活动绑定店铺。
+     *
+     * standard 云店模式下，选品返回的是总部商品（items.distributor_id=0），
+     * 通过 distribution_distributor_items 关联到具体店铺，因此需要额外允许该关系。
+     */
+    private function assertItemBelongsToActivityStore(array $item, array $activity, string $productModel)
+    {
+        $storeId = (int)($activity['distributor_id'] ?? 0);
+        $itemDistributorId = (int)($item['distributor_id'] ?? 0);
+
+        if ($itemDistributorId === $storeId) {
+            return;
+        }
+
+        if ($productModel === 'standard' && $storeId > 0 && $itemDistributorId === 0) {
+            $distributorItemsRepository = app('registry')->getManager('default')->getRepository(DistributorItems::class);
+            $count = $distributorItemsRepository->count([
+                'distributor_id' => $storeId,
+                'goods_id' => (int)($item['goods_id'] ?? 0),
+            ]);
+            if ($count > 0) {
+                return;
+            }
+        }
+
+        throw new ResourceException('只能选择一个店铺的商品开团');
     }
 
     /**
@@ -233,15 +263,14 @@ class CommunityActivityService
             if (!isset($params['activity_pics'])) {
                 $params['activity_pics'] = json_encode([]);
             }
+            $productModel = (string)((new CompanysActivationEgo())->check((int)($activity['company_id'] ?? 0))['product_model'] ?? '');
             $activity = $this->entityRepository->updateOneBy(['activity_id' => $activity['activity_id']], $params);
 
             // 处理活动商品
             $batchInertItems = [];
             $updateIds = [];
             foreach ($itemsList['list'] as $value) {
-                if ($value['distributor_id'] != $activity['distributor_id']) {
-                    throw new ResourceException('只能选择一个店铺的商品开团');   
-                }
+                $this->assertItemBelongsToActivityStore($value, $activity, $productModel);
 
                 $data = [
                     'activity_id' => $activity['activity_id'],
@@ -346,6 +375,11 @@ class CommunityActivityService
                 if ($value['is_default']) {
                     if (!isset($validItems[$value['goods_id']])) {
                         $validItems[$value['goods_id']] = array_merge($activity_item[$value['item_id']], $value);
+                        // 多规格但只有一个规格（默认行）时，把默认行自身也放入 spec_items
+                        if (($value['nospec'] === false || $value['nospec'] === 'false' || $value['nospec'] === 0 || $value['nospec'] === '0')
+                            && !isset($validItems[$value['goods_id']]['spec_items'])) {
+                            $validItems[$value['goods_id']]['spec_items'][] = $validItems[$value['goods_id']];
+                        }
                     }
                 } else {
                     if (isset($validItems[$value['goods_id']])) {
@@ -525,7 +559,14 @@ class CommunityActivityService
                 $item = $items[$value['item_id']];
                 if ($item['is_default']) {
                     if (!isset($validItems[$value['activity_id'].'_'.$item['goods_id']])) {
-                        $validItems[$value['activity_id'].'_'.$item['goods_id']] = array_merge($value, $item);
+                        $key = $value['activity_id'].'_'.$item['goods_id'];
+                        $validItems[$key] = array_merge($value, $item);
+
+                        // 多规格但只有一个规格（默认行）时，把默认行自身也放入 spec_items
+                        if (($item['nospec'] === false || $item['nospec'] === 'false' || $item['nospec'] === 0 || $item['nospec'] === '0')
+                            && !isset($validItems[$key]['spec_items'])) {
+                            $validItems[$key]['spec_items'][] = $validItems[$key];
+                        }
                     }
                 } else {
                     if (isset($validItems[$value['activity_id'].'_'.$item['goods_id']])) {

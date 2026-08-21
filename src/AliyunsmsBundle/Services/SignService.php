@@ -21,15 +21,49 @@ use AliyunsmsBundle\Jobs\AddSmsSign;
 use AliyunsmsBundle\Jobs\DeleteSmsSign;
 use AliyunsmsBundle\Jobs\ModifySmsSign;
 use AliyunsmsBundle\Jobs\QuerySmsSign;
+use AliyunsmsBundle\Jobs\SyncSmsSigns;
 use Dingo\Api\Exception\ResourceException;
 
 class SignService
 {
     public $signRepository;
-    public function __construct()
-    {
-        // $this->signRepository = app('registry')->getManager('default')->getRepository(Sign::class);
-        $this->signRepository = getRepositoryLangue(Sign::class);
+
+    /** @var callable */
+    private $dispatchJob;
+
+    /** @var callable */
+    private $hasSceneAssociation;
+
+    /** @var callable */
+    private $hasActiveTask;
+
+    /** @var SmsSignMapper */
+    private $mapper;
+
+    public function __construct(
+        $signRepository = null,
+        ?callable $dispatchJob = null,
+        ?callable $hasSceneAssociation = null,
+        ?callable $hasActiveTask = null,
+        ?SmsSignMapper $mapper = null
+    ) {
+        $this->signRepository = $signRepository ?? getRepositoryLangue(Sign::class);
+        $this->dispatchJob = $dispatchJob ?? static function ($job) {
+            app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($job);
+        };
+        $this->hasSceneAssociation = $hasSceneAssociation ?? static function (int $companyId, int $signId): bool {
+            $sceneItemService = new SceneItemService();
+            $sceneItem = $sceneItemService->getInfo(['company_id' => $companyId, 'sign_id' => $signId]);
+
+            return (bool) $sceneItem;
+        };
+        $this->hasActiveTask = $hasActiveTask ?? static function (int $companyId, int $signId): bool {
+            $taskService = new TaskService();
+            $task = $taskService->getInfo(['company_id' => $companyId, 'sign_id' => $signId, 'status' => 1]);
+
+            return (bool) $task;
+        };
+        $this->mapper = $mapper ?? new SmsSignMapper();
     }
     /**
      * 新增sign
@@ -51,16 +85,22 @@ class SignService
      */
     public function modifySign($params)
     {
-        $this->_checkValid($params);
+        $sign = $this->_checkValid($params);
         $filter['company_id'] = $params['company_id'];
         $filter['id'] = $params['id'];
-        $sign_name = $params['sign_name'];
-        unset($params['id'], $params['sign_name']);
+        $signName = $sign['sign_name'];
+        unset($params['id']);
+        if (array_key_exists('sign_name', $params)) {
+            unset($params['sign_name']);
+        }
+        $params['third_party'] = $this->mapper->normalizeThirdParty($params['third_party']);
         $params['status'] = 0;
         $this->signRepository->updateOneBy($filter, $params);
-        $params['sign_name'] = $sign_name;
+        $params['sign_name'] = $signName;
+        $params['company_id'] = $filter['company_id'];
+        $params['third_party'] = $this->mapper->normalizeThirdPartyBool($params['third_party']);
         $queue = (new ModifySmsSign($params))->onQueue('sms');
-        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
+        ($this->dispatchJob)($queue);
 
         return true;
     }
@@ -73,27 +113,21 @@ class SignService
     public function deleteSign($params)
     {
         $sign = $this->signRepository->getInfo($params);
-        if(!$sign) {
-            return true;
+        if (!$sign) {
+            throw new ResourceException('签名不存在');
         }
-        if($sign['status'] == 0) {
-            throw new ResourceException("不支持删除正在审核中的签名");
+        if ($sign['status'] == 0) {
+            throw new ResourceException('不支持删除正在审核中的签名');
         }
-        //判断是否关联短信场景
-        $sceneItemService = new SceneItemService();
-        $sceneItem = $sceneItemService->getInfo(['company_id' => $params['company_id'],'sign_id' => $params['id']]);
-        if($sceneItem) {
-            throw new ResourceException("不能删除已关联短信场景的模板");
+        if (($this->hasSceneAssociation)((int) $params['company_id'], (int) $params['id'])) {
+            throw new ResourceException('不能删除已关联短信场景的签名');
         }
-        //判断是否关联执行中的群发任务
-        $taskService = new TaskService();
-        $task = $taskService->getInfo(['company_id' => $params['company_id'],'sign_id' => $params['id'], 'status' => 1]);
-        if($task) {
-            throw new ResourceException("不能删除关联群发任务的模板");
+        if (($this->hasActiveTask)((int) $params['company_id'], (int) $params['id'])) {
+            throw new ResourceException('不能删除关联群发任务的签名');
         }
         $this->signRepository->deleteById($params['id']);
         $queue = (new DeleteSmsSign($sign))->onQueue('sms');
-        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
+        ($this->dispatchJob)($queue);
 
         return true;
     }
@@ -103,18 +137,33 @@ class SignService
     }
     private function _checkValid($params)
     {
-        if($params['id'] ?? 0) {
-            $sign = $this->signRepository->getInfo(['id' => $params['id'], 'status' => 2]);
-            if(!$sign) {
-                throw new ResourceException("未审核通过的签名才能修改");
+        if ($params['id'] ?? 0) {
+            $sign = $this->signRepository->getInfo([
+                'id' => $params['id'],
+                'company_id' => $params['company_id'],
+            ]);
+            if (!$sign) {
+                throw new ResourceException('签名不存在');
             }
-        } else {
-            $sign = $this->signRepository->getInfo(['company_id' => $params['company_id'], 'sign_name' => $params['sign_name']]);
-            if($sign) {
-                throw new ResourceException("签名不能重复");
+            if (!in_array((int) $sign['status'], [1, 2], true)) {
+                throw new ResourceException('审核中的签名不可修改');
             }
+            if (isset($params['sign_name']) && $params['sign_name'] !== $sign['sign_name']) {
+                throw new ResourceException('签名名称不可修改，请在阿里云控制台改名');
+            }
+
+            return $sign;
         }
-        //校验图片文件格式
+
+        $sign = $this->signRepository->getInfo([
+            'company_id' => $params['company_id'],
+            'sign_name' => $params['sign_name'],
+        ]);
+        if ($sign) {
+            throw new ResourceException('签名不能重复');
+        }
+
+        return null;
     }
     //查询审核状态
     public function queryAuditStatus()
@@ -126,6 +175,47 @@ class SignService
             $queue = (new QuerySmsSign($params))->onQueue('sms');
             app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
         }
+    }
+
+    /**
+     * 提交异步全量同步签名任务。
+     */
+    public function submitSyncSigns(int $companyId): bool
+    {
+        $queue = (new SyncSmsSigns($companyId))->onQueue('sms');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
+
+        return true;
+    }
+
+    /**
+     * 从阿里云全量同步签名到本地。
+     *
+     * @return array{created:int,updated:int,deleted:int,skipped:int,failed:int,errors:array}
+     */
+    public function syncSignsFromAliyun(int $companyId): array
+    {
+        $syncService = new SmsSignSyncService(
+            static function (int $cid) {
+                return new \PromotionsBundle\Services\SmsDriver\AliyunSmsClient($cid);
+            },
+            $this->signRepository,
+            new SmsSignMapper(),
+            static function (int $cid, int $signId): bool {
+                $sceneItemService = new SceneItemService();
+                $sceneItem = $sceneItemService->getInfo(['company_id' => $cid, 'sign_id' => $signId]);
+
+                return (bool) $sceneItem;
+            },
+            static function (int $cid, int $signId): bool {
+                $taskService = new TaskService();
+                $task = $taskService->getInfo(['company_id' => $cid, 'sign_id' => $signId, 'status' => 1]);
+
+                return (bool) $task;
+            }
+        );
+
+        return $syncService->syncSignsFromAliyun($companyId);
     }
 
     /**

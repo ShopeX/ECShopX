@@ -1143,20 +1143,6 @@ class AbstractNormalOrder implements OrderInterface
                     }
                 }
 
-                if ((!$v['order_auto_close_aftersales_time'] || $v['order_auto_close_aftersales_time'] > time()) && $v['left_aftersales_num'] > 0) {
-                    $result['list'][$k]['can_apply_aftersales'] = 1;
-                    // app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][can_apply_aftersales]:1' );
-
-                }
-
-                // app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][order_id]:' . json_encode($v['order_id']));
-                // app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][order_status]:' . json_encode($v['order_status']));
-                if( $v['order_status'] == "CANCEL"){
-                    $result['list'][$k]['can_apply_aftersales'] = 0;
-                    // app('log')->debug(__FUNCTION__.':'.__LINE__.'[AbstractNormalOrder][can_apply_aftersales]:0' );
-
-                }
-
                 // 自提信息
                 if (isset($ordersRelZitiList[$v['order_id']])) {
                     $result['list'][$k]['ziti_info'] = $ordersRelZitiList[$v['order_id']];
@@ -1192,6 +1178,63 @@ class AbstractNormalOrder implements OrderInterface
                 if (config('common.oem-shuyun')) {
                     $result['list'][$key]['promoter_info'] = $ordersRelPromoterList[$list['order_id']] ?? null;
                 }
+            }
+
+            // 订单列表与详情对齐：按子单剩余可售后/可仅退款数量计算订单是否可申请售后
+            $subOrderIds = [];
+            foreach ($result['list'] as $orderRow) {
+                foreach ($orderRow['items'] as $itemRow) {
+                    if (!empty($itemRow['id'])) {
+                        $subOrderIds[] = $itemRow['id'];
+                    }
+                }
+            }
+            $appliedNumMap = [];
+            if ($subOrderIds) {
+                $aftersalesService = new AftersalesService();
+                $appliedNumMap = $aftersalesService->getAppliedNumMapBySubOrders($subOrderIds);
+            }
+
+            foreach ($result['list'] as $k => $orderRow) {
+                if ($orderRow['order_status'] == 'CANCEL') {
+                    $result['list'][$k]['can_apply_aftersales'] = 0;
+                    continue;
+                }
+                // 整单未发货只能整单取消，不提供申请售后入口
+                if (($orderRow['delivery_status'] ?? '') == 'PENDING') {
+                    $result['list'][$k]['can_apply_aftersales'] = 0;
+                    continue;
+                }
+                $isZitiOrder = false;
+                if (($orderRow['receipt_type'] ?? '') == 'ziti' && in_array($orderRow['ziti_status'] ?? '', ['DONE', 'NOTZITI'])) {
+                    $isZitiOrder = true;
+                }
+
+                $canApply = 0;
+                foreach ($orderRow['items'] as $itemRow) {
+                    $subOrderId = $itemRow['id'];
+                    $num = intval($itemRow['num']);
+                    $deliveryItemNum = intval($itemRow['delivery_item_num']);
+                    if (($itemRow['delivery_status'] ?? '') == 'DONE' && !$deliveryItemNum) {
+                        $deliveryItemNum = $num;
+                    }
+                    $deliveryItemNum = min($deliveryItemNum, $num);
+                    if ($isZitiOrder) {
+                        $deliveryItemNum = $num;
+                    }
+
+                    $appliedReturnExchange = intval($appliedNumMap[$subOrderId]['REFUND_GOODS'] ?? 0) + intval($appliedNumMap[$subOrderId]['EXCHANGING_GOODS'] ?? 0);
+                    $leftAftersales = max(0, $deliveryItemNum - $appliedReturnExchange);
+                    $appliedRefundOnly = intval($appliedNumMap[$subOrderId]['ONLY_REFUND'] ?? 0);
+                    $leftRefundOnly = max(0, $num - intval($itemRow['cancel_item_num']) - $deliveryItemNum - $appliedRefundOnly);
+
+                    if (($leftAftersales + $leftRefundOnly) > 0
+                        && !($itemRow['auto_close_aftersales_time'] > 0 && $itemRow['auto_close_aftersales_time'] < time())) {
+                        $canApply = 1;
+                        break;
+                    }
+                }
+                $result['list'][$k]['can_apply_aftersales'] = $canApply;
             }
         }
 
@@ -1390,25 +1433,20 @@ class AbstractNormalOrder implements OrderInterface
             $item['delivery_item_num'] = min($item['delivery_item_num'], $item['num']);
 
             // 获取售后申请数量@todo部分发货的处理
-            if ($checkaftersales && $item['delivery_item_num'] > 0) {
+            if ($checkaftersales) {
                 $aftersalesService = new AftersalesService();
-                $applied_num = $aftersalesService->getAppliedNum($item['company_id'], $item['order_id'], $item['id']); // 已申请数量
-                $item['left_aftersales_num'] = $item['delivery_item_num'] + $item['cancel_item_num'] - $applied_num; // 剩余申请数量
+                $applied_num = $aftersalesService->getAppliedNum($item['company_id'], $item['order_id'], $item['id']); // 已申请数量（全部类型）
+                // 剩余可申请售后数量：已发货数量扣已申请的退货退款+换货，仅退款不占用
+                $applied_return_exchange_num = $aftersalesService->getAppliedNumByType($item['company_id'], $item['order_id'], $item['id'], ['REFUND_GOODS', 'EXCHANGING_GOODS']);
+                $item['left_aftersales_num'] = max(0, intval($item['delivery_item_num']) - intval($applied_return_exchange_num));
+                // 剩余可仅退款数量：未发货数量扣已申请的仅退款，全部发货后自动归0
+                $applied_refund_only_num = $aftersalesService->getAppliedNumByType($item['company_id'], $item['order_id'], $item['id'], 'ONLY_REFUND');
+                $item['left_refund_only_num'] = max(0, intval($item['num']) - intval($item['cancel_item_num']) - intval($item['delivery_item_num']) - intval($applied_refund_only_num));
                 $item['show_aftersales'] = $applied_num > $item['cancel_item_num'] ? 1 : 0;
-                // 超出售后失效不显示售后按钮
-                if ($item['auto_close_aftersales_time'] > 0 && $item['auto_close_aftersales_time'] < time()) {
-                    continue;
-                }else{
-                    $orderInfo['can_apply_aftersales'] = 1;
-                }
-                
-                $can_apply_aftersales += $item['left_aftersales_num'];
-                // 用于判断整个订单是否显示售后申请按钮，只有其中一个商品可以申请售后就显示
-                if ($can_apply_aftersales) {
-                    $orderInfo['can_apply_aftersales'] = 1;
-                }
-                if($orderInfo['order_status'] == "CANCEL"){
-                    $orderInfo['can_apply_aftersales'] = 0;
+                // 剩余可售后/可仅退款数量大于0，且未超出售后关闭时间，才允许申请售后
+                if (($item['left_aftersales_num'] + $item['left_refund_only_num']) > 0
+                    && !($item['auto_close_aftersales_time'] > 0 && $item['auto_close_aftersales_time'] < time())) {
+                    $can_apply_aftersales = 1;
                 }
             }
             if (isset($itemsAftersales[$item['item_id']])) {
@@ -1431,6 +1469,14 @@ class AbstractNormalOrder implements OrderInterface
             if (isset($drugRspList[$item['item_id']])) {
                 $item['instructions'] = $drugRspList[$item['item_id']]['instructions'];
             }
+        }
+        $orderInfo['can_apply_aftersales'] = $can_apply_aftersales ? 1 : 0;
+        // 整单未发货只能整单取消，不提供申请售后入口
+        if (($orderInfo['delivery_status'] ?? '') == 'PENDING') {
+            $orderInfo['can_apply_aftersales'] = 0;
+        }
+        if ($orderInfo['order_status'] == 'CANCEL') {
+            $orderInfo['can_apply_aftersales'] = 0;
         }
         //获取交易单信息
         $tradeRepository = app('registry')->getManager('default')->getRepository(Trade::class);
@@ -3504,7 +3550,7 @@ class AbstractNormalOrder implements OrderInterface
      * @param array<string, mixed> $filter
      * @return array<string, mixed>
      */
-    private function expandVirtualStoreDistributorFilter(array $filter): array
+    protected function expandVirtualStoreDistributorFilter(array $filter): array
     {
         if (isset($filter['distributor_id|neq'])) {
             return $filter;
@@ -3695,22 +3741,30 @@ class AbstractNormalOrder implements OrderInterface
         $orderInfo['can_apply_aftersales'] = 0;
         foreach ($orderInfo['items'] as &$item) {
             $aftersalesService = new AftersalesService();
-            $applied_num = $aftersalesService->getAppliedNum($item['company_id'], $item['order_id'], $item['id']); // 已申请数量
+            $applied_num = $aftersalesService->getAppliedNum($item['company_id'], $item['order_id'], $item['id']); // 已申请数量（全部类型）
             //如果是自提订单发货数量等于子订单商品数量
             $item['delivery_item_num'] = $isZitiOrder ? $item['num'] : $item['delivery_item_num'];
-            $item['left_aftersales_num'] = $item['delivery_item_num']  + $item['cancel_item_num'] - $applied_num; // 剩余申请数量
+            // 剩余可申请售后数量：已发货数量扣已申请的退货退款+换货，仅退款不占用
+            $applied_return_exchange_num = $aftersalesService->getAppliedNumByType($item['company_id'], $item['order_id'], $item['id'], ['REFUND_GOODS', 'EXCHANGING_GOODS']);
+            $item['left_aftersales_num'] = max(0, intval($item['delivery_item_num']) - intval($applied_return_exchange_num));
+            // 剩余可仅退款数量：未发货数量扣已申请的仅退款，全部发货后未发货数量为0，结果自动归0
+            $applied_refund_only_num = $aftersalesService->getAppliedNumByType($item['company_id'], $item['order_id'], $item['id'], 'ONLY_REFUND');
+            $item['left_refund_only_num'] = max(0, intval($item['num']) - intval($item['cancel_item_num']) - intval($item['delivery_item_num']) - intval($applied_refund_only_num));
             $item['show_aftersales'] = $applied_num > $item['cancel_item_num'] ? 1 : 0;
-            $can_apply_aftersales += $item['left_aftersales_num'];
-            // 用于判断整个订单是否显示售后申请按钮，只有其中一个商品可以申请售后就显示
-            if ($can_apply_aftersales) {
-                if ($item['auto_close_aftersales_time'] > 0 && $item['auto_close_aftersales_time'] < time()) {
-                    continue;
-                }
-                $orderInfo['can_apply_aftersales'] = 1;
-                if($orderInfo['order_status'] == "CANCEL"){
-                    $orderInfo['can_apply_aftersales'] = 0;
-                }
+            // 仅当该商品仍有剩余可售后/可仅退款数量，且未超过售后关闭时间，才计入可申请售后
+            if (($item['left_aftersales_num'] + $item['left_refund_only_num']) > 0
+                && !($item['auto_close_aftersales_time'] > 0 && $item['auto_close_aftersales_time'] < time())) {
+                $can_apply_aftersales = 1;
             }
+        }
+
+        $orderInfo['can_apply_aftersales'] = $can_apply_aftersales ? 1 : 0;
+        // 整单未发货只能整单取消，不显示申请售后按钮
+        if (($orderInfo['delivery_status'] ?? '') == 'PENDING') {
+            $orderInfo['can_apply_aftersales'] = 0;
+        }
+        if ($orderInfo['order_status'] == 'CANCEL') {
+            $orderInfo['can_apply_aftersales'] = 0;
         }
 
         $result['orderInfo'] = $orderInfo;

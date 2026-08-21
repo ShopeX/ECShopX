@@ -586,6 +586,7 @@ class NormalOrderExportService implements ExportFileInterface
             }
 
             // 店铺信息
+            $storeData = [];
             $storeIds = array_filter($orderdata['distributor_ids']);
             if ($storeIds) {
                 $sFilter = [
@@ -595,6 +596,8 @@ class NormalOrderExportService implements ExportFileInterface
                 $storeList = $distributorService->getDistributorOriginalList($sFilter, 1, $limit);
                 $storeData = array_column($storeList['list'], null, 'distributor_id');
             }
+            // distributor_id=0（自营总店）信息：array_filter 会过滤 0，需单独补齐
+            $storeData[0] = $distributorService->getDistributorSelfSimpleInfo($filter['company_id']);
 
             // 供应商信息
             $supplierIds = array_column($orderdata['list'], 'supplier_id');

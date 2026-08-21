@@ -24,6 +24,7 @@ use AliyunsmsBundle\Jobs\DeleteSmsSign;
 use AliyunsmsBundle\Jobs\DeleteSmsTemplate;
 use AliyunsmsBundle\Jobs\ModifySmsTemplate;
 use AliyunsmsBundle\Jobs\QuerySmsTemplate;
+use AliyunsmsBundle\Jobs\SyncSmsTemplates;
 use Dingo\Api\Exception\ResourceException;
 
 class TemplateService
@@ -104,30 +105,37 @@ class TemplateService
     }
     private function _checkValid($params)
     {
-        //变量校验
-        $scene = (new SceneService())->getDetail($params['scene_id']);
-        preg_match_all("/\\$\{(.+?)\}/", $params['template_content'],$result);
-        if($scene['template_type'] == 2) {
-            if($result[1]) {
-                throw new ResourceException('推广类模板不能包含变量');
-            }
-        } else {
-            if($scene['variables']) {
-                $variables = array_column($scene['variables'], 'var_title');
-                if(count($result[1]) != count(array_unique($result[1]))) {
-                    throw new ResourceException("变量不能重复");
+        if (($params['scene_id'] ?? null) !== 0 && ($params['scene_id'] ?? null) !== '0') {
+            $scene = (new SceneService())->getDetail($params['scene_id']);
+            preg_match_all("/\\$\{(.+?)\}/", $params['template_content'],$result);
+            if($scene['template_type'] == 2) {
+                if($result[1]) {
+                    throw new ResourceException('推广类模板不能包含变量');
                 }
-                foreach ($result[1] as $var) {
-                    if(!in_array($var, $variables)) {
-                        throw new ResourceException("\${".$var . "} 无效变量");
+            } else {
+                if($scene['variables']) {
+                    $variables = array_column($scene['variables'], 'var_title');
+                    if(count($result[1]) != count(array_unique($result[1]))) {
+                        throw new ResourceException("变量不能重复");
+                    }
+                    foreach ($result[1] as $var) {
+                        if(!in_array($var, $variables)) {
+                            throw new ResourceException("\${".$var . "} 无效变量");
+                        }
                     }
                 }
             }
         }
         if($params['id'] ?? 0) {
-            $template = $this->templateRepository->getInfo(['id' => $params['id'], 'status' => 2]);
+            $template = $this->templateRepository->getInfo([
+                'id' => $params['id'],
+                'company_id' => $params['company_id'],
+            ]);
             if(!$template) {
-                throw new ResourceException("未通过审核的模板才能修改");
+                throw new ResourceException("模板不存在");
+            }
+            if(!in_array((int) $template['status'], [1, 2], true)) {
+                throw new ResourceException("审核中的模板不可修改");
             }
             return $template['template_code'];
         }
@@ -137,14 +145,49 @@ class TemplateService
     {
         $data = $this->templateRepository->lists($filter, $cols, $page, $pageSize, $orderBy);
         if(!$data['list']) return $data;
-        $sceneFilter['id'] = array_column($data['list'],'scene_id');
+        $sceneIds = array_values(array_filter(array_unique(array_column($data['list'], 'scene_id')), static function ($sceneId) {
+            return (int) $sceneId > 0;
+        }));
+        $sceneFilter['id'] = $sceneIds;
         $sceneList = (new SceneService())->lists($sceneFilter,['id','scene_name'],0);
         $sceneList = array_column($sceneList['list'], NULL, 'id');
         //获取关联的场景名称
         foreach ($data['list'] as &$v) {
-            $v['scene_name'] = $sceneList[$v['scene_id']]['scene_name'] ?? '';
+            $v['scene_name'] = (int) $v['scene_id'] === 0 ? '未分配场景' : ($sceneList[$v['scene_id']]['scene_name'] ?? '');
         }
         return $data;
+    }
+
+    public function submitSyncTemplates(int $companyId): bool
+    {
+        $queue = (new SyncSmsTemplates($companyId))->onQueue('sms');
+        app('Illuminate\Contracts\Bus\Dispatcher')->dispatch($queue);
+
+        return true;
+    }
+
+    public function syncTemplatesFromAliyun(int $companyId): array
+    {
+        $syncService = new SmsTemplateSyncService(
+            static function (int $cid) {
+                return new \PromotionsBundle\Services\SmsDriver\AliyunSmsClient($cid);
+            },
+            $this->templateRepository,
+            static function (int $cid, int $templateId): bool {
+                $sceneItemService = new SceneItemService();
+                $sceneItem = $sceneItemService->getInfo(['company_id' => $cid, 'template_id' => $templateId]);
+
+                return (bool) $sceneItem;
+            },
+            static function (int $cid, int $templateId): bool {
+                $taskService = new TaskService();
+                $task = $taskService->getInfo(['company_id' => $cid, 'template_id' => $templateId, 'status' => 1]);
+
+                return (bool) $task;
+            }
+        );
+
+        return $syncService->syncTemplatesFromAliyun($companyId);
     }
 
     //查询审核状态

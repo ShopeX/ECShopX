@@ -29,12 +29,14 @@ use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\QuerySmsTemplateRequest;
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\CreateSmsSignRequest;//申请短信签名（新接口）
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\UpdateSmsSignRequest;//修改短信签名（新接口）
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\GetSmsSignRequest;//查询签名详情（新接口）
+use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\QuerySmsSignListRequest;//查询签名列表（新接口）
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\CreateSmsTemplateRequest;//申请短信模板（新接口）
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\UpdateSmsTemplateRequest;//修改短信模板（新接口）
 use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\GetSmsTemplateRequest;//查询模板审核详情（新接口）
+use AlibabaCloud\SDK\Dysmsapi\V20170525\Models\QuerySmsTemplateListRequest;//查询模板列表（新接口）
 
 use AlibabaCloud\Tea\Model;
-use AliyunsmsBundle\Services\RecordService;
+use AliyunsmsBundle\Services\SmsSignMapper;
 use AliyunsmsBundle\Services\SceneService;
 use AliyunsmsBundle\Services\SettingService;
 use PromotionsBundle\Interfaces\SmsInterface;
@@ -392,19 +394,20 @@ class AliyunSmsClient {
      */
     public function createSmsSign($params)
     {
+        $mapper = new SmsSignMapper();
         $client = $this->createClient();
         $sendParams = [
             'signName' => $params['sign_name'],
             'signSource' => $params['sign_source'],
             'remark' => $params['remark'],
-            'thirdParty' => $params['third_party'] == 'true' ? true : false,
+            'thirdParty' => $mapper->normalizeThirdPartyBool($params['third_party']),
             'qualificationId' => $params['qualification_id'],
         ];
         $createSmsSignRequest = new CreateSmsSignRequest($sendParams);
         // 复制代码运行请自行打印 API 的返回值
         app('log')->debug('新::createSmsSign::短信签名参数: fan-out =>'.json_encode($sendParams));
         $result = $client->createSmsSign($createSmsSignRequest)->toMap();
-        app('log')->debug('新::createSmsSign::添加短信签名结果: fan-out =>'.json_encode($result['body']));
+        app('log')->debug('新::createSmsSign::添加短信签名结果: fan-out =>'.json_encode($result['body'],JSON_UNESCAPED_UNICODE));
         if ('OK' != $result['body']['Code']) {
             $errMsg = $result['body']['Message'] ?? '添加阿里云短信签名失败';
             app('log')->error('新::createSmsSign::add aliyunSms sign Error :'. $errMsg);
@@ -419,25 +422,56 @@ class AliyunSmsClient {
      */
     public function updateSmsSign($params)
     {
+        $mapper = new SmsSignMapper();
         $client = $this->createClient();
         $sendParams = [
             'signName' => $params['sign_name'],
             'signSource' => $params['sign_source'],
             'remark' => $params['remark'],
-            'thirdParty' => $params['third_party'] == 'true' ? true : false,
+            'thirdParty' => $mapper->normalizeThirdPartyBool($params['third_party']),
             'qualificationId' => $params['qualification_id'],
         ];
         $updateSmsSignRequest = new UpdateSmsSignRequest($sendParams);
         // 复制代码运行请自行打印 API 的返回值
         app('log')->debug('新::updateSmsSign::修改短信签名参数: fan-out =>'.json_encode($sendParams));
         $result = $client->updateSmsSign($updateSmsSignRequest)->toMap();
-        app('log')->debug('新::updateSmsSign::修改短信签名结果: fan-out =>'.json_encode($result['body']));
+        app('log')->debug('新::updateSmsSign::修改短信签名结果: fan-out =>'.json_encode($result['body'],JSON_UNESCAPED_UNICODE));
         if ('OK' != $result['body']['Code']) {
             $errMsg = $result['body']['Message'] ?? '修改阿里云短信签名失败';
             app('log')->error('新::updateSmsSign::modify aliyunSms sign Error :'. $errMsg);
             throw new AccessDeniedHttpException($errMsg);
         }
         return true;
+    }
+
+    /**
+     * QuerySmsSignList - 查询签名列表（新接口）
+     *
+     * @param int $pageIndex
+     * @param int $pageSize
+     * @return array
+     */
+    public function querySmsSignList($pageIndex = 1, $pageSize = 50)
+    {
+        if ($pageSize < 1 || $pageSize > 50) {
+            throw new \InvalidArgumentException('PageSize must be between 1 and 50');
+        }
+
+        $client = $this->createClient();
+        $sendParams = [
+            'pageIndex' => $pageIndex,
+            'pageSize' => $pageSize,
+        ];
+        $querySmsSignListRequest = new QuerySmsSignListRequest($sendParams);
+        app('log')->debug('新::querySmsSignList::短信签名列表参数: fan-out =>'.json_encode($sendParams));
+        $result = $client->querySmsSignList($querySmsSignListRequest)->toMap();
+        app('log')->debug('新::querySmsSignList::查询短信签名列表结果: fan-out =>'.json_encode($result['body'],JSON_UNESCAPED_UNICODE));
+        if ('OK' != $result['body']['Code']) {
+            $errMsg = $result['body']['Message'] ?? '查询阿里云短信签名列表失败';
+            app('log')->error('新::querySmsSignList::query aliyunSms sign list Error :'. $errMsg);
+            throw new AccessDeniedHttpException($errMsg);
+        }
+        return $result['body'];
     }
 
     /**
@@ -452,7 +486,7 @@ class AliyunSmsClient {
         // 复制代码运行请自行打印 API 的返回值
         app('log')->debug('新::getSmsSign::短信签名参数: fan-out =>'.json_encode($sendParams));
         $result = $client->getSmsSign($getSmsSignRequest)->toMap();
-        app('log')->debug('新::getSmsSign::查询短信签名结果: fan-out =>'.json_encode($result['body']));
+        app('log')->debug('新::getSmsSign::查询短信签名结果: fan-out =>'.json_encode($result['body'],JSON_UNESCAPED_UNICODE));
         if ('OK' != $result['body']['Code']) {
             $errMsg = $result['body']['Message'] ?? '查询阿里云短信签名失败';
             app('log')->error('新::getSmsSign::query aliyunSms sign Error :'. $errMsg);
@@ -479,9 +513,9 @@ class AliyunSmsClient {
         $sendParams['templateRule'] = $template['rule'];
         $createSmsTemplateRequest = new CreateSmsTemplateRequest($sendParams);
         // 复制代码运行请自行打印 API 的返回值
-        app('log')->debug('新::createSmsTemplate::短信模板参数: fan-out =>'.json_encode($sendParams));
+        app('log')->debug('新::createSmsTemplate::短信模板参数: fan-out =>'.json_encode($sendParams,JSON_UNESCAPED_UNICODE));
         $result = $client->createSmsTemplate($createSmsTemplateRequest)->toMap();
-        app('log')->debug('新::createSmsTemplate::短信模板添加结果: fan-out =>'.json_encode($result['body']));
+        app('log')->debug('新::createSmsTemplate::短信模板添加结果: fan-out =>'.json_encode($result['body'],JSON_UNESCAPED_UNICODE));
         if ('OK' != $result['body']['Code']) {
             $errMsg = $result['body']['Message'] ?? '添加阿里云短信模板失败';
             app('log')->error('新::createSmsTemplate::add aliyunSms template Error :'. $errMsg);
@@ -497,6 +531,7 @@ class AliyunSmsClient {
     public function updateSmsTemplate($params)
     {
         $client = $this->createClient();
+        $template = $this->templateConversion($params);
         $sendParams = [
             "templateType" => $params['template_type'],
             "templateName" => $params['template_name'],
@@ -504,12 +539,13 @@ class AliyunSmsClient {
             'templateCode' => $params['template_code'],
             "relatedSignName" => $params['related_sign_name'],
         ];
-        $sendParams['templateContent'] = $this->templateConversion($params);
+        $sendParams['templateContent'] = $template['content'];
+        $sendParams['templateRule'] = $template['rule'];
         $updateSmsTemplateRequest = new UpdateSmsTemplateRequest($sendParams);
         // 复制代码运行请自行打印 API 的返回值
-        app('log')->debug('新::updateSmsTemplate::短信模板参数: fan-out =>'.json_encode($params));
+        app('log')->debug('新::updateSmsTemplate::短信模板参数: fan-out =>'.json_encode($params,JSON_UNESCAPED_UNICODE));
         $result = $client->updateSmsTemplate($updateSmsTemplateRequest)->toMap();
-        app('log')->debug('新::updateSmsTemplate::修改短信模板结果: fan-out =>'.json_encode($result['body']));
+        app('log')->debug('新::updateSmsTemplate::修改短信模板结果: fan-out =>'.json_encode($result['body'],JSON_UNESCAPED_UNICODE));
         if ('OK' != $result['body']['Code']) {
             $errMsg = $result['body']['Message'] ?? '修改阿里云短信模板失败';
             app('log')->error('新::updateSmsTemplate::modify aliyunSms template Error :'. $errMsg);
@@ -530,14 +566,45 @@ class AliyunSmsClient {
         ];
         $getSmsTemplateRequest = new GetSmsTemplateRequest($sendParams);
         // 复制代码运行请自行打印 API 的返回值
-        app('log')->debug('新::getSmsTemplate::短信模板参数: fan-out =>'.json_encode($sendParams));
+        app('log')->debug('新::getSmsTemplate::短信模板参数: fan-out =>'.json_encode($sendParams,JSON_UNESCAPED_UNICODE));
         $result = $client->getSmsTemplate($getSmsTemplateRequest)->toMap();
-        app('log')->debug('新::getSmsTemplate::查询短信模板结果: fan-out =>'.json_encode($result['body']));
+        app('log')->debug('新::getSmsTemplate::查询短信模板结果: fan-out =>'.json_encode($result['body'],JSON_UNESCAPED_UNICODE));
         if ('OK' != $result['body']['Code']) {
             $errMsg = $result['body']['Message'] ?? '查询阿里云短信模板失败';
             app('log')->error('新::getSmsTemplate::query aliyunSms template Error :'. $errMsg);
             throw new AccessDeniedHttpException($errMsg);
         }
+        return $result['body'];
+    }
+
+    /**
+     * QuerySmsTemplateList - 查询模板列表（新接口）
+     *
+     * @param int $pageIndex
+     * @param int $pageSize
+     * @return array
+     */
+    public function querySmsTemplateList($pageIndex = 1, $pageSize = 50)
+    {
+        if ($pageSize < 1 || $pageSize > 50) {
+            throw new \InvalidArgumentException('PageSize must be between 1 and 50');
+        }
+
+        $client = $this->createClient();
+        $sendParams = [
+            'pageIndex' => $pageIndex,
+            'pageSize' => $pageSize,
+        ];
+        $querySmsTemplateListRequest = new QuerySmsTemplateListRequest($sendParams);
+        app('log')->debug('新::querySmsTemplateList::短信模板列表参数: fan-out =>'.json_encode($sendParams));
+        $result = $client->querySmsTemplateList($querySmsTemplateListRequest)->toMap();
+        app('log')->debug('新::querySmsTemplateList::查询短信模板列表结果: fan-out =>'.json_encode($result['body'], JSON_UNESCAPED_UNICODE));
+        if ('OK' != $result['body']['Code']) {
+            $errMsg = $result['body']['Message'] ?? '查询阿里云短信模板列表失败';
+            app('log')->error('新::querySmsTemplateList::query aliyunSms template list Error :'. $errMsg);
+            throw new AccessDeniedHttpException($errMsg);
+        }
+
         return $result['body'];
     }
 

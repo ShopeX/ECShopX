@@ -18,6 +18,7 @@
 namespace AliyunsmsBundle\Http\Api\V1\Action;
 
 use AliyunsmsBundle\Services\SignService;
+use AliyunsmsBundle\Services\SmsSignMapper;
 use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
@@ -105,10 +106,13 @@ class Sign extends Controller
         $companyId = app('auth')->user()->get('company_id');
         $id = $request->input('id');
         $signService = new SignService();
-        $data = $signService->getInfo(['id' => $id]);
-        if ($data) {
-            $data['third_party'] = $data['third_party'] == 1 ? 'true' : 'false';
+        $data = $signService->getInfo(['id' => $id, 'company_id' => $companyId]);
+        if (!$data) {
+            throw new ResourceException('签名不存在');
         }
+        $mapper = new SmsSignMapper();
+        $data['third_party'] = $mapper->normalizeThirdPartyBool($data['third_party']) ? 'true' : 'false';
+
         return $this->response->array($data);
     }
 
@@ -163,7 +167,8 @@ class Sign extends Controller
             throw new ResourceException('申请说明长度不超过200个字符');
         }
         $params['company_id'] = $companyId;
-        $params['third_party'] = $params['third_party'] == 'true' ? true : false;
+        $mapper = new SmsSignMapper();
+        $params['third_party'] = $mapper->normalizeThirdPartyBool($params['third_party']);
         $signService = new SignService();
         $signService->addSign($params);
         return $this->response->array(['status' => true]);
@@ -216,7 +221,8 @@ class Sign extends Controller
             throw new ResourceException('申请说明长度不超过200个字符');
         }
         $params['company_id'] = $companyId;
-        $params['third_party'] = $params['third_party'] == 'true' ? true : false;
+        $mapper = new SmsSignMapper();
+        $params['third_party'] = $mapper->normalizeThirdPartyBool($params['third_party']);
         $signService = new SignService();
         $signService->modifySign($params);
         return $this->response->array(['status' => true]);
@@ -256,6 +262,18 @@ class Sign extends Controller
         $filter['id'] = $id;
         $signService->deleteSign($filter);
         return $this->response->array(['status' => true]);
+    }
+
+    public function syncSign(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        $signService = new SignService();
+        $signService->submitSyncSigns($companyId);
+
+        return $this->response->array([
+            'status' => true,
+            'message' => '同步任务已提交',
+        ]);
     }
 
 }

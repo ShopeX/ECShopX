@@ -169,7 +169,7 @@ class Category extends BaseController
         }
 
         if ($result) {
-            $pageIds = array_filter(array_column($result, 'customize_page_id'));
+                $pageIds = array_values(array_filter(array_column($result, 'customize_page_id')));
             if ($pageIds) {
                 $pageFilter = [
                     'company_id' => $company_id,

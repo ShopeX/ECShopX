@@ -748,6 +748,106 @@ setup_nuxt() {
 }
 
 # ---------------------------------------------------------------------------
+# 开源安装统计上报（与 dev-setup.sh 同逻辑）
+# ---------------------------------------------------------------------------
+
+open_source_stat_md5_upper() {
+    local data="$1"
+    if command -v md5sum &>/dev/null; then
+        printf '%s' "$data" | md5sum | awk '{print toupper($1)}'
+    elif command -v md5 &>/dev/null; then
+        printf '%s' "$data" | md5 -q | tr '[:lower:]' '[:upper:]'
+    else
+        echo ""
+    fi
+}
+
+open_source_stat_sign() {
+    local secret="$1"
+    local product="$2"
+    local instance_id="$3"
+    local version="$4"
+    local timestamp="$5"
+    local s="instance_id${instance_id}product${product}timestamp${timestamp}version${version}"
+    open_source_stat_md5_upper "${secret}${s}${secret}"
+}
+
+escape_json_string() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    printf '%s' "$s"
+}
+
+get_ecshopx_version_from_composer() {
+    local f="${SITE_ROOT}/composer.json"
+    local v=""
+    [ -r "$f" ] || {
+        echo "0.0.0"
+        return 0
+    }
+    # Prefer PHP only if it actually runs
+    if [ -n "${PHP_BIN:-}" ] && [ -x "$PHP_BIN" ] && "$PHP_BIN" -r 'echo 1;' >/dev/null 2>&1; then
+        v=$("$PHP_BIN" -r '$j=json_decode(file_get_contents($argv[1]),true);echo isset($j["version"])?(string)$j["version"]:"";' "$f" 2>/dev/null || true)
+    elif command -v php >/dev/null 2>&1 && php -r 'echo 1;' >/dev/null 2>&1; then
+        v=$(php -r '$j=json_decode(file_get_contents($argv[1]),true);echo isset($j["version"])?(string)$j["version"]:"";' "$f" 2>/dev/null || true)
+    fi
+    if [ -z "$v" ]; then
+        v=$(sed -n '1,40s/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | head -1)
+    fi
+    [ -n "$v" ] || v="0.0.0"
+    echo "$v"
+}
+
+get_open_source_instance_id() {
+    local mac="" f
+    if [[ "${OSTYPE:-}" == darwin* ]]; then
+        mac=$(ifconfig 2>/dev/null | awk '/ether/ {print tolower($2); exit}' || true)
+    else
+        for f in /sys/class/net/*/address; do
+            [ ! -f "$f" ] && continue
+            case "$f" in
+                */lo/address) continue ;;
+            esac
+            mac=$(tr '[:upper:]' '[:lower:]' <"$f" || true)
+            [ -n "$mac" ] && [ "$mac" != "00:00:00:00:00:00" ] && break
+        done
+    fi
+    if [ -z "$mac" ]; then
+        mac=$(hostname 2>/dev/null || echo "unknown")
+    fi
+    echo "${mac:0:64}"
+}
+
+report_open_source_install_stat() {
+    local gateway="https://gwnextapi.shopex.cn"
+    local secret="aF3dG6hJ1kL9zXcV4bN2mQ"
+    ([ -z "$gateway" ] || [ -z "$secret" ]) && return 0
+    command -v curl &>/dev/null || return 0
+
+    local product="echopx"
+    local instance_id version timestamp sign base url inst_esc ver_esc body
+    instance_id=$(get_open_source_instance_id)
+    version=$(get_ecshopx_version_from_composer)
+    timestamp=$(date +%s)
+    sign=$(open_source_stat_sign "$secret" "$product" "$instance_id" "$version" "$timestamp")
+    [ -z "$sign" ] && return 0
+
+    base="${gateway%/}"
+    url="${base}/usercenter/open_source/stat/report"
+    inst_esc=$(escape_json_string "$instance_id")
+    ver_esc=$(escape_json_string "$version")
+    body=$(printf '{"product":"%s","instance_id":"%s","version":"%s","timestamp":%s,"sign":"%s"}' \
+        "$product" "$inst_esc" "$ver_esc" "$timestamp" "$sign")
+
+    log "上报开源安装统计..."
+    curl -sS --max-time 15 -o /dev/null -X POST "$url" \
+        -H 'Content-Type: application/json' \
+        -d "$body" 2>/dev/null || true
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
 main() {
@@ -777,6 +877,7 @@ main() {
     log "  安装日志:  $LOG_FILE"
     log "=============================================="
     log "======== 安装结束 $(date '+%Y-%m-%d %H:%M:%S') ========"
+    report_open_source_install_stat
 }
 
 main "$@"

@@ -85,18 +85,6 @@ trait MemberSearchFilter
         $shopIds = isset($postdata['shop_id']) ? $postdata['shop_id'] : 0;
         $distributorIds = isset($postdata['distributor_id']) ? $postdata['distributor_id'] : 0;
 
-        if (!$shopIds && !$distributorIds && ($authData['operator_type'] ?? '') == 'distributor') {
-            $shopIds = isset($authData['shop_ids']) ? $authData['shop_ids'] : [];
-            if ($shopIds) {
-                $shopIds = array_column($shopIds, 'shop_id');
-            }
-
-            $distributorIds = isset($authData['distributor_ids']) ? $authData['distributor_ids'] : [];
-            if ($distributorIds) {
-                $distributorIds = array_column($distributorIds, 'distributor_id');
-            }
-        }
-
         $filter['company_id'] = $authData['company_id'];
         $filter['shop_id'] = $shopIds;
         $filter['distributor_id'] = $distributorIds;

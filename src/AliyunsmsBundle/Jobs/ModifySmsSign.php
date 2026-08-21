@@ -17,6 +17,7 @@
 
 namespace AliyunsmsBundle\Jobs;
 
+use AliyunsmsBundle\Services\SmsSignMapper;
 use EspierBundle\Jobs\Job;
 use PromotionsBundle\Services\SmsDriver\AliyunSmsClient;
 
@@ -31,18 +32,21 @@ class ModifySmsSign extends Job
 
     public function handle()
     {
-        $addSmsSignJob = new AddSmsSign();
-        $client = new AliyunSmsClient($this->params['company_id']);
-        if ($this->params['sign_file'] ?? 0) {
-            $this->params['sign_file'] = $addSmsSignJob->getImg($this->params['sign_file']);
-        }
-        if ($this->params['delegate_file'] ?? 0) {
-            $this->params['delegate_file'] = $addSmsSignJob->getImg($this->params['delegate_file']);
-        }
-        if(!isset($this->params['sign_file']) && !isset($this->params['delegate_file'])) {
-            $this->params['sign_file'] = $addSmsSignJob->getImg($addSmsSignJob->defaultImg);
-        }
-        $result = $client->modifySmsSign($this->params);
+        $mapper = new SmsSignMapper();
+        $params = [
+            'sign_name' => $this->params['sign_name'],
+            'sign_source' => $this->params['sign_source'],
+            'remark' => $this->params['remark'],
+            'third_party' => $mapper->normalizeThirdPartyBool($this->params['third_party']),
+            'qualification_id' => $this->params['qualification_id'],
+        ];
+        $this->makeClient()->updateSmsSign($params);
+
         return true;
+    }
+
+    protected function makeClient(): AliyunSmsClient
+    {
+        return new AliyunSmsClient($this->params['company_id']);
     }
 }

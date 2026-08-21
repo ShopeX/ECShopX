@@ -359,10 +359,6 @@ class Members extends Controller
             throw new ResourceException($error);
         }
         $filter = $this->dataFilter($postdata, $authdata);
-        $user = app('auth')->user();
-        if ($user->get('operator_type') == 'distributor') { //店铺端
-            $filter['op_distributor'] = $user->get('distributor_id');
-        }
         if (isset($postdata['inviter_mobile']) && $postdata['inviter_mobile']) {
             $inviterId = $this->memberService->getUserIdByMobile($postdata['inviter_mobile'], $authdata['company_id']);
             $filter['inviter_id'] = $inviterId ?: '-1';

@@ -731,7 +731,7 @@ class PagesTemplateServices
         $data = [];
 
         //获取模板设置
-        $pages_template_set_info = $this->pagesTemplateSetRepository->getInfo(['company_id' => $company_id]);
+        $pages_template_set_info = $this->pagesTemplateSetRepository->getInfo(['company_id' => $company_id, 'regionauth_id' => $regionauth_id, 'pages_template_id' => 0]);
         if (empty($pages_template_set_info['index_type'])) {
             return $data;
         }
@@ -756,11 +756,15 @@ class PagesTemplateServices
                     'weapp_pages' => $weapp_pages
                 ];
             } else {
+                // 店铺首页固定读取 distributor_index 页（与 shopDetail/shopContent 一致）
+                if ($weapp_pages == 'index') {
+                    $weapp_pages = 'distributor_index';
+                }
                 $filter = [
                     'company_id' => $params['company_id'],
                     'distributor_id' => $distributor_id,
                     'status' => 1,
-                    // 'weapp_pages' => $weapp_pages // # 暂时把页面查询条件取消 by ECX-8045 店铺首页页面空白
+                    'weapp_pages' => $weapp_pages,
                 ];
             }
         }

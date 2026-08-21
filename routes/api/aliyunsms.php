@@ -12,12 +12,14 @@ $api->version('v1', function($api) {
         $api->post('/sign/add', ['name' => '新增签名', 'middleware' => 'activated', 'as' => 'aliyunsms.sign.add', 'uses' => 'Sign@addSign']);
         $api->post('/sign/modify', ['name' => '修改签名', 'middleware' => 'activated', 'as' => 'aliyunsms.sign.modify', 'uses' => 'Sign@modifySign']);
         $api->delete('/sign/delete/{id}', ['name' => '删除签名', 'middleware' => 'activated', 'as' => 'aliyunsms.sign.delete', 'uses' => 'Sign@deleteSign']);
+        $api->post('/sign/sync', ['name' => '同步签名', 'middleware' => 'activated', 'as' => 'aliyunsms.sign.sync', 'uses' => 'Sign@syncSign']);
 
         //模板
          $api->get('/template/list', ['name' => '模板列表', 'middleware' => 'activated', 'as' => 'aliyunsms.tmpl.getList', 'uses' => 'Template@getList']);
          $api->get('/template/info', ['name' => '模板详情', 'middleware' => 'activated', 'as' => 'aliyunsms.tmpl.getInfo', 'uses' => 'Template@getInfo']);
          $api->post('/template/add', ['name' => '新增模板', 'middleware' => 'activated', 'as' => 'aliyunsms.tmpl.add', 'uses' => 'Template@addTemplate']);
          $api->post('/template/modify', ['name' => '修改模板', 'middleware' => 'activated', 'as' => 'aliyunsms.tmpl.modify', 'uses' => 'Template@modifyTemplate']);
+         $api->post('/template/sync', ['name' => '同步模板', 'middleware' => 'activated', 'as' => 'aliyunsms.tmpl.sync', 'uses' => 'Template@syncTemplate']);
         $api->delete('/template/delete/{id}', ['name' => '删除模板', 'middleware' => 'activated', 'as' => 'aliyunsms.tmpl.delete', 'uses' => 'Template@deleteTemplate']);
 
          //短信场景

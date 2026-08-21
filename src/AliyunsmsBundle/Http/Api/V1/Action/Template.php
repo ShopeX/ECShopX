@@ -81,6 +81,13 @@ class Template extends Controller
         if($params['template_type'] ?? 0) {
             $filter['template_type'] = $params['template_type'];
         }
+        if(isset($params['scene_id_assigned']) && $params['scene_id_assigned'] !== '') {
+            if ((string) $params['scene_id_assigned'] === '1') {
+                $filter['scene_id|gt'] = 0;
+            } elseif ((string) $params['scene_id_assigned'] === '0') {
+                $filter['scene_id'] = 0;
+            }
+        }
         if($params['scene_id'] ?? 0) {
             // $memberRelScenes这5个会员营销相关场景需要可以发普通短信也能发推广短信
             $sceneService = (new SceneService());
@@ -170,7 +177,6 @@ class Template extends Controller
             'template_type' => ['required|integer|min:0|max:2', '模板类型有误'],
             'remark' => ['required', '申请说明必填'],
             'template_content' => ['required', '模板内容必填'],
-            'scene_id' => ['required', '短信场景必填'],
             'related_sign_name' => ['required', '关联签名必填'],
         ];
         $errorMessage = validator_params($params, $rules);
@@ -254,10 +260,25 @@ class Template extends Controller
         if( mb_strlen($params['remark']) < 1 || mb_strlen($params['remark']) > 100) {
             throw new ResourceException('申请说明有效长度1-100个字符');
         }
+        if (!isset($params['scene_id']) || $params['scene_id'] === '') {
+            throw new ResourceException('短信场景必填');
+        }
         $params['company_id'] = $companyId;
         $templateServic = new TemplateService();
         $templateServic->modifyTemplate($params);
         return $this->response->array(['status' => true]);
+    }
+
+    public function syncTemplate(Request $request)
+    {
+        $companyId = app('auth')->user()->get('company_id');
+        $templateService = new TemplateService();
+        $templateService->submitSyncTemplates($companyId);
+
+        return $this->response->array([
+            'status' => true,
+            'message' => '同步任务已提交',
+        ]);
     }
 
     /**

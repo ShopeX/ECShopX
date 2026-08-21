@@ -1186,6 +1186,10 @@ class OrderService
             $distributorInfo = $distributorRepository->getInfoById($params['distributor_id']);
         }
 
+        $orderData['is_ziti'] = (bool) $distributorInfo['is_ziti'];
+        $orderData['is_self_delivery'] = (bool) $distributorInfo['is_self_delivery'];
+        $orderData['merchant_freight_fee'] = $this->getMerchantFreightFee($orderData, $params, $distributorInfo);
+
         $orderData['freight_fee'] = 0;
         if ($params['receipt_type'] == OrderReceiptTypeConstant::LOGISTICS) {
             //是否需要计算运费
@@ -1282,15 +1286,8 @@ class OrderService
                 if ($orderData['total_fee'] < bcmul($setting['min_amount'], 100)) {
                     throw new ResourceException(trans('OrdersBundle/Order.order_amount_requirement_for_self_delivery', ['{0}' => $setting['min_amount']]));
                 }
-                $rules = $setting['rule'] ?? [];
-                $freight_fee = $setting['freight_fee'];
-                foreach ($rules as $rule) {
-                    if ($orderData['total_fee'] >= bcmul($rule['full'], 100)) {
-                        $freight_fee = $rule['freight_fee'];
-                    }
-                }
                 $orderData['self_delivery_status'] = 'CONFIRMING';
-                $orderData['freight_fee'] = bcmul($freight_fee, 100);
+                $orderData['freight_fee'] = $orderData['merchant_freight_fee'];
                 $orderData['total_fee'] = $orderData['total_fee'] > 0 ? $orderData['total_fee'] + $orderData['freight_fee'] : 0; // 订单总金额
 
             } else {
@@ -1364,6 +1361,34 @@ class OrderService
         }
 
         return $orderData;
+    }
+
+    /**
+     * 计算商家自配送运费（不包含订单总额），未开启自配送时返回 null
+     *
+     * @return string|null
+     */
+    private function getMerchantFreightFee($orderData, $params, $distributorInfo)
+    {
+        if (empty($distributorInfo['is_self_delivery'])) {
+            return null;
+        }
+
+        $selfDeliveryService = new selfDeliveryService();
+        $setting = $selfDeliveryService->getSelfDeliverySetting($params['company_id'], $params['distributor_id'], $distributorInfo['distributor_self']);
+        if (!$setting || $setting['is_open'] != 'true') {
+            return null;
+        }
+
+        $freight_fee = $setting['freight_fee'];
+        $rules = $setting['rule'] ?? [];
+        foreach ($rules as $rule) {
+            if ($orderData['total_fee'] >= bcmul($rule['full'], 100)) {
+                $freight_fee = $rule['freight_fee'];
+            }
+        }
+
+        return bcmul($freight_fee, 100);
     }
 
     /**
@@ -2076,6 +2101,8 @@ class OrderService
                 $orderData['max_point'] = $usePoint['max_point'];// 本单会员最大可抵扣积分
                 $orderData['limit_point'] = $usePoint['limit_point'];// 本单最大可抵扣积分
                 $orderData['max_uppoint'] = $usePoint['max_uppoint'];// 本单最大升值积分
+                $orderData['max_point_ziti'] = 0;// 积分翻倍活动下无自提积分
+                $orderData['max_point_merchant'] = 0;// 积分翻倍活动下无商家自配送积分
             } else {
                 $usePoint = $pointRuleService->orderMaxPoint($params['company_id'], $memberPoint, $orderData['total_fee'], $orderData, $orderData['freight_fee']);
                 // 使用计算的最大积分数尝试，返回的实际抵扣积分为最大可使用积分
@@ -2094,6 +2121,10 @@ class OrderService
                     $orderData['max_point_ziti'] = $usePoint['max_point_ziti'];// 本单会员最大可抵扣积分(自提)
                 }
                 $orderData['limit_point'] = $usePoint['limit_point'];// 本单最大可抵扣积分
+                $orderData['max_point_merchant'] = empty($orderData['is_self_delivery']) ? 0 : $usePoint['max_point_merchant'];// 本单会员最大可抵扣积分(商家自配送)
+                if (empty($orderData['is_ziti'])) {
+                    $orderData['max_point_ziti'] = 0;// 自提关闭时，自提最大可抵扣积分为 0
+                }
             }
 
             $orderData['is_open_deduct_point'] = true;
@@ -2110,6 +2141,8 @@ class OrderService
             ];
             $orderData['max_point'] = 0;
             $orderData['limit_point'] = 0;
+            $orderData['max_point_ziti'] = 0;
+            $orderData['max_point_merchant'] = 0;
             $orderData['is_open_deduct_point'] = false;
         }
         //是否使用积分抵扣

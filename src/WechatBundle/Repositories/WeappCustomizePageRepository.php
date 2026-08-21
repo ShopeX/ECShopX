@@ -182,6 +182,7 @@ class WeappCustomizePageRepository extends EntityRepository
                 $qb = $qb->andWhere($qb->expr()->$k($v, $qb->expr()->literal($value)));
                 continue;
             } elseif (is_array($value)) {
+                $value = array_values($value);
                 // 检查是否是操作符格式 [操作符, 值]，如 ['!=', '183']
                 if (count($value) == 2 && is_string($value[0]) && in_array($value[0], ['!=', '<>', '>', '<', '>=', '<='])) {
                     $operator = $value[0];

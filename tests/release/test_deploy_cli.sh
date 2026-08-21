@@ -23,6 +23,18 @@ grep -q 'deploy_ensure_bind_mount_traverse' "$DEPLOY" || {
   echo "FAIL deploy.sh must ensure bind-mount traverse perms for www-data"
   exit 1
 }
+grep -q 'report_open_source_install_stat' "$DEPLOY" || {
+  echo "FAIL deploy.sh must report open-source install stats"
+  exit 1
+}
+grep -q 'gwnextapi.shopex.cn' "$DEPLOY" || {
+  echo "FAIL deploy.sh must POST to open_source stat gateway"
+  exit 1
+}
+grep -q 'usercenter/open_source/stat/report' "$DEPLOY" || {
+  echo "FAIL deploy.sh must use open_source stat report path"
+  exit 1
+}
 if grep -E 'docker-compose\.dev\.yml|docker-dev/' "$DEPLOY" | grep -vE '^\s*#' >/dev/null; then
   echo "FAIL deploy.sh must not depend on docker-compose.dev.yml or docker-dev/"
   exit 1

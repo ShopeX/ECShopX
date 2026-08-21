@@ -19,16 +19,13 @@ release_init_paths() {
 
 release_read_product_version() {
   local composer_json=$1
+  local ver=""
   if [ ! -f "$composer_json" ]; then
     release_log_error "composer.json not found: $composer_json"
     return 1
   fi
-  # Prefer PHP for reliable JSON; fallback to sed for minimal envs in unit tests
-  if command -v php >/dev/null 2>&1; then
-    php -r '$j=json_decode(file_get_contents($argv[1]), true); if (!isset($j["version"])) exit(1); echo $j["version"];' "$composer_json"
-    return
-  fi
-  local ver
+  # sed only — lite deploy must not invoke host php (may be broken/unrelated on PATH).
+  # Runtime PHP lives in the app container; pack.sh still requires host php for composer.
   ver=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$composer_json" | head -1)
   if [ -z "$ver" ]; then
     release_log_error "cannot parse version from $composer_json"

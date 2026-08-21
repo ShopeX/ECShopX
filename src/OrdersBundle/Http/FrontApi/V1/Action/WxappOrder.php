@@ -691,6 +691,8 @@ class WxappOrder extends Controller
      *                 @SWG\Property(property="user_point", type="integer", description="用户积分"),
      *                 @SWG\Property(property="max_point", type="integer", description="本单会员最大可抵扣积分"),
      *                 @SWG\Property(property="limit_point", type="integer", description="本单最大可抵扣积分"),
+     *                 @SWG\Property(property="max_point_ziti", type="integer", description="自提最大可抵扣积分，自提关闭时为 0"),
+     *                 @SWG\Property(property="max_point_merchant", type="integer", description="商家自配送最大可抵扣积分，商家自配送关闭时为 0"),
      *                 @SWG\Property(
      *                     property="items",
      *                     type="array",
