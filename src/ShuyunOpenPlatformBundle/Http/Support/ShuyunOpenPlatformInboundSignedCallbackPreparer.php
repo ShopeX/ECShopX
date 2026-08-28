@@ -6,6 +6,8 @@ namespace ShuyunOpenPlatformBundle\Http\Support;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use ShuyunOpenPlatformBundle\Auth\CacheShuyunCallbackNonceStore;
+use ShuyunOpenPlatformBundle\Auth\ShuyunCallbackNonceStoreInterface;
 use ShuyunOpenPlatformBundle\Auth\ShuyunCallbackSignatureVerifier;
 use ShuyunOpenPlatformBundle\Entities\CompanyShuyunOpenPlatformConfig;
 use ShuyunOpenPlatformBundle\Repositories\CompanyShuyunOpenPlatformConfigRepository;
@@ -90,7 +92,8 @@ final class ShuyunOpenPlatformInboundSignedCallbackPreparer
 
         $sign = $this->resolveCallbackSign($request);
         $verifier = new ShuyunCallbackSignatureVerifier();
-        if (!$verifier->verifyHttpCallback($callbackSecret, $request, $sign)) {
+        $nonceStore = $this->resolveCallbackNonceStore($request);
+        if (!$verifier->verifyHttpCallback($callbackSecret, $request, $sign, $nonceStore)) {
             return $this->invalidSignResponse($mode);
         }
 
@@ -154,6 +157,18 @@ final class ShuyunOpenPlatformInboundSignedCallbackPreparer
         }
 
         return '';
+    }
+
+    private function resolveCallbackNonceStore(Request $request): ?ShuyunCallbackNonceStoreInterface
+    {
+        foreach (['SY-Request-Nonce', 'Sy-Request-Nonce'] as $name) {
+            $nonce = $request->headers->get($name);
+            if ($nonce !== null && trim($nonce) !== '') {
+                return new CacheShuyunCallbackNonceStore(app('cache.store'));
+            }
+        }
+
+        return null;
     }
 
     /**

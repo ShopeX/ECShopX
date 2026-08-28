@@ -365,24 +365,32 @@ class Coupon extends Controller
         $discountCardService = new KaquanService(new CardService());
         //这个条件没想好怎么用criteria来组织, 先用SQL来处理
         $conn = app('registry')->getConnection('default');
-        $sql = "select card_id,title,description,discount,distributor_id,card_type from kaquan_discount_cards where company_id = " . $companyId;
+        $sql = 'select card_id,title,description,discount,distributor_id,card_type from kaquan_discount_cards where company_id = ?';
+        $queryParams = [(int) $companyId];
         if ($params['distributor_id'] ?? 0) {
-            $distributor_ids = explode(',', $params['distributor_id']);
-            $sql .= " and ( distributor_id = ','";
-            $orFilter = "";
-            foreach ($distributor_ids as $k => $distributor_id) {
-                $orFilter .= " or distributor_id like '%,".$distributor_id.",%'";
+            $distributor_ids = array_filter(explode(',', (string) $params['distributor_id']), static function ($value) {
+                return $value !== '';
+            });
+            if ($distributor_ids !== []) {
+                $orConditions = ['distributor_id = ?'];
+                $queryParams[] = ',';
+                foreach ($distributor_ids as $distributor_id) {
+                    $orConditions[] = 'distributor_id like ?';
+                    $queryParams[] = '%,' . $distributor_id . ',%';
+                }
+                $sql .= ' and (' . implode(' or ', $orConditions) . ')';
             }
-            $sql .= $orFilter . ")";
         }
-        $sql .= " order by created desc";
+        $sql .= ' order by created desc';
         if (isset($params['page_no']) && isset($params['page_size'])) {
-            $count = $params['page_size'];
-            $offset = ($params['page_no'] - 1) * $count;
-            $sql .= " limit ". $offset . "," . $count;
+            $count = (int) $params['page_size'];
+            $offset = ((int) $params['page_no'] - 1) * $count;
+            $sql .= ' limit ?, ?';
+            $queryParams[] = $offset;
+            $queryParams[] = $count;
         }
         try {
-            $return['list'] = $conn->executeQuery($sql)->fetchAll();
+            $return['list'] = $conn->executeQuery($sql, $queryParams)->fetchAll();
         } catch (\Exception $e) {
             $this->api_response('fail', $e->getMessage(), null, 'E0001');
         }

@@ -133,9 +133,13 @@ class TranscriptPropertiesRepository extends EntityRepository
     /**
      * 删除
      */
-    public function deleteAllBy($transcript_id)
+    public function deleteAllBy($transcript_id, $companyScope)
     {
-        $delTranscriptPropsEntity = $this->findBy(['transcript_id' => $transcript_id]);
+        $companyId = is_array($companyScope) ? (int) ($companyScope['company_id'] ?? 0) : (int) $companyScope;
+        $delTranscriptPropsEntity = $this->findBy([
+            'transcript_id' => $transcript_id,
+            'company_id' => $companyId,
+        ]);
         if (!$delTranscriptPropsEntity) {
             return false;
         }

@@ -70,6 +70,7 @@ $app->configure('app');
 $app->configure('bank');
 $app->configure('common');
 $app->configure('crm');
+$app->configure('customs');
 $app->configure('doumen_intl');
 $app->configure('licensegateway');
 $app->configure('openapi');
@@ -124,6 +125,7 @@ $app->routeMiddleware([
     'apicache' => EspierBundle\Middleware\ApiCacheMiddleWare::class, // api缓存中间件
     'frontnoauth' => EspierBundle\Middleware\FrontNoAuthMiddleWare::class, // 小程序、pc、h5无需验证中间件
     'frontmerchantauth' => EspierBundle\Middleware\FrontMerchantAuthMiddleWare::class, // h5商户验证中间件
+    'frontselfdelivery' => EspierBundle\Middleware\FrontSelfDeliveryStaffMiddleWare::class, // 自配送员 front 操作门控
     'ShopexErpCheck' => SystemLinkBundle\Middleware\ShopexErpCheck::class, // erp连接中间件
     'superguard' => EspierBundle\Middleware\SuperAccountGuardMiddleWare::class,
     'shoplog' => EspierBundle\Middleware\ShopLogMiddleWare::class, // 商家操作日志中间件
@@ -131,6 +133,7 @@ $app->routeMiddleware([
     'shoplogin' => EspierBundle\Middleware\ShopLoginMiddleWare::class, // 商家操作日志中间件
     'servicesign' => EspierBundle\Middleware\ServiceSignMiddleWare::class, // 接口签名中间件
     'ShopexSaasErpCheck' => ThirdPartyBundle\Middleware\ShopexSaasErpCheck::class, // saaserp中间件
+    'Kuaizhen580CallbackCheck' => ThirdPartyBundle\Middleware\Kuaizhen580CallbackCheck::class, // 快诊580回调验签
     'SystemLinkOpenapiCheck' => SystemLinkBundle\Middleware\OpenApiCheck::class,
     'OpenapiCheck' => OpenapiBundle\Middleware\OpenapiCheck::class, // openapi中间件
     'DadaApiCheck' => ThirdPartyBundle\Middleware\DadaApiCheck::class, // 达达配送中间件
@@ -138,6 +141,7 @@ $app->routeMiddleware([
     'OpenapiCommonCheck' => OpenapiBundle\Middleware\OpenapiCommonCheck::class,
     'datapass' => EspierBundle\Middleware\DataPassMiddleWare::class, // 达达日志中间件
     'JushuitanCheck' => SystemLinkBundle\Middleware\JushuitanCheck::class,// 聚水潭中间件
+    'BlockErpTestRoutes' => EspierBundle\Middleware\BlockErpTestRoutesMiddleware::class, // ERP test 路由防护
 ]);
 
 /*

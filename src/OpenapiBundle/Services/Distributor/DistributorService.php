@@ -17,6 +17,8 @@
 
 namespace OpenapiBundle\Services\Distributor;
 
+use CompanysBundle\Entities\Operators;
+use CompanysBundle\Services\OperatorDistributorNameSyncService;
 use Dingo\Api\Exception\ResourceException;
 use DistributionBundle\Entities\Distributor;
 use DistributionBundle\Services\DistributorItemsService;
@@ -266,6 +268,7 @@ class DistributorService extends BaseService
         // 获取企业id与店铺id
         $companyId = (int)$distributorInfo["company_id"];
         $distributorId = (int)$distributorInfo["distributor_id"];
+        $oldName = (string)($distributorInfo['name'] ?? '');
         $params = [];
         // 店铺号
         if (isset($updateData["shop_code"])) {
@@ -327,6 +330,11 @@ class DistributorService extends BaseService
                 $result = parent::updateDetail($filter, $params);
             } catch (ResourceException $exception) {
                 throw new ErrorException(ErrorCode::DISTRIBUTOR_NOT_FOUND);
+            }
+            if (isset($params['name']) && (string)$params['name'] !== $oldName) {
+                (new OperatorDistributorNameSyncService(
+                    app('registry')->getManager('default')->getRepository(Operators::class)
+                ))->syncIfNameChanged($companyId, $distributorId, $oldName, (string)$params['name']);
             }
             (new \DistributionBundle\Services\DistributorService())->dispatchEventsWhenUpdate($result);
             return $result;

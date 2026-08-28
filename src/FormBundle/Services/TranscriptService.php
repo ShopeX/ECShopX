@@ -19,6 +19,7 @@ namespace FormBundle\Services;
 
 use FormBundle\Entities\Transcripts;
 use FormBundle\Entities\TranscriptProperties;
+use FormBundle\Support\FormTenantScopeGuard;
 
 class TranscriptService
 {
@@ -79,11 +80,14 @@ class TranscriptService
      */
     public function update($params)
     {
+        $companyId = (int) $params['company_id'];
+        FormTenantScopeGuard::assertTranscriptIdBelongsToCompany($companyId, $params['transcript_id']);
+
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
             $data = [
-                'company_id' => $params['company_id'],
+                'company_id' => $companyId,
                 'transcript_name' => $params['transcript_name'],
                 'transcript_status' => isset($params['transcript_status']) ? $params['transcript_status'] : 'off',
                 'template_name' => $params['template_name'],
@@ -105,7 +109,12 @@ class TranscriptService
                     }
                 }
             } else {
-                $newTtranscriptPropIds = array_column($params['evaluateItems'], 'prop_id');
+                $newTtranscriptPropIds = array_filter(array_column($params['evaluateItems'], 'prop_id'));
+                FormTenantScopeGuard::assertTranscriptPropertyIdsBelongToTranscript(
+                    $companyId,
+                    (int) $params['transcript_id'],
+                    $newTtranscriptPropIds
+                );
                 $oldTtranscriptPropIds = array_column($oldTtranscriptProps, 'prop_id');
                 $delTtranscriptPropIds = array_diff($oldTtranscriptPropIds, $newTtranscriptPropIds);
                 if ($delTtranscriptPropIds) {
@@ -156,13 +165,18 @@ class TranscriptService
      *
      * 删除成绩单
      */
-    public function delete($transcriptId)
+    public function delete($companyId, $transcriptId)
     {
+        $companyId = (int) $companyId;
+        FormTenantScopeGuard::assertTranscriptIdBelongsToCompany($companyId, $transcriptId);
+
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
-            $this->transcriptsRepository->delete($transcriptId);
-            $result = $this->transcriptPropsRepository->deleteAllBy($transcriptId);
+            $this->transcriptsRepository->delete($transcriptId, $companyId);
+            $result = $this->transcriptPropsRepository->deleteAllBy($transcriptId, [
+                'company_id' => $companyId,
+            ]);
             $conn->commit();
             return ['status' => $result];
         } catch (\Exception $e) {

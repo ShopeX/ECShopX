@@ -162,6 +162,15 @@ class DistributorCartObject implements CartInterface
 
     public function formatCartList($companyId, $userId, $cartData, $isCheckout = false, $userDevice = 'miniprogram')
     {
+        $profileStartedAt = microtime(true);
+        $profileLog = function (string $stage, array $context = []) use ($profileStartedAt, $companyId) {
+            app('log')->info('[CART_PERF] promotion_' . $stage, array_merge($context, [
+                'company_id' => $companyId,
+                'elapsed_ms' => round((microtime(true) - $profileStartedAt) * 1000, 2),
+            ]));
+        };
+        $profileLog('start', ['valid_count' => count($cartData['valid_cart'] ?? [])]);
+
         if ($userDevice != 'pc') {
             $limitedTimeSalelimit = [];
             foreach ($cartData['valid_cart'] as $key => $cartRow) {
@@ -170,7 +179,13 @@ class DistributorCartObject implements CartInterface
                     continue;
                 }
                 // 目前在有效商品中进行处理，后续对有时间，放到循环外面处理
-                $activityData = $this->getCurrentActivityByItemId($cartRow['company_id'], $cartRow['item_id'], $cartRow['shop_id'], false);
+                $activityData = $this->getCurrentActivityByItemId(
+                    $cartRow['company_id'],
+                    $cartRow['item_id'],
+                    $cartRow['shop_id'],
+                    false,
+                    $cartRow['item_info'] ?? null
+                );
                 // 如果不是限时优惠，那么则不需要进行处理
                 if (!$activityData || !in_array(($activityData['activity_type'] ?? ''), ['limited_time_sale', 'limited_buy'])) {
                     continue;
@@ -257,6 +272,7 @@ class DistributorCartObject implements CartInterface
                 }
             }
 
+            $profileLog('item_activities_checked');
             if ($limitedTimeSalelimit) {
                 foreach ($limitedTimeSalelimit as $row) {
                     if ($row['limit_money'] > 0 && $row['total_fee'] < $row['limit_money']) {
@@ -273,6 +289,8 @@ class DistributorCartObject implements CartInterface
 
         //获取满减，满折，满赠优惠活动
         $cartData['valid_cart'] = $this->getPromotions($companyId, $userId, $cartData['valid_cart'], $userDevice);
+        $profileLog('marketing_activities_applied', ['valid_count' => count($cartData['valid_cart'])]);
+        $profileLog('done');
 
         return $cartData;
     }
@@ -293,6 +311,7 @@ class DistributorCartObject implements CartInterface
         if (!$activityData) {
             return $cartData;
         }
+        $company = (new CompanysActivationEgo())->check($companyId);
         foreach ($activityData as $activity) {
             $activityId = $activity['marketing_id'];
             $relItems = $activity['items'] ?? [];
@@ -316,7 +335,6 @@ class DistributorCartObject implements CartInterface
                 }
 
                 // 只有平台版才校验活动是哪个店铺添加的
-                $company = (new CompanysActivationEgo())->check($companyId);
                 if ($company['product_model'] == 'platform') {
                     //店铺和平台只能使用各自的活动
                     $cartDistributorId = $cart['shop_id'] ?? 0;

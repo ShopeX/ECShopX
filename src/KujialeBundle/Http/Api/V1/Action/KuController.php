@@ -22,6 +22,7 @@ use KujialeBundle\Repositories\KujialeDesignerWorksRepository;
 use KujialeBundle\Entities\KujialeDesignerWorks;
 use GoodsBundle\Repositories\ItemsRepository;
 use GoodsBundle\Entities\Items;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 use KujialeBundle\Services\KujialeDesignerWorksService;
 
 class KuController extends Controller
@@ -136,6 +137,11 @@ class KuController extends Controller
         }
 
         $designId = $request->input('design_id');
+        $companyId = (int) app('auth')->user()->get('company_id');
+        if ($companyId <= 0) {
+            throw new ResourceException('无法获取公司ID');
+        }
+        GoodsTenantScopeGuard::assertItemIdsBelongToCompany($companyId, $itemIds);
 
         // 检查该 design_id 是否已经绑定过商品（一个 design 只能绑定一个商品）
         // $existingRel = $this->worksItemRelRepository->getInfo(['design_id' => $designId]);
@@ -224,6 +230,10 @@ class KuController extends Controller
         $successCount = 0;
         $failCount = 0;
         $errors = [];
+        $companyId = (int) app('auth')->user()->get('company_id');
+        if ($companyId <= 0) {
+            throw new ResourceException('无法获取公司ID');
+        }
 
         try {
             foreach ($bindings as $index => $binding) {
@@ -262,6 +272,11 @@ class KuController extends Controller
                     $errors[] = "第" . ($index + 1) . "条数据的绑定关系不存在";
                     continue;
                 }
+
+                GoodsTenantScopeGuard::assertCompanyScope(
+                    $this->itemsRepository->getInfo(['item_id' => $itemId]),
+                    $companyId
+                );
 
                 // 删除绑定关系
                 $this->worksItemRelRepository->deleteBy([

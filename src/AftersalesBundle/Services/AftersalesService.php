@@ -18,6 +18,7 @@
 namespace AftersalesBundle\Services;
 
 use AftersalesBundle\Repositories\AftersalesRepository;
+use AftersalesBundle\Support\AftersalesDistributorGate;
 use DistributionBundle\Entities\Distributor;
 use DistributionBundle\Services\DistributorService;
 use MembersBundle\Services\MemberService;
@@ -911,13 +912,14 @@ class AftersalesService
             'aftersales_bn' => $data['aftersales_bn'],
             'company_id' => $data['company_id']
         ];
-        // if ($data['distributor_id'] ?? 0) {
-        //     $filter['distributor_id'] = $data['distributor_id'];
-        // }
         $aftersales = $this->aftersalesRepository->get($filter);
         if (!$aftersales) {
             throw new ResourceException('售后单数据异常');
         }
+        AftersalesDistributorGate::assertOwnStoreAftersales(
+            $aftersales,
+            AftersalesDistributorGate::resolveScopeFromParams($data)
+        );
         if (!in_array($aftersales['aftersales_status'], ['0'])) {
             throw new ResourceException("售后{$data['aftersales_bn']}已处理，无需审核");
         }
@@ -1215,13 +1217,14 @@ class AftersalesService
             'aftersales_bn' => $param['aftersales_bn'],
             'company_id' => $param['company_id']
         ];
-        // if ($param['distributor_id'] ?? 0) {
-        //     $filter['distributor_id'] = $param['distributor_id'];
-        // }
         $aftersales = $this->aftersalesRepository->get($filter);
         if (!$aftersales) {
             throw new ResourceException("需要退款的售后单不存在");
         }
+        AftersalesDistributorGate::assertOwnStoreAftersales(
+            $aftersales,
+            AftersalesDistributorGate::resolveScopeFromParams($param)
+        );
         if (in_array($aftersales['aftersales_status'], [2, 3])) {
             throw new ResourceException("售后单已处理");
         }
@@ -2513,7 +2516,7 @@ class AftersalesService
      *
      * @param array $data 申请的参数
      */
-    public function __checkApply($data, $tradeInfo = [])
+    public function __checkApply($data, $tradeInfo = [], $shareFullDeliveredAftersalesQuantity = false)
     {
         $order_filter = [
             'company_id' => $data['company_id'],
@@ -2713,7 +2716,11 @@ class AftersalesService
                 $delivery_item_num = min(intval($subOrderInfo['delivery_item_num']), intval($subOrderInfo['num']));
                 $cancel_item_num = intval($subOrderInfo['cancel_item_num']);
 
-                if ($data['aftersales_type'] == 'ONLY_REFUND') {
+                if ($data['aftersales_type'] == 'ONLY_REFUND' && $shareFullDeliveredAftersalesQuantity && $orderInfo['delivery_status'] == 'DONE') {
+                    // 后管和店务端整单发货时，仅退款与退货退款共用已发货商品数量
+                    $applied_num = $this->getAppliedNum($data['company_id'], $data['order_id'], $v['id']);
+                    $left_num = $delivery_item_num - intval($applied_num);
+                } elseif ($data['aftersales_type'] == 'ONLY_REFUND') {
                     // 仅退款按未发货数量扣减已申请仅退款数量
                     $applied_num = $this->getAppliedNumByType($data['company_id'], $data['order_id'], $v['id'], 'ONLY_REFUND'); // 已申请数量
                     $left_num = intval($subOrderInfo['num']) - $cancel_item_num - $delivery_item_num - intval($applied_num); // 剩余申请数量
@@ -2723,7 +2730,7 @@ class AftersalesService
                     $left_num = $delivery_item_num - intval($applied_num); // 剩余申请数量
                 }
                 if ($v['num'] > $left_num) {
-                    throw new ResourceException($subOrderInfo['item_name'] . ' 剩余可申请售后的数量为' . $left_num . ',申请售后数量为' . $v['num']. ",已申请售后数量为:".$applied_num);
+                    throw new ResourceException($subOrderInfo['item_name'] . ' 剩余可申请售后的数量为' . $left_num);
                 }
             }
 
@@ -3290,7 +3297,7 @@ class AftersalesService
 
     public function shopApply($data) {
         // 检查是否可以申请售后
-        $this->__checkApply($data);
+        $this->__checkApply($data, [], true);
         $filter = [
             'company_id' => $data['company_id'],
             'order_id' => $data['order_id'],
@@ -3519,7 +3526,7 @@ class AftersalesService
     public function shopApplyByNum($data)
     {
         // 检查是否可以申请售后
-        $this->__checkApply($data);
+        $this->__checkApply($data, [], true);
         $filter = [
             'company_id' => $data['company_id'],
             'order_id' => $data['order_id'],

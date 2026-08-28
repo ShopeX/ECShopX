@@ -13,6 +13,7 @@ use ShuyunOpenPlatformBundle\Repositories\ShuyunOfflineBenefitRepository;
 use ShuyunOpenPlatformBundle\Services\ShuyunOfflineBenefitCallbackService;
 use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformShopSyncService;
 use TestCase;
+use ShuyunOpenPlatformBundle\Auth\ShuyunCallbackSignatureVerifier;
 
 class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
 {
@@ -59,6 +60,33 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
         $shopSync = $this->createMock(ShuyunOpenPlatformShopSyncService::class);
         $shopSync->method('isEligible')->willReturn($eligible);
         $this->app->instance(ShuyunOpenPlatformShopSyncService::class, $shopSync);
+    }
+
+    /**
+     * @param  array<string, scalar|null>  $query
+     */
+    private function signedRequest(string $path, string $body, array $query = [], ?string $nonce = null): Request
+    {
+        static $nonceSeq = 0;
+        $nonce ??= 'offline-benefit-nonce-'.(++$nonceSeq);
+        $time = (string) ((int) floor(microtime(true) * 1000));
+        $draftUri = $path.($query !== [] ? '?'.http_build_query($query) : '');
+
+        $draft = Request::create($draftUri, 'POST', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_SY_REQUEST_TIME' => $time,
+            'HTTP_SY_REQUEST_NONCE' => $nonce,
+        ], $body);
+        $sign = (new ShuyunCallbackSignatureVerifier())->expectedHttpCallbackSign(self::SECRET, $draft);
+        $queryWithSign = array_merge($query, ['sign' => $sign]);
+        $finalUri = $path.'?'.http_build_query($queryWithSign);
+
+        return Request::create($finalUri, 'POST', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_SY_REQUEST_TIME' => $time,
+            'HTTP_SY_REQUEST_NONCE' => $nonce,
+            'HTTP_SY_REQUEST_SIGN' => $sign,
+        ], $body);
     }
 
     public function testMissingAppIdReturns403(): void
@@ -118,18 +146,9 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
             'remark' => '发一张85折优惠券券',
         ], JSON_THROW_ON_ERROR);
 
-        $req = Request::create(
+        $req = $this->signedRequest(
             '/third/shuyun/open-platform/callback/offline-benefit/single-send',
-            'POST',
-            [],
-            [],
-            [],
-            [
-                'CONTENT_TYPE' => 'application/json',
-                'HTTP_SY_REQUEST_TIME' => self::SY_TIME,
-                'HTTP_SY_REQUEST_SIGN' => self::GOOD_SIGN_SY_TIME_ONLY,
-            ],
-            $body
+            $body,
         );
 
         $resp = (new ShuyunOfflineBenefitCallbackController())->singleSend($req);
@@ -164,18 +183,9 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
             ],
         ], JSON_THROW_ON_ERROR);
 
-        $req = Request::create(
+        $req = $this->signedRequest(
             '/third/shuyun/open-platform/callback/offline-benefit/create',
-            'POST',
-            [],
-            [],
-            [],
-            [
-                'CONTENT_TYPE' => 'application/json',
-                'HTTP_SY_REQUEST_TIME' => self::SY_TIME,
-                'HTTP_SY_REQUEST_SIGN' => self::GOOD_SIGN_SY_TIME_ONLY,
-            ],
-            $body
+            $body,
         );
 
         $c = new ShuyunOfflineBenefitCallbackController();
@@ -264,17 +274,10 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
             'endTime' => '2019-10-01 00:00:00',
         ], JSON_THROW_ON_ERROR);
 
-        $req = Request::create(
-            '/third/shuyun/open-platform/callback/offline-benefit/create?appId='.self::APP_ID.'&sign='.self::GOOD_SIGN_APP,
-            'POST',
-            [],
-            [],
-            [],
-            [
-                'CONTENT_TYPE' => 'application/json',
-                'HTTP_SY_REQUEST_TIME' => self::SY_TIME,
-            ],
-            $body
+        $req = $this->signedRequest(
+            '/third/shuyun/open-platform/callback/offline-benefit/create',
+            $body,
+            ['appId' => self::APP_ID],
         );
 
         $c = new ShuyunOfflineBenefitCallbackController();
@@ -300,17 +303,10 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
             'endTime' => '2019-10-01 00:00:00',
         ], JSON_THROW_ON_ERROR);
 
-        $req = Request::create(
-            '/third/shuyun/open-platform/callback/offline-benefit/create?appId='.self::APP_ID.'&sign='.self::GOOD_SIGN_APP,
-            'POST',
-            [],
-            [],
-            [],
-            [
-                'CONTENT_TYPE' => 'application/json',
-                'HTTP_SY_REQUEST_TIME' => self::SY_TIME,
-            ],
-            $body
+        $req = $this->signedRequest(
+            '/third/shuyun/open-platform/callback/offline-benefit/create',
+            $body,
+            ['appId' => self::APP_ID],
         );
 
         $c = new ShuyunOfflineBenefitCallbackController();
@@ -343,17 +339,10 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
             'customerId' => '7895642',
         ], JSON_THROW_ON_ERROR);
 
-        $req = Request::create(
-            '/third/shuyun/open-platform/callback/offline-benefit/single-send?appId='.self::APP_ID.'&sign='.self::GOOD_SIGN_APP,
-            'POST',
-            [],
-            [],
-            [],
-            [
-                'CONTENT_TYPE' => 'application/json',
-                'HTTP_SY_REQUEST_TIME' => self::SY_TIME,
-            ],
-            $body
+        $req = $this->signedRequest(
+            '/third/shuyun/open-platform/callback/offline-benefit/single-send',
+            $body,
+            ['appId' => self::APP_ID],
         );
 
         $c = new ShuyunOfflineBenefitCallbackController();
@@ -384,17 +373,10 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
             'customerId' => '7895642',
         ], JSON_THROW_ON_ERROR);
 
-        $req = Request::create(
-            '/third/shuyun/open-platform/callback/offline-benefit/single-send?appId='.self::APP_ID.'&sign='.self::GOOD_SIGN_APP,
-            'POST',
-            [],
-            [],
-            [],
-            [
-                'CONTENT_TYPE' => 'application/json',
-                'HTTP_SY_REQUEST_TIME' => self::SY_TIME,
-            ],
-            $body
+        $req = $this->signedRequest(
+            '/third/shuyun/open-platform/callback/offline-benefit/single-send',
+            $body,
+            ['appId' => self::APP_ID],
         );
 
         $c = new ShuyunOfflineBenefitCallbackController();
@@ -426,17 +408,10 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
             'customerList' => ['7895642'],
         ], JSON_THROW_ON_ERROR);
 
-        $req = Request::create(
-            '/third/shuyun/open-platform/callback/offline-benefit/batch-send?appId='.self::APP_ID.'&sign='.self::GOOD_SIGN_APP,
-            'POST',
-            [],
-            [],
-            [],
-            [
-                'CONTENT_TYPE' => 'application/json',
-                'HTTP_SY_REQUEST_TIME' => self::SY_TIME,
-            ],
-            $body
+        $req = $this->signedRequest(
+            '/third/shuyun/open-platform/callback/offline-benefit/batch-send',
+            $body,
+            ['appId' => self::APP_ID],
         );
 
         $c = new ShuyunOfflineBenefitCallbackController();
@@ -458,17 +433,10 @@ class ShuyunOfflineBenefitCallbackControllerTest extends TestCase
         $this->app->instance(ShuyunOfflineBenefitCallbackService::class, $service);
 
         $body = json_encode([], JSON_THROW_ON_ERROR);
-        $req = Request::create(
-            '/third/shuyun/open-platform/callback/offline-benefit/create?appId='.self::APP_ID.'&sign='.self::GOOD_SIGN_APP,
-            'POST',
-            [],
-            [],
-            [],
-            [
-                'CONTENT_TYPE' => 'application/json',
-                'HTTP_SY_REQUEST_TIME' => self::SY_TIME,
-            ],
-            $body
+        $req = $this->signedRequest(
+            '/third/shuyun/open-platform/callback/offline-benefit/create',
+            $body,
+            ['appId' => self::APP_ID],
         );
 
         $c = new ShuyunOfflineBenefitCallbackController();

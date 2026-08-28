@@ -6,7 +6,7 @@
  * **出站**：店铺/类目/商品/会员/订单等统一 `platCode=OFFLINE`、`platform: offline`；`shop_id` 为 `{distributor_id}{offline_plat_id_suffix}`（默认 `-off`，见 {@see offline_plat_id_suffix}）。
  * **入站**（等级、线下权益等）：验签用 {@see callback_identity_secret}（合作方「身份注册」密匙），与 DB `app_secret`（出站网关签名）分离。
  * 租户解析：优先 query/body `appId`；否则 body `platCode` 对应 DB `company_shuyun_open_platform_config.plat_code`（开启同步时应为 `OFFLINE`）。
- * Token 回调不验签；{@see callback_identity_secret} 不用于 token 路径。
+ * Token 回调入站验签同 {@see callback_identity_secret}（见 {@see ShuyunOpenPlatformTokenCallbackController}）。
  * 若库中 access_token 为空，出站可回退 {@see fallback_gateway_access_token}（联调/单租户；勿提交真实 token）。
  *
  * @see .tasks/plans/shuyun-open-platform-core.md
@@ -65,6 +65,16 @@ return [
      * 环境变量：SHUYUN_OPEN_PLATFORM_CALLBACK_SIGNATURE_DEBUG_LOG
      */
     'callback_signature_debug_log' => (bool) env('SHUYUN_OPEN_PLATFORM_CALLBACK_SIGNATURE_DEBUG_LOG', false),
+    /**
+     * 入站回调验签 freshness：SY-Request-Time 与服务器时间允许偏差（秒）；超出视为过期拒绝。
+     * 环境变量：SHUYUN_OPEN_PLATFORM_CALLBACK_FRESHNESS_MAX_SKEW_SECONDS
+     */
+    'callback_freshness_max_skew_seconds' => max(1, (int) env('SHUYUN_OPEN_PLATFORM_CALLBACK_FRESHNESS_MAX_SKEW_SECONDS', 300)),
+    /**
+     * 入站回调 nonce（SY-Request-Nonce）去重 TTL（秒）；与 freshness 窗口独立，应 ≥ freshness。
+     * 环境变量：SHUYUN_OPEN_PLATFORM_CALLBACK_NONCE_TTL_SECONDS
+     */
+    'callback_nonce_ttl_seconds' => max(1, (int) env('SHUYUN_OPEN_PLATFORM_CALLBACK_NONCE_TTL_SECONDS', 600)),
     /** 请求体写入日志的最大字节（UTF-8 截断） */
     'gateway_request_log_body_max_bytes' => max(512, (int) env('SHUYUN_OPEN_PLATFORM_GATEWAY_REQUEST_LOG_BODY_MAX_BYTES', 12288)),
     /**

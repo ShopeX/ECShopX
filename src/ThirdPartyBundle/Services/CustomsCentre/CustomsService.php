@@ -33,8 +33,6 @@ class CustomsService
     public $normalOrdersRepository;
     public $customDeclareOrderResultRepository;
 
-    private static $signKey = 'U2FsdGVkX11BC2';
-
     public function __construct()
     {
         $this->repository = app('registry')->getManager('default')->getRepository(CustomsData::class);
@@ -160,7 +158,7 @@ class CustomsService
      */
     private static function genSignKey($timestamp)
     {
-        return strtoupper(md5($timestamp . self::$signKey));
+        return strtoupper(md5($timestamp . config('customs.sign_key')));
     }
 
     public function __call($name, $arguments)

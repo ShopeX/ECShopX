@@ -18,11 +18,17 @@ class ShuyunOpenPlatformTokenCallbackControllerTest extends TestCase
 
     private const TIME = '1690000000000';
 
-    /** @see ShuyunOpenPlatformTokenCallbackServiceTest::GOOD_SIGN */
-    private const GOOD_SIGN = '96b3b5d255d9ab923a9e772dd74ff572';
+    /** 含 body + SY-Request-Time 头参与验签 */
+    private const GOOD_SIGN = '519a39f5de481ca96abaa8f382ccc0fe';
 
-    /** 含 query extra=1 时与 SY-Request-Time 头一起参与验签 */
-    private const GOOD_SIGN_WITH_EXTRA_QUERY = '584d088e26557d03dc774a70aada1d84';
+    /** 含 query extra=1、body 与 SY-Request-Time 头一起参与验签 */
+    private const GOOD_SIGN_WITH_EXTRA_QUERY = 'c8c55f8ab3420ef774d65b7724901309';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['shuyun_open_platform.callback_identity_secret' => self::SECRET]);
+    }
 
     private function credentialRow(): CompanyShuyunOpenPlatformConfig
     {

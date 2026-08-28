@@ -18,6 +18,8 @@
 namespace DistributionBundle\Services;
 
 use DistributionBundle\Entities\Distributor;
+use CompanysBundle\Entities\Operators;
+use CompanysBundle\Services\OperatorDistributorNameSyncService;
 use CompanysBundle\Services\ShopsService;
 use CompanysBundle\Services\Shops\WxShopsService;
 use DistributionBundle\Events\DistributionAddEvent;
@@ -191,6 +193,18 @@ class DistributorService
             if (array_key_exists('__client_intent_profile', $data)) {
                 $result['__client_intent_profile'] = $data['__client_intent_profile'];
             }
+        }
+
+        if (isset($data['name']) && (string) $data['name'] !== $oldName) {
+            // 须取真实 OperatorsRepository；getRepositoryLangue 返回 RepositoryLangInterceptor 无法注入
+            $operatorsRepository = app('registry')->getManager('default')->getRepository(Operators::class);
+            $syncService = new OperatorDistributorNameSyncService($operatorsRepository);
+            $syncService->syncIfNameChanged(
+                (int) $data['company_id'],
+                $distributorId,
+                $oldName,
+                (string) $data['name']
+            );
         }
 
         //触发事件

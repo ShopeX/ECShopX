@@ -21,6 +21,7 @@ use DistributionBundle\Services\DistributorService;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 use AftersalesBundle\Services\AftersalesService;
+use AftersalesBundle\Support\AftersalesDistributorGate;
 use Dingo\Api\Exception\ResourceException;
 use EspierBundle\Traits\GetExportServiceTraits;
 use OrdersBundle\Entities\NormalOrders;
@@ -311,6 +312,7 @@ class Aftersales extends Controller
             'aftersales_bn' => $request->input('aftersales_bn'),
         ];
         $result = $aftersalesService->getAftersales($filter);
+        AftersalesDistributorGate::assertOwnStoreAftersales($result, $authInfo['distributor_id']);
         $result['create_time'] = date('Y-m-d H:i:s', $result['create_time']);
         return $this->response->array($result);
     }
@@ -408,6 +410,10 @@ class Aftersales extends Controller
             if (!$result['order_info']) {
                 throw new ResourceException('订单不存在');
             }
+            AftersalesDistributorGate::assertOwnStoreAftersales(
+                ['distributor_id' => $result['order_info']['distributor_id'] ?? 0],
+                (int) $authInfo['distributor_id']
+            );
             $result['order_info']['distributor_name'] = '';
             $distributorService = new DistributorService();
             $distributorInfo = [];
@@ -516,6 +522,7 @@ class Aftersales extends Controller
         if ($params['is_approved'] == 1 && !$params['refund_fee'] && !$params['refund_point']) {
             throw new ResourceException('退款金额或积分必填');
         }
+        AftersalesDistributorGate::attachAdminAuthScope($params, $authInfo);
         $aftersalesService = new AftersalesService();
         $result = $aftersalesService->review($params);
 
@@ -622,6 +629,7 @@ class Aftersales extends Controller
             'refund_fee.*' => '退款金额必填,以分为单位，必须为整数',
         ]);
 
+        AftersalesDistributorGate::attachAdminAuthScope($params, $authInfo);
         $aftersalesService = new AftersalesService();
         $result = $aftersalesService->confirmRefund($params);
 

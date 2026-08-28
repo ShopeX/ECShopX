@@ -26,6 +26,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use CompanysBundle\Services\EmployeeService;
 use CompanysBundle\Services\OperatorsService;
+use CompanysBundle\Support\OperatorDistributorIdsPatterns;
 
 use Dingo\Api\Exception\StoreResourceFailedException;
 use SupplierBundle\Services\SupplierService;
@@ -199,7 +200,7 @@ class EmployeeController extends BaseController
                         $dupFilter = [
                             'company_id' => $params['company_id'],
                             'is_distributor_main' => 1,
-                            'distributor_ids' => $this->distributorIdsJsonContainsPatterns($v['distributor_id']),
+                            'distributor_ids' => OperatorDistributorIdsPatterns::forDistributorId($v['distributor_id']),
                         ];
                         $operatorInfo = $operatorsService->lists($dupFilter);
                         if ($operatorInfo['total_count'] >= 1) {
@@ -390,7 +391,7 @@ class EmployeeController extends BaseController
                         $checkFilter = [
                             'company_id' => app('auth')->user()->get('company_id'),
                             'is_distributor_main' => 1,
-                            'distributor_ids' => $this->distributorIdsJsonContainsPatterns($v['distributor_id']),
+                            'distributor_ids' => OperatorDistributorIdsPatterns::forDistributorId($v['distributor_id']),
                         ];
                         $operatorInfo = $operatorsService->lists($checkFilter);
                         if (($operatorInfo['total_count'] >= 1) && ($operator_id != $operatorInfo['list'][0]['operator_id'])) {
@@ -674,7 +675,7 @@ class EmployeeController extends BaseController
         }
 
         if ($distributor_id) {
-            $filter['distributor_ids'] = $this->distributorIdsJsonContainsPatterns($distributor_id);
+            $filter['distributor_ids'] = OperatorDistributorIdsPatterns::forDistributorId($distributor_id);
         }
 
         //配送员账号管理
@@ -683,7 +684,7 @@ class EmployeeController extends BaseController
             $distributorIds = $distributorRepository->getLists(['merchant_id'=>$merchantId,'company_id'=>$filter['company_id']],'distributor_id,merchant_id');
             $distributor_ids = [];
             foreach ($distributorIds as $d_id){
-                foreach ($this->distributorIdsJsonContainsPatterns($d_id['distributor_id']) as $p) {
+                foreach (OperatorDistributorIdsPatterns::forDistributorId($d_id['distributor_id']) as $p) {
                     $distributor_ids[] = $p;
                 }
             }
@@ -729,10 +730,10 @@ class EmployeeController extends BaseController
                     'filter' => $filter,
                 ]);
             }
-            // 员工表 distributor_ids 存的是 JSON，需转成 contains 用的子串模式（见 distributorIdsJsonContainsPatterns）
+            // 员工表 distributor_ids 存的是 JSON，需转成 contains 用的子串模式（见 OperatorDistributorIdsPatterns::forDistributorId）
             $patterns = [];
             foreach ($matchedDistributorIds as $matchedDistributorId) {
-                foreach ($this->distributorIdsJsonContainsPatterns($matchedDistributorId) as $pattern) {
+                foreach (OperatorDistributorIdsPatterns::forDistributorId($matchedDistributorId) as $pattern) {
                     $patterns[] = $pattern;
                 }
             }
@@ -857,23 +858,4 @@ class EmployeeController extends BaseController
         return $this->response->array($result);
     }
 
-    /**
-     * operators.distributor_ids 为 json_encode 结果：数字 ID 常为 "distributor_id":123，
-     * 旧逻辑只匹配 "distributor_id":"123" 会漏数据。此处返回多段子串，由 OperatorsRepository::lists 做 OR contains。
-     * 使用 123} / 123, / 123] 等后缀，避免 "distributor_id":12 误匹配 129。
-     */
-    private function distributorIdsJsonContainsPatterns($distributorId): array
-    {
-        $id = (string) $distributorId;
-        if ($id === '') {
-            return [];
-        }
-
-        return array_values(array_unique(array_filter([
-            '"distributor_id":"' . $id . '"',
-            '"distributor_id":' . $id . '}',
-            '"distributor_id":' . $id . ',',
-            '"distributor_id":' . $id . ']',
-        ])));
-    }
 }

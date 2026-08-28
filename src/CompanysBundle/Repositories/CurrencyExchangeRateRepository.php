@@ -118,17 +118,17 @@ class CurrencyExchangeRateRepository extends EntityRepository
         if (!$entityList) {
             throw new \Exception("删除的数据不存在");
         }
-        $isDefault = $entityList->getIsDefault();
-        if (!$isDefault || $isDefault === 'false') {
-            $em = $this->getEntityManager();
-            foreach ($entityList as $entityProp) {
-                $em->remove($entityProp);
-                $em->flush();
+        foreach ($entityList as $entityProp) {
+            if ($entityProp->getIsDefault()) {
+                throw new \Exception("默认货币，不可删除");
             }
-            return true;
-        } else {
-            throw new \Exception("默认货币，不可删除");
         }
+        $em = $this->getEntityManager();
+        foreach ($entityList as $entityProp) {
+            $em->remove($entityProp);
+            $em->flush();
+        }
+        return true;
     }
 
     /**

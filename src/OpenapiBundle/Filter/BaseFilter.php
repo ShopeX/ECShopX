@@ -18,6 +18,7 @@
 namespace OpenapiBundle\Filter;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use OpenapiBundle\Constants\ErrorCode;
 use OpenapiBundle\Exceptions\ErrorException;
 use OpenapiBundle\Services\Member\MemberService;
@@ -78,14 +79,9 @@ abstract class BaseFilter implements \ArrayAccess
     public function __construct(?array $requestInputData = null)
     {
         $this->requestData = is_null($requestInputData) ? app("request")->input() : $requestInputData;
-        // 设置企业id
-        if (!isset($this->requestData["company_id"])) {
-            // 获取企业id
-            $auth = (array)app("request")->attributes->get("auth");
-            // 企业id
-            $this->requestData["company_id"] = (int)$auth["company_id"];
-        }
-        $this->set("company_id", $this->requestData["company_id"]);
+        $companyId = $this->resolveCompanyId();
+        $this->requestData["company_id"] = $companyId;
+        $this->set("company_id", $companyId);
         // 初始化
         $this->init();
         // 过滤空值
@@ -97,6 +93,44 @@ abstract class BaseFilter implements \ArrayAccess
      * @return void
      */
     abstract protected function init();
+
+    /**
+     * 解析并校验租户 company_id：未传则用 auth；非法或与 auth 不一致则 fail-closed 拒绝。
+     */
+    private function resolveCompanyId(): int
+    {
+        $auth = (array) app("request")->attributes->get("auth");
+        $authCompanyId = (int) ($auth["company_id"] ?? 0);
+
+        if (!array_key_exists("company_id", $this->requestData)) {
+            return $authCompanyId;
+        }
+
+        $requested = $this->requestData["company_id"];
+        if ($requested === null || $requested === "" || !is_numeric($requested) || (int) $requested <= 0) {
+            $this->logCompanyIdRejected("invalid", $authCompanyId, $requested);
+
+            throw new ErrorException(ErrorCode::VALIDATION_MISSING_PARAMS, "company_id 无效");
+        }
+
+        $requestedCompanyId = (int) $requested;
+        if ($requestedCompanyId !== $authCompanyId) {
+            $this->logCompanyIdRejected("mismatch", $authCompanyId, $requestedCompanyId);
+
+            throw new ErrorException(ErrorCode::VALIDATION_MISSING_PARAMS, "company_id 与授权租户不一致");
+        }
+
+        return $authCompanyId;
+    }
+
+    private function logCompanyIdRejected(string $reason, int $authCompanyId, $requestedCompanyId): void
+    {
+        Log::warning("openapi.company_id_rejected", [
+            "reason" => $reason,
+            "auth_company_id" => $authCompanyId,
+            "request_company_id" => $requestedCompanyId,
+        ]);
+    }
 
     /**
      * 根据手机号设置用户id

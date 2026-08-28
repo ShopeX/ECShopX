@@ -118,7 +118,7 @@ class Request
 
             $t1 = microtime(true);
             $resData = $client->post($this->url, [
-                'verify' => false,
+                'verify' => true,
                 'timeout' => 3,//接口超时设置，秒
                 'form_params' => $query_params
             ])->getBody();
@@ -152,12 +152,6 @@ class Request
             }
 
             $this->saveRequestLog($method, $logParams['runtime'], $query_params, $result);
-
-            //$saasErpLogService = new SaasErpLogService();
-            //$logResult = $saasErpLogService->create($logParams);
-
-            //app('log')->debug("saaserp certSetting ".json_encode($this->certSetting));
-            //app('log')->debug("saaserp ===>method:".$method."===token:".$this->token."===url:".$this->url."\n=====>params:".json_encode($query_params)."\n===>response:".$response);
 
             return $result;
         } catch (\Exception $e) {

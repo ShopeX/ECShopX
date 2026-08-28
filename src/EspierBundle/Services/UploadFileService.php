@@ -33,6 +33,12 @@ use CompanysBundle\Services\OperatorsService;
 
 class UploadFileService
 {
+    /** 单次表格导入最大数据行数（不含表头） */
+    public const MAX_IMPORT_ROWS = 10000;
+
+    /** 导入任务最大执行秒数 */
+    private const IMPORT_MAX_SECONDS = 3600;
+
     /**
      * 为null表示还没有被实例化
      * AbstractTemplate为抽象类
@@ -188,7 +194,7 @@ class UploadFileService
 
         //设置头部
         ini_set('memory_limit', '512M');
-        set_time_limit(0);
+        set_time_limit(self::IMPORT_MAX_SECONDS);
 
         $column = [];
         $headerData = [];
@@ -203,6 +209,11 @@ class UploadFileService
             $column = $this->headerHandle($headerData, $companyId, $data['relation_id'] ?? 0);
             $headerSuccess = true;
             unset($results[0]);
+            if (count($results) > self::MAX_IMPORT_ROWS) {
+                throw new BadRequestHttpException(
+                    '每次最多上传'.self::MAX_IMPORT_ROWS.'条数据（不含表头），请减少后再提交'
+                );
+            }
         } catch (\Exception $e) {
             $headerSuccess = false;
             $errorLine++;
@@ -531,11 +542,16 @@ class UploadFileService
         return true;
     }
 
-    public function getErrorFile($id, $fileType)
+    public function getErrorFile($id, $fileType, $companyId = 0)
     {
         $this->getUpdateFile($fileType);
 
-        $info = $this->entityRepository->getInfo(['id' => $id]);
+        $filter = ['id' => $id];
+        if ($companyId > 0) {
+            $filter['company_id'] = $companyId;
+        }
+        $info = $this->entityRepository->getInfo($filter);
+        \EspierBundle\Support\UploadFileTenantScopeGuard::assertCompanyScope($info, (int) $companyId);
         if ($info['handle_message']['errorlog'] ?? []) {
             $errorData = $info['handle_message']['errorlog'];
             $this->errorHandle($id, $errorData);

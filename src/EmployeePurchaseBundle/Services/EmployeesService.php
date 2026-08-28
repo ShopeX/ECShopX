@@ -32,6 +32,8 @@ use MembersBundle\Services\MemberService;
 
 class EmployeesService
 {
+    private const EMAIL_VCODE_COOLDOWN = 60;
+
     /** @var \EmployeePurchaseBundle\Repositories\EmployeesRepository */
     public $entityRepository;
 
@@ -188,6 +190,8 @@ class EmployeesService
             throw new ResourceException('企业发件箱配置错误');
         }
 
+        $this->assertEmailVcodeRateLimit((int) $params['company_id'], $params['email'], $enterpriseId);
+
         $from = [
             'email_smtp_port' => $box['smtp_port'],
             'email_relay_host' => $box['relay_host'],
@@ -208,6 +212,16 @@ class EmployeesService
 <p style="text-indent: 2em;">您的验证码是:{$vcode}位数字，30分钟内有效，请尽快完成验证。</p>
 EOF;
         return $emailService->sendmail($to, $subject, $body);
+    }
+
+    private function assertEmailVcodeRateLimit(int $companyId, string $email, int $enterpriseId): void
+    {
+        $cooldownKey = 'employee-purchase-email-vcode-cooldown:'.$companyId.':'.$enterpriseId.':'.strtolower(trim($email));
+        $redis = app('redis');
+        if ($redis->exists($cooldownKey)) {
+            throw new ResourceException('验证码发送过于频繁，请稍后再试');
+        }
+        $redis->setex($cooldownKey, self::EMAIL_VCODE_COOLDOWN, '1');
     }
 
     public function authentication_bak($params) {

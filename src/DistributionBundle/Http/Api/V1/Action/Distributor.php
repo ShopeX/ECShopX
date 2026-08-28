@@ -1632,8 +1632,11 @@ class Distributor extends Controller
 
         $filter['distributor_id'] = $distributorId;
 
-        if ($request->input('keywords')) {
-            $filter['item_name|contains'] = $request->input('keywords');
+        $keywords = trim((string)$request->input('keywords', ''));
+        if ($keywords !== '') {
+            // 走 ItemsService::_filter 的多语言复合命中（语言表名称∪货号∪条码），
+            // 与列表展示时 getListAddLang 用语言表名称覆盖主表值的逻辑保持一致
+            $filter['keywords'] = $keywords;
         }
 
         $item_holder = trim($request->input('item_holder', ''));
@@ -1974,8 +1977,10 @@ class Distributor extends Controller
         $filter['company_id'] = $companyId;
         $filter['distributor_id'] = $distributorId;
 
-        if ($request->input('keywords')) {
-            $filter['item_name|contains'] = $request->input('keywords');
+        $keywords = trim((string)$request->input('keywords', ''));
+        if ($keywords !== '') {
+            // 与列表接口 __getItemFilter 保持一致：走多语言复合命中，避免主表与语言表名称不一致时漏数据
+            $filter['keywords'] = $keywords;
         }
 
         if ($params['is_can_sale'] === 'false') {

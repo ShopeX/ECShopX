@@ -19,6 +19,8 @@ namespace OpenapiBundle\Middleware;
 
 use Closure;
 use Exception;
+use OpenapiBundle\Auth\CacheOpenapiNonceStore;
+use OpenapiBundle\Auth\OpenapiNonceStoreInterface;
 use OpenapiBundle\Entities\OpenapiDeveloper;
 use OpenapiBundle\Constants\ErrorCode;
 
@@ -75,7 +77,9 @@ class OpenapiCheck
             if (!$sign || $sign != self::gen_sign($data, $token)) {
                 throw new Exception('sign 不合法', ErrorCode::SIGN_ERROR);
             }
-            
+
+            $this->assertNonceNotReplayed($data);
+
             $mid_auth_params = [];
             $mid_auth_params['auth']['company_id'] = $developer['company_id'];
 
@@ -114,5 +118,26 @@ class OpenapiCheck
             $sign .= $key . (is_array($val) ? self::assemble($val) : $val);
         }
         return $sign;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function assertNonceNotReplayed(array $data): void
+    {
+        $nonce = trim((string) ($data['nonce'] ?? $data['request_id'] ?? ''));
+        if ($nonce === '') {
+            throw new Exception('缺少 nonce 或 request_id', ErrorCode::VALIDATION_MISSING_PARAMS);
+        }
+
+        $nonceStore = $this->resolveOpenapiNonceStore();
+        if (!$nonceStore->consumeNonce($nonce, 60 * 10)) {
+            throw new Exception('nonce 已使用', ErrorCode::VALIDATION_TIMESTAMP_ERROR);
+        }
+    }
+
+    private function resolveOpenapiNonceStore(): OpenapiNonceStoreInterface
+    {
+        return new CacheOpenapiNonceStore(app('cache.store'));
     }
 }

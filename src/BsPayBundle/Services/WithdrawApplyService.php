@@ -242,6 +242,8 @@ class WithdrawApplyService
 
         // 检查当前用户是否有权限审核该提现申请
         $user = app('auth')->user();
+        $companyId = (int) $user->get('company_id');
+        \PaymentBundle\Services\PaymentTenantScopeGuard::assertCompanyScope($applyInfo, $companyId);
         $operatorType = $user->get('operator_type');
         if ($operatorType !== 'admin') {
             throw new ResourceException('只有管理员可以审核提现申请');

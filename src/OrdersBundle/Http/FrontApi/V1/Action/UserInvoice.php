@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Dingo\Api\Exception\ResourceException;
 use App\Http\Controllers\Controller as Controller;
 use OrdersBundle\Services\OrderInvoiceService;
+use OrdersBundle\Support\GuideOrderTenantScopeGuard;
 
 class UserInvoice extends Controller
 {
@@ -146,6 +147,11 @@ class UserInvoice extends Controller
         if(isset($data['invoice_id']) && isset($data['invoice_status']) && $data['invoice_status'] == "cancel"){
             $data['invoice_status'] = "cancel";
             $invoiceDetail = $this->invoiceService->getInvoiceDetail($data['invoice_id'],$authInfo['company_id']);
+            GuideOrderTenantScopeGuard::assertInvoiceBelongsToAuthUser(
+                $invoiceDetail,
+                (int) $authInfo['company_id'],
+                (int) $userId
+            );
             if($invoiceDetail['invoice_status'] == "cancel" ){
                 throw new ResourceException('发票已取消');
             }
@@ -167,6 +173,12 @@ class UserInvoice extends Controller
             throw new ResourceException(trans('OrdersBundle/Order.invoice_update_error', ['errorMessage' => $errorMessage]));
         }
         $data['user_id'] = $userId;
+        $invoiceDetail = $this->invoiceService->getInvoiceDetail($data['invoice_id'], $authInfo['company_id']);
+        GuideOrderTenantScopeGuard::assertInvoiceBelongsToAuthUser(
+            $invoiceDetail,
+            (int) $authInfo['company_id'],
+            (int) $userId
+        );
         $result = $this->invoiceService->updateInvoice($data['invoice_id'], $data);
         return $this->response->array($result);
     }

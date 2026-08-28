@@ -302,7 +302,7 @@ class UpgradeEgo
         ];
         $params['sign'] = $this->getSign($params, $this->secret);
         $client = new Client(['base_uri' => self::BASE_URI]);
-        $response = $client->post(self::ECX_DOWNLOAD_API_URL, ['verify'=>false, 'form_params' => $params]);
+        $response = $client->post(self::ECX_DOWNLOAD_API_URL, ['verify'=>true, 'form_params' => $params]);
         $result = $response->getBody()->getContents();
         $result = json_decode($result, true);
         if (isset($result['status']) && $result['status'] !== 'success') {

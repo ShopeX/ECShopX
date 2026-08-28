@@ -25,6 +25,8 @@ use WsugcBundle\Services\SettingService;
 use WsugcBundle\Services\CommentService;
 use WsugcBundle\Services\PostService;
 use WsugcBundle\Services\MessageService;
+use WsugcBundle\Support\WsugcTenantScopeGuard;
+use EspierBundle\Support\OrderByWhitelist;
 
 class CommentController extends Controller
 {
@@ -96,6 +98,7 @@ class CommentController extends Controller
         // 查询活动信息 
         $postService = new PostService();
         $commentService=new CommentService();
+        WsugcTenantScopeGuard::assertCommentIdsBelongToCompany((int) ($admin['company_id'] ?? 0), $params['comment_id']);
         $params['manual_refuse_reason']=$params['refuse_reason']??'';
         $data=$params;
         //if(isset($data['refuse_reason'])) {
@@ -208,8 +211,10 @@ class CommentController extends Controller
         //$params['comment_id'] =  1;
         //$params['status'] =  1;
         //查询活动信息
+        $companyId = (int) ($authInfo['company_id'] ?? 0);
+        WsugcTenantScopeGuard::assertCommentIdsBelongToCompany($companyId, $params['comment_id']);
         $postService = new CommentService();
-        $result = $postService->deleteBy(['comment_id'=>$params['comment_id']]);
+        $result = $postService->deleteBy(['comment_id'=>$params['comment_id'], 'company_id' => $companyId]);
         if($result['comment_id']??null){
            
         }
@@ -331,13 +336,11 @@ class CommentController extends Controller
 
         $commentService = new CommentService();
         $sort = $request->get('sort') ?? '';
-        $orderBy = [];
+        $allowedSort = ['comment_id', 'created', 'updated', 'p_order', 'status', 'user_id'];
         if ($sort && trim($sort)) {
-            $orderByRs = explode(' ', $sort);
-            $orderBy[$orderByRs[0]] = $orderByRs[1];
-        }
-        else{
-            $orderBy = ['p_order' => 'ASC','created' => 'DESC'];
+            $orderBy = OrderByWhitelist::fromSortString($sort, $allowedSort);
+        } else {
+            $orderBy = OrderByWhitelist::sanitize(['p_order' => 'ASC', 'created' => 'DESC'], $allowedSort);
         }
         //$parent_comment_id=0; 后台所有评论都要看到，不能只看没有父级Id的
         if (isset($params['parent_comment_id']) && $params['parent_comment_id']>0) {

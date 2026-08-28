@@ -21,6 +21,7 @@ use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Request;
 use ThirdPartyBundle\Http\Controllers\Controller;
 use ThirdPartyBundle\Services\CustomsCentre\CustomsService;
+use ThirdPartyBundle\Support\CustomsCallbackSignatureVerifier;
 
 class Customs extends Controller
 {
@@ -98,12 +99,20 @@ class Customs extends Controller
     {
         // Ver: 1e2364-fe10
         $params = $request->all();
+        if (! CustomsCallbackSignatureVerifier::verifyCustomsCallbackSignature($params)) {
+            throw new ResourceException('签名验证失败');
+        }
+
         $validator = app('validator')->make($params, [
             'order_id' => 'required',
             'response' => 'required',
+            'timestamp' => 'required',
+            'sign' => 'required',
         ], [
             'order_id.*' => '订单编号不能为空',
             'response.*' => 'response不能为空',
+            'timestamp.*' => '时间戳不能为空',
+            'sign.*' => '签名不能为空',
         ]);
         if ($validator->fails()) {
             $errorsMsg = $validator->errors()->toArray();

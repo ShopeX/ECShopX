@@ -675,7 +675,7 @@ class CompanysActivationEgo
         $postData['product'] = config('licensegateway.product_name');
         $postData['code'] = $code;
         $client = new Client();
-        $res = $client->post($request_url, ['verify'=>false, 'form_params' => $postData])->getBody();
+        $res = $client->post($request_url, ['verify'=>true, 'form_params' => $postData])->getBody();
         $result = json_decode($res->getContents(), 1);
 
         if ( ($result['code'] === 0 || $result['code'] === '0') && isset($result['data']) ) {

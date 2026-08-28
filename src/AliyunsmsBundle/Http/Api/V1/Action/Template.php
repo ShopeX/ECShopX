@@ -136,7 +136,7 @@ class Template extends Controller
         $companyId = app('auth')->user()->get('company_id');
         $id = $request->input('id');
         $templateService = new TemplateService();
-        $data = $templateService->getInfo(['id' => $id]);
+        $data = $templateService->getInfo(['id' => $id, 'company_id' => $companyId]);
         return $this->response->array($data);
     }
 

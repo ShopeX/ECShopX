@@ -64,6 +64,65 @@ class PaymentOrderOwnershipTest extends \TestCase
     }
 
     /**
+     * TC-PAY-03 / S-A16：operator auth 无 user_id → Guard 跳过归属比对（不抛异常）。
+     * #given 订单 user_id=200；auth 含 operator_id、company_id，无 user_id
+     * #when 校验订单归属
+     * #then 不抛异常
+     */
+    public function testTcPay03OperatorAuthWithoutUserIdDoesNotThrow(): void
+    {
+        #given
+        $order = ['user_id' => 200, 'order_id' => '3313653000370376'];
+        $authInfo = ['operator_id' => 42, 'company_id' => 1];
+
+        #when
+        PaymentOrderOwnershipGuard::assertBelongsToAuthUser($order, $authInfo);
+
+        #then
+        $this->addToAssertionCount(1);
+    }
+
+    /**
+     * TC-PAY-04 / S-A17：operator auth 无 user_id，他人订单 → Guard 跳过归属比对（不抛异常）。
+     * #given 订单 user_id=999（他人）；auth 含 operator_id、company_id，无 user_id
+     * #when 校验订单归属
+     * #then 不抛异常
+     */
+    public function testTcPay04OperatorAuthWithOtherOrderUserIdDoesNotThrow(): void
+    {
+        #given
+        $order = ['user_id' => 999, 'order_id' => '3313653000370376'];
+        $authInfo = ['operator_id' => 42, 'company_id' => 1];
+
+        #when
+        PaymentOrderOwnershipGuard::assertBelongsToAuthUser($order, $authInfo);
+
+        #then
+        $this->addToAssertionCount(1);
+    }
+
+    /**
+     * TC-PAY-05 / S-A20：operator_type=user 且无 user_id、无 operator_id → 拒绝。
+     * #given 订单含 user_id；auth 含 operator_type=user、company_id，无 user_id、无 operator_id
+     * #when 校验订单归属
+     * #then 抛 ResourceException
+     */
+    public function testTcPay05UserOperatorTypeWithoutUserIdThrowsResourceException(): void
+    {
+        #given
+        $order = ['user_id' => 200, 'order_id' => '3313653000370376'];
+        $authInfo = ['operator_type' => 'user', 'company_id' => 1];
+
+        #when / #then
+        try {
+            PaymentOrderOwnershipGuard::assertBelongsToAuthUser($order, $authInfo);
+            $this->fail('Expected ResourceException when operator_type=user without user_id or operator_id');
+        } catch (ResourceException $e) {
+            $this->addToAssertionCount(1);
+        }
+    }
+
+    /**
      * TC-PAY-01/02 集成：PaymentService::payment 取单后须校验归属。
      */
     public function testPaymentServicePaymentMethodCallsOwnershipGuardAfterGetOrder(): void

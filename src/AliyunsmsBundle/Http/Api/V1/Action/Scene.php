@@ -158,7 +158,7 @@ class Scene extends Controller
         $companyId = app('auth')->user()->get('company_id');
         $id = $request->input('id');
         $sceneService = new SceneService();
-        $data = $sceneService->getDetail($id);
+        $data = $sceneService->getDetail($id, $companyId);
         return $this->response->array($data);
     }
 

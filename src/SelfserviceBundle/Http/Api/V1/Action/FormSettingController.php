@@ -22,6 +22,7 @@ use App\Http\Controllers\Controller as Controller;
 use Dingo\Api\Exception\StoreResourceFailedException;
 
 use SelfserviceBundle\Services\FormSettingService;
+use SelfserviceBundle\Support\SelfserviceTenantScopeGuard;
 
 class FormSettingController extends Controller
 {
@@ -208,6 +209,8 @@ class FormSettingController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        SelfserviceTenantScopeGuard::assertFormSettingIdBelongsToCompany($companyId, $id);
         $result = $this->formSettingService->getInfoById($id);
         return $this->response->array($result);
     }
@@ -247,6 +250,8 @@ class FormSettingController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        SelfserviceTenantScopeGuard::assertFormSettingIdBelongsToCompany($companyId, $id);
         $result = $this->formSettingService->entityRepository->discard($id);
         return $this->response->array(['status' => $result]);
     }
@@ -286,6 +291,8 @@ class FormSettingController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        SelfserviceTenantScopeGuard::assertFormSettingIdBelongsToCompany($companyId, $id);
         $result = $this->formSettingService->entityRepository->restore($id);
         return $this->response->array(['status' => $result]);
     }

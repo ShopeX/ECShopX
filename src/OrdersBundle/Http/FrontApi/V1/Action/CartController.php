@@ -429,6 +429,14 @@ class CartController extends BaseController
      */
     public function getDistributorCartList(Request $request)
     {
+        $profileStartedAt = microtime(true);
+        $profileLog = function (string $stage, array $context = []) use ($profileStartedAt) {
+            app('log')->info('[CART_PERF] ' . $stage, array_merge($context, [
+                'elapsed_ms' => round((microtime(true) - $profileStartedAt) * 1000, 2),
+            ]));
+        };
+        $profileLog('start');
+
         $userDevice = $request->get('user_device');
         $iscrossborder = $request->get('iscrossborder', 0);        // 是否跨境购物车
         $isShopScreen = $request->get('isShopScreen', 0);
@@ -463,6 +471,7 @@ class CartController extends BaseController
             $shopId ?: null
         );
         $inputData['user_id'] = $actingUserId;
+        $profileLog('acting_user_resolved', ['user_id' => $actingUserId]);
 
         $cartService = new CartService();
         $result['invalid_cart'] = [];
@@ -497,7 +506,11 @@ class CartController extends BaseController
                 // $cartFilter['shop_id|gt'] = 0;
             }
             $cartList = $cartService->lists($cartFilter);
+            $profileLog('cart_rows_loaded', [
+                'cart_rows' => $cartList['total_count'],
+            ]);
             if ($cartList['total_count'] === 0) {
+                $profileLog('empty_cart');
                 return $this->response->array($result);
             }
 
@@ -508,8 +521,30 @@ class CartController extends BaseController
                 $shopIds = array_column($cartList['list'], 'shop_id');
                 $shopIds = array_unique($shopIds);
             }
+            $profileLog('shops_grouped', [
+                'shop_count' => count($shopIds),
+                'shop_ids' => $shopIds,
+            ]);
+            $validShopIds = $cartService->prepareValidShopIds(
+                $authInfo['company_id'],
+                $shopIds,
+                $cartType,
+                $shopType
+            );
+            $profileLog('valid_shops_prepared', [
+                'valid_shop_count' => count($validShopIds),
+            ]);
+            // 预加载全部购物车商品，多店铺时各店复用，避免重复批量查询
+            $cartService->prepareItemsData($authInfo['company_id'], $cartList['list'], $shopType);
             foreach ($shopIds as $shopId) {
+                $shopStartedAt = microtime(true);
                 $cartData = $cartService->getCartList($authInfo['company_id'], $inputData['user_id'], $shopId, $cartType, $shopType, false, $iscrossborder, $isShopScreen, $userDevice,[],$inputData);
+                $profileLog('shop_cart_loaded', [
+                    'shop_id' => $shopId,
+                    'valid_count' => count($cartData['valid_cart'] ?? []),
+                    'invalid_count' => count($cartData['invalid_cart'] ?? []),
+                    'shop_elapsed_ms' => round((microtime(true) - $shopStartedAt) * 1000, 2),
+                ]);
                 if ($cartData['valid_cart']) {
                     $result['valid_cart'][] = $cartData['valid_cart'][0];
                 }
@@ -526,6 +561,7 @@ class CartController extends BaseController
         } else {
             $result['crossborder_show'] = $CrossBorderSet['crossborder_show'];
         }
+        $profileLog('cross_border_loaded');
 
         // 总部发货的商品购物车分开显示
         foreach ($result['valid_cart'] as $key => $shopCart) {
@@ -569,6 +605,10 @@ class CartController extends BaseController
             }
         }
 
+        $profileLog('done', [
+            'valid_shop_count' => count($result['valid_cart']),
+            'invalid_count' => count($result['invalid_cart']),
+        ]);
         return $this->response->array($result);
     }
 

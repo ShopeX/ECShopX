@@ -36,6 +36,7 @@ use OrdersBundle\Services\Orders\NormalOrderService;
 use OrdersBundle\Services\OrderService;
 use WorkWechatBundle\Services\WorkWechatRelService;
 use MembersBundle\Services\MemberBrowseHistoryService;
+use OrdersBundle\Support\GuideOrderTenantScopeGuard;
 
 class UserData extends Controller
 {
@@ -851,8 +852,10 @@ class UserData extends Controller
     {
         $params = $request->input();
         $authInfo = $this->auth->user();
+        GuideOrderTenantScopeGuard::assertGuideCanAccessMember($authInfo, (int) $userId);
         $params = array_merge((array)$params, (array)$authInfo);
         $params['user_id'] = $userId;
+        $params['company_id'] = $authInfo['company_id'];
         $memberBrowseHistoryServiceService = new MemberBrowseHistoryService();
         $result = $memberBrowseHistoryServiceService->getBrowseHistoryList($params);
         return $this->response->array($result);

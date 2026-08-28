@@ -19,6 +19,7 @@ namespace GoodsBundle\Services;
 
 use GoodsBundle\Entities\ItemsProfit;
 use DistributionBundle\Services\DistributionService;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 use Dingo\Api\Exception\ResourceException;
 
 class ItemsProfitService
@@ -97,6 +98,7 @@ class ItemsProfitService
         $itemsService = new ItemsService();
         try {
             $itemIds = array_column($profitConf, 'item_id');
+            GoodsTenantScopeGuard::assertItemIdsBelongToCompany((int) $params['company_id'], $itemIds);
             //清除已存在的会员价信息
             $this->deleteBy(['item_id' => $itemIds, 'company_id' => $params['company_id']]);
 
@@ -126,7 +128,7 @@ class ItemsProfitService
                     }
                 } else {
                     $itemsCategoryProfitService = new ItemsCategoryProfitService();
-                    $itemInfo = $itemsService->getInfo(['item_id' => $val['item_id']]);
+                    $itemInfo = $itemsService->getInfo(['company_id' => $params['company_id'], 'item_id' => $val['item_id']]);
                     $itemsCategoryProfitInfo = $itemsCategoryProfitService->getInfo(['category_id' => $itemInfo['item_category']]);
                     if ($itemsCategoryProfitInfo) {
                         $profitConf = $itemsCategoryProfitInfo['profit_conf'];

@@ -33,6 +33,7 @@ use GoodsBundle\Jobs\ItemBatchEditStatusEventJob;
 use GoodsBundle\Jobs\MedicineItemsSubmitAudit;
 use GoodsBundle\Repositories\ItemsMedicineRepository;
 use GoodsBundle\Services\MultiLang\MultiLangService;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 use KaquanBundle\Entities\RelItems;
 
 use Dingo\Api\Exception\ResourceException;
@@ -556,29 +557,33 @@ class ItemsService
         $del_where['item_id'] = $item_id;
         $del_where['company_id'] = $company_id;
         // 先清空原有的关联条形码
-        if ($ItemsBarcode->deleteBy($del_where)) {
-            if (empty($barcode)) {
-                return false;
-            }
-            $barcode = str_replace('，', ',', $barcode);
-            $barcode = explode(',', $barcode);
-            $barcode = array_unique($barcode);
-            $add_sql = '';
-            foreach ($barcode as $k => $v) {
-                // 判断条形码是否存在
-                $count_where['company_id'] = $company_id;
-                $count_where['barcode'] = $v;
-                if ($ItemsBarcode->count($count_where)) {
-                    throw new ResourceException(trans('GoodsBundle/Controllers/Items.barcode_exists'));
-                }
-                $add_sql .= "($item_id,$barcode_default_item_id,$company_id,'$v'),";
-            }
-            // 拼接批量插入sql进行批量插入
-            $add_sql = substr($add_sql, 0, strlen($add_sql) - 1);
-            $conn = app('registry')->getConnection('default');
-            $sql = "INSERT INTO items_barcode  (`item_id`, `default_item_id`, `company_id`, `barcode`) VALUES" . $add_sql;
-            $id = $conn->executeUpdate($sql);
+        $ItemsBarcode->deleteBy($del_where);
+        if (empty($barcode)) {
+            return false;
         }
+        $barcode = str_replace('，', ',', $barcode);
+        $barcode = explode(',', $barcode);
+        $barcode = array_unique($barcode);
+        $valuePlaceholders = [];
+        $params = [];
+        foreach ($barcode as $k => $v) {
+            // 判断条形码是否存在
+            $count_where['company_id'] = $company_id;
+            $count_where['barcode'] = $v;
+            if ($ItemsBarcode->count($count_where)) {
+                throw new ResourceException(trans('GoodsBundle/Controllers/Items.barcode_exists'));
+            }
+            $valuePlaceholders[] = '(?, ?, ?, ?)';
+            $params[] = $item_id;
+            $params[] = $barcode_default_item_id;
+            $params[] = $company_id;
+            $params[] = $v;
+        }
+        // 批量插入使用参数绑定
+        $conn = app('registry')->getConnection('default');
+        $sql = 'INSERT INTO items_barcode (`item_id`, `default_item_id`, `company_id`, `barcode`) VALUES '
+            . implode(',', $valuePlaceholders);
+        $id = $conn->executeUpdate($sql, $params);
     }
 
     /**
@@ -2580,9 +2585,11 @@ class ItemsService
             $langIds = $multiLangService->filterByLang($lang,'item_name',$filter['keywords'],'items');
             $or = [
                 'or'=>[
+                    // 主表名称也纳入命中：展示时 getListAddLang 优先用语言表名称、无语言表记录时回退主表名称，
+                    // 搜索需覆盖两个数据源，避免语言表缺失记录的商品搜不到
+                    'item_name|contains'=> $filter['keywords'],
                     'item_bn|contains'=> $filter['keywords'],
                     'barcode'=> $filter['keywords'],
-                    // ['item_name|contains'=> $filter['keywords']],
                 ]
             ];
             if (!empty($langIds)) {
@@ -2833,6 +2840,8 @@ class ItemsService
 
     public function updateItemsStore($companyId, $params)
     {
+        GoodsTenantScopeGuard::assertItemIdsBelongToCompany((int) $companyId, array_column((array) $params, 'item_id'));
+
         $itemStoreService = new ItemStoreService();
         foreach ((array)$params as $data) {
             // $itemInfo = $this->itemsRepository->get($data['item_id']);

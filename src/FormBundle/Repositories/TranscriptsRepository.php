@@ -102,9 +102,12 @@ class TranscriptsRepository extends EntityRepository
         return $result;
     }
 
-    public function delete($transcriptId)
+    public function delete($transcriptId, $companyId)
     {
-        $transcript = $this->find($transcriptId);
+        $transcript = $this->findOneBy([
+            'transcript_id' => $transcriptId,
+            'company_id' => $companyId,
+        ]);
         if (!$transcript) {
             throw new Exception("transcriptId为{$transcriptId}的成绩单不存在");
         }

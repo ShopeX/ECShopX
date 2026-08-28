@@ -261,7 +261,7 @@ class Task extends Controller
         $companyId = app('auth')->user()->get('company_id');
         $id = $request->input('id');
         $taskService = new TaskService();
-        $data = $taskService->getInfo(['id' => $id]);
+        $data = $taskService->getInfo(['id' => $id, 'company_id' => $companyId]);
         return $this->response->array($data);
     }
 }

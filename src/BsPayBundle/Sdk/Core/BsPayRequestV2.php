@@ -42,7 +42,7 @@ class BsPayRequestV2 {
         curl_setopt($ch, CURLOPT_FAILONERROR, false);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HEADER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         if (is_array($postFields) && 0 < count($postFields)) {
             curl_setopt($ch, CURLOPT_POST, true);
 

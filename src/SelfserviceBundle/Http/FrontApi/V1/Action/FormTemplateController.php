@@ -23,6 +23,7 @@ use Dingo\Api\Exception\ResourceException;
 
 use SelfserviceBundle\Services\UserDailyRecordService;
 use SelfserviceBundle\Traits\GetFormSettingTemp;
+use MembersBundle\Support\MembersOwnerScopeGuard;
 
 class FormTemplateController extends Controller
 {
@@ -83,8 +84,13 @@ class FormTemplateController extends Controller
             $filter['record_date|lte'] = $request->get('timeChoosed') ?: date('Ymd');
         }
         $authInfo = $request->get('auth');
+        $authUserId = (int) ($authInfo['user_id'] ?? 0);
+        $requestedUserId = $request->get('user_id');
+        if ($requestedUserId !== null && $requestedUserId !== '' && $requestedUserId !== 'undefined') {
+            MembersOwnerScopeGuard::assertRequestedUserMatchesAuth((int) $requestedUserId, $authUserId);
+        }
         $filter['company_id'] = $authInfo['company_id'];
-        $filter['user_id'] = $request->get('user_id') ?: ($authInfo['user_id'] ?? 0);
+        $filter['user_id'] = $authUserId;
         if (!$filter['user_id']) {
             return [];
         }

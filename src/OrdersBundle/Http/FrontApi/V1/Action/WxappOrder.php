@@ -45,6 +45,8 @@ use PaymentBundle\Services\Payments\WechatPayService;
 use PaymentBundle\Services\Payments\OfflinePayService;
 use OrdersBundle\Services\LogisticTracker;
 use OrdersBundle\Services\OfflinePaymentService;
+use OrdersBundle\Services\Orders\NormalOrderService;
+use OrdersBundle\Support\GuideOrderTenantScopeGuard;
 
 use AftersalesBundle\Services\AftersalesService;
 
@@ -393,10 +395,21 @@ class WxappOrder extends Controller
      *     )),
      * )
      */
-    public function delEpidemicRegister($id)
+    public function delEpidemicRegister($id, Request $request)
     {
+        $authInfo = $request->get('auth');
+        $companyId = (int) $authInfo['company_id'];
+        $userId = (int) $authInfo['user_id'];
         $orderEpidemicService = new OrderEpidemicService();
-        $result = $orderEpidemicService->updateOneBy(['id' => $id], ['is_use' => 0]);
+        $record = $orderEpidemicService->getInfo([
+            'id' => $id,
+            'company_id' => $companyId,
+        ]);
+        GuideOrderTenantScopeGuard::assertEpidemicRecordBelongsToAuthUser($record, $companyId, $userId);
+        $orderEpidemicService->updateOneBy(
+            ['id' => $id, 'company_id' => $companyId, 'user_id' => $userId],
+            ['is_use' => 0]
+        );
 
         return $this->response->array(['status' => true]);
     }
@@ -3115,7 +3128,17 @@ class WxappOrder extends Controller
             throw new ResourceException($errorMessage);
         }
         $authInfo = $request->get('auth');
-        $params['company_id'] = $authInfo['company_id'];
+        $companyId = (int) $authInfo['company_id'];
+        $userId = (int) $authInfo['user_id'];
+        $params['company_id'] = $companyId;
+        $params['user_id'] = $userId;
+        $orderService = new NormalOrderService();
+        $orderInfo = $orderService->getOrderInfo($companyId, $params['order_id']);
+        GuideOrderTenantScopeGuard::assertOrderBelongsToAuthUser(
+            $orderInfo['orderInfo'] ?? null,
+            $companyId,
+            $userId
+        );
         $offlinePaymentService = new OfflinePaymentService();
         $result = $offlinePaymentService->getVoucher($params);
         return $this->response->array($result);

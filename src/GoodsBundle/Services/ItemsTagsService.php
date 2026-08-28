@@ -128,9 +128,18 @@ class ItemsTagsService
         return $this->getListTags($filter, $page, $limit, $orderBy, true);
     }
 
-    public function getTagsInfo($tag_id)
+    public function getTagsInfo($tag_id, $companyId = null)
     {
-        return $this->entityRepository->getInfoById($tag_id);
+        $filter = ['tag_id' => $tag_id];
+        if ($companyId !== null) {
+            $filter['company_id'] = $companyId;
+        }
+        $result = $this->entityRepository->getInfo($filter);
+        if (!$result) {
+            throw new ResourceException(trans('GoodsBundle/Controllers/Items.tag_not_exists'));
+        }
+
+        return $result;
     }
 
     public function getItemsRelTagList($filter, string $columns = "reltag.item_id,tag.*")

@@ -91,6 +91,11 @@ class TrustLogin extends Controller
         $data['redirect_url'] = $request->get('redirect_url', '');
         $result = $this->trustLoginService->trustLoginParams($company_id, $trustlogin_tag, $version_tag, $data);
 
+        if (!empty($result['config_info'])) {
+            $socialService = new SocialTrustLoginService();
+            $result['config_info'] = $socialService->sanitizeConfigRow($result['config_info'], true);
+        }
+
         return $this->response->array($result);
     }
 

@@ -101,7 +101,7 @@ class Request
             $query_params = array_merge((array)$params, $system_params);
             $query_params['sign'] = self::gen_sign($query_params, $this->token);
             $postdata = [
-                'verify' => false,
+                'verify' => true,
                 'form_params' => $query_params
             ];
             $resData = $client->post($this->url, $postdata)->getBody();
@@ -110,7 +110,7 @@ class Request
             if (!$result) {
                 $result = $response;
             }
-            app('log')->debug('ome request===>method:'.$method.'===token:'.$this->token.'===url:'.$this->url.'=====>params:'.var_export($params, 1).'===>response:'.$response);
+            app('log')->debug('ome request===>method:'.$method.'===url:'.$this->url.'=====>params:'.var_export($params, 1).'===>response:'.$response);
         } catch (\Exception $e) {
             $result = [ 'fail_msg' => $e->getMessage()];
             app('log')->debug('ome error:'.var_export($e->getMessage(), 1));

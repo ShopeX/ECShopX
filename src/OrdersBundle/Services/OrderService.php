@@ -1276,7 +1276,7 @@ class OrderService
             $orderData['receiver_address'] = $params['receiver_address'] ?? '';
             if ($distributorInfo['is_self_delivery']) {
                 $selfDeliveryService = new selfDeliveryService();
-                $setting = $selfDeliveryService->getSelfDeliverySetting($params['company_id'], $params['distributor_id'], $distributorInfo['distributor_self']);
+                $setting = $selfDeliveryService->getSelfDeliverySetting($params['company_id'], ($params['distributor_id'] ?: 0), $distributorInfo['distributor_self']);
                 if (!$setting || $setting['is_open'] != 'true') {
                     throw new ResourceException(trans('OrdersBundle/Order.merchant_self_delivery_not_enabled'));
                 }
@@ -1375,7 +1375,7 @@ class OrderService
         }
 
         $selfDeliveryService = new selfDeliveryService();
-        $setting = $selfDeliveryService->getSelfDeliverySetting($params['company_id'], $params['distributor_id'], $distributorInfo['distributor_self']);
+        $setting = $selfDeliveryService->getSelfDeliverySetting($params['company_id'], ($params['distributor_id'] ?? 0), $distributorInfo['distributor_self']);
         if (!$setting || $setting['is_open'] != 'true') {
             return null;
         }

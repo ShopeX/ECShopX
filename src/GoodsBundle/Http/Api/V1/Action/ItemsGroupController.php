@@ -43,7 +43,7 @@ class ItemsGroupController extends Controller
             $params['group_id'] = $itemsGroup['id'];
         } else {
             $itemsGroup = $itemsGroupService->repository->getInfoById($params['group_id']);
-            if (!$itemsGroup) {
+            if (!$itemsGroup || (int) ($itemsGroup['company_id'] ?? 0) !== (int) $params['company_id']) {
                 throw new ResourceException('group_id错误');
             }
         }
@@ -62,8 +62,15 @@ class ItemsGroupController extends Controller
         $params = $request->all('page', 'pageSize', 'group_id');
         $params['page'] = $params['page'] ?? 1;
         $params['pageSize'] = $params['pageSize'] ?? 100;
+        $companyId = (int) app('auth')->user()->get('company_id');
+        $itemsGroupService = new ItemsGroupService();
+        $itemsGroup = $itemsGroupService->repository->getInfoById($params['group_id']);
+        if (!$itemsGroup || (int) ($itemsGroup['company_id'] ?? 0) !== $companyId) {
+            throw new ResourceException('group_id错误');
+        }
         $filter = [
             'group_id' => $params['group_id'],
+            'company_id' => $companyId,
         ];
         $orderBy = [
             'id' => 'DESC'

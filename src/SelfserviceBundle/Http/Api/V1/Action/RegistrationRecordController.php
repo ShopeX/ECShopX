@@ -25,6 +25,7 @@ use Dingo\Api\Exception\StoreResourceFailedException;
 use SelfserviceBundle\Services\FormTemplateService;
 use SelfserviceBundle\Services\RegistrationActivityService;
 use SelfserviceBundle\Services\RegistrationRecordService;
+use SelfserviceBundle\Support\SelfserviceTenantScopeGuard;
 
 use EspierBundle\Jobs\ExportFileJob;
 
@@ -168,7 +169,11 @@ class RegistrationRecordController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = app('auth')->user()->get('company_id');
         $result = $this->service->getRocordInfo($id);
+        if (empty($result) || (int) ($result['company_id'] ?? 0) !== (int) $companyId) {
+            return $this->response->array([]);
+        }
         // 是否有权限查看加密数据
         $datapassBlock = $request->get('x-datapass-block');
         $result['content'] = $this->service->fixeddecryptRocordContent($result['content'], $datapassBlock);
@@ -266,7 +271,9 @@ class RegistrationRecordController extends Controller
             throw new ResourceException(trans('SelfserviceBundle.operation_too_frequent_try_later'));
         }
 
-        $record = $this->service->entityRepository->getInfoById($filter['record_id']);
+        $companyId = (int) $filter['company_id'];
+        SelfserviceTenantScopeGuard::assertRegistrationRecordIdBelongsToCompany($companyId, $filter['record_id']);
+        $record = $this->service->entityRepository->getInfo(['record_id' => $filter['record_id'], 'company_id' => $companyId]);
         if (!in_array($record['status'], ['pending'])) {
             throw new ResourceException(trans('SelfserviceBundle.current_status_no_need_review'));
         }
@@ -300,7 +307,6 @@ class RegistrationRecordController extends Controller
         $params = $request->all('record_id', 'verify_code');
         $rules = [
             'record_id' => ['required', trans('SelfserviceBundle.registration_record_id_cannot_empty')],
-            'verify_code' => ['required', trans('SelfserviceBundle.verification_code_required')],
         ];
         $error = validator_params($params, $rules);
         if ($error) {
@@ -308,7 +314,7 @@ class RegistrationRecordController extends Controller
         }
         $filter['company_id'] = app('auth')->user()->get('company_id');
         $record_id = intval($params['record_id']);
-        $verify_code = intval($params['verify_code']);
+        $verify_code = !empty($params['verify_code']) ? intval($params['verify_code']) : null;
 
         $redis_key = 'registrationVerify:' . $record_id;
         if (app('redis')->setnx($redis_key, 1)) {
@@ -317,15 +323,17 @@ class RegistrationRecordController extends Controller
             throw new StoreResourceFailedException(trans('SelfserviceBundle.operation_too_frequent_try_later'));
         }
 
+        $companyId = (int) $filter['company_id'];
+        SelfserviceTenantScopeGuard::assertRegistrationRecordIdBelongsToCompany($companyId, $record_id);
         $registrationRecordService = new RegistrationRecordService();
-        $rs = $registrationRecordService->entityRepository->getInfoById($record_id);
+        $rs = $registrationRecordService->entityRepository->getInfo(['record_id' => $record_id, 'company_id' => $companyId]);
         if (!$rs) {
             throw new StoreResourceFailedException(trans('SelfserviceBundle.registration_record_not_exist'));
         }
         if ($rs['status'] != 'passed') {
             throw new StoreResourceFailedException(trans('SelfserviceBundle.registration_record_cannot_verify'));
         }
-        if ($rs['verify_code'] != $verify_code) {
+        if ($verify_code !== null && $rs['verify_code'] != $verify_code) {
             throw new StoreResourceFailedException(trans('SelfserviceBundle.verification_code_error'));
         }
         $saveData = [
@@ -333,7 +341,7 @@ class RegistrationRecordController extends Controller
             'verify_time' => time(),
             'verify_operator' => app('auth')->user()->get('mobile'),
         ];
-        $result = $registrationRecordService->entityRepository->updateOneBy(['record_id' => $record_id], $saveData);
+        $result = $registrationRecordService->entityRepository->updateOneBy(['record_id' => $record_id, 'company_id' => $companyId], $saveData);
         return $this->response->array(['status' => $result]);
     }
 

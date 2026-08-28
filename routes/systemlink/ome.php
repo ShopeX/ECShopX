@@ -13,7 +13,7 @@
 
 $api->version('v1', function($api) {
 
-    $api->group(['namespace' => 'SystemLinkBundle\Http\ThirdApi\V1\Action'], function($api) {
+    $api->group(['namespace' => 'SystemLinkBundle\Http\ThirdApi\V1\Action', 'middleware' => ['BlockErpTestRoutes']], function($api) {
         //test 同步订单
         $api->get('test/event/{order_id}', ['as' => 'ome.order.test',  'uses'=>'Order@testEvent']);
 
@@ -32,8 +32,6 @@ $api->version('v1', function($api) {
         //test 售后买家取消
         $api->get('test/aftersales/cancel/event', ['as' => 'ome.order.aftersales.cancel',  'uses'=>'Order@testAftersalesCancelEvent']);
 
-        $api->get('ome/createitems', ['as' => 'ome.items.create', 'uses' => 'Item@createItems']);
-
     });
 
     $api->group(['namespace' => 'SystemLinkBundle\Http\ThirdApi\V1\Action','prefix'=>'systemlink', 'middleware' => ['ShopexErpCheck']], function($api) {
@@ -41,6 +39,7 @@ $api->version('v1', function($api) {
          // ome获取订单详情
         $api->post('ome', ['as' => 'ome.api',  'uses'=>'Verify@omeApi']);
         $api->post('ome/{method}', ['as' => 'ome.api',  'uses'=>'Verify@omeApi']);
+        $api->post('ome/createitems', ['as' => 'ome.items.create', 'uses' => 'Item@createItems']);
 
         // 订单发票信息接收
         //$api->post('ome/updateInvoice', ['as' => 'ome.api',  'uses'=>'Order@ReceiveOrderInvoice']);

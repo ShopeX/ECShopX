@@ -19,6 +19,7 @@ namespace GoodsBundle\Services;
 
 use GoodsBundle\Entities\ItemsCommission;
 use GoodsBundle\Entities\Items;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 
 use Dingo\Api\Exception\ResourceException;
 
@@ -53,6 +54,7 @@ class ItemsCommissionService
         if (!$itemDetail) {
             throw new ResourceException(trans('GoodsBundle/Controllers/Items.item_get_failed'));
         }
+        GoodsTenantScopeGuard::assertCompanyScope($itemDetail, (int) $filter['company_id']);
         $result = [
             'item_id' => $filter['item_id'],
             'goods_id' => $itemDetail['goods_id'],

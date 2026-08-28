@@ -88,14 +88,14 @@ $api->version('v1', function ($api) {
         $api->POST('/wxapp/order/bind/{order_id}', ['name'=>'绑定订单', 'as' => 'front.wxapp.order.bind', 'uses' => 'WxappOrder@bindUserOrder']);
 
         //自配送订单发货
-        $api->POST('/wxapp/order/delivery', ['name'=>'自配送订单发货', 'as' => 'front.wxapp.order.delivery', 'uses' => 'WxappOrder@delivery']);
+        $api->POST('/wxapp/order/delivery', ['name'=>'自配送订单发货', 'middleware' => 'frontselfdelivery', 'as' => 'front.wxapp.order.delivery', 'uses' => 'WxappOrder@delivery']);
         //自配送订单更新发货
-        $api->POST('/wxapp/order/updateDelivery/{delivery_id}', ['name'=>'自配送订单更新发货', 'as' => 'front.wxapp.order.updateDelivery', 'uses' => 'WxappOrder@updateDelivery']);
+        $api->POST('/wxapp/order/updateDelivery/{delivery_id}', ['name'=>'自配送订单更新发货', 'middleware' => 'frontselfdelivery', 'as' => 'front.wxapp.order.updateDelivery', 'uses' => 'WxappOrder@updateDelivery']);
 
         //取消配送
-        $api->POST('/wxapp/order/cancel/deliverystaff', ['name'=>'取消配送', 'as' => 'front.wxapp.order.cancel.Delivery', 'uses' => 'WxappOrder@cancelDeliveryStaff']);
+        $api->POST('/wxapp/order/cancel/deliverystaff', ['name'=>'取消配送', 'middleware' => 'frontselfdelivery', 'as' => 'front.wxapp.order.cancel.Delivery', 'uses' => 'WxappOrder@cancelDeliveryStaff']);
         //自配送订单更新发货
-        $api->POST('/wxapp/order/deliverypackag/confirm', ['name'=>'订单打包确认', 'as' => 'front.wxapp.order.confirm.deliverypackag', 'uses' => 'WxappOrder@confirmDeliveryPackag']);
+        $api->POST('/wxapp/order/deliverypackag/confirm', ['name'=>'订单打包确认', 'middleware' => 'frontselfdelivery', 'as' => 'front.wxapp.order.confirm.deliverypackag', 'uses' => 'WxappOrder@confirmDeliveryPackag']);
 
         // 线下转账--获取收款账户信息
         $api->GET('/wxapp/order/offline/backaccount', ['name'=>'线下转账--获取收款账户列表', 'as' => 'front.wxapp.order.offline.backaccount', 'uses' => 'WxappOrder@getOfflineAccount']);
@@ -114,7 +114,6 @@ $api->version('v1', function ($api) {
         $api->get('/wxapp/order/invoice/info/{id}',  ['name'=>'订单申请发票信息','as' => 'front.wxapp.order.invoice.detail',  'uses'=>'UserInvoice@getUserInvoiceDetail']);
         $api->post('/wxapp/order/invoice/resend',  ['name'=>'重发发票到邮箱','as' => 'front.wxapp.order.invoice.resend',  'uses'=>'UserInvoice@resendInvoiceEmail']);
         $api->get('/wxapp/order/invoice/setting',  ['name'=>'获取开票配置','as' => 'front.wxapp.order.invoice.setting',  'uses'=>'UserInvoice@getInvoiceSetting']);
-        $api->post('/wxapp/order/invoice/setting',  ['name'=>'设置开票配置','as' => 'front.wxapp.order.invoice.setting',  'uses'=>'UserInvoice@setInvoiceSetting']);
 
     });
 });

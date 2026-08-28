@@ -43,6 +43,91 @@ use CompanysBundle\Ego\CompanysActivationEgo;
 
 class CartService
 {
+    private $validShopIdsCache = [];
+
+    private $packageInfoCache = [];
+
+    private $itemsDataCache = [];
+
+    /**
+     * 预加载购物车涉及的的全部商品数据，多店铺场景下避免每店重复批量查询
+     */
+    public function prepareItemsData($companyId, array $cartList, $shopType = 'distributor')
+    {
+        $itemIds = array_column($cartList, 'item_id');
+        foreach ($cartList as $v) {
+            $itemIds = array_merge($itemIds, $v['items_id'] ?? []);
+        }
+        $itemIds = array_values(array_unique(array_filter($itemIds)));
+        if (!$itemIds) {
+            return [];
+        }
+
+        $cacheKey = $companyId . ':' . $shopType;
+        $stageStartedAt = microtime(true);
+        if ('pointsmall' == $shopType) {
+            $itemService = new PointsmallItemsService();
+        } else {
+            $itemService = new ItemsService();
+        }
+        $itemList = $itemService->getSkuItemsList(['company_id' => $companyId, 'item_id' => $itemIds]);
+        $this->itemsDataCache[$cacheKey] = $itemList['list'] ?? [];
+        app('log')->info('[CART_PERF] items_prepared', [
+            'company_id' => $companyId,
+            'item_count' => count($this->itemsDataCache[$cacheKey]),
+            'elapsed_ms' => round((microtime(true) - $stageStartedAt) * 1000, 2),
+        ]);
+        return $this->itemsDataCache[$cacheKey];
+    }
+
+    public function prepareValidShopIds($companyId, array $shopIds, $cartType = 'normal', $shopType = 'distributor')
+    {
+        if ($shopType != 'distributor') {
+            return [];
+        }
+
+        $shopIds = array_values(array_unique(array_filter($shopIds)));
+        if (!$shopIds) {
+            return [];
+        }
+
+        $cacheKey = $companyId . ':' . $shopType . ':' . $cartType;
+        $shopValidMap = $this->validShopIdsCache[$cacheKey] ?? [];
+        $missingShopIds = array_values(array_diff($shopIds, array_keys($shopValidMap)));
+        if ($missingShopIds) {
+            $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
+            $distributorFilter = ['distributor_id' => $missingShopIds];
+            if ($cartType !== 'shop_offline') {
+                $distributorFilter['is_valid'] = 'true';
+            }
+            $validShopList = $distributorRepository->getLists($distributorFilter, 'distributor_id');
+            $validShopIds = array_column($validShopList, 'distributor_id');
+            $merchantIds = array_column($validShopList, 'merchant_id');
+            $validShopIds = (new MerchantService())->getVaildDistributorByMid($companyId, $merchantIds, $validShopIds);
+            foreach ($missingShopIds as $shopId) {
+                $shopValidMap[$shopId] = in_array($shopId, $validShopIds);
+            }
+            $this->validShopIdsCache[$cacheKey] = $shopValidMap;
+        }
+
+        return array_values(array_intersect($shopIds, array_keys(array_filter($shopValidMap))));
+    }
+
+    private function getValidShopIds($companyId, array $shopIds, $cartType, $shopType)
+    {
+        if ($shopType != 'distributor') {
+            return [];
+        }
+        $shopIds = array_values(array_unique(array_filter($shopIds)));
+        if (!$shopIds) {
+            return [];
+        }
+        $this->prepareValidShopIds($companyId, $shopIds, $cartType, $shopType);
+        $cacheKey = $companyId . ':' . $shopType . ':' . $cartType;
+        $shopValidMap = $this->validShopIdsCache[$cacheKey] ?? [];
+        return array_values(array_intersect($shopIds, array_keys(array_filter($shopValidMap))));
+    }
+
     use CheckPromotionsValid;
     /** @var entityRepository */
     public $entityRepository;
@@ -428,6 +513,15 @@ class CartService
      */
     public function getCartList($companyId, $userId, $shopId = 0, $cartType = 'cart', $shopType = 'distributor', $isCheckout = false, $iscrossborder = false, $isShopScreen = false, $userDevice = 'miniprogram', $items = [], $inputData = [])
     {
+        $profileStartedAt = microtime(true);
+        $profileLog = function (string $stage, array $context = []) use ($profileStartedAt, $companyId, $shopId) {
+            app('log')->info('[CART_PERF] service_' . $stage, array_merge($context, [
+                'company_id' => $companyId,
+                'shop_id' => $shopId,
+                'elapsed_ms' => round((microtime(true) - $profileStartedAt) * 1000, 2),
+            ]));
+        };
+
         if ($cartType == 'offline') {
             $cartData = [];
             $offlineCartId = 0;
@@ -454,6 +548,7 @@ class CartService
         } else {
             $cartData = $this->__getCartBasicData($companyId, $userId, $isCheckout, $shopId, $cartType, $shopType, $inputData ?? []);
         }
+        $profileLog('basic_loaded', ['row_count' => count($cartData)]);
         if ($isCheckout && !$cartData) {
             throw new ResourceException(trans('OrdersBundle/Order.cart_selected_items_empty'));
         }
@@ -461,7 +556,11 @@ class CartService
             return ['invalid_cart' => [], 'valid_cart' => []];
         }
 
-        $cartData = $this->__getValidCartList($companyId, $userId, $cartData, $shopId, $shopType, $isCheckout, $iscrossborder, $isShopScreen, $userDevice);
+        $cartData = $this->__getValidCartList($companyId, $userId, $cartData, $shopId, $cartType, $shopType, $isCheckout, $iscrossborder, $isShopScreen, $userDevice);
+        $profileLog('validity_checked', [
+            'valid_count' => count($cartData['valid_cart'] ?? []),
+            'invalid_count' => count($cartData['invalid_cart'] ?? []),
+        ]);
         if (!$cartData || (isset($cartData['valid_cart']) && empty($cartData['valid_cart']))) {
             if ($isCheckout) {
                 throw new ResourceException(trans('OrdersBundle/Order.cart_items_not_from_same_shop'));
@@ -480,6 +579,11 @@ class CartService
         if (method_exists($cartTypeService, 'formatCartList')) {
             $cartData = $cartTypeService->formatCartList($companyId, $userId, $cartData, $isCheckout, $userDevice);
         }
+        foreach ($cartData['valid_cart'] as &$cartRow) {
+            unset($cartRow['item_info']);
+        }
+        unset($cartRow);
+        $profileLog('promotions_formatted');
         if (!$cartData['is_check_store']) {
             foreach ($cartData['valid_cart'] as $row) {
                 if ($row['store'] < $row['num'] && $isCheckout) {
@@ -499,8 +603,10 @@ class CartService
 
         //处理会员价
         $cartData['valid_cart'] = $this->getCartItemUserGradePrice($cartData['valid_cart'], $companyId, $userId);
+        $profileLog('member_price_applied');
         //处理购物车价格计算
         $cartData['valid_cart'] = $this->getTotalCart($cartData['valid_cart'], $cartTypeService, $shopId, $companyId);
+        $profileLog('total_calculated');
         if ($cartData['invalid_cart']) {
             $cartIds = array_column($cartData['invalid_cart'], 'cart_id');
             $this->entityRepository->updateBy(['cart_id' => $cartIds], ['is_checked' => false]);
@@ -515,6 +621,10 @@ class CartService
             }
         }
 
+        $profileLog('done', [
+            'valid_count' => count($cartData['valid_cart'] ?? []),
+            'invalid_count' => count($cartData['invalid_cart'] ?? []),
+        ]);
         return $cartData;
     }
 
@@ -563,7 +673,7 @@ class CartService
      *
      * @return array
      */
-    private function __getValidCartList($companyId, $userId, $cartList, $shopId, $shopType, $isCheckout, $iscrossborder, $isShopScreen = false, $userDevice = 'miniprogram')
+    private function __getValidCartList($companyId, $userId, $cartList, $shopId, $cartType, $shopType, $isCheckout, $iscrossborder, $isShopScreen = false, $userDevice = 'miniprogram')
     {
         $itemIds = array_column($cartList, 'item_id');
         foreach ($cartList as $v) {
@@ -571,18 +681,30 @@ class CartService
         }
         $itemIds = array_unique(array_filter($itemIds));
 
-        //检查商品是否有效
-        $filter = [
-            'company_id' => $companyId,
-            'item_id' => $itemIds,
-        ];
-        if ('pointsmall' == $shopType) {
-            $itemService = new PointsmallItemsService();
+        $stageStartedAt = microtime(true);
+        $itemsCacheKey = $companyId . ':' . $shopType;
+        if (array_key_exists($itemsCacheKey, $this->itemsDataCache)) {
+            // 使用请求级预加载的全量商品数据切片，避免每店重复批量查询
+            $needMap = array_flip($itemIds);
+            $cachedList = array_values(array_filter($this->itemsDataCache[$itemsCacheKey], function ($row) use ($needMap) {
+                return isset($needMap[$row['item_id']]);
+            }));
+            $itemList = ['total_count' => count($cachedList), 'list' => $cachedList];
+            $itemsFromCache = true;
         } else {
-            $itemService = new ItemsService();
+            //检查商品是否有效
+            $filter = [
+                'company_id' => $companyId,
+                'item_id' => $itemIds,
+            ];
+            if ('pointsmall' == $shopType) {
+                $itemService = new PointsmallItemsService();
+            } else {
+                $itemService = new ItemsService();
+            }
+            $itemList = $itemService->getSkuItemsList($filter);
+            $itemsFromCache = false;
         }
-
-        $itemList = $itemService->getSkuItemsList($filter);
         if ($itemList['total_count'] <= 0) {
             return ['valid_cart' => [], 'invalid_cart' => $cartList];
         }
@@ -591,9 +713,16 @@ class CartService
             $distributorItemsService = new DistributorItemsService();
             $itemList['list'] = $distributorItemsService->getDistributorSkuReplace($companyId, $shopId, $itemList['list']);
         }
+        app('log')->info('[CART_PERF] validity_items_loaded', [
+            'company_id' => $companyId,
+            'shop_id' => $shopId,
+            'item_count' => count($itemList['list']),
+            'from_cache' => $itemsFromCache,
+            'elapsed_ms' => round((microtime(true) - $stageStartedAt) * 1000, 2),
+        ]);
 
         $itemList = array_column($itemList['list'], null, 'item_id');
-        $data = $this->HandleValidCart($companyId, $userId, $cartList, $itemList, 'normal', $iscrossborder, $isShopScreen, $shopType, $userDevice);
+        $data = $this->HandleValidCart($companyId, $userId, $cartList, $itemList, $cartType, $iscrossborder, $isShopScreen, $shopType, $userDevice);
 
         return $data;
     }
@@ -624,6 +753,15 @@ class CartService
      */
     public function HandleValidCart($companyId, $userId, $cartList, $itemList, $cartType = 'normal', $iscrossborder = false, $isShopScreen = false, $shopType = 'distributor', $userDevice = 'miniprogram')
     {
+        $profileStartedAt = microtime(true);
+        $profileLog = function (string $stage, array $context = []) use ($profileStartedAt, $companyId, $shopType) {
+            app('log')->info('[CART_PERF] validity_' . $stage, array_merge($context, [
+                'company_id' => $companyId,
+                'shop_type' => $shopType,
+                'elapsed_ms' => round((microtime(true) - $profileStartedAt) * 1000, 2),
+            ]));
+        };
+
         // 跨境
         if ($iscrossborder == 1) {
             // 产地国信息
@@ -640,34 +778,31 @@ class CartService
             }
         }
 
-        //获取购物车商品相关的有效的店铺集合
+        //获取购物车商品相关的有效的店铺集合，请求内复用预加载结果
         $shopIds = array_unique(array_column($cartList, 'shop_id'));
-        $validShopIds = [];
-        // if ($cartType != 'employee_purchase' && $shopType == 'distributor') {
-        if ($shopType == 'distributor') {
-            $distributorRepository = app('registry')->getManager('default')->getRepository(Distributor::class);
-            $distributorFilter = ['distributor_id' => $shopIds];
-            // 店务线下收银购物车：不因云店 is_valid 禁用而清空有效购物车（实体门店仍可开单）
-            if ($cartType !== 'shop_offline') {
-                $distributorFilter['is_valid'] = 'true';
-            }
-            $validShopList = $distributorRepository->getLists($distributorFilter, 'distributor_id');
-            $validShopIds = array_column($validShopList, 'distributor_id');
-            $merchantIds = array_column($validShopList, 'merchant_id');
-            // 获取可用的店铺id,去检查店铺关联的商户，是否是开启状态
-            $merchantService = new MerchantService();
-            $validShopIds = $merchantService->getVaildDistributorByMid($companyId, $merchantIds, $validShopIds);
-        }
+        $validShopIds = $this->getValidShopIds($companyId, $shopIds, $cartType, $shopType);
+        $profileLog('shops_checked', ['valid_shop_count' => count($validShopIds)]);
 
         $validCart = []; //购物车有效的商品
         $invalidCart = []; //购物车失效商品
         $packageService = new PackageService();
+        $itemTimings = ['member_preference_ms' => 0.0, 'single_item_ms' => 0.0, 'package_ms' => 0.0];
         foreach ($cartList as $k => $cartdata) {
             $itemId = $cartdata['item_id'];
             $memberpreference = true;
             $cartdata['shop_type'] = $cartdata['shop_type'] ?? '';
             if ($cartType != 'employee_purchase' && ($cartdata['shop_type'] != 'pointsmall' && $cartdata['shop_type'] != 'shop_offline')) {
-                $memberpreference = $this->checkCurrentMemberpreferenceByItemId($companyId, $userId, $itemId, $msg, $cartdata['shop_id'], false);
+                $stageStartedAt = microtime(true);
+                $memberpreference = $this->checkCurrentMemberpreferenceByItemId(
+                    $companyId,
+                    $userId,
+                    $itemId,
+                    $msg,
+                    $cartdata['shop_id'],
+                    false,
+                    $itemList[$itemId] ?? null
+                );
+                $itemTimings['member_preference_ms'] += (microtime(true) - $stageStartedAt) * 1000;
             }
             if (!$memberpreference) {
                 $invalidCart[] = $cartdata;
@@ -685,15 +820,17 @@ class CartService
                 }
             }
             $itemPic = $this->resolveCartItemPic($itemList[$itemId]);
+            $cartdata['item_info'] = $itemList[$itemId];
             if ($cartType != 'employee_purchase' &&'package' == ($cartdata['activity_type'] ?? '') && ($cartdata['items_id'] ?? null)) {
-                $packageInfo = $packageService->getPackageInfo($companyId, $cartdata['activity_id']);
-                if (!$packageInfo) {
-                    $invalidCart[] = $cartdata;
-                    continue;
+                $stageStartedAt = microtime(true);
+                $packageCacheKey = $companyId . ':' . $cartdata['activity_id'];
+                if (!array_key_exists($packageCacheKey, $this->packageInfoCache)) {
+                    $this->packageInfoCache[$packageCacheKey] = $packageService->getPackageInfo($companyId, $cartdata['activity_id']);
                 }
-                // 判断组合商品是否有效
-                $result = $this->packageItem($companyId, $userId, $packageInfo, $cartdata, $itemList);
-                if (!$result) {
+                $packageInfo = $this->packageInfoCache[$packageCacheKey];
+                $result = $packageInfo ? $this->packageItem($companyId, $userId, $packageInfo, $cartdata, $itemList) : false;
+                $itemTimings['package_ms'] += (microtime(true) - $stageStartedAt) * 1000;
+                if (!$packageInfo || !$result) {
                     $invalidCart[] = $cartdata;
                     continue;
                 }
@@ -764,7 +901,9 @@ class CartService
                 $validCart[] = $cartdata;
             } else {
                 if ($shopType != 'pointsmall') {
+                    $stageStartedAt = microtime(true);
                     $result = $this->singleItem($companyId, $userId, $cartdata, $itemList);
+                    $itemTimings['single_item_ms'] += (microtime(true) - $stageStartedAt) * 1000;
                     if (!$result) {
                         $invalidCart[] = $cartdata;
                         continue;
@@ -922,6 +1061,13 @@ class CartService
                 }
             }
         }
+        $profileLog('items_checked', [
+            'valid_count' => count($validCart),
+            'invalid_count' => count($invalidCart),
+            'member_preference_ms' => round($itemTimings['member_preference_ms'], 2),
+            'single_item_ms' => round($itemTimings['single_item_ms'], 2),
+            'package_ms' => round($itemTimings['package_ms'], 2),
+        ]);
         $data['valid_cart'] = $validCart;
         $data['invalid_cart'] = $invalidCart;
         return $data;
@@ -969,7 +1115,7 @@ class CartService
             }
 
             if (($cartdata['shop_type'] ?? '') != 'shop_offline') {
-                return $this->limitBuy($companyId, $userId, $v, $cartdata['num']);
+                return $this->limitBuy($companyId, $userId, $v, $cartdata['num'], $itemList[$v] ?? null);
             }
         }
 
@@ -1008,7 +1154,7 @@ class CartService
         }
 
         if (($cartdata['shop_type'] ?? '') != 'shop_offline' && ($cartdata['shop_type'] ?? '') != 'employee_purchase') {
-            return $this->limitBuy($companyId, $userId, $itemId, $cartdata['num']);
+            return $this->limitBuy($companyId, $userId, $itemId, $cartdata['num'], $itemList[$itemId] ?? null);
         }
 
         return true;
@@ -1020,9 +1166,10 @@ class CartService
      * @param $userId
      * @param $itemId
      * @param $number
+     * @param array|null $itemInfo 已加载的商品信息，避免重复查询
      * @return bool
      */
-    public function limitBuy($companyId, $userId, $itemId, $number)
+    public function limitBuy($companyId, $userId, $itemId, $number, $itemInfo = null)
     {
         $limitService = new  LimitService();
         $filter = [
@@ -1036,8 +1183,10 @@ class CartService
             return true;
         }
 
-        $itemsService = new ItemsService();
-        $itemInfo = $itemsService->getInfo(['item_id' => $itemId, 'company_id' => $companyId]);
+        if ($itemInfo === null) {
+            $itemsService = new ItemsService();
+            $itemInfo = $itemsService->getInfo(['item_id' => $itemId, 'company_id' => $companyId]);
+        }
 
         $activityData['activity_type'] = 'limited_buy';
         $limitInfo = $limitService->getLimitInfo($companyId, $limitItemInfo['limit_id']);
@@ -1777,7 +1926,7 @@ class CartService
             foreach ($shopIds as $shopId) {
                 $cartData = $this->__getCartBasicData($filter['company_id'], $filter['user_id'], false, $shopId, $cartType, $filter['shop_type']);
                 if ($cartData) {
-                    $cartData = $this->__getValidCartList($filter['company_id'], $filter['user_id'], $cartData, $shopId, $filter['shop_type'], false, $iscrossborder, $isShopScreen);
+                    $cartData = $this->__getValidCartList($filter['company_id'], $filter['user_id'], $cartData, $shopId, $cartType, $filter['shop_type'], false, $iscrossborder, $isShopScreen);
                     if (!empty($cartData['invalid_cart'])) {
                         $cartIds = array_merge(array_column($cartData['invalid_cart'], 'cart_id'), $cartIds);
                     }

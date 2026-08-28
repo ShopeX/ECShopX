@@ -28,6 +28,7 @@ use Illuminate\Http\Request;
 use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Response;
 use GoodsBundle\Services\ItemsService;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 use Illuminate\Validation\Rule;
 use PointBundle\Services\PointMemberRuleService;
 use PopularizeBundle\Services\SettingService;
@@ -2311,6 +2312,8 @@ class Items extends BaseController
             throw new ResourceException($errorMessage);
         }
 
+        GoodsTenantScopeGuard::assertItemIdsBelongToCompany((int) $companyId, array_column($params, 'item_id'));
+
         if ($operator_type == 'supplier') {
             $SupplierItemsService = new SupplierItemsService();
             $SupplierItemsService->updateItemsStore($companyId, $params);
@@ -2483,8 +2486,15 @@ class Items extends BaseController
         if ($validator->fails()) {
             throw new ResourceException(trans('GoodsBundle/Controllers/Items.param_error'), $validator->errors());
         }
+        $companyId = app('auth')->user()->get('company_id');
         $keywordsService = new KeywordsService();
-        $result = $keywordsService->getInfoById($request->get('id'));
+        $result = $keywordsService->getInfo([
+            'id' => $request->get('id'),
+            'company_id' => $companyId,
+        ]);
+        if (!$result) {
+            throw new ResourceException(trans('GoodsBundle/Controllers/Items.record_not_exists'));
+        }
         return $this->response->array($result);
     }
 

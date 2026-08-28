@@ -526,7 +526,9 @@ class WxShopsService implements ShopsInterface
             throw new ResourceException('请填写配置信息');
         }
         $ns = new CommonLangModService();
-        $params = $ns->setLangDataIndexLang($params,['intro','brand_name','name']);
+        $oldData = app('redis')->connection('companys')->get($this->genReidsId($companyId));
+        $oldData = $oldData ? json_decode($oldData, true) : [];
+        $params = array_merge($oldData, $ns->setLangDataIndexLang($params, ['intro','brand_name','name']));
 
         return app('redis')->connection('companys')->set($this->genReidsId($companyId), json_encode($params));
     }
@@ -537,9 +539,18 @@ class WxShopsService implements ShopsInterface
         if ($data) {
             $data = json_decode($data, true);
             $ns = new CommonLangModService();
-            $data = $ns->getLangDataIndexLang($data);
-            
-            return $data;
+            $langData = $ns->getLangDataIndexLang($data);
+            if (!$langData) {
+                $langData = $ns->getLangDataIndexLang($data, $ns->getDefaultLang());
+            }
+            if (!$langData) {
+                foreach ($data as $value) {
+                    if (is_array($value)) {
+                        return $value;
+                    }
+                }
+            }
+            return $langData;
         }else {
             $data = [
                 "intro" => '',

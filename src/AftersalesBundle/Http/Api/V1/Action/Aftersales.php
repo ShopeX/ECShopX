@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 
 use AftersalesBundle\Services\AftersalesService;
+use AftersalesBundle\Support\AftersalesDistributorGate;
 
 use Dingo\Api\Exception\ResourceException;
 
@@ -237,6 +238,13 @@ class Aftersales extends Controller
             'aftersales_bn' => $aftersales_bn,
         ];
         $result = $aftersalesService->getAftersales($filter, true);
+        $distributorListSet = app('auth')->user()->get('distributor_ids');
+        if (!empty($distributorListSet)) {
+            AftersalesDistributorGate::assertOwnStoreAftersales(
+                $result,
+                array_column($distributorListSet, 'distributor_id')
+            );
+        }
 
         return $this->response->array($result);
     }
@@ -419,21 +427,7 @@ class Aftersales extends Controller
             $filter['distributor_id'] = $request->get('distributorIds');
         }
 
-        $distributorListSet = app('auth')->user()->get('distributor_ids');
-        if (!empty($distributorListSet)) {
-            $distributorIdSet = array_column($distributorListSet, 'distributor_id');
-            if (!empty($filter['distributor_id'])) {
-                if (is_array($filter['distributor_id'])) {
-                    $filter['distributor_id'] = array_intersect($filter['distributor_id'], $distributorIdSet);
-                } else {
-                    if (!in_array($filter['distributor_id'], $distributorIdSet)) {
-                        unset($filter['distributor_id']);
-                    }
-                }
-            } else {
-                $filter['distributor_id'] = $distributorIdSet;
-            }
-        }
+        AftersalesDistributorGate::assertAuthorizedDistributorFilter($filter, app('auth')->user());
 
         // 是否为处方单，关联订单查询
         if ($request->input('is_prescription_order')) {
@@ -661,6 +655,7 @@ class Aftersales extends Controller
         $params['freight'] = $params['freight'] ?? 0;
         $params['operator_type'] = 'admin';
         $params['operator_id'] = app('auth')->user()->get('operator_id');
+        AftersalesDistributorGate::attachApiAuthScope($params, app('auth')->user());
         $aftersalesService = new AftersalesService();
         // 批量处理
         if (is_array($params['aftersales_bn'])) {
@@ -831,6 +826,7 @@ class Aftersales extends Controller
             throw new ResourceException(trim($errmsg, '，'));
         }
 
+        AftersalesDistributorGate::attachApiAuthScope($params, app('auth')->user());
         $aftersalesService = new AftersalesService();
         if (is_array($params['aftersales_bn'])) {
             $aftersales_bns = $params['aftersales_bn'];
@@ -1004,6 +1000,8 @@ class Aftersales extends Controller
                 $filter['order_id'] = array_column($orderLists, 'order_id');
             }
         }
+
+        AftersalesDistributorGate::assertAuthorizedDistributorFilter($filter, app('auth')->user());
 
         $aftersalesService = new AftersalesService();
         $count = $aftersalesService->count($filter);

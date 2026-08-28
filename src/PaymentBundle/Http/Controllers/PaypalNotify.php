@@ -19,6 +19,7 @@ namespace PaymentBundle\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use DepositBundle\Services\DepositTrade;
+use EspierBundle\Support\OutboundUrlAllowlist;
 use Illuminate\Http\Request;
 use OrdersBundle\Services\TradeService;
 use PaymentBundle\Services\Payments\PaypalService;
@@ -35,8 +36,14 @@ class PaypalNotify extends Controller
         $paymentId = $request->input('paymentId');
         $token = $request->input('token');
         $payerId = $request->input('PayerID');
-        $returnUrl = $request->input('return_url', '/payment/success');
-        $cancelUrl = $request->input('cancel_url', '/payment/failed');
+        $returnUrl = $this->validateRedirectUrl(
+            (string) $request->input('return_url', '/payment/success'),
+            '/payment/success'
+        );
+        $cancelUrl = $this->validateRedirectUrl(
+            (string) $request->input('cancel_url', '/payment/failed'),
+            '/payment/failed'
+        );
         
         app('log')->info('PayPal支付回调: ' . json_encode([
             'paymentId' => $paymentId,
@@ -182,8 +189,11 @@ class PaypalNotify extends Controller
      */
     public function cancel(Request $request)
     {
-        $cancelUrl = $request->input('cancel_url', '/payment/cancelled');
-        
+        $cancelUrl = $this->validateRedirectUrl(
+            (string) $request->input('cancel_url', '/payment/cancelled'),
+            '/payment/cancelled'
+        );
+
         app('log')->info('PayPal支付取消: ' . json_encode([
             'cancelUrl' => $cancelUrl,
             'request' => $request->all()
@@ -191,7 +201,29 @@ class PaypalNotify extends Controller
         
         return redirect($cancelUrl);
     }
-    
+
+    /**
+     * Reject open redirects: allow same-app relative paths or absolute URLs on APP_URL host.
+     */
+    private function validateRedirectUrl(string $url, string $default): string
+    {
+        if ($url !== '' && $url[0] === '/' && strncmp($url, '//', 2) !== 0) {
+            return $url;
+        }
+
+        if (!OutboundUrlAllowlist::isAllowed($url)) {
+            return $default;
+        }
+
+        $appHost = parse_url((string) env('APP_URL', ''), PHP_URL_HOST);
+        $urlHost = parse_url($url, PHP_URL_HOST);
+        if (!$appHost || !$urlHost || strcasecmp((string) $appHost, (string) $urlHost) !== 0) {
+            return $default;
+        }
+
+        return $url;
+    }
+
     /**
      * 处理 PayPal Webhook 事件
      */

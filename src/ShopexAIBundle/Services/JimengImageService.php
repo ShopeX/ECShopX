@@ -54,7 +54,7 @@ class JimengImageService
                 'Authorization' => 'Bearer ' . $this->apiKey
             ],
             'debug' => config('app.debug', false),
-            'verify' => false // 临时禁用SSL验证用于测试
+            'verify' => true,
         ]);
     }
 

@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 
 use PromotionsBundle\Services\MemberPriceService;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 
 use Dingo\Api\Exception\ResourceException;
 
@@ -72,6 +73,11 @@ class MemberPrice extends Controller
         $memberPriceService = new MemberPriceService();
 
         $params['company_id'] = app('auth')->user()->get('company_id');
+
+        $mprice = json_decode((string) ($params['mprice'] ?? ''), true);
+        if (is_array($mprice)) {
+            GoodsTenantScopeGuard::assertItemIdsBelongToCompany((int) $params['company_id'], array_keys($mprice));
+        }
 
         $result = $memberPriceService->saveMemberPrice($params);
 

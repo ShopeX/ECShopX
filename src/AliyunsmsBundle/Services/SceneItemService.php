@@ -78,23 +78,23 @@ class SceneItemService
     }
 
     public function enableItem($filter) {
-        $sceneItem = $this->repository->getInfo(['id' => $filter['id'], 'status'=>0]);
+        $sceneItem = $this->repository->getInfo(['id' => $filter['id'], 'company_id' => $filter['company_id'], 'status'=>0]);
         if(!$sceneItem) {
             return true;
         }
-        $this->repository->updateBy(['scene_id' => $sceneItem['scene_id']], ['status' => 0]);
-        $this->repository->updateOneBy($filter, ['status' => 1]);
-        (new SceneService())->updateOneBy(['id' => $sceneItem['scene_id']], ['status' => 'enabled']);
+        $this->repository->updateBy(['scene_id' => $sceneItem['scene_id'], 'company_id' => $filter['company_id']], ['status' => 0]);
+        $this->repository->updateOneBy(['id' => $filter['id'], 'company_id' => $filter['company_id']], ['status' => 1]);
+        (new SceneService())->updateOneBy(['id' => $sceneItem['scene_id'], 'company_id' => $filter['company_id']], ['status' => 'enabled']);
         return true;
     }
 
     public function disableItem($filter) {
-        $sceneItem = $this->repository->getInfo(['id' => $filter['id'], 'status' => 1]);
+        $sceneItem = $this->repository->getInfo(['id' => $filter['id'], 'company_id' => $filter['company_id'], 'status' => 1]);
         if(!$sceneItem) {
             return true;
         }
-        $this->repository->updateBy($filter, ['status' => 0]);
-        (new SceneService())->updateOneBy(['id' => $sceneItem['scene_id']], ['status' => 'disabled']);
+        $this->repository->updateBy(['id' => $filter['id'], 'company_id' => $filter['company_id']], ['status' => 0]);
+        (new SceneService())->updateOneBy(['id' => $sceneItem['scene_id'], 'company_id' => $filter['company_id']], ['status' => 'disabled']);
         return true;
     }
 

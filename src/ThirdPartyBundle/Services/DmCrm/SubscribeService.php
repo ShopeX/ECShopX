@@ -7,6 +7,8 @@ namespace ThirdPartyBundle\Services\DmCrm;
 
 use App\Exceptions\Handler;
 use Dingo\Api\Exception\ResourceException;
+use ThirdPartyBundle\Auth\CacheDmCrmCallbackNonceStore;
+use ThirdPartyBundle\Auth\DmCrmCallbackNonceStoreInterface;
 use ThirdPartyBundle\Jobs\DmCrm\SyncMemberLevelChangeJob;
 
 class SubscribeService extends DmService
@@ -84,20 +86,52 @@ class SubscribeService extends DmService
     }
 
     public function checkSign($params)
-    {       
+    {
         $sign = $params['sign'];
         $timestamp = $params['timestamp'];
         $msgContent = $params['msgContent'];
+        $this->assertCallbackTimestampFresh($timestamp);
         // 如果存在加密就先解密数据
         if ($params['encryptFlag'] === true || $params['encryptFlag'] == 'true') {
             $msgContent = $this->decryptData($msgContent);
         }
 
         if ($sign != $this->getSign($msgContent, $timestamp)) {
-            throw new ResourceException("事件签名校验失败");    
+            throw new ResourceException("事件签名校验失败");
         }
-      
+
+        $this->assertNonceNotReplayed($params, $sign, $timestamp);
+
         return true;
+    }
+
+    private function assertCallbackTimestampFresh($timestamp): void
+    {
+        $callbackTime = is_numeric($timestamp) ? (int) $timestamp : strtotime((string) $timestamp);
+        if ($callbackTime === false || abs($callbackTime - time()) > 600) {
+            throw new ResourceException('回调 timestamp 不合法或已过期');
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function assertNonceNotReplayed(array $params, string $sign, $timestamp): void
+    {
+        $nonce = trim((string) ($params['nonce'] ?? $params['requestId'] ?? $sign));
+        if ($nonce === '') {
+            throw new ResourceException('回调缺少 nonce');
+        }
+
+        $nonceStore = $this->resolveDmCrmCallbackNonceStore();
+        if (!$nonceStore->consumeNonce($nonce.':'.$timestamp, 600)) {
+            throw new ResourceException('回调 nonce 已使用，拒绝重放');
+        }
+    }
+
+    private function resolveDmCrmCallbackNonceStore(): DmCrmCallbackNonceStoreInterface
+    {
+        return new CacheDmCrmCallbackNonceStore(app('cache.store'));
     }
   
     private function getMap($msgContent)

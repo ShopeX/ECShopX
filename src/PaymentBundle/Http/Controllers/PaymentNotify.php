@@ -18,10 +18,12 @@
 namespace PaymentBundle\Http\Controllers;
 
 use App\Http\Controllers\Controller as Controller;
+use DepositBundle\Entities\DepositTrade as DBDepositTrade;
 use DepositBundle\Services\DepositTrade;
 use Illuminate\Http\Request;
 use PaymentBundle\Services\Payments\AlipayService;
 use OrdersBundle\Services\TradeService;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 class PaymentNotify extends Controller
 {
@@ -38,13 +40,25 @@ class PaymentNotify extends Controller
             return [];
         }
         $data = AlipayService::encoding($data, 'utf-8', $data['charset'] ?? 'gb2312');
+        parse_str(urldecode($data['passback_params']), $returnData);
         // 获取tradeInfo
         $tradeService = new TradeService();
         $tradeInfo = $tradeService->getInfo(['trade_id' => $data['out_trade_no']]);
+        $companyId = $tradeInfo['company_id'] ?? null;
+        if (empty($companyId)) {
+            $depositEntity = app('registry')->getManager('default')
+                ->getRepository(DBDepositTrade::class)
+                ->find($data['out_trade_no']);
+            if ($depositEntity) {
+                $companyId = $depositEntity->getCompanyId();
+            }
+        }
+        if (empty($companyId)) {
+            throw new BadRequestHttpException('支付回调无法解析交易所属租户');
+        }
         $distributorId = $tradeInfo['distributor_id'] ?? 0;
         $alipayService = new AlipayService($distributorId);
-        parse_str(urldecode($data['passback_params']), $returnData);
-        $alipay = $alipayService->getPayment($returnData['company_id']);
+        $alipay = $alipayService->getPayment($companyId);
         try {
             $params = $alipay->verify($data); // 是的，验签就这么简单！
 

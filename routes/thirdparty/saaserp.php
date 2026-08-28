@@ -13,7 +13,7 @@
 
 $api->version('v1', function($api) {
 
-    $api->group(['namespace' => 'ThirdPartyBundle\Http\ThirdApi\V1\Action'], function($api) {
+    $api->group(['namespace' => 'ThirdPartyBundle\Http\ThirdApi\V1\Action', 'middleware' => ['BlockErpTestRoutes']], function($api) {
         //test 同步订单
         $api->get('saaserp/test/event/{order_id}', ['as' => 'saaserp.order.test',  'uses'=>'Order@testEvent']);
 

@@ -1,7 +1,7 @@
 <?php
 
 $api->version('v1', function($api) {
-    $api->group(['namespace' => 'ThirdPartyBundle\Http\ThirdApi\V1\Action'], function($api) {
+    $api->group(['namespace' => 'ThirdPartyBundle\Http\ThirdApi\V1\Action', 'middleware' => ['Kuaizhen580CallbackCheck']], function($api) {
         // 药品审核结果
         $api->post('/third/kuaizhen/medicineAuditResult', ['as' => 'third.kuaizhen580.medicineAuditResult', 'uses'=>'Kuaizhen580@medicineAuditResult']);
 

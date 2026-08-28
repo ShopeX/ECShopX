@@ -371,6 +371,10 @@ class ArticleController extends BaseController
         if (empty($cacheKey)) {
             return $this->response->error('请提供有效的缓存键', 400);
         }
+
+        if (!Str::startsWith($cacheKey, $this->cacheKeyPrefix)) {
+            return $this->response->error('无效的缓存键', 400);
+        }
         
         // 检查缓存
         $cachedResult = $this->checkCache($cacheKey);
@@ -433,11 +437,18 @@ class ArticleController extends BaseController
      */
     protected function generateCacheKey(array $data): string
     {
+        $auth = app('auth')->user();
+        $scope = [
+            'company_id' => $auth ? (int) $auth->get('company_id') : 0,
+            'operator_id' => $auth ? (int) $auth->get('operator_id') : 0,
+        ];
+        $payload = array_merge($scope, $data);
+
         // 对数据进行排序，确保相同内容但顺序不同的数据生成相同的键
-        $this->sortRecursive($data);
+        $this->sortRecursive($payload);
         
         // 生成MD5作为缓存键
-        return $this->cacheKeyPrefix . md5(json_encode($data));
+        return $this->cacheKeyPrefix . md5(json_encode($payload));
     }
     
     /**

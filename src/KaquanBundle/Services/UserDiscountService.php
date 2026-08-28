@@ -374,6 +374,17 @@ class UserDiscountService implements UserDiscountInterface
             throw new ResourceException(trans('KaquanBundle.coupon_record_add_failed'));
         }
 
+        return $this->lockCouponReceive($companyId, $cardId, function () use (
+            $companyId,
+            $cardId,
+            $userId,
+            $sourceFrom,
+            $salespersonId,
+            $activityName,
+            $dmCardCode,
+            $mobile,
+            $salespersonCode
+        ) {
         $postdata['status'] = 1;
         // 校验优惠券是否能领取
         $cardInfo = $this->__getCardInfo($cardId, $companyId, $userId);
@@ -479,6 +490,7 @@ class UserDiscountService implements UserDiscountInterface
         $result['dm_card_code'] = $postdata['dm_card_code'] ?? '';
         $this->sendWxaTemplateMsg($companyId, $userId, $cardInfo, 'get');
         return $result;
+        });
     }
 
     public function sendWxaTemplateMsg($companyId, $userId, $data, $source = 'get')
@@ -563,6 +575,7 @@ class UserDiscountService implements UserDiscountInterface
      */
     public function userConsumeCard($companyId, $code, $params = ['consume_outer_str' => '快捷买单核销'])
     {
+        return $this->lockCouponConsume($companyId, $code, function () use ($companyId, $code, $params) {
         $filter['company_id'] = $companyId;
         $filter['code'] = $code;
         if (isset($params['user_id'])) {
@@ -648,6 +661,7 @@ class UserDiscountService implements UserDiscountInterface
         $userCardInfo['status'] = $postdata['status'];
         $this->sendWxaTemplateMsg($companyId, $userCardInfo['user_id'], $userCardInfo, 'used');
         return $result;
+        });
     }
 
     /**
@@ -1916,6 +1930,34 @@ class UserDiscountService implements UserDiscountInterface
     {
         $key = "lock:discount:item:{$companyId}:{$itemId}";
         return $this->redisLock($key, $func, 6);
+    }
+
+    /**
+     * 领券分布式锁：并发领取时原子校验库存与用户限额。
+     */
+    public function lockCouponReceive(int $companyId, int $cardId, \Closure $func)
+    {
+        $key = "lock:coupon:receive:{$companyId}:{$cardId}";
+        $result = $this->redisLock($key, $func, 10, 5, 200);
+        if ($result === false) {
+            throw new ResourceException(trans('KaquanBundle.failed_to_receive_coupon'));
+        }
+
+        return $result;
+    }
+
+    /**
+     * 核销分布式锁：防止同一券码并发重复核销。
+     */
+    public function lockCouponConsume(int $companyId, string $code, \Closure $func)
+    {
+        $key = "lock:coupon:consume:{$companyId}:{$code}";
+        $result = $this->redisLock($key, $func, 10, 5, 200);
+        if ($result === false) {
+            throw new ResourceException(trans('KaquanBundle.coupon_use_failed_used_invalid'));
+        }
+
+        return $result;
     }
 
     /**

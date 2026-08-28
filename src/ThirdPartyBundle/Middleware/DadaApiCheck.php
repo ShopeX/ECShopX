@@ -59,7 +59,6 @@ class DadaApiCheck
      */
     public function _sign($data)
     {
-
         // 第一步：将参与签名的字段的值进行升序排列
         asort($data, SORT_STRING);
         // 第二步：将排序过后的参数，进行字符串拼接
@@ -67,8 +66,8 @@ class DadaApiCheck
         foreach ($data as $value) {
             $args .= $value;
         }
-        // 第三步：对第二步连接的字符串进行md5加密
-        $sign = md5($args);
-        return $sign;
+        $appSecret = (string) config('common.dada_app_secret');
+        // 第三步：共享密钥包裹后 md5（与达达开放平台出站签名一致）
+        return md5($appSecret.$args.$appSecret);
     }
 }

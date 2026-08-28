@@ -42,6 +42,7 @@ use PromotionsBundle\Http\FrontApi\V1\Action\TurntableWinningPrizePoint;
 use CompanysBundle\Services\OperatorsService;
 use PromotionsBundle\Repositories\LuckyDrawActivityRepository;
 use PromotionsBundle\Repositories\TurntableLogRepository;
+use PromotionsBundle\Support\PromotionActivityTenantScopeGuard;
 
 class TurntableService
 {
@@ -115,7 +116,7 @@ class TurntableService
         if (!empty($data['id'])) {
             $id = $data['id'];
             unset($data['id']);
-            $this->luckDrawActivityRepository->updateBy(['id' => $id], $data);
+            $this->luckDrawActivityRepository->updateBy(['id' => $id, 'company_id' => $data['company_id']], $data);
         } else {
             //存表
             $this->luckDrawActivityRepository->create($data);
@@ -135,7 +136,10 @@ class TurntableService
      */
     public function getTurntableConfig($company_id, $id, $userId = null)
     {
-        $data = $this->luckDrawActivityRepository->getInfo(['id' => $id]);
+        $data = $this->luckDrawActivityRepository->getInfo(['id' => $id, 'company_id' => $company_id]);
+        if (!$data) {
+            throw new ResourceException(trans('PromotionsBundle.activity_not_exist_with_id', ['id' => $id]));
+        }
 //        $this->redisConn = app('redis')->connection('default');
 //
 //        $result = $this->redisConn->hgetall('turntableConfigCompany_'.$company_id);
@@ -274,7 +278,12 @@ class TurntableService
     //david重构版本抽奖，抽奖的底层不变，只是兼容数据表
     public function doLuckyDraw(array $userInfo,int $actId)
     {
-        $actInfo = $this->luckDrawActivityRepository->getInfo(['id'=>$actId]);
+        return $this->lockTurntableDraw((int) $userInfo['user_id'], $actId, function () use ($userInfo, $actId) {
+        PromotionActivityTenantScopeGuard::assertLuckyDrawActivityBelongsToCompany(
+            $actId,
+            (int) $userInfo['company_id']
+        );
+        $actInfo = $this->luckDrawActivityRepository->getInfo(['id' => $actId, 'company_id' => $userInfo['company_id']]);
         $costPoint = $actInfo['cost_value'];
         $now = time();
         if($actInfo['end_time'] <= $now){
@@ -404,6 +413,7 @@ class TurntableService
             $relData['prize_title'] = $relData['fonts']['text'] ?? '';
         }
         return $relData;
+        });
     }
 
     public function addStock(int $actId,array $prizeData,$date = null)
@@ -853,5 +863,22 @@ class TurntableService
             'end_time'=>time(),
         ];
         $this->luckDrawActivityRepository->updateBy(['id' => $actId], $updateData);
+    }
+
+    private function lockTurntableDraw(int $userId, int $actId, \Closure $func)
+    {
+        $key = "lock:turntable:draw:{$userId}:{$actId}";
+        for ($i = 0; $i < 5; $i++) {
+            if ($this->redisConn->set($key, 1, 'NX', 'EX', 10)) {
+                try {
+                    $re = $func();
+                } finally {
+                    $this->redisConn->del($key);
+                }
+                return $re;
+            }
+            usleep(200000);
+        }
+        throw new ResourceException(trans('PromotionsBundle.daily_draw_limit_reached'));
     }
 }

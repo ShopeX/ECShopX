@@ -27,6 +27,7 @@ use WsugcBundle\Services\TopicService;
 use WsugcBundle\Services\SettingService;
 use WsugcBundle\Services\ContentCheckService;
 use WsugcBundle\Services\PostService;
+use EspierBundle\Support\OrderByWhitelist;
 class TopicController extends Controller
 {
      /**
@@ -229,13 +230,9 @@ class TopicController extends Controller
         $filter['enabled'] = 1;
         $filter['status'] = 1;//审核通过的才行
         $sort = $request->get('sort') ?? '';
-        $orderBy = [];
-        if ($sort && trim($sort)) {
-            $orderByRs = explode(' ', $sort);
-            $orderBy[$orderByRs[0]] = $orderByRs[1];
-            $orderBy['p_order'] = 'asc';
-            //$filter['start_time|gte']=time();//开始时间大于当前时间
-        }
+        $allowedSort = ['topic_id', 'created', 'updated', 'p_order', 'status', 'user_id'];
+        $appendOrder = ($sort && trim($sort)) ? ['p_order' => 'ASC'] : [];
+        $orderBy = OrderByWhitelist::fromSortString($sort, $allowedSort, [], $appendOrder);
         $cols='topic_id,topic_name,user_id,p_order,created,source,status';
         $result = $topicService->getTopicList($filter, $cols, $page, $pageSize, $orderBy);
 

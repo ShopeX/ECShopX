@@ -27,6 +27,8 @@ use WsugcBundle\Services\SettingService;
 use WsugcBundle\Services\PostTopicService;
 use WsugcBundle\Services\PostBadgeService;
 use WsugcBundle\Services\MessageService;
+use WsugcBundle\Support\WsugcTenantScopeGuard;
+use EspierBundle\Support\OrderByWhitelist;
 
 class PostController extends Controller
 {
@@ -219,6 +221,7 @@ class PostController extends Controller
         //创建或更新
         $action='add';
         if($params['post_id']??null){
+            WsugcTenantScopeGuard::assertPostIdsBelongToCompany((int) ($authInfo['company_id'] ?? 0), $params['post_id']);
             $result = $postService->saveData($params,['post_id'=>$params['post_id']]);
             $result['post_id']=$params['post_id'];
             $action='edit';
@@ -399,6 +402,7 @@ class PostController extends Controller
         //创建或更新
         $action='add';
         if($params['post_id']??null){
+            WsugcTenantScopeGuard::assertPostIdsBelongToCompany((int) ($authInfo['company_id'] ?? 0), $params['post_id']);
             $result = $postService->saveData($params,['post_id'=>$params['post_id']]);
             $result['post_id']=$params['post_id'];
             $action='edit';
@@ -543,6 +547,7 @@ class PostController extends Controller
         // $params['status'] =  1;
         // 查询活动信息
         $postService = new PostService();
+        WsugcTenantScopeGuard::assertPostIdsBelongToCompany((int) ($admin['company_id'] ?? 0), $params['post_id']);
         $params['manual_refuse_reason']=$params['refuse_reason']??'';
         $data=$params;
         unset($data['refuse_reason']);
@@ -680,6 +685,9 @@ class PostController extends Controller
         else{
             throw new ResourceException('post_id参数不能为空');
         }
+        $companyId = (int) ($admin['company_id'] ?? 0);
+        WsugcTenantScopeGuard::assertPostIdsBelongToCompany($companyId, $params['post_id']);
+        WsugcTenantScopeGuard::assertBadgeIdsBelongToCompany($companyId, $params['badges']);
         $postService = new PostService();
         $data=$params;
         $postBadgeService = new PostBadgeService();
@@ -783,8 +791,10 @@ class PostController extends Controller
         //$params['post_id'] =  1;
         //$params['status'] =  1;
         //查询活动信息
+        $companyId = (int) ($authInfo['company_id'] ?? 0);
+        WsugcTenantScopeGuard::assertPostIdsBelongToCompany($companyId, $params['post_id']);
         $postService = new PostService();
-        $result = $postService->deletePost(['post_id'=>$params['post_id']]);
+        $result = $postService->deletePost(['post_id'=>$params['post_id'], 'company_id' => $companyId]);
         if($result['post_id']??null){
            
         }
@@ -951,13 +961,8 @@ class PostController extends Controller
         $filter['disabled'] = 0;//去掉已删除
 
         $sort = $request->get('sort') ?? '';
-        $orderBy = [];
-        if ($sort && trim($sort)) {
-            $orderByRs = explode(' ', $sort);
-            $orderBy[$orderByRs[0]] = $orderByRs[1];
-            //$orderBy['p_order'] = 'asc';
-            //$filter['start_time|gte']=time();//开始时间大于当前时间
-        }
+        $allowedSort = ['post_id', 'created', 'updated', 'p_order', 'likes', 'is_top', 'status', 'user_id'];
+        $orderBy = OrderByWhitelist::fromSortString($sort, $allowedSort);
         //最小原则
         $cols=['post_id','user_id','company_id','title','cover','status','created','badges','topics','p_order','images','image_path','likes','source','is_top'];
         $fromAdmin=true;

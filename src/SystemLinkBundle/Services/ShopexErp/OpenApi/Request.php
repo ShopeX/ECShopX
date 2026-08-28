@@ -70,7 +70,7 @@ class Request
             $query_params = array_merge((array)$params, $system_params);
             $query_params['sign'] = self::gen_sign($query_params, $this->token);
             $postdata = [
-                'verify' => false,
+                'verify' => true,
                 'form_params' => $query_params
             ];
             $resData = $client->post($this->url, $postdata)->getBody();
@@ -86,7 +86,7 @@ class Request
                     $result['data']['rsp'] = 'fail';
                 }
             }
-            app('log')->debug('ome openapi request===>method:'.$method.'===token:'.$this->token.'===url:'.$this->url.'=====>params:'.var_export($params, 1).'===>response:'.var_export($response, 1));
+            app('log')->debug('ome openapi request===>method:'.$method.'===url:'.$this->url.'=====>params:'.var_export($params, 1).'===>response:'.var_export($response, 1));
         } catch (\Exception $e) {
             $result = [ 'fail_msg' => $e->getMessage()];
             app('log')->debug('ome openapi error:'.var_export($e->getMessage(), 1));

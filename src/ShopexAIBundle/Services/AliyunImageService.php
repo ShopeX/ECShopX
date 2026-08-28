@@ -86,7 +86,7 @@ class AliyunImageService
         
         $this->httpClient = new Client([
             'timeout' => 60, // 设置超时时间为60秒
-            'verify' => false, // 开发环境可能需要禁用SSL验证
+            'verify' => true,
         ]);
     }
 

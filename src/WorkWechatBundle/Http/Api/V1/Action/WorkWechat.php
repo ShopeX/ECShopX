@@ -27,6 +27,7 @@ use WorkWechatBundle\Services\WorkWechatRelService;
 use WorkWechatBundle\Services\WorkWechatService;
 use DistributionBundle\Services\DistributorService;
 use WorkWechatBundle\Services\WorkWechatVerifyDomainService;
+use WorkWechatBundle\Support\WorkWechatTenantScopeGuard;
 
 class WorkWechat extends Controller
 {
@@ -785,6 +786,8 @@ class WorkWechat extends Controller
         ];
 
         $verify_domain_service = new WorkWechatVerifyDomainService();
+        $existing = $verify_domain_service->getVerifyInfoByName($params['name']);
+        WorkWechatTenantScopeGuard::assertVerifyDomainFileAvailableForCompany((int) $company_id, $existing ?: null);
         $verify_domain_service->saveVerifyInfo($params);
 
         return $this->response->array(["status" => true]);

@@ -419,7 +419,13 @@ class DistributorItemsService
                 }
                 $this->_filter($dFilter, $query, 'd_items');
             }
+            $hasKeywords = !empty($filter['keywords']);
             $filter = $itemsService->_filter($filter);
+            // keywords 复合命中（语言表名称∪货号∪条码）会被转成 item_id 集合过滤；
+            // 无命中时必须直接返回空列表，否则空的 item_id 数组条件会被查询构建器跳过，导致返回全部商品
+            if ($hasKeywords && empty($filter['item_id'])) {
+                return ['total_count' => 0, 'list' => []];
+            }
             $query = $this->_filter($filter, $query, 'items');
 
             $result['total_count'] = $query->execute()->fetchColumn();
@@ -463,7 +469,12 @@ class DistributorItemsService
                 return $result;
             }
         } else {
+            $hasKeywords = !empty($filter['keywords']);
             $filter = $itemsService->_filter($filter);
+            // 同上：keywords 无命中时返回空列表，避免空 item_id 条件被跳过后返回全部商品
+            if ($hasKeywords && empty($filter['item_id'])) {
+                return ['total_count' => 0, 'list' => []];
+            }
             // 只查询总部商品
             $result = $itemsService->getItemsList($filter, $page, $pageSize, $orderBy);
             if ($result['total_count'] === 0) {

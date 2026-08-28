@@ -115,6 +115,19 @@ class BargainPromotionsRepository extends EntityRepository
         return $result;
     }
 
+    public function getInfo(array $filter)
+    {
+        $entity = $this->findOneBy($filter);
+        if (!$entity) {
+            return [];
+        }
+
+        $result = $this->getBargainData($entity);
+        $this->getLangService()->getOneLangData($result, $this->multiLangField, $this->table, $this->getLang(), $result[$this->prk], $this->table);
+
+        return $result;
+    }
+
     public function getList($filter, $offset = 0, $limit = -1, $orderBy = ['created' => 'desc'])
     {
         $criteria = Criteria::create();

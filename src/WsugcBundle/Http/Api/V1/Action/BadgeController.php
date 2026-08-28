@@ -26,6 +26,8 @@ use Dingo\Api\Exception\StoreResourceFailedException;
 use WsugcBundle\Services\BadgeService;
 use WsugcBundle\Services\SettingService;
 use WsugcBundle\Services\PostService;
+use WsugcBundle\Support\WsugcTenantScopeGuard;
+use EspierBundle\Support\OrderByWhitelist;
 
 class BadgeController extends Controller
 {
@@ -93,6 +95,7 @@ class BadgeController extends Controller
 
         $action='add';
         if($params['badge_id']??null){
+            WsugcTenantScopeGuard::assertBadgeIdsBelongToCompany((int) ($authInfo['company_id'] ?? 0), $params['badge_id']);
             $result = $badgeService->saveData($params,['badge_id'=>$params['badge_id']]);
             $result['badge_id']=$params['badge_id'];
             $action='edit';
@@ -346,13 +349,9 @@ class BadgeController extends Controller
         $badgeService = new BadgeService();
         //$filter['enabled'] = 1;
         $sort = $request->get('sort') ?? '';
-        $orderBy = [];
-        if ($sort && trim($sort)) {
-            $orderByRs = explode(' ', $sort);
-            $orderBy[$orderByRs[0]] = $orderByRs[1];
-            $orderBy['p_order'] = 'asc';
-            //$filter['start_time|gte']=time();//开始时间大于当前时间
-        }
+        $allowedSort = ['badge_id', 'badge_name', 'created', 'updated', 'p_order', 'is_top', 'status', 'user_id'];
+        $appendOrder = ($sort && trim($sort)) ? ['p_order' => 'ASC'] : [];
+        $orderBy = OrderByWhitelist::fromSortString($sort, $allowedSort, [], $appendOrder);
         $cols='badge_id,badge_name,badge_memo,user_id,p_order,created,updated,source,is_top,status,company_id';
         $result = $badgeService->getBadgeList($filter, $cols, $page, $pageSize, $orderBy);
 
@@ -414,8 +413,10 @@ class BadgeController extends Controller
         //$params['post_id'] =  1;
         //$params['status'] =  1;
         //查询活动信息
+        $companyId = (int) ($authInfo['company_id'] ?? 0);
+        WsugcTenantScopeGuard::assertBadgeIdsBelongToCompany($companyId, $params['badge_id']);
         $badgeService = new BadgeService();
-        $result = $badgeService->deleteBy(['badge_id'=>$params['badge_id']]);
+        $result = $badgeService->deleteBy(['badge_id'=>$params['badge_id'], 'company_id' => $companyId]);
         if($result['badge_id']??null){
         }
         //ksort($result);

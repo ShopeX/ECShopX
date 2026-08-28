@@ -1926,13 +1926,24 @@ class Distributor extends BaseController
     {
         $authInfo = $request->get('auth');
 
+        $lng = $request->input('lng');
+        $lat = $request->input('lat');
+
+        $validator = app('validator')->make(["lng" => $lng, "lat" => $lat], [
+            'lng' => 'sometimes|numeric|between:-180.0,180.0',
+            'lat' => 'sometimes|numeric|between:-90.0,90.0',
+        ]);
+        if ($validator->fails()) {
+            throw new ResourceException('经纬度范围错误.', $validator->errors());
+        }
+
         $filter['company_id'] = $authInfo['company_id'];
         $filter['distributor_self'] = 0;
 
-        if ($lng = $request->input('lng')) {
+        if ($lng) {
             $filter['lng'] = $lng;
         }
-        if ($lat = $request->input('lat')) {
+        if ($lat) {
             $filter['lat'] = $lat;
         }
         if ($name = $request->input('name')) {

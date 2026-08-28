@@ -26,6 +26,8 @@ use Dingo\Api\Exception\StoreResourceFailedException;
 
 class Comments extends BaseController
 {
+    private const MAX_PAGE_SIZE = 50;
+
     /**
       * @SWG\Definition(
       *     definition="Comment",
@@ -167,7 +169,7 @@ class Comments extends BaseController
     {
         $authInfo = $request->get('auth');
         $pageNo = $request->input('page_no', 1);
-        $pageSize = $request->input('pageSize', 50);
+        $pageSize = min((int) $request->input('pageSize', self::MAX_PAGE_SIZE), self::MAX_PAGE_SIZE);
         $postdata = $request->all();
         if (isset($postdata['is_hide']) && $postdata['is_hide'] != null) {
             $params['hid'] = $postdata['is_hide'];

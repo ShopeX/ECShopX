@@ -25,6 +25,8 @@ use Dingo\Api\Exception\StoreResourceFailedException;
 
 use WsugcBundle\Services\TagService;
 use WsugcBundle\Services\PostService;
+use WsugcBundle\Support\WsugcTenantScopeGuard;
+use EspierBundle\Support\OrderByWhitelist;
 
 class TagController extends Controller
 {
@@ -150,6 +152,7 @@ class TagController extends Controller
         // $params['status'] =  1;
         // 查询活动信息
         $postService = new TagService();
+        WsugcTenantScopeGuard::assertTagIdsBelongToCompany((int) ($authInfo['company_id'] ?? 0), $params['tag_id']);
         $params['manual_refuse_reason']=$params['refuse_reason']??'';
         $data=$params;
         $data['manual_verify_time']=time();
@@ -292,13 +295,9 @@ class TagController extends Controller
         $tagService = new TagService();
         $filter['enabled'] = 1;
         $sort = $request->get('sort') ?? '';
-        $orderBy = [];
-        if ($sort && trim($sort)) {
-            $orderByRs = explode(' ', $sort);
-            $orderBy[$orderByRs[0]] = $orderByRs[1];
-            $orderBy['p_order'] = 'asc';
-            //$filter['start_time|gte']=time();//开始时间大于当前时间
-        }
+        $allowedSort = ['tag_id', 'created', 'updated', 'p_order', 'status', 'user_id'];
+        $appendOrder = ($sort && trim($sort)) ? ['p_order' => 'ASC'] : [];
+        $orderBy = OrderByWhitelist::fromSortString($sort, $allowedSort, [], $appendOrder);
         $fromAdmin=true;
         $result = $tagService->getTagList($filter, '*', $page, $pageSize, $orderBy,$fromAdmin);
         ksort($result);

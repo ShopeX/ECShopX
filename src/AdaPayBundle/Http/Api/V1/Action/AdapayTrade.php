@@ -165,6 +165,7 @@ class AdapayTrade extends Controller
 
 
         if ($request->get('distributor_name', 0)) { //主商户端/经销商端 根据店铺字段筛选
+            \PaymentBundle\Services\PaymentTenantScopeGuard::assertDistributorNameFilterAllowed($user);
             $distributorFilter = ['name|contains' => $request->get('distributor_name')];
             $distributorFilter['company_id'] = $filter['company_id'];
             $distributors = $tradeService->getDistributors($distributorFilter);
@@ -287,9 +288,9 @@ class AdapayTrade extends Controller
      */
     public function getTradeInfo($trade_id)
     {
+        $companyId = (int) app('auth')->user()->get('company_id');
         $tradeService = new AdapayTradeService();
-        $filter = array();
-        $data = $tradeService->getTradeInfo($trade_id);
+        $data = $tradeService->getTradeInfo($trade_id, $companyId);
         return $this->response->array($data);
     }
 }

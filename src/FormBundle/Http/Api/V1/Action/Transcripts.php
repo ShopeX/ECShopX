@@ -206,7 +206,7 @@ class Transcripts extends BaseController
         $companyId = app('auth')->user()->get('company_id');
 
         $transcriptService = new TranscriptService();
-        $result = $transcriptService->delete($transcript_id);
+        $result = $transcriptService->delete($companyId, $transcript_id);
 
         return $this->response->array($result);
     }

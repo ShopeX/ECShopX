@@ -27,6 +27,7 @@ use Dingo\Api\Exception\ResourceException;
 use Illuminate\Http\Response;
 use Exception;
 use CompanysBundle\Services\CompanysService;
+use CompanysBundle\Support\WxShopTenantScopeGuard;
 
 class Shops extends BaseController
 {
@@ -590,6 +591,10 @@ class Shops extends BaseController
         if (!$wx_shop_id) {
             return $this->response->error('门店必选！', 411);
         }
+        WxShopTenantScopeGuard::assertWxShopBelongsToCompany(
+            (int) $wx_shop_id,
+            (int) app('auth')->user()->get('company_id')
+        );
         $shopsService = new ShopsService(new WxShopsService());
         $result = $shopsService->openOrClose($wx_shop_id, $status);
 

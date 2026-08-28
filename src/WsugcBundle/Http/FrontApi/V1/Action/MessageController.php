@@ -25,6 +25,7 @@ use Dingo\Api\Exception\StoreResourceFailedException;
 
 use WsugcBundle\Services\MessageService;
 use WsugcBundle\Services\SettingService;
+use EspierBundle\Support\OrderByWhitelist;
 
 class MessageController extends Controller
 {
@@ -166,13 +167,9 @@ class MessageController extends Controller
         $messageService = new MessageService();
         // $filter['enabled'] = 1;
         $sort = $request->get('sort') ?? '';
-        $orderBy = [];
-        if ($sort && trim($sort)) {
-            $orderByRs = explode(' ', $sort);
-            $orderBy[$orderByRs[0]] = $orderByRs[1];
-            $orderBy['created'] = 'desc';
-            //$filter['start_time|gte']=time();//开始时间大于当前时间
-        }
+        $allowedSort = ['message_id', 'created', 'updated', 'type', 'from_user_id', 'to_user_id'];
+        $appendOrder = ($sort && trim($sort)) ? ['created' => 'DESC'] : [];
+        $orderBy = OrderByWhitelist::fromSortString($sort, $allowedSort, [], $appendOrder);
         $cols='*';
         //print_r($filter);exit;
         $result = $messageService->getMessageList($filter, $cols, $page, $pageSize, $orderBy);

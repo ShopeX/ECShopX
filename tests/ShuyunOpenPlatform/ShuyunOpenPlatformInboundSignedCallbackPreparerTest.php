@@ -13,6 +13,7 @@ use ShuyunOpenPlatformBundle\Repositories\CompanyShuyunOpenPlatformConfigReposit
 use ShuyunOpenPlatformBundle\Repositories\ShuyunOfflineBenefitRepository;
 use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformShopSyncService;
 use TestCase;
+use ShuyunOpenPlatformBundle\Auth\ShuyunCallbackSignatureVerifier;
 
 class ShuyunOpenPlatformInboundSignedCallbackPreparerTest extends TestCase
 {
@@ -47,9 +48,13 @@ class ShuyunOpenPlatformInboundSignedCallbackPreparerTest extends TestCase
         );
 
         $body = json_encode(['platCode' => 'OFFLINE', 'grade' => 1], JSON_THROW_ON_ERROR);
+        $time = (string) ((int) floor(microtime(true) * 1000));
+        $nonce = 'preparer-offline-plat';
         $req = Request::create('/cb', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json'], $body);
-        $req->headers->set('SY-Request-Time', self::SY_TIME);
-        $req->headers->set('SY-Request-Sign', self::GOOD_SIGN_HEADER_ONLY);
+        $req->headers->set('SY-Request-Time', $time);
+        $req->headers->set('SY-Request-Nonce', $nonce);
+        $sign = (new ShuyunCallbackSignatureVerifier())->expectedHttpCallbackSign('mysecret', $req);
+        $req->headers->set('SY-Request-Sign', $sign);
 
         $out = $preparer->prepare($req, ShuyunInboundSignedPrepareMode::LoyaltyMemberGradeChange);
 

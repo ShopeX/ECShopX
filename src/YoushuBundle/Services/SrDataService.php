@@ -17,6 +17,7 @@
 
 namespace YoushuBundle\Services;
 
+use EspierBundle\Support\OutboundUrlAllowlist;
 use YoushuBundle\Entities\YoushuSetting;
 use YoushuBundle\Services\src\Kernel\Config;
 use YoushuBundle\Services\src\Kernel\Factory;
@@ -46,7 +47,9 @@ class SrDataService
         }
 
         $config = new Config();
-        $config->base_uri = $info['api_url'] ? $info['api_url'] : $info['sandbox_api_url'];
+        $baseUri = $info['api_url'] ? $info['api_url'] : $info['sandbox_api_url'];
+        OutboundUrlAllowlist::assertAllowed($baseUri);
+        $config->base_uri = $baseUri;
         $config->merchant_id = $info['merchant_id'];
         $config->app_id = $info['app_id'] ? $info['app_id'] : $info['sandbox_app_id'];
         $config->app_secret = $info['app_secret'] ? $info['app_secret'] : $info['sandbox_app_secret'];

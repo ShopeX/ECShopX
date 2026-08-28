@@ -18,6 +18,7 @@
 namespace WorkWechatBundle\Services;
 
 use Dingo\Api\Exception\ResourceException;
+use WorkWechatBundle\Support\WorkWechatTenantScopeGuard;
 
 class WorkWechatService
 {
@@ -192,6 +193,7 @@ class WorkWechatService
                 ],
             ]
         ];
+        WorkWechatTenantScopeGuard::assertCorpidAvailableForCompany((int) $companyId, $data['corpid']);
         $cropidKey = $this->getCropidCacheKey($data['corpid']);
         $redis->set($key, json_encode($data));
         $redis->set($cropidKey, json_encode($data));

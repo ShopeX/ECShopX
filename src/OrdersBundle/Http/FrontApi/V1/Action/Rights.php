@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use OrdersBundle\Services\RightsService;
 use OrdersBundle\Services\Rights\TimesCardService;
+use OrdersBundle\Support\GuideOrderTenantScopeGuard;
 use Dingo\Api\Exception\ResourceException;
 
 class Rights extends BaseController
@@ -95,11 +96,12 @@ class Rights extends BaseController
         }
         $rightsService = new RightsService(new TimesCardService());
         $result = $rightsService->getRightsDetail($rights_id);
+        GuideOrderTenantScopeGuard::assertRightsBelongsToAuthUser(
+            $result,
+            (int) $authInfo['company_id'],
+            (int) $authInfo['user_id']
+        );
         $result['server_time'] = time(); // 增加服务器当前时间用于前端判断
-        $company_id = $authInfo['company_id'];
-        if ($company_id != $result['company_id']) {
-            throw new ResourceException(trans('OrdersBundle/Order.rights_id_invalid'));
-        }
 
         return $this->response->array($result);
     }
@@ -321,9 +323,12 @@ class Rights extends BaseController
     public function getRightsCode($rights_id, Request $request)
     {
         $authUser = $request->get('auth');
-        $params['company_id'] = $authUser['company_id'];
+        $companyId = (int) $authUser['company_id'];
+        $userId = (int) $authUser['user_id'];
 
         $rightsService = new RightsService(new TimesCardService());
+        $rights = $rightsService->getRightsDetail($rights_id);
+        GuideOrderTenantScopeGuard::assertRightsBelongsToAuthUser($rights, $companyId, $userId);
         $result = $rightsService->getRightsCode($rights_id);
         $result['_ignore_data'] = true;
 

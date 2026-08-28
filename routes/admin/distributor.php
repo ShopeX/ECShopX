@@ -47,10 +47,10 @@ $api->version('v1', function($api) {
         $api->post('/shop/signin', ['as' => 'admin.wxapp.shop.signin', 'uses' => 'ShopSalespersonController@signin']); //签到
         $api->post('/shop/signout', ['as' => 'front.wxapp.shop.signout', 'uses' => 'ShopSalespersonController@signout']); //签退
     });
-    $api->group(['prefix' => '/admin/wxapp', 'namespace' => 'SalespersonBundle\Http\AdminApi\V1\Action', 'providers' => 'adminwxapp'], function ($api) {
+    $api->group(['prefix' => '/admin/wxapp', 'namespace' => 'SalespersonBundle\Http\AdminApi\V1\Action', 'middleware' => ['api.auth', 'distributorlog'], 'providers' => 'adminwxapp'], function ($api) {
         $api->get('/bydistributor/salespersonQrcode/{company_id}', ['name' => '根据门店获取导购二维码', 'as' => 'admin.wxapp.bydistributor.salesperson.qrcode', 'uses'=>'ShopSalespersonController@getSalespersonContactQrCodeByDistributor']);
     });
-    $api->group(['prefix' => '/h5app', 'namespace' => 'SalespersonBundle\Http\AdminApi\V1\Action', 'providers' => 'adminwxapp'], function ($api) {
+    $api->group(['prefix' => '/h5app', 'namespace' => 'SalespersonBundle\Http\AdminApi\V1\Action', 'middleware' => ['api.auth', 'distributorlog'], 'providers' => 'adminwxapp'], function ($api) {
         $api->get('/wxapp/bydistributor/salespersonQrcode/{company_id}', ['name' => '根据门店获取导购二维码', 'as' => 'admin.wxapp.bydistributor.salesperson.qrcode', 'uses'=>'ShopSalespersonController@getSalespersonContactQrCodeByDistributor']);
     });
 });

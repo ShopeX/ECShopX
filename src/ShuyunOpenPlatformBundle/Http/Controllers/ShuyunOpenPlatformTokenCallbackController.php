@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Laravel\Lumen\Routing\Controller;
 use Psr\Log\LoggerInterface;
 use ShuyunOpenPlatformBundle\Http\Support\ShuyunOpenPlatformCallbackRequestDebug;
+use ShuyunOpenPlatformBundle\Auth\ShuyunCallbackSignatureVerifier;
+use ShuyunOpenPlatformBundle\Http\Support\ShuyunOpenPlatformInboundCallbackSecret;
 use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformTokenCallbackService;
 use ShuyunOpenPlatformBundle\Services\ShuyunOpenPlatformTrafficAuditWriter;
 
@@ -18,10 +20,15 @@ class ShuyunOpenPlatformTokenCallbackController extends Controller
     private const INBOUND_AUDIT_ACTION_METHOD = 'token';
 
     /**
-     * 数云 token 推送回调：落库逻辑见 {@see ShuyunOpenPlatformTokenCallbackService}（当前不验签，依赖部署侧访问控制）。
+     * 数云 token 推送回调：入站验签后落库，逻辑见 {@see ShuyunOpenPlatformTokenCallbackService}。
      */
     public function token(Request $request): JsonResponse
     {
+        $signFailure = $this->verifyTokenCallbackSign($request);
+        if ($signFailure instanceof JsonResponse) {
+            return $signFailure;
+        }
+
         $debugLog = (bool) config('shuyun_open_platform.callback_debug_log');
         if ($debugLog) {
             $this->logCallbackDebugPayload($request);
@@ -116,5 +123,31 @@ class ShuyunOpenPlatformTokenCallbackController extends Controller
         }
 
         return [ShuyunOpenPlatformTrafficAuditWriter::OUTCOME_BUSINESS_ERROR, $msg !== '' ? $msg : 'code:'.$codeInt];
+    }
+
+    private function verifyTokenCallbackSign(Request $request): ?JsonResponse
+    {
+        $callbackSecret = ShuyunOpenPlatformInboundCallbackSecret::getTrimmedFromConfig();
+        if ($callbackSecret === '') {
+            return response()->json(['code' => 403, 'msg' => 'CALLBACK_IDENTITY_SECRET_NOT_CONFIGURED', 'data' => ''], 403);
+        }
+
+        $sign = trim((string) $request->query->get('sign', ''));
+        if ($sign === '') {
+            foreach (['SY-Request-Sign', 'Sy-Request-Sign'] as $name) {
+                $header = $request->headers->get($name);
+                if ($header !== null && trim((string) $header) !== '') {
+                    $sign = trim((string) $header);
+                    break;
+                }
+            }
+        }
+
+        $verifier = new ShuyunCallbackSignatureVerifier();
+        if (! $verifier->verifyHttpCallback($callbackSecret, $request, $sign)) {
+            return response()->json(['code' => 403, 'msg' => 'INVALID_SIGN', 'data' => ''], 403);
+        }
+
+        return null;
     }
 }

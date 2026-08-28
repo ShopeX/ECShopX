@@ -215,7 +215,7 @@ class PromotionGroupsActivityService
         //同一个用户在同一个商品下只能有一个待成团订单
         $conn = app('registry')->getConnection('default');
         $waitGroupsOrder = $conn->fetchAll("SELECT * FROM orders_normal_orders WHERE user_id = {$params['user_id']} AND order_status = 'WAIT_GROUPS_SUCCESS' AND order_class = 'groups' AND act_id = {$params['bargain_id']}");
-        if (!empty($waitGroups)) {
+        if (!empty($waitGroupsOrder)) {
 
             $orderIdList = array_column($waitGroupsOrder, 'order_id');
             $orderIdList = array_unique($orderIdList);

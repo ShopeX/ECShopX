@@ -64,6 +64,9 @@ class OpenapiCommonCheck
             unset($data['sign']);
 
             $token = config('openapi.common_token');
+            if (empty($token)) {
+                throw new Exception('common_token 未配置', ErrorCode::SIGN_ERROR);
+            }
 
             if (!$sign || $sign != OpenapiCheck::gen_sign($data, $token)) {
                 throw new Exception('sign 不合法', ErrorCode::SIGN_ERROR);

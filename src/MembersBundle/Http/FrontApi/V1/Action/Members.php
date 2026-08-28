@@ -41,6 +41,7 @@ use KaquanBundle\Services\VipGradeOrderService;
 use MembersBundle\Entities\MembersAssociations;
 use MembersBundle\Services\MemberAddressService;
 use SalespersonBundle\Services\SalespersonProxyAuthorizationService;
+use MembersBundle\Support\MembersOwnerScopeGuard;
 use PointBundle\Services\PointMemberRuleService;
 use MembersBundle\Services\MemberItemsFavService;
 use ThirdPartyBundle\Services\DmCrm\PointService;
@@ -1090,12 +1091,13 @@ class Members extends Controller
         if ($messageBag = validation($postData, [
             'mobile' => 'required',
             'password' => ['required', 'alpha_num', 'between:6,16'],
-            'vcode' => 'nullable',
+            'vcode' => 'required',
         ], [
             "mobile.required" => "手机号必填！",
             "password.required" => "密码必填！",
             "password.alpha_num" => "密码只能是字母和数字的组合！",
             "password.between" => "密码长度6～16个字符之间！",
+            "vcode.required" => "短信验证码必填！",
         ])) {
             throw new ResourceException($messageBag->first());
         }
@@ -1113,7 +1115,7 @@ class Members extends Controller
         }
         $regSettinService = new MemberRegSettingService();
 
-        if (isset($postData['vcode']) && !$regSettinService->checkSmsVcode($postData['mobile'], $authInfo['company_id'], $postData['vcode'], 'forgot_password')) {
+        if (!$regSettinService->checkSmsVcode($postData['mobile'], $authInfo['company_id'], $postData['vcode'], 'forgot_password')) {
             throw new ResourceException('短信验证码错误');
         }
 
@@ -1619,11 +1621,18 @@ class Members extends Controller
         }
 
         $distributorId = $inputData['distributor_id'] ?? null;
-        $filter['user_id'] = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+        $resolvedUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
             $authInfo,
             $inputData,
             $distributorId
         );
+        MembersOwnerScopeGuard::assertActingUserBoundToAuth(
+            $authInfo,
+            $inputData,
+            $resolvedUserId,
+            $distributorId
+        );
+        $filter['user_id'] = $resolvedUserId;
 
         $pageSize = $request->input('pageSize', 20);
         $page = $request->input('page', 1);
@@ -1735,11 +1744,18 @@ class Members extends Controller
         $params['company_id'] = $authInfo['company_id'];
 
         $distributorId = $params['distributor_id'] ?? null;
-        $params['user_id'] = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
+        $resolvedUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
             $authInfo,
             $params,
             $distributorId
         );
+        MembersOwnerScopeGuard::assertActingUserBoundToAuth(
+            $authInfo,
+            $params,
+            $resolvedUserId,
+            $distributorId
+        );
+        $params['user_id'] = $resolvedUserId;
 
         $memberAddressService = new MemberAddressService();
         $result = $memberAddressService->createAddress($params);

@@ -28,6 +28,7 @@ use KaquanBundle\Services\DiscountCardService;
 use KaquanBundle\Services\UserDiscountService;
 
 use MembersBundle\Services\UserGroupService;
+use SalespersonBundle\Support\SalespersonMemberScopeGuard;
 
 class UserDiscount extends BaseController
 {
@@ -197,6 +198,8 @@ class UserDiscount extends BaseController
         if (!is_array($users)) {
             $users = explode(',', $users);
         }
+
+        SalespersonMemberScopeGuard::assertSalespersonCanGrantToUsers($salesperson_info, $users);
 
         $result = $user_discount_server->giveUserCoupons($salesperson_info, $users, $coupons);
 

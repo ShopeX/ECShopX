@@ -195,6 +195,7 @@ class ResourceLevel extends BaseController
         //获取资源位详情
         $ResourceLevelService = new ResourceLevelService();
         $filter['resource_level_id'] = $input['resource_level_id'];
+        $filter['company_id'] = $companyId;
         $result['levelData'] = $ResourceLevelService->getResourceLevel($filter, false);
 
         //获取店铺详情

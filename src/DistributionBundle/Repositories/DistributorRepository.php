@@ -17,6 +17,7 @@
 
 namespace DistributionBundle\Repositories;
 
+use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\EntityRepository;
 use DistributionBundle\Entities\Distributor;
 use Dingo\Api\Exception\DeleteResourceFailedException;
@@ -358,6 +359,16 @@ class DistributorRepository extends EntityRepository
         unset($filter['lng']);
         unset($filter['lat']);
 
+        $userLat = null;
+        $userLng = null;
+        if ($lng && $lat) {
+            $userLat = $this->parseLatitude($lat);
+            $userLng = $this->parseLongitude($lng);
+            $having = true;
+        } else {
+            $having = false;
+        }
+
         $conn = app('registry')->getConnection('default');
 
         $qb = $conn->createQueryBuilder();
@@ -373,8 +384,8 @@ class DistributorRepository extends EntityRepository
         }
 
 
-        if ($lng && $lat) {
-            $select[] = '( 6371 * acos( cos( radians(' . $lat . ') ) * cos( radians( lat ) ) * cos( radians( lng ) - radians(' . $lng . ') ) + sin( radians(' . $lat . ') ) * sin( radians( lat ) ) ) ) AS distance';
+        if ($userLat !== null && $userLng !== null) {
+            $select[] = $this->buildHaversineDistanceSelectExpression();
             $having = true;
         } else {
             $having = false;
@@ -386,6 +397,10 @@ class DistributorRepository extends EntityRepository
         }
 
         $qb->select(implode(",", $select))->from($this->table);
+        if ($userLat !== null && $userLng !== null) {
+            $qb->setParameter('user_lat', $userLat, Type::FLOAT);
+            $qb->setParameter('user_lng', $userLng, Type::FLOAT);
+        }
         $qb = $this->_filter($filter, $qb);
 
         // 聚合操作
@@ -409,7 +424,9 @@ class DistributorRepository extends EntityRepository
         $res["total_count"] = 0;
         if ($isTotalCount) {
             $totalCountQb = $conn->createQueryBuilder();
-            $res["total_count"] = (int)$totalCountQb->select('count(*) as _count')->from("(".$qb->getSql().")", 'tmp')->execute()->fetchColumn();
+            $totalCountQb->select('count(*) as _count')->from("(".$qb->getSql().")", 'tmp');
+            $totalCountQb->setParameters($qb->getParameters(), $qb->getParameterTypes());
+            $res["total_count"] = (int)$totalCountQb->execute()->fetchColumn();
         }
 
         // 分页设置
@@ -517,9 +534,14 @@ class DistributorRepository extends EntityRepository
     {
         $conn = app('registry')->getConnection('default');
 
-        $select = '*, ' . '( 6371 * acos( cos( radians(' . $lat . ') ) * cos( radians( lat ) ) * cos( radians( lng ) - radians(' . $lng . ') ) + sin( radians(' . $lat . ') ) * sin( radians( lat ) ) ) ) AS distance';
+        $userLat = $this->parseLatitude($lat);
+        $userLng = $this->parseLongitude($lng);
+
+        $select = '*, ' . $this->buildHaversineDistanceSelectExpression();
 
         $qb = $conn->createQueryBuilder()->select($select)->from($this->table);
+        $qb->setParameter('user_lat', $userLat, Type::FLOAT);
+        $qb->setParameter('user_lng', $userLng, Type::FLOAT);
         $qb = $this->_filter($filter, $qb);
 
         $qb->orderBy('distance', 'asc');
@@ -696,6 +718,36 @@ class DistributorRepository extends EntityRepository
         return $qb;
     }
 
+    private function buildHaversineDistanceSelectExpression(): string
+    {
+        return '( 6371 * acos( cos( radians(:user_lat) ) * cos( radians( lat ) ) * cos( radians( lng ) - radians(:user_lng) ) + sin( radians(:user_lat) ) * sin( radians( lat ) ) ) ) AS distance';
+    }
+
+    private function parseLatitude($lat): float
+    {
+        if (!is_numeric($lat)) {
+            throw new ResourceException('经纬度范围错误.');
+        }
+        $value = (float) $lat;
+        if ($value < -90.0 || $value > 90.0) {
+            throw new ResourceException('经纬度范围错误.');
+        }
+
+        return $value;
+    }
+
+    private function parseLongitude($lng): float
+    {
+        if (!is_numeric($lng)) {
+            throw new ResourceException('经纬度范围错误.');
+        }
+        $value = (float) $lng;
+        if ($value < -180.0 || $value > 180.0) {
+            throw new ResourceException('经纬度范围错误.');
+        }
+
+        return $value;
+    }
 
     private function setColumnNamesData($entity, $params)
     {

@@ -231,11 +231,14 @@ class UserBargains extends Controller
         $params['company_id'] = $authInfo['company_id'];
         $params['authorizer_appid'] = $authInfo['woa_appid'] ?? '';
         $params['wxa_appid'] = $authInfo['wxapp_appid'] ?? '';
-        if ($authInfo['user_id'] ?? 0) {
-            $params['open_id'] = $params['open_id'] ?? ($authInfo['open_id'] ?? '');
-            $params['nickname'] = $params['nickname'] ?? ($authInfo['nickname'] ?? '');
-            $params['headimgurl'] = $params['headimgurl'] ?? ($authInfo['headimgurl'] ?? '');
+
+        $authUserId = (int) ($authInfo['user_id'] ?? 0);
+        if ($authUserId <= 0 || empty($authInfo['open_id'])) {
+            throw new ResourceException(trans('PromotionsBundle.wechat_openid_required'));
         }
+        $params['open_id'] = $authInfo['open_id'];
+        $params['nickname'] = $authInfo['nickname'] ?? '';
+        $params['headimgurl'] = $authInfo['headimgurl'] ?? '';
 
         $validator = app('validator')->make($params, [
             'bargain_id' => 'required',

@@ -58,6 +58,25 @@ class SupplierItemsDraftRepository
         return $rows[0] ?? null;
     }
 
+    public function hasBarcodeConflict($companyId, array $barcodes, array $excludeSourceItemIds = [])
+    {
+        if (!$barcodes) {
+            return false;
+        }
+
+        $rows = $this->decodeRows($this->getLists(['company_id' => $companyId]));
+        foreach ($rows as $row) {
+            if (in_array($row['source_item_id'], $excludeSourceItemIds)) {
+                continue;
+            }
+            if (in_array(trim((string)($row['barcode'] ?? '')), $barcodes, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function existsByGoodsId($goodsId, $companyId = null)
     {
         $filter = ['goods_id' => $goodsId];

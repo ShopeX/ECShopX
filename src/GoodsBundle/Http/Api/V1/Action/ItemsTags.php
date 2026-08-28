@@ -321,7 +321,8 @@ class ItemsTags extends Controller
      */
     public function getTagsInfo($tag_id)
     {
-        $result = $this->itemsTagsService->getTagsInfo($tag_id);
+        $companyId = (int) app('auth')->user()->get('company_id');
+        $result = $this->itemsTagsService->getTagsInfo($tag_id, $companyId);
 
         return $this->response->array($result);
     }

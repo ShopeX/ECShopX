@@ -54,9 +54,13 @@ class SceneService
         return $this->sceneRepository->lists($filter, $cols, $page, $pageSize);
     }
 
-    public function getDetail($id)
+    public function getDetail($id, $companyId = null)
     {
-        $data = $this->sceneRepository->getInfoById($id);
+        $filter = ['id' => $id];
+        if ($companyId !== null) {
+            $filter['company_id'] = $companyId;
+        }
+        $data = $this->sceneRepository->getInfo($filter);
         if(!$data) {
             $data = [
                 "default_template" => null,

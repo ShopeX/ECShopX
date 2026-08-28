@@ -89,7 +89,7 @@ class OutfitAnyoneService
         
         $this->httpClient = new Client([
             'timeout' => 60,
-            'verify' => false,
+            'verify' => true,
         ]);
     }
 

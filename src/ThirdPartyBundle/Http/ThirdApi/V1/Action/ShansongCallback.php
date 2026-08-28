@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use ThirdPartyBundle\Http\Controllers\Controller as Controller;
 
 use OrdersBundle\Services\LocalDeliveryService;
+use ThirdPartyBundle\Support\ShansongCallbackSignatureVerifier;
 
 class ShansongCallback extends Controller
 {
@@ -57,6 +58,11 @@ class ShansongCallback extends Controller
      */
     public function updateOrderStatus($company_id, Request $request)
     {
+        if (! ShansongCallbackSignatureVerifier::verifyCallbackSignature((int) $company_id, $request->all())) {
+            app('log')->info('shansongCallback request sign error');
+            $this->api_response('fail', '签名验证失败');
+        }
+
         $params = $request->all('issOrderNo', 'orderNo', 'status', 'statusDesc', 'subStatus', 'subStatusDesc', 'deductAmount', 'abortType', 'punishType', 'abortReason', 'courier', 'sendBackFee', 'drawback');
         app('log')->info('shansong updateOrderStatus company_id===>'.var_export($company_id, 1));
         app('log')->info('shansong updateOrderStatus params===>'.var_export($params, 1));

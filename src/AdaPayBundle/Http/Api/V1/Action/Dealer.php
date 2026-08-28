@@ -355,7 +355,9 @@ class Dealer extends Controller
      */
     public function resetPassword($operatorId)
     {
-        $companyId = app('auth')->user()->get('company_id');
+        $user = app('auth')->user();
+        \PaymentBundle\Services\PaymentTenantScopeGuard::assertOperatorInCompany($user, (int) $operatorId);
+        $companyId = $user->get('company_id');
         $dealerService = new DealerService();
         $result = $dealerService->resetPasswordService($companyId, $operatorId);
 
@@ -380,8 +382,12 @@ class Dealer extends Controller
      */
     public function delDealerSub($operatorId)
     {
+        $user = app('auth')->user();
+        \PaymentBundle\Services\PaymentTenantScopeGuard::assertOperatorInCompany($user, (int) $operatorId);
+        $companyId = (int) $user->get('company_id');
         $filter = [
-            'operator_id' => $operatorId
+            'operator_id' => $operatorId,
+            'company_id' => $companyId,
         ];
         $operatorsService = new OperatorsService();
         $info = $operatorsService->getInfo($filter);
@@ -416,6 +422,8 @@ class Dealer extends Controller
      */
     public function update(Request $request, $operatorId)
     {
+        $user = app('auth')->user();
+        \PaymentBundle\Services\PaymentTenantScopeGuard::assertOperatorInCompany($user, (int) $operatorId);
         $params = $request->all('password');
         $rules = [
             'password' => ['required|min:6|max:16', '密码必须6-16位'],

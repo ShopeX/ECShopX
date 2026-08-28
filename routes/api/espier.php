@@ -80,7 +80,7 @@ $api->version('v1',
         $api->post('/espier/offline/backaccount/update', ['name' => '更新线下收款账户', 'middleware' => 'activated', 'as' => 'espier.offline.backaccount.update', 'uses' => 'OfflineBankAccountController@update']);
     });
 
-    $api->group(['namespace' => 'EspierBundle\Http\Api\V1\Action', 'middleware' => ['api.auth','shoplog'], 'providers' => 'jwt'], function ($api) {
+    $api->group(['namespace' => 'EspierBundle\Http\Api\V1\Action', 'middleware' => ['api.auth', 'activated', 'shoplog'], 'providers' => 'jwt'], function ($api) {
         $api->post('/espier/system/detect_version', ['name' => '升级', 'uses' => 'UpgradeController@detectVersion']);
         $api->post('/espier/system/upgrade', ['name' => '升级', 'uses' => 'UpgradeController@upgrade']);
         $api->post('/espier/system/rollback', ['name' => '回滚', 'uses' => 'UpgradeController@rollback']);

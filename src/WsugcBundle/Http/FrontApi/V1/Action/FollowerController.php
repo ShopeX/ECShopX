@@ -28,6 +28,7 @@ use Dingo\Api\Exception\DeleteResourceFailedException;
 use Dingo\Api\Exception\StoreResourceFailedException;
 use WsugcBundle\Services\PostService;
 use MembersBundle\Services\WechatUserService;
+use MembersBundle\Services\MemberService;
 use WsugcBundle\Services\MessageService;
 
 
@@ -237,6 +238,10 @@ class FollowerController extends Controller {
         $messageService = new MessageService();
 
         $userInfo = $wechatUserService->getUserInfo($filter);
+        $memberInfo = (new MemberService())->getMemberInfo($filter);
+        if ($memberInfo) {
+            $userInfo['nickname'] = $memberInfo['username'] ?? '';
+        }
         //所有帖子总数
         $post_all_nums=$postService->entityRepository->count(array_merge($filter,['disabled'=>0,'is_draft'=>0]));
 

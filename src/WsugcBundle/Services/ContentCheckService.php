@@ -18,6 +18,7 @@
 //内容检测
 namespace WsugcBundle\Services;
 
+use EspierBundle\Support\OutboundUrlAllowlist;
 use WsugcBundle\Entities\Post;
 use MembersBundle\Services\MemberService;
 use CompanysBundle\Services\CompanysService;
@@ -43,7 +44,7 @@ class ContentCheckService
         } else {
             $appid      =$settingService->getSetting($this->companyId, 'contentCheck_appid');
             $appsecret  =$settingService->getSetting($this->companyId, 'contentCheck_appsecret');
-            $url        = $settingService->getSetting($this->companyId, 'contentCheck_url');
+            $url        = $this->resolveAllowedContentCheckBaseUrl($settingService);
             $url        = $url . '/cgi-bin/token?grant_type=client_credential&appid=' . $appid . '&secret=' . $appsecret;
             // $resData = $client->post($post_url, [
             //     'form_params' => $post_data
@@ -73,7 +74,7 @@ class ContentCheckService
         if ($enable) {
             try {
                 if ($access_token = $this->getAccessToken()) {
-                    $url = $settingService->getSetting($this->companyId, 'contentCheck_url');
+                    $url = $this->resolveAllowedContentCheckBaseUrl($settingService);
                     $url = $url . '/wxa/msg_sec_check?access_token=' . $access_token;
                     $client = new Client();
                     $post_data['openid'] = $open_id;
@@ -135,7 +136,7 @@ class ContentCheckService
         if ($enable) {
             try {
                 if ($access_token = $this->getAccessToken()) {
-                    $url = $settingService->getSetting($this->companyId, 'contentCheck_url');
+                    $url = $this->resolveAllowedContentCheckBaseUrl($settingService);
                     $url = $url . '/wxa/media_check_async?access_token=' . $access_token;
                     $client = new Client();
                     $post_data['openid'] = $open_id;
@@ -182,13 +183,15 @@ class ContentCheckService
      */
     public function requestWxApi($url, $sParams, $cookie = '')
     {
+        OutboundUrlAllowlist::assertAllowed($url);
+
         $ch = curl_init();
         $aHeader = array(
             'Content-Type: application/json; charset=utf-8',
             'Expect:',
         );
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $sParams);
@@ -203,5 +206,13 @@ class ContentCheckService
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         return $result;
+    }
+
+    private function resolveAllowedContentCheckBaseUrl(SettingService $settingService): string
+    {
+        $baseUrl = (string) $settingService->getSetting($this->companyId, 'contentCheck_url');
+        OutboundUrlAllowlist::assertAllowed($baseUrl);
+
+        return $baseUrl;
     }
 }

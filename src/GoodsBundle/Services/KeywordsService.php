@@ -55,11 +55,14 @@ class KeywordsService
     public function addKeywords($data)
     {
         if (isset($data['id'])) {
-            $row = $this->entityRepository->getInfo(['id' => $data['id']]);
+            $row = $this->entityRepository->getInfo([
+                'id' => $data['id'],
+                'company_id' => $data['company_id'],
+            ]);
             if (!$row) {
                 throw new ResourceException(trans('GoodsBundle/Controllers/Items.record_not_exists'));
             }
-            return $this->updateOneBy(['id' => $data['id']], $data);
+            return $this->updateOneBy(['id' => $data['id'], 'company_id' => $data['company_id']], $data);
         }
         return $this->create($data);
     }

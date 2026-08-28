@@ -271,11 +271,14 @@ class AdapayTradeService
         return $params;
     }
 
-    public function getTradeInfo($trade_id)
+    public function getTradeInfo($trade_id, $companyId = null)
     {
         $tradeInfo = $this->tradeService->getInfoById($trade_id);
         if (!$tradeInfo) {
             return [];
+        }
+        if ($companyId !== null) {
+            \PaymentBundle\Services\PaymentTenantScopeGuard::assertCompanyScope($tradeInfo, (int) $companyId);
         }
         $tradeList = $this->getTradeList(['company_id' => $tradeInfo['company_id'], 'order_id' => $tradeInfo['order_id']]);
         $tradeInfo['trade_state'] = $tradeList['list'][0]['tradeState'];

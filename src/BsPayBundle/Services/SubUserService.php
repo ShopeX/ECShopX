@@ -89,6 +89,7 @@ class SubUserService
         if (!$userEntryInfo) {
             throw new ResourceException('没有开户详情');
         }
+        \PaymentBundle\Services\PaymentTenantScopeGuard::assertCompanyScope($userEntryInfo, (int) $companyId);
         $operatorId = $userEntryInfo['operator_id'] ?? 0;//对应店铺ID 或 经销商ID 或商户ID
 
         $entryApplyInfo = $this->entryApplyRepository->getInfoById($id);

@@ -25,6 +25,8 @@ use Dingo\Api\Exception\StoreResourceFailedException;
 use WsugcBundle\Services\TopicService;
 use WsugcBundle\Services\PostService;
 use WsugcBundle\Services\SettingService;
+use WsugcBundle\Support\WsugcTenantScopeGuard;
+use EspierBundle\Support\OrderByWhitelist;
 
 class TopicController extends Controller
 {
@@ -68,7 +70,7 @@ class TopicController extends Controller
             throw new ResourceException('话题名称不能为空');
         }
         $topicService = new TopicService();
-        if($topicService->entityRepository->count(['topic_name'=>$params['topic_name'], 'company_id' => $params['company_id']])>0){
+        if($topicService->entityRepository->count(['topic_name'=>$params['topic_name'], 'company_id' => $company_id])>0){
             throw new ResourceException('同名话题已存在');
         }
         $params['operator_id'] =  $user_id;
@@ -82,6 +84,7 @@ class TopicController extends Controller
         //创建或更新
         $action='add';
         if($params['topic_id']??null){
+            WsugcTenantScopeGuard::assertTopicIdsBelongToCompany((int) $company_id, $params['topic_id']);
             $result = $topicService->saveData($params,['topic_id'=>$params['topic_id']]);
             $result['topic_id']=$params['topic_id'];
             $action='edit';
@@ -149,6 +152,7 @@ class TopicController extends Controller
             throw new ResourceException('人工拒绝原因不能为空');
         } */
         $topicService = new TopicService();
+        WsugcTenantScopeGuard::assertTopicIdsBelongToCompany((int) ($authInfo['company_id'] ?? 0), $params['topic_id']);
         $params['manual_refuse_reason']=$params['refuse_reason']??'';
         $params['manual_verify_time']=time();
         $data=$params;
@@ -207,11 +211,13 @@ class TopicController extends Controller
         }
         $topicService = new TopicService();
         $data=$params;
+        $companyId = (int) ($authInfo['company_id'] ?? 0);
+        WsugcTenantScopeGuard::assertTopicIdsBelongToCompany($companyId, $params['topic_id']);
         //置顶话题的p_order排序，最上面的在最上面
         $allUpdate=[];
 
         //先干掉之前所有置顶的
-        $filterOldTop=['is_top'=>1];
+        $filterOldTop=['is_top'=>1, 'company_id' => $companyId];
         $updateOldTop=['is_top'=>0,'p_order'=>0];
         $result = $topicService->entityRepository->updateBy($filterOldTop,$updateOldTop);
 
@@ -341,13 +347,9 @@ class TopicController extends Controller
         $topicService = new TopicService();
         //$filter['enabled'] = 1;
         $sort = $request->get('sort') ?? '';
-        $orderBy = [];
-        if ($sort && trim($sort)) {
-            $orderByRs = explode(' ', $sort);
-            $orderBy[$orderByRs[0]] = $orderByRs[1];
-            $orderBy['p_order'] = 'asc';
-            //$filter['start_time|gte']=time();//开始时间大于当前时间
-        }
+        $allowedSort = ['topic_id', 'created', 'updated', 'p_order', 'status', 'user_id'];
+        $appendOrder = ($sort && trim($sort)) ? ['p_order' => 'ASC'] : [];
+        $orderBy = OrderByWhitelist::fromSortString($sort, $allowedSort, [], $appendOrder);
         $cols='topic_id,topic_name,user_id,p_order,created,updated,source,is_top,status,company_id';
         $fromAdmin=true;
         $result = $topicService->getTopicList($filter, $cols, $page, $pageSize, $orderBy,$fromAdmin);
@@ -410,8 +412,10 @@ class TopicController extends Controller
         //$params['post_id'] =  1;
         //$params['status'] =  1;
         //查询活动信息
+        $companyId = (int) ($authInfo['company_id'] ?? 0);
+        WsugcTenantScopeGuard::assertTopicIdsBelongToCompany($companyId, $params['topic_id']);
         $topicService = new TopicService();
-        $result = $topicService->deleteBy(['topic_id'=>$params['topic_id']]);
+        $result = $topicService->deleteBy(['topic_id'=>$params['topic_id'], 'company_id' => $companyId]);
         if($result['topic_id']??null){
         }
         //ksort($result);

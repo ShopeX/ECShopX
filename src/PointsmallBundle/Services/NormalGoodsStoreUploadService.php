@@ -19,6 +19,7 @@ namespace PointsmallBundle\Services;
 
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use GuzzleHttp\Client as Client;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 
 class NormalGoodsStoreUploadService
 {
@@ -103,10 +104,11 @@ class NormalGoodsStoreUploadService
         }
         // 检查商品是否存在
         $itemsService = new ItemsService();
-        $itemInfo = $itemsService->getInfo(['item_bn' => $row['item_bn']]);
+        $itemInfo = $itemsService->getInfo(['company_id' => $companyId, 'item_bn' => $row['item_bn']]);
         if (!$itemInfo) {
             throw new BadRequestHttpException('商品不存在');
         }
+        GoodsTenantScopeGuard::assertCompanyScope($itemInfo, (int) $companyId);
         $itemId = $itemInfo['item_id'];
         $store = intval($row['store']);
 

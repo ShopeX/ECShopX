@@ -33,20 +33,13 @@ class CallBack extends Controller
         //storage_path('logs')
         app('log')->debug('adapay callback =>' . var_export($request->all(), 1));
 
-        // 此处只是个示例 需要测试请去掉注释
-        //$post_data_str = "{\"app_id\":\"app_fe1ec54d-e7cd-432a-a994-c12c3d8295f8\",\"created_time\":\"20201115182858\",\"end_time\":\"20201115182904\",\"expend\":{\"bank_type\":\"OTHERS\",\"open_id\":\"o8jhotwaUEffs1fyWE5O3N4HWvbk\",\"sub_open_id\":\"o4WGIxA59TYBzEKdwz_s6actNIYY\"},\"id\":\"002112020111518285710173995928213929984\",\"order_no\":\"SH20201115182857625624\",\"out_trans_id\":\"4200000839202011155051561044\",\"party_order_id\":\"02212011156653808201465\",\"pay_amt\":\"0.01\",\"pay_channel\":\"wx_pub\",\"status\":\"succeeded\"}";
-        //$post_sign_str = "YXOWP5pyL38cZvXbVTyr4Lp9tpr2IzYmc5+EXuNofMTPPlCMfgXX4aBHT8QhxmKMYe95TBklWrM6IAdSLqIBXyc7CYnEYh0o54QHH4H\/yKy5yiOqFCbcHAHPhtJPU28rj+dHbG7YG\/4Qk5psFoBuOTP99ACizLy\/uiILYY3UhJk=";
-
-        if ($eventType != 'userEntry.realTimeError') {
-            # 先校验签名和返回的数据的签名的数据是否一致
-            $sign_flag = $this->verifySign($post_sign_str, $post_data_str);
-            if (!$sign_flag) {
-                app('log')->error('adapay callback => 签名验证失败');
-                throw new ResourceException('签名验证失败');
-            } else {
-                app('log')->info('adapay callback => 签名ok');
-            }
+        # 先校验签名和返回的数据的签名的数据是否一致（fail-closed：所有事件均须验签）
+        $sign_flag = $this->verifySign($post_sign_str, $post_data_str);
+        if (!$sign_flag) {
+            app('log')->error('adapay callback => 签名验证失败');
+            throw new ResourceException('签名验证失败');
         }
+        app('log')->info('adapay callback => 签名ok');
 
 
         $events = [

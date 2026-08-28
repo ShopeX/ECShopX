@@ -46,15 +46,19 @@ trait CheckPromotionsValid
      * @param inteter $itemId 商品详情也的商品ID，也是默认商品ID
      * @param bool  $isItemsAll 如果商品为多规格商品是否需要查询所有的SKU信息
      */
-    public function getCurrentActivityByItemId($companyId, $itemId, $distributorId = null, $isItemsAll = true)
+    public function getCurrentActivityByItemId($companyId, $itemId, $distributorId = null, $isItemsAll = true, $itemInfo = null)
     {
-        $itemsService = new ItemsService();
-        $itemInfo = $itemsService->getInfo(['item_id' => $itemId, 'company_id' => $companyId]);
+        $itemsService = null;
+        if ($itemInfo === null) {
+            $itemsService = new ItemsService();
+            $itemInfo = $itemsService->getInfo(['item_id' => $itemId, 'company_id' => $companyId]);
+        }
         if (!$itemInfo) {
             return [];
         }
 
         if (($itemInfo['nospec'] === false || $itemInfo['nospec'] === 'false' || $itemInfo['nospec'] === 0 || $itemInfo['nospec'] === '0') && $itemInfo['default_item_id'] && $isItemsAll) {
+            $itemsService = $itemsService ?: new ItemsService();
             $itemsList = $itemsService->list(['default_item_id' => $itemInfo['default_item_id'], 'company_id' => $companyId], null, -1);
             if ($itemsList['total_count'] >= 0) {
                 $itemId = array_column($itemsList['list'], 'item_id');
@@ -248,10 +252,12 @@ trait CheckPromotionsValid
      * @param inteter $itemId 商品详情也的商品ID，也是默认商品ID
      * @param bool  $isItemsAll 如果商品为多规格商品是否需要查询所有的SKU信息
      */
-    public function checkCurrentMemberpreferenceByItemId($companyId, $userId, $itemId, &$msg, $distributorId = null, $isItemsAll = true)
+    public function checkCurrentMemberpreferenceByItemId($companyId, $userId, $itemId, &$msg, $distributorId = null, $isItemsAll = true, $itemInfo = null)
     {
-        $itemsService = new ItemsService();
-        $itemInfo = $itemsService->getInfo(['item_id' => $itemId, 'company_id' => $companyId]);
+        if ($itemInfo === null) {
+            $itemsService = new ItemsService();
+            $itemInfo = $itemsService->getInfo(['item_id' => $itemId, 'company_id' => $companyId]);
+        }
         if (!$itemInfo) {
             $msg = '活动商品出错';
             return [];

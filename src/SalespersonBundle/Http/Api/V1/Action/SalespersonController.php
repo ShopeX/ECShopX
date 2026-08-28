@@ -430,9 +430,13 @@ class SalespersonController extends BaseController
         ];
         $filter = [];
         $filter['id'] = $params['reply_id'];
+        $filter['company_id'] = (int) app('auth')->user()->get('company_id');
         $salespersonService = new SalespersonService();
         //获取已回复的内容
-        $replyed = $salespersonService->salemanCustomerComplaints->getInfoById($filter['id']);
+        $replyed = $salespersonService->salemanCustomerComplaints->getInfo($filter);
+        if (!$replyed) {
+            throw new ResourceException('未知的回复对象');
+        }
         if (!empty($replyed['reply_content'])) {
             $replyed_content = json_decode($replyed['reply_content'], true);
         } else {

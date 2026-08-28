@@ -266,6 +266,7 @@ class CashWithdrawalService
         }
 
         $distributeCountService = new DistributeCountService();
+        return $this->lockSalesmanCashWithdrawal($data['company_id'], $data['distributor_id'], function () use ($data, $distributeCountService, $distributorInfo) {
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
 
@@ -317,6 +318,7 @@ class CashWithdrawalService
         }
 
         return $return;
+        });
     }
 
 
@@ -324,5 +326,34 @@ class CashWithdrawalService
     public function __call($method, $parameters)
     {
         return $this->entityRepository->$method(...$parameters);
+    }
+
+    private function lockSalesmanCashWithdrawal(int $companyId, int $distributorId, \Closure $func)
+    {
+        $key = "lock:salesman_cash_withdrawal:{$companyId}:{$distributorId}";
+        $result = $this->redisLock($key, $func, 10, 5, 200);
+        if ($result === false) {
+            throw new ResourceException(trans('DistributionBundle/Services/CashWithdrawalService.system_error_try_later'));
+        }
+
+        return $result;
+    }
+
+    private function redisLock(string $key, \Closure $func, int $expire = 5, int $times = 3, int $sleep = 500)
+    {
+        for ($i = 0; $i < $times; $i++) {
+            $redis = app('redis')->connection('default');
+            if ($redis->set($key, 1, 'NX', 'EX', $expire)) {
+                try {
+                    $re = $func();
+                } finally {
+                    $redis->del($key);
+                }
+                return $re ?: true;
+            }
+            usleep($sleep * 1000);
+        }
+
+        return false;
     }
 }

@@ -429,6 +429,8 @@ class MarketingActivityService
         $userGrade = $this->getUserGrade($userId, $companyId);
         //系统所有的会员等级信息
         $memberGrade = $this->getMemberGrade($companyId);
+        //公司配置请求内只查一次，避免活动循环内重复查询
+        $company = (new CompanysActivationEgo())->check($companyId);
 
         foreach ($activityList as $value) {
             if (in_array($value['marketing_type'], ['member_preference'])) {
@@ -456,7 +458,6 @@ class MarketingActivityService
                 continue;
             }
 
-            $company = (new CompanysActivationEgo())->check($companyId);
             // 店铺和平台的促销各自独立，与商品列表活动标签逻辑保持一致
             if ($shopId > 0 && (int) $shopId != (int) ($value['source_id'] ?? 0)) {
                 continue;

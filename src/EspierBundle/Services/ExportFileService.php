@@ -258,7 +258,7 @@ class ExportFileService
                     if (!empty($textFields) && in_array($key, $textFields) && is_numeric($value) && $value !== '') {
                         $row[] = "\t" . $value;
                     } else {
-                        $row[] = $value;
+                        $row[] = $this->neutralizeCsvFormulaPrefix($value);
                     }
                 }
                 // 显式指定分隔符、引号和转义字符，确保兼容性
@@ -279,5 +279,25 @@ class ExportFileService
         $result['filename'] = $fileName.'.csv';
         $result['url'] = $filesystem->privateDownloadUrl('export/csv/'.$fileName.'.csv');
         return $result;
+    }
+
+    /**
+     * Prefix spreadsheet formula triggers (=,+,-,@) so Excel treats cells as text.
+     *
+     * @param mixed $value
+     * @return mixed
+     */
+    private function neutralizeCsvFormulaPrefix($value)
+    {
+        if (!is_string($value) || $value === '') {
+            return $value;
+        }
+
+        $first = $value[0];
+        if ($first === '=' || $first === '+' || $first === '-' || $first === '@') {
+            return "'" . $value;
+        }
+
+        return $value;
     }
 }

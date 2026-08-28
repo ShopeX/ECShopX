@@ -134,7 +134,7 @@ class UserTranscripts extends BaseController
         }
 
         $userTranscriptService = new UserTranscriptService();
-        $result = $userTranscriptService->getUserTranscript($postdata);
+        $result = $userTranscriptService->getUserTranscript($filter);
 
         return $this->response->array($result);
     }

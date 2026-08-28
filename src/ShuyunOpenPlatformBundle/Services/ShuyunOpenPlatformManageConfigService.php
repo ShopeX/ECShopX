@@ -47,7 +47,7 @@ final class ShuyunOpenPlatformManageConfigService
             'plat_code' => $row->getPlatCode(),
             'app_id' => $row->getAppId(),
             'app_secret_masked' => $this->maskSecret($row->getAppSecret()),
-            'access_token' => $row->getAccessToken(),
+            'access_token_masked' => $this->maskSecret($row->getAccessToken()),
             'is_enabled' => $row->getIsEnabled() === 1,
             'is_over_due' => $row->getIsOverDue(),
         ];

@@ -32,6 +32,7 @@ use PaymentBundle\Services\Payments\DoumenIntlService;
 use PaymentBundle\Services\Payments\PaypalService;
 use PaymentBundle\Services\Payments\WechatPayService;
 use PaymentBundle\Services\PaymentDoumenIntlMutualExclusionService;
+use PaymentBundle\Services\PaymentTenantScopeGuard;
 use PaymentBundle\Services\PaymentsService;
 use PaymentBundle\Services\Payments\ChinaumsPayService;
 use PaymentBundle\Services\Payments\BsPayService;
@@ -65,8 +66,12 @@ class Payment extends Controller
      */
     public function setPaymentSetting(Request $request)
     {
-        $companyId = app('auth')->user()->get('company_id');
-        $distributorId = $request->input('distributor_id', 0);
+        $user = app('auth')->user();
+        $companyId = $user->get('company_id');
+        $distributorId = PaymentTenantScopeGuard::resolvePaymentDistributorId(
+            $user,
+            (int) $request->input('distributor_id', 0)
+        );
         $payType = (string) $request->input('pay_type');
         $isOpening = $this->resolvePaymentIsOpening($request, $payType);
         $doumenExclusionService = new PaymentDoumenIntlMutualExclusionService();
@@ -283,8 +288,12 @@ class Payment extends Controller
      */
     public function getPaymentSetting(Request $request)
     {
-        $companyId = app('auth')->user()->get('company_id');
-        $distributorId = $request->input('distributor_id', 0);
+        $user = app('auth')->user();
+        $companyId = $user->get('company_id');
+        $distributorId = PaymentTenantScopeGuard::resolvePaymentDistributorId(
+            $user,
+            (int) $request->input('distributor_id', 0)
+        );
         if ($request->input('pay_type') == 'wxpay') {
             $paymentsService = new WechatPayService($distributorId, false);
         } elseif ($request->input('pay_type') == 'point_pay') {
@@ -310,7 +319,6 @@ class Payment extends Controller
                 $operatorId = app('auth')->user()->get('operator_id');
                 $paymentsService = new ChinaumsPayService('dealer_'.$operatorId);
             } else {
-                $distributorId = $request->input('distributor_id', 0);
                 if ($distributorId > 0) {
                     $paymentsService = new ChinaumsPayService('distributor_'.$distributorId);
                 } else {

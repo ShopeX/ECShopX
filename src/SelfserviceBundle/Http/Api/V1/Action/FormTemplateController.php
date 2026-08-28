@@ -22,6 +22,7 @@ use App\Http\Controllers\Controller as Controller;
 use Dingo\Api\Exception\StoreResourceFailedException;
 
 use SelfserviceBundle\Services\FormTemplateService;
+use SelfserviceBundle\Support\SelfserviceTenantScopeGuard;
 
 class FormTemplateController extends Controller
 {
@@ -251,6 +252,8 @@ class FormTemplateController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        SelfserviceTenantScopeGuard::assertFormTemplateIdBelongsToCompany($companyId, $id);
         $result = $this->formTemplateService->getInfoById($id);
         return $this->response->array($result);
     }
@@ -290,6 +293,8 @@ class FormTemplateController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        SelfserviceTenantScopeGuard::assertFormTemplateIdBelongsToCompany($companyId, $id);
         $result = $this->formTemplateService->discard($id);
         return $this->response->array(['status' => $result]);
     }
@@ -329,6 +334,8 @@ class FormTemplateController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        SelfserviceTenantScopeGuard::assertFormTemplateIdBelongsToCompany($companyId, $id);
         $result = $this->formTemplateService->restore($id);
         return $this->response->array(['status' => $result]);
     }

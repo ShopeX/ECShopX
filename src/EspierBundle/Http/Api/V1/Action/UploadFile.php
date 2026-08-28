@@ -271,7 +271,7 @@ class UploadFile extends Controller
         $companyId = app('auth')->user()->get('company_id');
         $fileType = $request->input('file_type');
 
-        $content = $uploadFileService->getErrorFile($id, $fileType);
+        $content = $uploadFileService->getErrorFile($id, $fileType, (int) $companyId);
 
         $response = array(
             'name' => 'error.xlsx', //no extention needed

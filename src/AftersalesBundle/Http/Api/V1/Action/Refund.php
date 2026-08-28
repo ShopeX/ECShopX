@@ -21,6 +21,7 @@ use EspierBundle\Jobs\ExportFileJob;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 use AftersalesBundle\Services\AftersalesRefundService;
+use AftersalesBundle\Support\AftersalesDistributorGate;
 use AftersalesBundle\Services\AftersalesOfflineRefundService;
 use OrdersBundle\Services\OfflinePaymentService;
 use MembersBundle\Services\MemberService;
@@ -217,17 +218,7 @@ class Refund extends Controller
             $filter['supplier_id'] = app('auth')->user()->get('operator_id');;
         }
 
-        $distributorListSet = app('auth')->user()->get('distributor_ids');
-        if (!empty($distributorListSet)) {
-            $distributorIdSet = array_column($distributorListSet, 'distributor_id');
-            if (isset($filter['distributor_id']) && $filter['distributor_id']) {
-                if (!in_array($filter['distributor_id'], $distributorIdSet)) {
-                    unset($filter['distributor_id']);
-                }
-            } else {
-                $filter['distributor_id'] = $distributorIdSet;
-            }
-        }
+        AftersalesDistributorGate::assertAuthorizedDistributorFilter($filter, app('auth')->user());
 
         $companyId = app('auth')->user()->get('company_id');
         $filter['company_id'] = $companyId;
@@ -295,6 +286,13 @@ class Refund extends Controller
             'refund_bn' => $refund_bn,
         ];
         $result = $AftersalesRefundService->getRefunds($filter);
+        $distributorListSet = app('auth')->user()->get('distributor_ids');
+        if (!empty($distributorListSet) && $result) {
+            AftersalesDistributorGate::assertOwnStoreAftersales(
+                $result,
+                array_column($distributorListSet, 'distributor_id')
+            );
+        }
 
         return $this->response->array($result);
     }
@@ -418,19 +416,8 @@ class Refund extends Controller
             $filter['supplier_id'] = app('auth')->user()->get('operator_id');
         }
         
-        // 处理店铺端权限
-        $distributorListSet = app('auth')->user()->get('distributor_ids');
-        if (!empty($distributorListSet)) {
-            $distributorIdSet = array_column($distributorListSet, 'distributor_id');
-            if (isset($filter['distributor_id']) && $filter['distributor_id']) {
-                if (!in_array($filter['distributor_id'], $distributorIdSet)) {
-                    unset($filter['distributor_id']);
-                }
-            } else {
-                $filter['distributor_id'] = $distributorIdSet;
-            }
-        }
-        
+        AftersalesDistributorGate::assertAuthorizedDistributorFilter($filter, app('auth')->user());
+
         // 处理商家端权限
         if ($operatorType == 'merchant') {
             $filter['merchant_id'] = $merchantId;

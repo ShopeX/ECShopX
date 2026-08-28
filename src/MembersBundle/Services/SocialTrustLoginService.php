@@ -126,15 +126,20 @@ class SocialTrustLoginService
     public function resolveAppleCallbackH5Host(array $data): string
     {
         $state = (string) ($data['state'] ?? '');
+        $requestHost = rtrim(trim((string) ($data['h5_host'] ?? '')), '/');
         $candidates = [
-            (string) ($data['h5_host'] ?? ''),
             $this->recallAppleOAuthH5Host($state),
             (string) ($this->decodeAppleOAuthState($state)['h5_host'] ?? ''),
-            (string) env('H5_BASE_URL', ''),
         ];
+        if ($requestHost !== '' && $this->isAllowedH5Origin($requestHost)) {
+            $candidates[] = $requestHost;
+        }
+        $candidates[] = rtrim(trim((string) config('common.h5_base_url')), '/');
+        $candidates[] = rtrim(trim((string) env('H5_BASE_URL', '')), '/');
+
         foreach ($candidates as $candidate) {
             $host = rtrim(trim($candidate), '/');
-            if ($host !== '' && preg_match('#^https?://#i', $host)) {
+            if ($host !== '' && preg_match('#^https?://#i', $host) && $this->isAllowedH5Origin($host)) {
                 return $host;
             }
         }
@@ -167,9 +172,21 @@ class SocialTrustLoginService
 
     public function encodeAppleOAuthState(string $h5Host): string
     {
-        $payload = json_encode(['h5_host' => rtrim(trim($h5Host), '/')], JSON_UNESCAPED_SLASHES);
+        $h5Host = rtrim(trim($h5Host), '/');
+        if (!$this->isAllowedH5Origin($h5Host)) {
+            throw new ResourceException('H5 域名不在允许列表中');
+        }
 
-        return rtrim(strtr(base64_encode((string) $payload), '+/', '-_'), '=');
+        $payload = json_encode([
+            'h5_host' => $h5Host,
+            'exp' => time() + 600,
+        ], JSON_UNESCAPED_SLASHES);
+        $payloadB64 = $this->base64UrlEncode((string) $payload);
+        $signature = $this->base64UrlEncode(
+            hash_hmac('sha256', $payloadB64, $this->appleOAuthStateSigningKey(), true)
+        );
+
+        return $payloadB64 . '.' . $signature;
     }
 
     public function decodeAppleOAuthState(string $state): array
@@ -179,14 +196,83 @@ class SocialTrustLoginService
             return [];
         }
 
-        $normalized = strtr($state, '-_', '+/');
+        $parts = explode('.', $state, 2);
+        if (count($parts) !== 2) {
+            return [];
+        }
+
+        [$payloadB64, $signatureB64] = $parts;
+        $expectedSignature = $this->base64UrlEncode(
+            hash_hmac('sha256', $payloadB64, $this->appleOAuthStateSigningKey(), true)
+        );
+        if (!hash_equals($expectedSignature, $signatureB64)) {
+            return [];
+        }
+
+        $decoded = json_decode($this->base64UrlDecode($payloadB64), true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $h5Host = rtrim(trim((string) ($decoded['h5_host'] ?? '')), '/');
+        $exp = (int) ($decoded['exp'] ?? 0);
+        if ($h5Host === '' || $exp < time() || !$this->isAllowedH5Origin($h5Host)) {
+            return [];
+        }
+
+        return ['h5_host' => $h5Host];
+    }
+
+    public function isAllowedH5Origin(string $h5Host): bool
+    {
+        $h5Host = rtrim(trim($h5Host), '/');
+        if ($h5Host === '' || !preg_match('#^https?://#i', $h5Host)) {
+            return false;
+        }
+
+        $allowedBases = [
+            rtrim(trim((string) config('common.h5_base_url')), '/'),
+            rtrim(trim((string) env('H5_BASE_URL', '')), '/'),
+        ];
+        foreach ($allowedBases as $base) {
+            if ($base !== '' && strcasecmp($h5Host, $base) === 0) {
+                return true;
+            }
+        }
+
+        $suffix = (string) config('common.h5_domain_suffix');
+        if ($suffix === '') {
+            return false;
+        }
+
+        $host = parse_url($h5Host, PHP_URL_HOST);
+        $scheme = strtolower((string) parse_url($h5Host, PHP_URL_SCHEME));
+        if (!is_string($host) || !in_array($scheme, ['http', 'https'], true)) {
+            return false;
+        }
+
+        return preg_match('/^m\d+' . preg_quote($suffix, '/') . '$/i', $host) === 1;
+    }
+
+    private function appleOAuthStateSigningKey(): string
+    {
+        return (string) config('app.key');
+    }
+
+    private function base64UrlEncode(string $value): string
+    {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+
+    private function base64UrlDecode(string $value): string
+    {
+        $normalized = strtr($value, '-_', '+/');
         $padding = strlen($normalized) % 4;
         if ($padding > 0) {
             $normalized .= str_repeat('=', 4 - $padding);
         }
-        $decoded = json_decode((string) base64_decode($normalized), true);
 
-        return is_array($decoded) ? $decoded : [];
+        return (string) base64_decode($normalized);
     }
 
     /**

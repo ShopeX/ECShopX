@@ -18,6 +18,7 @@
 namespace ThirdPartyBundle\Services;
 
 //shopex oms直连接口
+use EspierBundle\Support\OutboundUrlAllowlist;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Carbon;
 use SystemLinkBundle\Services\OmsQueueLogService;
@@ -35,6 +36,9 @@ class OmsApiService
         $omsSettingService = new OmsSettingService();
         $config = $omsSettingService->getSetting($this->companyId);
         $this->host = $config['api_host'] ?? '';
+        if ($this->host !== '') {
+            OutboundUrlAllowlist::assertAllowed($this->host);
+        }
         $this->nodeId = $config['node_id'] ?? '';
         $this->appSecret = $config['app_secret'] ?? '';
 //        $this->host = config('oms.api_host');
@@ -100,6 +104,7 @@ class OmsApiService
         $ch = curl_init();
 
         $apiUrl = $this->host . '/api';
+        OutboundUrlAllowlist::assertAllowed($apiUrl);
         $postData = http_build_query($params);
         // app('log')->info("callApi_oms_url => " . $apiUrl);
         // app('log')->info("callApi_oms_params => " . $postData);

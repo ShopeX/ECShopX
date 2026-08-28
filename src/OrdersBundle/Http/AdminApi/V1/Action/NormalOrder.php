@@ -32,6 +32,7 @@ use OrdersBundle\Traits\GetOrderServiceTrait;
 use OrdersBundle\Traits\GetPaymentServiceTrait;
 use MembersBundle\Services\MemberService;
 use OrdersBundle\Traits\OrderSettingTrait;
+use OrdersBundle\Support\GuideOrderTenantScopeGuard;
 
 class NormalOrder extends Controller
 {
@@ -649,12 +650,14 @@ class NormalOrder extends Controller
     {
         $input = $request->all();
         $authInfo = $this->auth->user();
-        $input['distributor_id'] = $request->input('distributor_id') ?: $authInfo['distributor_id'];
-        $input['company_id'] = $request->get('company_id') ?: $authInfo['company_id'];
-
-        if ($input['company_id'] != $authInfo['company_id']) {
-            $input['distributor_id'] = 0;
-        }
+        $input['company_id'] = GuideOrderTenantScopeGuard::resolveAuthCompanyId(
+            $authInfo,
+            $request->get('company_id')
+        );
+        $input['distributor_id'] = GuideOrderTenantScopeGuard::resolveGuideDistributorId(
+            $authInfo,
+            $request->input('distributor_id')
+        );
         $params = $this->_getOrderParams($input, $authInfo);
         $orderService = $this->getOrderService($params['order_type']);
         $result = $orderService->create($params);
@@ -725,12 +728,14 @@ class NormalOrder extends Controller
     {
         $input = $request->all();
         $authInfo = $this->auth->user();
-        $input['distributor_id'] = $request->input('distributor_id') ?: $authInfo['distributor_id'];
-        $input['company_id'] = $request->get('company_id') ?: $authInfo['company_id'];
-
-        if ($input['company_id'] != $authInfo['company_id']) {
-            $input['distributor_id'] = 0;
-        }
+        $input['company_id'] = GuideOrderTenantScopeGuard::resolveAuthCompanyId(
+            $authInfo,
+            $request->get('company_id')
+        );
+        $input['distributor_id'] = GuideOrderTenantScopeGuard::resolveGuideDistributorId(
+            $authInfo,
+            $request->input('distributor_id')
+        );
         $params = $this->_getOrderParams($input, $authInfo);
         $orderService = $this->getOrderService($params['order_type']);
         $result = $orderService->getOrderTempInfo($params);
@@ -752,6 +757,10 @@ class NormalOrder extends Controller
         if (!$userinfo) {
             throw new ResourceException('会员信息有误');
         }
+        GuideOrderTenantScopeGuard::assertMemberBelongsToCompany(
+            $userinfo,
+            (int) $input['company_id']
+        );
 
         $params['promotion'] = 'normal';
         $params['order_source'] = 'shop_offline';

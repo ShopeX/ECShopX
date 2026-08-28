@@ -19,6 +19,7 @@ namespace WsugcBundle\Repositories;
 
 use Doctrine\ORM\EntityRepository;
 use Doctrine\Common\Collections\Criteria;
+use EspierBundle\Support\OrderByWhitelist;
 use WsugcBundle\Entities\Tag;
 
 use Dingo\Api\Exception\DeleteResourceFailedException;
@@ -196,9 +197,7 @@ class TagRepository extends EntityRepository
         $qb = $conn->createQueryBuilder()->select($cols)->from($this->table);
         $qb = $this->_filter($filter, $qb);
         if ($orderBy) {
-            foreach($orderBy as $filed => $val) {
-                $qb->addOrderBy($filed, $val);
-            }
+            OrderByWhitelist::applyToQueryBuilder($qb, $orderBy, $this->cols);
         }
         if ($pageSize > 0) {
             $qb->setFirstResult(($page-1)*$pageSize)
@@ -223,9 +222,7 @@ class TagRepository extends EntityRepository
             $qb = $conn->createQueryBuilder()->select($cols)->from($this->table);
             $qb = $this->_filter($filter, $qb);
             if ($orderBy) {
-                foreach($orderBy as $filed => $val) {
-                    $qb->addOrderBy($filed, $val);
-                }
+                OrderByWhitelist::applyToQueryBuilder($qb, $orderBy, $this->cols);
             }
             if ($pageSize > 0) {
                 $qb->setFirstResult(($page-1)*$pageSize)

@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use CommentsBundle\Services\CommentService;
 use CommentsBundle\Services\Comments\ShopCommentService;
+use CommentsBundle\Support\CommentsTenantScopeGuard;
 use Dingo\Api\Exception\StoreResourceFailedException;
 
 class Comments extends BaseController
@@ -169,6 +170,8 @@ class Comments extends BaseController
     public function updateComment($comment_id, Request $request)
     {
         $params = $request->all();
+        $companyId = (int) app('auth')->user()->get('company_id');
+        CommentsTenantScopeGuard::assertCommentIdBelongsToCompany($companyId, (int) $comment_id);
         $commentService = new CommentService(new ShopCommentService());
 
         $update = [];

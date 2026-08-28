@@ -43,7 +43,11 @@ class JushuitanCheck
         $sign = trim($data['sign']);
         
         unset($data['sign']);
-        $partnerkey = 'erp';
+        $partnerkey = trim((string) config('jushuitan.app_secret', ''));
+        if ($partnerkey === '') {
+            app('log')->debug('jushuitan::callback::JushuitanCheck::sign error: app_secret not configured');
+            return response()->json(['code' => 0, 'msg' => 'sign error']);
+        }
 
         app('log')->debug('jushuitan::callback::JushuitanCheck::sign:' . self::gen_sign($data,$partnerkey));
         if (!$sign || $sign != self::gen_sign($data,$partnerkey) )

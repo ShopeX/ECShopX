@@ -18,6 +18,7 @@
 namespace ThirdPartyBundle\Services\Kuaizhen580Center\Src;
 
 use Dingo\Api\Exception\ResourceException;
+use EspierBundle\Support\OutboundUrlAllowlist;
 use GoodsBundle\Entities\ItemsMedicine;
 use GoodsBundle\Repositories\ItemsMedicineRepository;
 use OrdersBundle\Entities\NormalOrders;
@@ -375,11 +376,16 @@ class DiagnosisService
         ]);
 
         if (!empty($params['dstFilePath'])) {
+            $dstFilePath = (string) $params['dstFilePath'];
+            if (! OutboundUrlAllowlist::isAllowed($dstFilePath)) {
+                throw new ResourceException('处方文件地址不允许');
+            }
+
             $storage = 'import-image';
             $filesystem = app('filesystem')->disk($storage);
             $fileName = basename($params['dstFilePath']);
             $filePath = 'order_dst_file_path/' . $orderInfo['company_id'] . '/' . $orderInfo['order_id'] . '/' . $fileName;
-            $filesystem->put($filePath, file_get_contents($params['dstFilePath']));
+            $filesystem->put($filePath, file_get_contents($dstFilePath));
             $fileUlr = $filesystem->url($filePath);
         }
 

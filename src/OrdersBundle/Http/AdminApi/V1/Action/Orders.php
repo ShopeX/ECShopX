@@ -34,6 +34,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use MembersBundle\Services\MemberService;
 use MembersBundle\Services\WechatUserService;
 use OrdersBundle\Services\OrderProcessLogService;
+use OrdersBundle\Support\GuideOrderTenantScopeGuard;
 
 class Orders extends Controller
 {
@@ -264,6 +265,15 @@ class Orders extends Controller
                 break;
         }
         $authInfo = $this->auth->user();
+        $companyId = GuideOrderTenantScopeGuard::resolveAuthCompanyId(
+            $authInfo,
+            $request->get('company_id')
+        );
+        $memberService = new MemberService();
+        GuideOrderTenantScopeGuard::assertMemberBelongsToCompany(
+            $memberService->getMemberInfo(['user_id' => $request->input('user_id')]),
+            $companyId
+        );
         // if ($authInfo['salesperson_id'] ?? 0) {
         //     $filter['salesman_id'] = $authInfo['salesperson_id'];
         // }
@@ -273,7 +283,7 @@ class Orders extends Controller
         } elseif ($isOnlineOrder == 'false') {
             $filter['order_source'] = 'shop_offline';
         }
-        $filter['company_id'] = $authInfo['company_id'];
+        $filter['company_id'] = $companyId;
         $orderService = $this->getOrderService($filter['order_type']);
         $result = $orderService->getOrderList($filter, $page, $limit);
         if ($result['list'] ?? null) {
@@ -637,9 +647,10 @@ class Orders extends Controller
         if (method_exists($orderService, 'orderRecombine')) {
             $result = $orderService->orderRecombine($result); //订单售后数量重新计算
         }
-        if ($authInfo['distributor_id'] != $result['orderInfo']['distributor_id']) {
-            throw new BadRequestHttpException('此订单不是本店订单');
-        }
+        GuideOrderTenantScopeGuard::assertOrderInGuideStore(
+            $result['orderInfo'],
+            (int) $authInfo['distributor_id']
+        );
 //        if ('ziti' == $result['orderInfo']['receipt_type']) {
 //            throw new BadRequestHttpException('此订单不属于自提订单，请自行退款');
 //        }
@@ -1178,8 +1189,14 @@ class Orders extends Controller
     {
         $authInfo = $this->auth->user();
 
-        $filter['company_id'] = $authInfo['company_id'];
-        $filter['distributor_id'] = $authInfo['distributor_id'];
+        $filter['company_id'] = GuideOrderTenantScopeGuard::resolveAuthCompanyId(
+            $authInfo,
+            $request->get('company_id')
+        );
+        $filter['distributor_id'] = GuideOrderTenantScopeGuard::resolveGuideDistributorId(
+            $authInfo,
+            $request->input('distributor_id')
+        );
 
         $page = $request->input('page', 1);
         $limit = $request->input('page_size', 20);

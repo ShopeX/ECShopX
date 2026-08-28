@@ -23,6 +23,7 @@ use OrdersBundle\Events\TradeFinishEvent;
 use OrdersBundle\Events\OrderProcessLogEvent;
 use OrdersBundle\Traits\GetOrderServiceTrait;
 use OrdersBundle\Services\Orders\NormalOrderService;
+use OrdersBundle\Support\GuideOrderTenantScopeGuard;
 use OrdersBundle\Services\OrderAssociationService;
 use EspierBundle\Entities\OfflineBankAccount;
 
@@ -126,6 +127,11 @@ class OfflinePaymentService
     {
         $info = $this->repository->getInfo(['id' => $params['id']]);
         if (!$info) throw new ResourceException('凭证不存在');
+        GuideOrderTenantScopeGuard::assertOfflineVoucherBelongsToOrder(
+            $info,
+            (string) $params['order_id'],
+            (int) $params['company_id']
+        );
         $orderService = new NormalOrderService();
         // 获取订单信息
         $orderInfo = $orderService->normalOrdersRepository->getInfo(['company_id' => $params['company_id'], 'order_id' => $params['order_id']]);

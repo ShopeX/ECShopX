@@ -30,6 +30,7 @@ use SelfserviceBundle\Services\FormTemplateService;
 use SelfserviceBundle\Services\RegistrationActivityRelShopService;
 use SelfserviceBundle\Services\RegistrationActivityService;
 use SelfserviceBundle\Services\RegistrationRecordService;
+use SelfserviceBundle\Support\SelfserviceTenantScopeGuard;
 
 class RegistrationActivityController extends Controller
 {
@@ -301,7 +302,7 @@ class RegistrationActivityController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
-        $result = $this->service->entityRepository->getInfoById($id);
+        $result = $this->service->entityRepository->getInfoById($id, $companyId);
         if (!$result) {
             return $this->response->array($result);
         }
@@ -396,6 +397,8 @@ class RegistrationActivityController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        SelfserviceTenantScopeGuard::assertRegistrationActivityIdBelongsToCompany($companyId, $id);
         $result = $this->service->entityRepository->deleteById($id);
         return $this->response->array(['status' => $result]);
     }
@@ -439,7 +442,10 @@ class RegistrationActivityController extends Controller
         if (!$id) {
             return $this->response->array($result);
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        SelfserviceTenantScopeGuard::assertRegistrationActivityIdBelongsToCompany($companyId, $id);
         $filter['activity_id'] = $id;
+        $filter['company_id'] = $companyId;
         $params['end_time'] = time() - 3600;
         $result = $this->service->entityRepository->updateBy($filter, $params);
         return $this->response->array(['status' => $result]);

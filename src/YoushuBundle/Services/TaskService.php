@@ -17,6 +17,7 @@
 
 namespace YoushuBundle\Services;
 
+use EspierBundle\Support\OutboundUrlAllowlist;
 use WechatBundle\Entities\Weapp;
 use WechatBundle\Services\OpenPlatform;
 use YoushuBundle\Entities\YoushuSetting;
@@ -67,7 +68,7 @@ class TaskService
                 $visit_data = $app->data_cube->visitPage($begindate, $enddate);
 
                 $config = new Config();
-                $config->base_uri = $v['api_url'] ? $v['api_url'] : $v['sandbox_api_url'];
+                $config->base_uri = $this->resolveAllowedBaseUri($v);
                 $config->merchant_id = $v['merchant_id'];
                 $config->app_id = $v['app_id'] ? $v['app_id'] : $v['sandbox_app_id'];
                 $config->app_secret = $v['app_secret'] ? $v['app_secret'] : $v['sandbox_app_secret'];
@@ -110,7 +111,7 @@ class TaskService
                 $visit_data = $app->data_cube->visitDistribution($begindate, $enddate);
 
                 $config = new Config();
-                $config->base_uri = $v['api_url'] ? $v['api_url'] : $v['sandbox_api_url'];
+                $config->base_uri = $this->resolveAllowedBaseUri($v);
                 $config->merchant_id = $v['merchant_id'];
                 $config->app_id = $v['app_id'] ? $v['app_id'] : $v['sandbox_app_id'];
                 $config->app_secret = $v['app_secret'] ? $v['app_secret'] : $v['sandbox_app_secret'];
@@ -153,7 +154,7 @@ class TaskService
                 ];
 
                 $config = new Config();
-                $config->base_uri = $v['api_url'] ? $v['api_url'] : $v['sandbox_api_url'];
+                $config->base_uri = $this->resolveAllowedBaseUri($v);
                 $config->merchant_id = $v['merchant_id'];
                 $config->app_id = $v['app_id'] ? $v['app_id'] : $v['sandbox_app_id'];
                 $config->app_secret = $v['app_secret'] ? $v['app_secret'] : $v['sandbox_app_secret'];
@@ -192,5 +193,13 @@ class TaskService
         }
 
         throw new \Exception('未查询到腾讯有数对应数据仓库');
+    }
+
+    private function resolveAllowedBaseUri(array $setting): string
+    {
+        $baseUri = $setting['api_url'] ? $setting['api_url'] : $setting['sandbox_api_url'];
+        OutboundUrlAllowlist::assertAllowed($baseUri);
+
+        return $baseUri;
     }
 }

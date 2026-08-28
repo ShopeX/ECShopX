@@ -21,6 +21,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as Controller;
 
 use GoodsBundle\Services\ItemsProfitService;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 
 use Dingo\Api\Exception\ResourceException;
 
@@ -51,6 +52,13 @@ class ItemsProfit extends Controller
     {
         $params = $request->input();
         $params['company_id'] = app('auth')->user()->get('company_id');
+        $profitConf = json_decode((string) ($params['profit_conf'] ?? ''), true);
+        if (is_array($profitConf)) {
+            GoodsTenantScopeGuard::assertItemIdsBelongToCompany(
+                (int) $params['company_id'],
+                array_column($profitConf, 'item_id')
+            );
+        }
         $itemsProfitService = new ItemsProfitService();
         $result = $itemsProfitService->saveItemsProfit($params);
         return $this->response->array(['status' => true]);

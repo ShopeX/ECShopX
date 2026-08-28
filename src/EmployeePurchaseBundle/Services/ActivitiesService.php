@@ -942,7 +942,7 @@ class ActivitiesService
     public function addActivityItems($params)
     {
         $activity = $this->entityRepository->getInfo(['id' => $params['activity_id']]);
-        if (!$activity) {
+        if (!$activity || (int) ($activity['company_id'] ?? 0) !== (int) $params['company_id']) {
             throw new ResourceException('活动不存在');
         }
 

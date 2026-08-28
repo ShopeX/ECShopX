@@ -54,16 +54,49 @@ class HfPay extends Controller
     public function notify(Request $request)
     {
         $check_value = $request->input('check_value');
+        if ($check_value === null || $check_value === '') {
+            return 'fail';
+        }
+
         //解密汇付数据
         $sign = new HfSign();
         $sign->strLogCofigFilePath = storage_path('hfpay/cfcalog.conf');
-        $sign->getCFCAInitialize();
-        //验证接口返回的签名数据
-        $source_data = $sign->getCFCASignSourceData($check_value);
-        $sign_source_data = '';
-        if (!empty($source_data['strMsgP7AttachedSource'])) {
-            $sign_source_data = json_decode($source_data['strMsgP7AttachedSource'], true);
+        try {
+            $sign->getCFCAInitialize();
+            //验证接口返回的签名数据
+            $source_data = $sign->getCFCASignSourceData($check_value);
+        } catch (\Exception $e) {
+            app('log')->error('汇付回调验签失败--->>>' . $e->getMessage());
+
+            return 'fail';
         }
+
+        $signCertContent = (string) ($source_data['strMsgP7AttachedSignCertContent'] ?? '');
+        $attachedSource = (string) ($source_data['strMsgP7AttachedSource'] ?? '');
+        if ($attachedSource === '' || $signCertContent === '') {
+            return 'fail';
+        }
+
+        $sign_source_data = json_decode($attachedSource, true);
+        if (!is_array($sign_source_data)) {
+            return 'fail';
+        }
+
+        $merCustId = trim((string) ($sign_source_data['mer_cust_id'] ?? ''));
+        if ($merCustId === '') {
+            app('log')->warning('汇付回调缺少 mer_cust_id，无法校验证书链');
+
+            return 'fail';
+        }
+
+        $sign->strTrustedCACertFilePath = storage_path('chinapnrPayment/' . $merCustId . '/CFCA_ACS_CA.cer')
+            . '|' . storage_path('chinapnrPayment/' . $merCustId . '/CFCA_ACS_OCA31.cer');
+        if (!$sign->verifyCertificat($signCertContent)) {
+            app('log')->warning('汇付回调证书链校验失败--->>> mer_cust_id=' . $merCustId);
+
+            return 'fail';
+        }
+
         app('log')->debug('汇付回调data--->>>' . var_export($sign_source_data, 1));
         //应答返回码
         $resp_code = $sign_source_data['resp_code'];

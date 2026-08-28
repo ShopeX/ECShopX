@@ -20,6 +20,7 @@ namespace MembersBundle\Services;
 use Dingo\Api\Exception\ResourceException;
 use MembersBundle\Entities\MedicationPersonnel;
 use MembersBundle\Repositories\MedicationPersonnelRepository;
+use MembersBundle\Support\MembersOwnerScopeGuard;
 
 class MedicationPersonnelService
 {
@@ -90,6 +91,7 @@ class MedicationPersonnelService
         if (!$info) {
             throw new ResourceException(trans('MembersBundle/Members.medication_personnel_not_exists'));
         }
+        MembersOwnerScopeGuard::assertOwnUserRecord($info, (int) $params['user_id']);
         // 查询身份证号是否有重复
         $sameInfo = $this->medicationPersonnelRepository->getInfo([
             'company_id' => $params['company_id'],

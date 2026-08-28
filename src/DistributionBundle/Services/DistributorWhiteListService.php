@@ -139,12 +139,12 @@ class DistributorWhiteListService
         return $ret ?? [];
     }
 
-    public function deleteOneWhiteList(array $whiteId, int $distributorId = 0)
+    public function deleteOneWhiteList(array $whiteId, int $distributorId = 0, int $companyId = 0)
     {
 
-        $exit = $this->distributorWhiteListRepository->lists(['id'=>$whiteId],'*',1,-1);
+        $exit = $this->distributorWhiteListRepository->lists(['id'=>$whiteId, 'company_id' => $companyId],'*',1,-1);
         foreach ($exit['list'] as $v){
-            $filter =['mobile'=>$v['mobile']];
+            $filter =['mobile'=>$v['mobile'], 'company_id' => $companyId];
             if(!empty($distributorId)){
                 $filter['distributor_id'] = $distributorId;
             }
@@ -154,9 +154,9 @@ class DistributorWhiteListService
 
     }
 
-    public function deleteByDistributorId(array $distributorId)
+    public function deleteByDistributorId(array $distributorId, int $companyId = 0)
     {
-        $filter = ['distributor_id' => $distributorId];
+        $filter = ['distributor_id' => $distributorId, 'company_id' => $companyId];
         $this->distributorWhiteListRepository->deleteBy($filter);
     }
 

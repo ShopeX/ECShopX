@@ -205,6 +205,7 @@ class CommunityChiefCashWithdrawalService
             }
         }
 
+        return $this->lockChiefCashWithdrawal($data['company_id'], $data['chief_id'], function () use ($data) {
         $chiefRebate = $this->getChiefRebateCount($data['company_id'], $data['chief_id']);
         if (!isset($chiefRebate[$data['chief_id']])) {
             throw new ResourceException('申请提现金额额度超出限制');
@@ -228,6 +229,7 @@ class CommunityChiefCashWithdrawalService
         ];
 
         return $this->entityRepository->create($insertData);
+        });
     }
 
     public function updateStatus($companyId, $applyId, $applyStatus, $error_msg = [])
@@ -367,5 +369,34 @@ class CommunityChiefCashWithdrawalService
     public function __call($method, $parameters)
     {
         return $this->entityRepository->$method(...$parameters);
+    }
+
+    private function lockChiefCashWithdrawal(int $companyId, int $chiefId, \Closure $func)
+    {
+        $key = "lock:chief_cash_withdrawal:{$companyId}:{$chiefId}";
+        $result = $this->redisLock($key, $func, 10, 5, 200);
+        if ($result === false) {
+            throw new ResourceException('申请提现金额额度超出限制');
+        }
+
+        return $result;
+    }
+
+    private function redisLock(string $key, \Closure $func, int $expire = 5, int $times = 3, int $sleep = 500)
+    {
+        for ($i = 0; $i < $times; $i++) {
+            $redis = app('redis')->connection('default');
+            if ($redis->set($key, 1, 'NX', 'EX', $expire)) {
+                try {
+                    $re = $func();
+                } finally {
+                    $redis->del($key);
+                }
+                return $re ?: true;
+            }
+            usleep($sleep * 1000);
+        }
+
+        return false;
     }
 }

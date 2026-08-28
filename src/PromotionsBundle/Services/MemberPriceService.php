@@ -19,6 +19,7 @@ namespace PromotionsBundle\Services;
 
 use PromotionsBundle\Entities\MemberPrice;
 use GoodsBundle\Services\ItemsService;
+use GoodsBundle\Support\GoodsTenantScopeGuard;
 use DistributionBundle\Services\DistributorItemsService;
 use DistributionBundle\Services\DistributorService;
 use Dingo\Api\Exception\ResourceException;
@@ -51,6 +52,7 @@ class MemberPriceService
 
         try {
             $itemIds = array_keys($mprice);
+            GoodsTenantScopeGuard::assertItemIdsBelongToCompany((int) $params['company_id'], $itemIds);
             //清除已存在的会员价信息
             $this->deleteMemberPrice(['item_id' => $itemIds, 'company_id' => $params['company_id']]);
 

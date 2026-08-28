@@ -22,6 +22,7 @@ use EspierBundle\Jobs\ExportFileJob;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller as BaseController;
 use PromotionsBundle\Services\TurntableService;
+use PromotionsBundle\Support\PromotionActivityTenantScopeGuard;
 
 class Turntable extends BaseController
 {
@@ -105,6 +106,10 @@ class Turntable extends BaseController
 
         if($params['begin_time'] >= $params['end_time']){
             throw new ResourceException(trans('PromotionsBundle.start_time_cannot_greater_equal_end_time'));
+        }
+
+        if (!empty($params['id'])) {
+            PromotionActivityTenantScopeGuard::assertLuckyDrawActivityBelongsToCompany((int) $params['id'], (int) $company_id);
         }
 
 //        $turntable_open = $request->input('turntable_open', ''); //是否开启大转盘，1开启，0关闭
@@ -314,7 +319,9 @@ class Turntable extends BaseController
         if(empty($params['id'])){
             throw new ResourceException(trans('PromotionsBundle.id_not_exist_error'));
         }
-        $detail = (new TurntableService())->getDetail($params['id']);
+        $companyId = (int) app('auth')->user()->get('company_id');
+        PromotionActivityTenantScopeGuard::assertLuckyDrawActivityBelongsToCompany((int) $params['id'], $companyId);
+        $detail = (new TurntableService())->getDetail((int) $params['id']);
         return $this->response->array($detail);
     }
 
@@ -325,6 +332,8 @@ class Turntable extends BaseController
         if(empty($params['activity_id'])){
             throw new ResourceException(trans('PromotionsBundle.activity_id_required_error'));
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        PromotionActivityTenantScopeGuard::assertLuckyDrawActivityBelongsToCompany((int) $params['activity_id'], $companyId);
         $page = $params['page'] ?? 1;
         $limit = $params['page_size'] ?? 20;
         $list = (new TurntableService())->getLuckyDrawLogByActId($params['activity_id'],$page,$limit);
@@ -348,6 +357,8 @@ class Turntable extends BaseController
         if(empty($params['activity_id'])){
             throw new ResourceException(trans('PromotionsBundle.activity_id_required_error'));
         }
+        $companyId = (int) app('auth')->user()->get('company_id');
+        PromotionActivityTenantScopeGuard::assertLuckyDrawActivityBelongsToCompany((int) $params['activity_id'], $companyId);
         (new TurntableService())->downActvity($params['activity_id']);
         return $this->response->array(['status'=>true]);
     }
@@ -361,6 +372,10 @@ class Turntable extends BaseController
         }
         $authdata = app('auth')->user()->get();
         $operator_id = app('auth')->user()->get('operator_id');
+        PromotionActivityTenantScopeGuard::assertLuckyDrawActivityBelongsToCompany(
+            (int) $params['activity_id'],
+            (int) $authdata['company_id']
+        );
 
         // 是否有权限查看加密数据
         $params['datapass_block'] = $request->get('x-datapass-block');

@@ -49,6 +49,7 @@ class DistributorWhiteList extends Controller
         $params = $request->all();
         $type = $params['type'];
         $id = $params['id'];
+        $companyId = (int) app('auth')->user()->get('company_id');
         $service = new DistributorWhiteListService();
         if($type === 'id'){
             $distributorId = 0;
@@ -56,9 +57,9 @@ class DistributorWhiteList extends Controller
             if ($operatorType == 'distributor') {
                 $distributorId  = app('auth')->user()->get('distributor_id');
             }
-            $service->deleteOneWhiteList($id,$distributorId);
+            $service->deleteOneWhiteList($id, $distributorId, $companyId);
         }else{
-            $service->deleteByDistributorId($id);
+            $service->deleteByDistributorId($id, $companyId);
         }
         return $this->response->array(['status'=>true]);
     }

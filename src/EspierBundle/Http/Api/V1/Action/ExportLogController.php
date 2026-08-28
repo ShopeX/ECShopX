@@ -20,6 +20,7 @@ namespace EspierBundle\Http\Api\V1\Action;
 use App\Http\Controllers\Controller as Controller;
 use Dingo\Api\Exception\ResourceException;
 use EspierBundle\Services\ExportLogService;
+use EspierBundle\Support\ExportLogTenantScopeGuard;
 use Illuminate\Http\Request;
 
 class ExportLogController extends Controller
@@ -138,6 +139,10 @@ class ExportLogController extends Controller
         if (empty($data)) {
             throw new ResourceException('资源文件不存在');
         }
+        ExportLogTenantScopeGuard::assertCompanyScope(
+            $data,
+            (int) app('auth')->user()->get('company_id')
+        );
         $file_url = $data['file_url'];
         $file_url_info = parse_url($file_url);
         try {

@@ -18,6 +18,7 @@
 namespace SupplierBundle\Services;
 
 use GoodsBundle\Services\ItemsService;
+use GoodsBundle\Entities\ItemsBarcode;
 use GoodsBundle\Events\ItemDeleteEvent;
 use Dingo\Api\Exception\ResourceException;
 use GoodsBundle\Services\ItemStoreService;
@@ -305,12 +306,73 @@ class SupplierItemsService
         return $itemsList;
     }
 
+    private function validateBarcodes(array $params)
+    {
+        $specItems = [];
+        if (!empty($params['spec_items'])) {
+            $specItems = is_array($params['spec_items']) ? $params['spec_items'] : json_decode($params['spec_items'], true);
+        }
+        $specItems = is_array($specItems) ? $specItems : [];
+        if (!$specItems && isset($params['barcode'])) {
+            $specItems[] = ['barcode' => $params['barcode'], 'item_id' => $params['item_id'] ?? null];
+        }
+
+        $currentItemIds = array_values(array_filter(array_unique(array_column($specItems, 'item_id'))));
+        $barcodes = [];
+        foreach ($specItems as $specItem) {
+            $barcode = trim((string)($specItem['barcode'] ?? ''));
+            if ($barcode === '') {
+                continue;
+            }
+            if (isset($barcodes[$barcode])) {
+                throw new ResourceException(trans('GoodsBundle/Controllers/Items.barcode_exists'));
+            }
+            $barcodes[$barcode] = true;
+        }
+
+        if (!$barcodes) {
+            return;
+        }
+
+        $draftRepository = $this->getDraftService()->draftRepository;
+        if ($draftRepository->hasBarcodeConflict($params['company_id'], array_keys($barcodes), $currentItemIds)) {
+            throw new ResourceException(trans('GoodsBundle/Controllers/Items.barcode_exists'));
+        }
+
+        $itemsService = new ItemsService();
+        $itemsBarcode = app('registry')->getManager('default')->getRepository(ItemsBarcode::class);
+        foreach (array_keys($barcodes) as $barcode) {
+            $supplierItem = $this->repository->getInfo([
+                'company_id' => $params['company_id'],
+                'barcode' => $barcode,
+            ]);
+            if ($supplierItem && !in_array($supplierItem['item_id'], $currentItemIds)) {
+                throw new ResourceException(trans('GoodsBundle/Controllers/Items.barcode_exists'));
+            }
+
+            $platformBarcode = $itemsBarcode->getInfo([
+                'company_id' => $params['company_id'],
+                'barcode' => $barcode,
+            ]);
+            if (!$platformBarcode) {
+                continue;
+            }
+            $mappedItem = $itemsService->itemsRepository->getInfo([
+                'item_id' => $platformBarcode['item_id'],
+            ]);
+            if (!$mappedItem || !in_array($mappedItem['supplier_item_id'], $currentItemIds)) {
+                throw new ResourceException(trans('GoodsBundle/Controllers/Items.barcode_exists'));
+            }
+        }
+    }
+
     /**
      * 添加(更新)供应商商品
      */
     public function addItems($params, $isCreateRelData = true)
     {
         $params['item_type'] = $params['item_type'] ?? "services";
+        $this->validateBarcodes($params);
         $params['recommend_items'] = $params['recommend_items'] ?? [];
         // $this->itemtypeObject = new $this->itemsTypeClass[$params['item_type']]();
 
@@ -1408,7 +1470,10 @@ class SupplierItemsService
         $itemsService = new ItemsService();
 
         $supplierGoods = $this->repository->getInfoById($itemId);
-        $companyId = $supplierGoods['company_id'];
+        if (!$supplierGoods || (int) ($supplierGoods['company_id'] ?? 0) !== (int) $params['company_id']) {
+            throw new ResourceException(trans('SupplierBundle.please_select_audit_items'));
+        }
+        $companyId = (int) $params['company_id'];
         $params['supplier_id'] = $supplierGoods['supplier_id'];
         $params['goods_id'] = $supplierGoods['goods_id'];
         $params['is_market'] = $supplierGoods['is_market'];//供应商控制商品是否可售
@@ -1710,6 +1775,14 @@ class SupplierItemsService
             if ($draftService->shouldUseStagingForGoods($skuRows)) {
                 // 已上线商品：每个 SKU 走 saveStagedItemUpdate，销售状态进 draft
                 $this->resolveStagingForGoods($goodsId);
+                // 已有待审草稿（保存时写入的 item_name 等内容）：批量操作只携带状态字段，
+                // saveDraftSku 是整份覆盖 content_json，必须以草稿内容为底合并，否则保存的修改会丢失
+                $existingDraftContent = [];
+                foreach ($draftService->getDraftSkusByGoodsId($goodsId, $skuRows[0]['company_id'] ?? null) as $draftSku) {
+                    $content = SupplierItemsDraftFields::splitRow($draftSku)['content'];
+                    unset($content['content_json']);
+                    $existingDraftContent[$draftSku['source_item_id']] = $content;
+                }
                 foreach ($skuRows as $row) {
                     $stagedData = [
                         'company_id' => $row['company_id'],
@@ -1719,6 +1792,13 @@ class SupplierItemsService
                         'audit_status' => $params['audit_status'] ?? $row['audit_status'],
                         'default_item_id' => $row['default_item_id'] ?? null,
                     ];
+                    if (isset($existingDraftContent[$row['item_id']])) {
+                        $draftContent = $existingDraftContent[$row['item_id']];
+                        // 未显式传参的状态字段沿用草稿值，避免主表旧值回退覆盖保存时的修改
+                        $stagedData['approve_status'] = $params['approve_status'] ?? ($draftContent['approve_status'] ?? $row['approve_status']);
+                        $stagedData['is_market'] = $params['is_market'] ?? ($draftContent['is_market'] ?? $row['is_market']);
+                        $stagedData = array_merge($draftContent, $stagedData);
+                    }
                     $this->saveStagedItemUpdate($stagedData, [
                         'item_id' => $row['item_id'],
                         'approve_status' => $stagedData['approve_status'],

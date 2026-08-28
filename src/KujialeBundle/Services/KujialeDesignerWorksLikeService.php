@@ -35,16 +35,16 @@ class KujialeDesignerWorksLikeService
                 //更新对应的设计方案的点赞量
                 $conn = app("registry")->getConnection("default");
 
-                $sql = "UPDATE kujiale_designer_works SET `like_count`=`like_count`+1 WHERE `design_id`='".$designId."' AND `plan_id`='".$planId."'";
-                $conn->executeUpdate($sql);
+                $sql = 'UPDATE kujiale_designer_works SET `like_count`=`like_count`+1 WHERE `design_id`=? AND `plan_id`=?';
+                $conn->executeUpdate($sql, [$designId, $planId]);
             }
             if($like && $type == 'unlike'){
                 $this->likeRepository->deleteBy($filter);
                 //更新对应的设计方案的点赞量
                 $conn = app("registry")->getConnection("default");
 
-                $sql = "UPDATE kujiale_designer_works SET `like_count`=`like_count`-1 WHERE `design_id`='".$designId."' AND `plan_id`='".$planId."'";
-                $conn->executeUpdate($sql);
+                $sql = 'UPDATE kujiale_designer_works SET `like_count`=`like_count`-1 WHERE `design_id`=? AND `plan_id`=?';
+                $conn->executeUpdate($sql, [$designId, $planId]);
             }
             return true;
         }catch(\Exception $e){

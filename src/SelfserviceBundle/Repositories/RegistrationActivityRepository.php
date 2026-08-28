@@ -282,9 +282,13 @@ class RegistrationActivityRepository extends EntityRepository
      *
      * @param $id
      */
-    public function getInfoById($id)
+    public function getInfoById($id, $companyId = null)
     {
-        $entity = $this->find($id);
+        if ($companyId !== null) {
+            $entity = $this->findOneBy(['activity_id' => $id, 'company_id' => $companyId]);
+        } else {
+            $entity = $this->find($id);
+        }
         if (!$entity) {
             return [];
         }

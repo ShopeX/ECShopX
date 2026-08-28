@@ -23,13 +23,22 @@ use Dingo\Api\Exception\ResourceException;
 class PaymentOrderOwnershipGuard
 {
     /**
-     * 在线支付仅允许订单买家本人发起。
+     * 在线支付仅允许订单买家本人发起；收银/店务 operator 无 user_id 时跳过归属比对。
      *
      * @param array $order 须含 user_id
-     * @param array $authInfo 须含 user_id
+     * @param array $authInfo member 须含 user_id；operator 可无 user_id（含 operator_id 或 operator_type≠user）
      */
     public static function assertBelongsToAuthUser(array $order, array $authInfo): void
     {
+        if (!isset($authInfo['user_id'])) {
+            if (!empty($authInfo['operator_id'])
+                || (($authInfo['operator_type'] ?? '') !== 'user')) {
+                return;
+            }
+
+            throw new ResourceException(trans('OrdersBundle/Order.operation_failed'));
+        }
+
         if ($order['user_id'] != $authInfo['user_id']) {
             throw new ResourceException(trans('OrdersBundle/Order.operation_failed'));
         }

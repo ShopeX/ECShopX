@@ -117,7 +117,8 @@ class AdapayWithdrawSet extends Controller
         $params = $request->input();
         $companyId = $auth['company_id'];
         $params['company_id'] = $companyId;
-        $distributorId = $params['distributor_id'];
+        $distributorId = (int) $auth['distributor_id'];
+        $params['distributor_id'] = $distributorId;
         $rules = [
             'isAuto' => ['required|in:true,false',"是否开启自动提现"],
             'rule.type' => ["required_if:isAuto,true", '规则类型必填'],

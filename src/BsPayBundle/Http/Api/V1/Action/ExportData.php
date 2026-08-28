@@ -120,6 +120,7 @@ class ExportData extends Controller
         }
 
         if ($request->get('distributor_name', 0)) { //主商户端/经销商端 根据店铺字段筛选
+            \PaymentBundle\Services\PaymentTenantScopeGuard::assertDistributorNameFilterAllowed($user);
             $distributorFilter = ['name|contains' => $request->get('distributor_name')];
             $distributorFilter['company_id'] = $filter['company_id'];
             $distributors = $tradeService->getDistributors($distributorFilter);

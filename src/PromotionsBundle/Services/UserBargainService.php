@@ -28,6 +28,7 @@ use OrdersBundle\Services\Orders\BargainOrderService;
 use WechatBundle\Services\OpenPlatform;
 
 use Dingo\Api\Exception\ResourceException;
+use PromotionsBundle\Support\PromotionActivityTenantScopeGuard;
 use PromotionsBundle\Jobs\BargainFinishSendSmsNotice;
 use MembersBundle\Services\UserService;
 
@@ -55,6 +56,10 @@ class UserBargainService
 
     public function createUserBargain($authInfo, $bargainId)
     {
+        PromotionActivityTenantScopeGuard::assertBargainPromotionBelongsToCompany(
+            (int) $bargainId,
+            (int) $authInfo['company_id']
+        );
         $bargainInfo = $this->bargainPromotionsRepository->get($bargainId);
         if (!$bargainInfo) {
             throw new ResourceException(trans("PromotionsBundle.bargain_activity_not_exist_with_bargain_id", ["bargain_id" => $bargainId]));

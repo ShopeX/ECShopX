@@ -94,13 +94,29 @@ class DepositTradeRepository extends EntityRepository
      */
     public function updateStatus($depositTradeId, $status = null, $options = array())
     {
-        $data = $this->find($depositTradeId);
+        $conn = app('registry')->getConnection('default');
+        $conn->beginTransaction();
+        try {
+            $lockedRow = $conn->fetchAssociative(
+                'SELECT trade_status FROM ' . $this->table . ' WHERE deposit_trade_id = ? FOR UPDATE',
+                [$depositTradeId]
+            );
+            if (!$lockedRow) {
+                $conn->rollback();
+                return null;
+            }
 
-        if ($data->getTradeStatus() === 'SUCCESS') {
-            throw new BadRequestHttpException('更新已处理，不需要更新');
-        }
+            if ($lockedRow['trade_status'] === 'SUCCESS') {
+                $conn->rollback();
+                throw new BadRequestHttpException('更新已处理，不需要更新');
+            }
 
-        if ($data && $data->getTradeStatus()) {
+            $data = $this->find($depositTradeId);
+            if (!$data || !$data->getTradeStatus()) {
+                $conn->rollback();
+                return null;
+            }
+
             $updateData = [
                 'trade_status' => $status,
                 'bank_type' => isset($options['bank_type']) ? $options['bank_type'] : null,
@@ -109,10 +125,12 @@ class DepositTradeRepository extends EntityRepository
                 'time_expire' => time()
             ];
 
-
-            $conn = app('registry')->getConnection('default');
             $conn->update($this->table, $updateData, ['deposit_trade_id' => $depositTradeId]);
-            return $data;
+            $conn->commit();
+            return $this->find($depositTradeId);
+        } catch (\Exception $e) {
+            $conn->rollback();
+            throw $e;
         }
     }
 
