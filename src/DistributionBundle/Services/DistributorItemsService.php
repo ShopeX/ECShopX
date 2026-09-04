@@ -390,6 +390,8 @@ class DistributorItemsService
     public function getDistributorRelItemList($filter, $pageSize = 1000, $page = 1, $orderBy = ["item_id" => "desc"], $all = false, $column = null)
     {
         $itemsService = new ItemsService();
+        $itemHolder = $filter['_item_holder'] ?? '';
+        unset($filter['_item_holder']);
         $company = (new CompanysActivationEgo())->check($filter['company_id']);
         if ($company['product_model'] == 'standard') {
             $conn = app('registry')->getConnection('default');
@@ -398,7 +400,12 @@ class DistributorItemsService
             ->from('items');
             // 兼容下可能存在数组$filter['distributor_id'] 2025年5月23日14:57:36 嘉实多
             $distributorId = is_array($filter['distributor_id']) ? intval($filter['distributor_id'][0]) : intval($filter['distributor_id']);
-            $filter['distributor_id'] = 0;
+            if ($itemHolder === 'distributor') {
+                unset($filter['distributor_id']);
+                $filter['distributor_id|gt'] = 0;
+            } else {
+                $filter['distributor_id'] = 0;
+            }
             // 指定门店时统一按门店关联商品读取，虚拟门店也只展示已同步/关联的商品。
             if (!$all && $distributorId > 0) {
                 $query->leftJoin('items', 'distribution_distributor_items', 'd_items', 'items.item_id = d_items.item_id');
@@ -838,6 +845,7 @@ class DistributorItemsService
 
         $distributorItemList = array_column($list['list'], null, 'item_id');
         foreach ($skuList as &$row) {
+            $row['item_owner_distributor_id'] = $row['distributor_id'] ?? 0;
             // 获取门店库存
             $row["distributor_store"] = (int)($distributorItemList[$row['item_id']]["store"] ?? -1);
             //如果为自动发布总部商品，那么在关联表中如果查询不到，那么默认是上架的

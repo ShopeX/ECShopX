@@ -1639,11 +1639,16 @@ class Distributor extends Controller
             $filter['keywords'] = $keywords;
         }
 
-        $item_holder = trim($request->input('item_holder', ''));
+		$item_holder = trim($request->input('item_holder', ''));
         if ($item_holder == 'supplier') {
             $filter['supplier_id|gte'] = 1;
-        } elseif ($item_holder == 'self') {
+        } elseif ($item_holder == 'self' || $item_holder == 'platform') {
             $filter['supplier_id'] = 0;
+            $filter['_item_holder'] = 'self';
+        } elseif ($item_holder == 'distributor') {
+            $filter['supplier_id'] = 0;
+            $filter['distributor_id|gt'] = 0;
+            $filter['_item_holder'] = 'distributor';
         }
 
         $supplier_name = trim($request->input('supplier_name'));
@@ -1900,9 +1905,11 @@ class Distributor extends Controller
         foreach ($data['list'] as &$v) {
             $v['tagList'] = $newTags[$v['item_id']] ?? [];
             //'self': '自营', 'distributor': '商户商品', 'supplier': '供应商商品'
+            // item_owner_distributor_id 为店铺覆盖前的商品归属店铺，避免关联店铺 ID 把自营误标成商户
+            $ownerDistributorId = $v['item_owner_distributor_id'] ?? $v['distributor_id'] ?? 0;
             if ($v['supplier_id']) {
                 $v['item_holder'] = 'supplier';
-            } elseif ($v['distributor_id']) {
+            } elseif ($ownerDistributorId) {
                 $v['item_holder'] = 'distributor';
             } else {
                 $v['item_holder'] = 'self';

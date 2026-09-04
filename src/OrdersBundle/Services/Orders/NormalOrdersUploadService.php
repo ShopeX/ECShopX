@@ -115,12 +115,12 @@ class NormalOrdersUploadService
         if (!$row['order_id']) {
             throw new BadRequestHttpException(trans('OrdersBundle/Order.order_number_error'));
         }
-        $row['order_id'] = trim(trim($row['order_id']), "'");
+        $row['order_id'] = trim($row['order_id'], "\"' \t\r\n");
         if (!$row['delivery_code'] or !$row['delivery_corp_name']) {
             throw new BadRequestHttpException(trans('OrdersBundle/Order.no_delivery_info'));
         }
 
-        $supplier_id = $row['supplier_id'] ?? 0;
+        $supplier_id = (int) ($row['supplier_id'] ?? 0);
         if ($supplier_id) {
             $supplierOrderService = new SupplierOrderService();
             $order = $supplierOrderService->repository->getInfo([
@@ -138,14 +138,14 @@ class NormalOrdersUploadService
             throw new BadRequestHttpException(trans('OrdersBundle/Order.cancelled_order_cannot_ship'));
         }
 
-        $row['delivery_corp'] = $this->getDeliveryCorpByName($companyId, $row['delivery_corp_name'], $row['supplier_id']);
+        $row['delivery_corp'] = $this->getDeliveryCorpByName($companyId, $row['delivery_corp_name'], $supplier_id);
 
         $params = [
             'type' => 'new',
             'delivery_type' => 'batch',
             'order_id' => $row['order_id'],
             'company_id' => $companyId,
-            'supplier_id' => $row['supplier_id'],
+            'supplier_id' => $supplier_id,
             'delivery_corp' => trim($row['delivery_corp']),
             'delivery_code' => trim($row['delivery_code']),
         ];

@@ -38,6 +38,7 @@ class UpdateDistributionItemTemplateTest extends \EspierBundle\Services\TestBase
             $this->service->handleRow($this->getCompanyId(), [
                 "distribution_id" => 135,
                 "shop_code" => "",
+                "spu_bn" => "6969",
                 "item_bn" => "6969",
                 "is_onsale" => 0,
                 "is_total_store" => 0,

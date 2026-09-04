@@ -33,6 +33,7 @@ class UpdateDistributionItemTemplate extends AbstractTemplate
     protected $header = [
         "店铺ID" => "distribution_id",
         "店铺号" => "shop_code",
+        "商品SPU" => "spu_bn",
         "商品货号" => "item_bn",
         "是否上架" => "is_onsale",
         "是否总部发货" => "is_total_store",
@@ -43,14 +44,16 @@ class UpdateDistributionItemTemplate extends AbstractTemplate
     protected $headerInfo = [
         "店铺ID" => ["size" => 32, "remarks" => "店铺ID和店铺号需选一项进行填写", "is_need" => false],
         "店铺号" => ["size" => 32, "remarks" => "店铺ID和店铺号需选一项进行填写", "is_need" => false],
-        "商品货号" => ["size" => 32, "remarks" => "", "is_need" => true],
+        "商品SPU" => ["size" => 32, "remarks" => "填写商品SPU货号", "is_need" => true],
+        "商品货号" => ["size" => 32, "remarks" => "填写商品SKU货号", "is_need" => true],
         "是否上架" => ["size" => 32, "remarks" => "是否上架: 0否, 1是", "is_need" => false],
-        "是否总部发货" => ["size" => 32, "remarks" => "是否总部发货: 0否, 1是 （当前只支持更新spu级商品）", "is_need" => false],
+        "是否总部发货" => ["size" => 32, "remarks" => "是否总部发货: 0否, 1是\n（针对多规格商品，是否总部发货这列数据，只需填写第一行sku。SPU 内其余 SKU 行该字段留空，不需要重复填写。\n若SPU下的sku都填写，取该 SPU 内最后一行填写的 SKU 的值，覆盖生效到本 SPU 下全部 SKU，前面填写的值则无效）", "is_need" => false],
         "商品库存" => ["size" => 32, "remarks" => "库存为0-999999的整数 （若总部发货, 商品库存将不会更新）", "is_need" => false],
         "商品价格" => ["size" => 32, "remarks" => "价格需大于0元 （若总部发货, 商品库存将不会更新）", "is_need" => false],
     ];
 
     protected $isNeedCols = [
+        "商品SPU" => "spu_bn",
         "商品货号" => "item_bn",
     ];
 
@@ -82,6 +85,7 @@ class UpdateDistributionItemTemplate extends AbstractTemplate
         $rowData = [
             "distribution_id" => $row["distribution_id"] ?? "",
             "shop_code" => $row["shop_code"] ?? "",
+            "spu_bn" => $row["spu_bn"] ?? "",
             "item_bn" => $row["item_bn"] ?? "",
             "is_onsale" => $row["is_onsale"] ?? "",
             "is_total_store" => $row["is_total_store"] ?? "",
@@ -99,6 +103,9 @@ class UpdateDistributionItemTemplate extends AbstractTemplate
             throw new \Exception("店铺ID与店铺号必填一项");
         }
         // 获取商品编号
+        if (empty($rowData["spu_bn"])) {
+            throw new \Exception("未填写商品SPU");
+        }
         if (empty($rowData["item_bn"])) {
             throw new \Exception("未填写商品货号");
         }
@@ -155,13 +162,20 @@ class UpdateDistributionItemTemplate extends AbstractTemplate
         }
         // 是否是默认商品
         $isDefault = (int)($itemInfo["is_default"] ?? false);
-        // 获取商品的spu的item_id，这里没有用到goods_id来查询，是因为goods_id是不会变的，如果默认商品删除了，goods_id则会变为脏数据，而default_item_id实时更新, goods_id只能作为判断当前的商品是否是同一个spu下面的sku
+        // 获取商品SPU信息
         $goodsId = (int)($itemInfo["goods_id"] ?? 0);
-        $defaultItemId = (int)($itemInfo["default_item_id"] ?? 0);
-        // 如果存在spu_id，且当前的商品并不是spu，此时又存在 是否总部发货的字段，则不进行更新
-        if ($defaultItemId > 0 && $itemId != $defaultItemId && isset($updateData["is_total_store"])) {
-            throw new \Exception("是否总部发货, 当前只支持更新spu级商品");
+        $spuInfo = $itemsService->getInfo([
+            "company_id" => $companyId,
+            "goods_bn" => $rowData["spu_bn"],
+            "is_default" => 1,
+        ]);
+        if (empty($spuInfo)) {
+            throw new \Exception("未查询到对应商品SPU");
         }
+        if ($goodsId <= 0 || (int)($spuInfo["goods_id"] ?? 0) !== $goodsId) {
+            throw new \Exception("商品货号与商品SPU不属于同一商品");
+        }
+        $defaultItemId = (int)($spuInfo["item_id"] ?? 0);
 
         // 获取店铺信息
         $distributor = $this->getDistributor($companyId, (int)$rowData["distribution_id"], (string)$rowData["shop_code"]);
@@ -261,10 +275,9 @@ class UpdateDistributionItemTemplate extends AbstractTemplate
                 }
             }
 
-            // 如果存在总部发货的参数，则统一更新所有的sku的总部发货
-            // 这里定义是spu才能更新，因为上文做了判断，is_total_store的参数，商品必须是spu
+            // 如果存在总部发货参数，则统一更新该SPU下所有SKU；同一SPU后续行会覆盖前一行
             if (isset($updateData['is_total_store'])) {
-                $distributorItemsService->updateBy(['distributor_id' => $distributorId, 'goods_id' => $defaultItemId], ['is_total_store' => $isTotalStore]);
+                $distributorItemsService->updateBy(['distributor_id' => $distributorId, 'goods_id' => $goodsId], ['is_total_store' => $isTotalStore]);
             }
 
             // 更新商品是否可售的逻辑

@@ -204,6 +204,7 @@ class UploadFileService
 
             $headerData = array_filter($results[0]);
             array_walk($headerData, function (&$value) {
+                $value = preg_replace('/^\xEF\xBB\xBF/', '', $value);
                 $value = preg_replace("/\s|　/", "", $value);
             });
             $column = $this->headerHandle($headerData, $companyId, $data['relation_id'] ?? 0);

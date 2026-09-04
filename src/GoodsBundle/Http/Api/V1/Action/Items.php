@@ -1405,6 +1405,17 @@ class Items extends BaseController
             if (isset($inputData['supplier_id']) && $inputData['supplier_id']) {
                 $params['supplier_id'] = $request->input('supplier_id');
             }
+
+            $itemHolder = $request->input('item_holder');
+            if ($itemHolder === 'platform') {
+                $params['supplier_id'] = 0;
+                $params['distributor_id'] = 0;
+            } elseif ($itemHolder === 'distributor') {
+                $params['supplier_id'] = 0;
+                $params['distributor_id|gt'] = 0;
+            } elseif ($itemHolder === 'supplier') {
+                $params['supplier_id|gte'] = 1;
+            }
         }
 
         // if (isset($inputData['supplier_goods_bn']) && $inputData['supplier_goods_bn']) {
@@ -1490,6 +1501,18 @@ class Items extends BaseController
             //todo 平台端只能选择平台商品
             if ($operator_type == 'admin' || $operator_type == 'staff') {
                 $params['distributor_id'] = 0;
+            }
+        }
+
+        if ($operator_type != 'supplier' && isset($inputData['item_holder'])) {
+            if ($inputData['item_holder'] === 'platform') {
+                $params['supplier_id'] = 0;
+                $params['distributor_id'] = 0;
+            } elseif ($inputData['item_holder'] === 'distributor') {
+                $params['supplier_id'] = 0;
+                $params['distributor_id|gt'] = 0;
+            } elseif ($inputData['item_holder'] === 'supplier') {
+                $params['supplier_id|gte'] = 1;
             }
         }
 
@@ -1842,7 +1865,13 @@ class Items extends BaseController
                 }
                 $value['operator_name'] = $operators[$value['supplier_id']]['username'] ?? '';
                 $value['distributor_name'] = $distributorData[$value['distributor_id']] ?? [];
-                $value['item_holder'] = $value['supplier_id'] ? 'supplier' : 'self';
+                if ($value['supplier_id']) {
+                    $value['item_holder'] = 'supplier';
+                } elseif ($value['distributor_id']) {
+                    $value['item_holder'] = 'distributor';
+                } else {
+                    $value['item_holder'] = 'platform';
+                }
                 $value['supplier_name'] = $supplierData[$value['supplier_id']]['supplier_name'] ?? '';
                 //毛利率=（销售价格/(1+税率）-成本价/(1+税率））/（销售价格/(1+税率）
                 // $price = bcdiv($value['price'],'100',10);//销售价格
