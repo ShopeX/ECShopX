@@ -227,6 +227,22 @@ class Item extends Controller
             throw new ResourceException($errorMessage);
         }
 
+        $systemCompanyId = (int) config('common.system_companys_id');
+        if (!array_key_exists('company_id', $params)) {
+            $params['company_id'] = $systemCompanyId;
+        } else {
+            $requestedCompanyId = $params['company_id'];
+            if ($requestedCompanyId === null || $requestedCompanyId === '') {
+                $params['company_id'] = $systemCompanyId;
+            } elseif (!is_numeric($requestedCompanyId) || (int) $requestedCompanyId <= 0) {
+                throw new ResourceException('company_id 无效');
+            } elseif ((int) $requestedCompanyId !== $systemCompanyId) {
+                throw new ResourceException('company_id 与系统租户不一致');
+            } else {
+                $params['company_id'] = (int) $requestedCompanyId;
+            }
+        }
+
         $itemsService = new ItemsService();
         //  $companyId = app('auth')->user()->get('company_id');
         //  $params['company_id'] = $companyId;

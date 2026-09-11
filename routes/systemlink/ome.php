@@ -13,27 +13,6 @@
 
 $api->version('v1', function($api) {
 
-    $api->group(['namespace' => 'SystemLinkBundle\Http\ThirdApi\V1\Action', 'middleware' => ['BlockErpTestRoutes']], function($api) {
-        //test 同步订单
-        $api->get('test/event/{order_id}', ['as' => 'ome.order.test',  'uses'=>'Order@testEvent']);
-
-        //test 同步拼团订单
-        $api->get('test/group/event', ['as' => 'ome.order.test',  'uses'=>'Order@testGroupEvent']);
-
-        //test 发送退款申请单
-        $api->get('test/refund/event', ['as' => 'ome.order.refund',  'uses'=>'Order@testRefundEvent']);
-
-        //test 发送售后请单
-        $api->get('test/aftersales/event', ['as' => 'ome.order.aftersales',  'uses'=>'Order@testAftersalesEvent']);
-
-        //test 更新售后退货物流信息
-        $api->get('test/aftersales/logi/event', ['as' => 'ome.order.aftersales.logi',  'uses'=>'Order@testAfterLogiEvent']);
-
-        //test 售后买家取消
-        $api->get('test/aftersales/cancel/event', ['as' => 'ome.order.aftersales.cancel',  'uses'=>'Order@testAftersalesCancelEvent']);
-
-    });
-
     $api->group(['namespace' => 'SystemLinkBundle\Http\ThirdApi\V1\Action','prefix'=>'systemlink', 'middleware' => ['ShopexErpCheck']], function($api) {
 
          // ome获取订单详情

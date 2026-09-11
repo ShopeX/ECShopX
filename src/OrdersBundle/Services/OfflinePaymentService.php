@@ -67,6 +67,7 @@ class OfflinePaymentService
         if ($offlinePayInfo) throw new ResourceException('转账凭证已存在，请勿重复上传');
         $bankAccountInfo = $this->offlineBankAccountRepository->getInfo(['company_id' => $params['company_id'], 'id' => $params['bank_account_id']]);
         if (!$bankAccountInfo) throw new ResourceException('收款账户不存在');
+        $orderTotalFee = $orderInfo['total_fee'] ?? 0;
         // 定义支付数据
         $paymentData = [
             'company_id' => $params['company_id'],
@@ -74,8 +75,8 @@ class OfflinePaymentService
             'user_id' => $orderInfo['user_id'] ?? 0,
             'shop_id' => $orderInfo['shop_id'] ?? 0,
             'distributor_id' => $orderInfo['distributor_id'] ?? 0,
-            'total_fee' => $orderInfo['total_fee'] ?? 0,
-            'pay_fee' => 0,
+            'total_fee' => $orderTotalFee,
+            'pay_fee' => $this->resolveUploadPayFee($params, $orderTotalFee),
             'check_status' => 0,
             'bank_account_id' => $bankAccountInfo['id'],
             'bank_account_name' => $bankAccountInfo['bank_account_name'] ?? '',
@@ -155,6 +156,7 @@ class OfflinePaymentService
         $params['china_ums_no'] = $bankAccountInfo['china_ums_no'];
         // 修改凭证状态为待审核
         $params['check_status'] = 0;
+        $params['pay_fee'] = $this->resolveUploadPayFee($params, $orderInfo['total_fee'] ?? 0);
         $result = $this->repository->updateOneBy(['id' => $params['id']], $params);
         // 更新订单主表中的offline_payment_status
         $orderService->normalOrdersRepository->updateOneBy(
@@ -357,6 +359,26 @@ class OfflinePaymentService
         $info['tradeInfo'] = $result['tradeInfo'];
         return $info;
     }
+
+    /**
+     * C 端上传凭证时申报的转账金额（分）；缺省或与订单应付不一致时以订单 total_fee 为准。
+     */
+    private function resolveUploadPayFee(array $params, $orderTotalFee): int
+    {
+        $orderTotalFee = intval($orderTotalFee);
+        if (!isset($params['pay_fee']) || $params['pay_fee'] === '' || !is_numeric($params['pay_fee'])) {
+            return $orderTotalFee;
+        }
+        $payFee = intval($params['pay_fee']);
+        if ($payFee <= 0) {
+            return $orderTotalFee;
+        }
+        if ($orderTotalFee > 0 && $payFee !== $orderTotalFee) {
+            return $orderTotalFee;
+        }
+        return $payFee;
+    }
+
     /**
      * Dynamically call the KaquanService instance.
      *

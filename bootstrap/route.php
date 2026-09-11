@@ -41,9 +41,6 @@ if ($lumenRoutingKeyOne == 'wechatAuth') {
             require __DIR__.'/../routes/systemlink/adapay.php';
             require __DIR__.'/../routes/systemlink/jushuitan.php';
             break;
-        case ($dingoRoutingKeyOne == 'test' || $dingoRoutingKeyOne == 'ome'):
-            require __DIR__.'/../routes/systemlink/ome.php';
-            break;
         case 'third' :
             require __DIR__.'/../routes/api/third.php';
             require __DIR__.'/../routes/thirdparty/saascert.php';

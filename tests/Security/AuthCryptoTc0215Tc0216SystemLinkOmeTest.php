@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Security;
 
-use EspierBundle\Middleware\BlockErpTestRoutesMiddleware;
 use Illuminate\Http\Request;
+use SystemLinkBundle\Middleware\ShopexErpCheck;
 use TestCase;
 
 /**
@@ -14,26 +14,75 @@ use TestCase;
 class AuthCryptoTc0215Tc0216SystemLinkOmeTest extends TestCase
 {
     /**
-     * TC-02-15 / AC-02-01：SystemLink 完成订单 test 路由须防护。
+     * TC-TEST-01 / AC-TEST-01：ome.php 不存在 test 调试路由。
      * #given ome 路由文件
-     * #when 检查 test/event
-     * #then 挂 BlockErpTestRoutes
+     * #when 检查 test/* 路由注册
+     * #then 文件不含 test/event 等调试路由
      */
-    public function testTc0215SystemLinkOrderTestRouteUsesBlockMiddleware(): void
+    public function testTcTest01OmePhpHasNoTestRoutes(): void
     {
         #given
         $routes = (string) file_get_contents(dirname(__DIR__, 2).'/routes/systemlink/ome.php');
-        $group = $this->extractGroupBlockContaining($routes, "test/event/{order_id}");
 
         #when / #then
-        $this->assertStringContainsString('BlockErpTestRoutes', $group);
+        $this->assertStringNotContainsString(
+            "test/event",
+            $routes,
+            'ome.php must not register test/event debug routes'
+        );
+        $this->assertStringNotContainsString(
+            'BlockErpTestRoutes',
+            $routes,
+            'ome.php must not register BlockErpTestRoutes test route group'
+        );
     }
 
     /**
-     * TC-02-16 / AC-02-01：SystemLink createItems 须挂 ShopexErpCheck。
+     * TC-AUTH-01 / AC-AUTH-01：无 sign 或错 sign 时 ShopexErpCheck 拒绝。
+     * #given 无 sign 或错误 sign 的请求
+     * #when ShopexErpCheck 处理
+     * #then 响应含 sign error
+     */
+    public function testTcAuth01ShopexErpCheckRejectsMissingOrWrongSign(): void
+    {
+        #given
+        config(['common.oms_token' => 'ome-test-token']);
+        $middleware = new ShopexErpCheck();
+        $params = ['company_id' => 1, 'method' => 'ome.items.create'];
+
+        $missingSignRequest = Request::create('/systemlink/ome/createitems', 'POST', $params);
+        $wrongSign = ShopexErpCheck::gen_sign($params, 'wrong-token');
+        $wrongSignRequest = Request::create(
+            '/systemlink/ome/createitems',
+            'POST',
+            array_merge($params, ['sign' => $wrongSign])
+        );
+
+        #when
+        $missingSignResponse = $middleware->handle(
+            $missingSignRequest,
+            static fn () => response()->json(['rsp' => 'succ', 'code' => 1])
+        );
+        $wrongSignResponse = $middleware->handle(
+            $wrongSignRequest,
+            static fn () => response()->json(['rsp' => 'succ', 'code' => 1])
+        );
+
+        #then
+        $this->assertSame(200, $missingSignResponse->getStatusCode());
+        $missingPayload = json_decode((string) $missingSignResponse->getContent(), true);
+        $this->assertSame('sign error', $missingPayload['err_msg'] ?? null);
+
+        $this->assertSame(200, $wrongSignResponse->getStatusCode());
+        $wrongPayload = json_decode((string) $wrongSignResponse->getContent(), true);
+        $this->assertSame('sign error', $wrongPayload['err_msg'] ?? null);
+    }
+
+    /**
+     * TC-AUTH-02 / AC-AUTH-02 / TC-TEST-03：SystemLink createItems 须挂 ShopexErpCheck。
      * #given ome 路由文件
      * #when 检查 createitems 路由
-     * #then 位于 ShopexErpCheck 中间件组
+     * #then 位于 ShopexErpCheck 中间件组；无未鉴权 GET createitems
      */
     public function testTc0216CreateItemsRouteUsesShopexErpCheck(): void
     {
@@ -51,68 +100,21 @@ class AuthCryptoTc0215Tc0216SystemLinkOmeTest extends TestCase
     }
 
     /**
-     * TC-02-15 / AC-02-01：生产环境 SystemLink test/event 须 403。
-     * #given APP_ENV=production
-     * #when BlockErpTestRoutes 处理 test/event
-     * #then 403
+     * TC-TEST-02 / AC-TEST-02：bootstrap/route.php 不再因 test|ome 旁路加载 ome.php。
+     * #given route 引导文件
+     * #when 检查 test|ome 分发旁路
+     * #then 不存在单独加载 ome.php 的 test|ome case
      */
-    public function testTc0215SystemLinkTestEventBlockedInProduction(): void
+    public function testTcTest02RoutePhpHasNoTestOmeBypass(): void
     {
         #given
-        $previous = env('APP_ENV');
-        putenv('APP_ENV=production');
-        $_ENV['APP_ENV'] = 'production';
-        $_SERVER['APP_ENV'] = 'production';
+        $routeBootstrap = (string) file_get_contents(dirname(__DIR__, 2).'/bootstrap/route.php');
 
-        $middleware = new BlockErpTestRoutesMiddleware();
-        $request = Request::create('/test/event/999', 'GET');
-
-        try {
-            #when
-            $response = $middleware->handle($request, static fn () => response('ok', 200));
-
-            #then
-            $this->assertSame(403, $response->getStatusCode());
-        } finally {
-            if ($previous === null) {
-                putenv('APP_ENV');
-                unset($_ENV['APP_ENV'], $_SERVER['APP_ENV']);
-            } else {
-                putenv('APP_ENV='.$previous);
-                $_ENV['APP_ENV'] = $previous;
-                $_SERVER['APP_ENV'] = $previous;
-            }
-        }
-    }
-
-    private function extractGroupBlockContaining(string $content, string $needle): string
-    {
-        $needlePos = strpos($content, $needle);
-        $this->assertNotFalse($needlePos, "Route content containing {$needle} must exist");
-
-        $groupStart = strrpos(substr($content, 0, $needlePos), '$api->group');
-        $this->assertNotFalse($groupStart, 'Surrounding group declaration must exist');
-
-        $functionPos = strpos($content, 'function', $groupStart);
-        $this->assertNotFalse($functionPos, 'Group callback must exist');
-
-        $openBrace = strpos($content, '{', $functionPos);
-        $this->assertNotFalse($openBrace, 'Group body must exist');
-
-        $depth = 0;
-        $length = strlen($content);
-        for ($i = $openBrace; $i < $length; $i++) {
-            $char = $content[$i];
-            if ($char === '{') {
-                $depth++;
-            } elseif ($char === '}') {
-                $depth--;
-                if ($depth === 0) {
-                    return substr($content, $groupStart, $i - $groupStart + 1);
-                }
-            }
-        }
-
-        $this->fail('Group block must be closed');
+        #when / #then
+        $this->assertStringNotContainsString(
+            "dingoRoutingKeyOne == 'test' || \$dingoRoutingKeyOne == 'ome'",
+            $routeBootstrap,
+            'route.php must not load ome.php via test|ome bypass'
+        );
     }
 }

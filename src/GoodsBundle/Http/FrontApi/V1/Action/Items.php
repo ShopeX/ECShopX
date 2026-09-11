@@ -26,6 +26,7 @@ use GoodsBundle\Services\ItemTaxRateService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use GoodsBundle\Services\ItemsService;
+use GoodsBundle\Support\IntroHtmlSanitizer;
 use Dingo\Api\Exception\ResourceException;
 use DistributionBundle\Services\DistributorItemsService;
 use KaquanBundle\Services\DiscountCardService;
@@ -1155,7 +1156,7 @@ class Items extends BaseController
         $woa_appid = $authInfo['woa_appid'];
         $itemsService = new ItemsService();
         $result = $itemsService->getItemsDetail($item_id, $woa_appid);
-        return response($result['intro'])->header('content-type', 'text/html');
+        return response(IntroHtmlSanitizer::sanitize($result['intro']))->header('content-type', 'text/html');
     }
 
     /**

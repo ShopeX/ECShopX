@@ -271,24 +271,23 @@ class PointMemberRuleService
             //     $totalMoneyToPoint += $moneyToPoint;
             //     $totalMaxMoney += $maxMoney;
             // }
-            $totalMaxMoney = bcmul(
-                bcdiv($this->rule['deduct_proportion_limit'], 100, 2),
-                $orderData['total_fee'] - $freightFee
-            );
-            app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':totalMaxMoney:' . json_encode($totalMaxMoney));
-            $moneyToPoint = $this->moneyToPoint($companyId, $totalMaxMoney);// 本商品最大抵扣积分数
-            app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':moneyToPoint:' . json_encode($moneyToPoint));
-            $totalMoneyToPoint = $moneyToPoint;
-            $totalPointZiti = $totalMoneyToPoint;
+            $proportion = bcdiv($this->rule['deduct_proportion_limit'], 100, 2);
+            $goodsMaxMoney = bcmul($proportion, $orderData['total_fee'] - $freightFee);
+            $canDeductFreight = isset($this->rule['can_deduct_freight']) ? $this->rule['can_deduct_freight'] : false;
+
+            // 自提仅商品部分
+            $totalPointZiti = $this->moneyToPoint($companyId, $goodsMaxMoney);
             app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':totalPointZiti:' . json_encode($totalPointZiti));
 
-            // 配置运费是否可抵扣
-            $canDeductFreight = isset($this->rule['can_deduct_freight']) ? $this->rule['can_deduct_freight'] : false;
+            // 与 moneyOutLimit 一致：整单上限一次换算，避免商品/运费分段 ceil 导致 max_point 偏大
             if ($canDeductFreight) {
-                $freightMaxMoney = bcmul(bcdiv($this->rule['deduct_proportion_limit'], 100, 2), $freightFee);
-                $freightMoneyToPoint = $this->moneyToPoint($companyId, $freightMaxMoney);// 运费最大可抵扣积分数
-                $totalMoneyToPoint += $freightMoneyToPoint;
+                $totalMaxMoney = bcmul($proportion, $orderData['total_fee']);
+            } else {
+                $totalMaxMoney = $goodsMaxMoney;
             }
+            app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':totalMaxMoney:' . json_encode($totalMaxMoney));
+            $totalMoneyToPoint = $this->moneyToPoint($companyId, $totalMaxMoney);
+            app('log')->info(__FUNCTION__ . ':' . __LINE__ . ':totalMoneyToPoint:' . json_encode($totalMoneyToPoint));
 
             if ($memberPoint > $totalMoneyToPoint) { // 未超出会员积分
                 $useLimit = $totalMoneyToPoint;
@@ -297,18 +296,22 @@ class PointMemberRuleService
                 $useLimit = $this->moneyToPoint($companyId, $totalMaxMoney);
             }
             $useLimit = $useLimit > 0 ? $useLimit : 0;// 本地，当前会员，最大可使用积分数
+            while ($useLimit > 0 && ! $this->moneyOutLimit($useLimit, $orderData['total_fee'])) {
+                $useLimit--;
+            }
             $totalPoint = $useLimit;
 
             // 商家自配送：商品金额 + 商家运费（若可抵扣）对应的最大可抵扣积分
             if (isset($orderData['merchant_freight_fee']) && $orderData['merchant_freight_fee'] !== null) {
-                $merchantGoodsMaxMoney = bcmul(
-                    bcdiv($this->rule['deduct_proportion_limit'], 100, 2),
-                    $orderData['total_fee'] - $freightFee
-                );
-                $merchantTotalMoneyToPoint = $this->moneyToPoint($companyId, $merchantGoodsMaxMoney);
+                $merchantGoodsMaxMoney = bcmul($proportion, $orderData['total_fee'] - $freightFee);
                 if ($canDeductFreight) {
-                    $merchantFreightMaxMoney = bcmul(bcdiv($this->rule['deduct_proportion_limit'], 100, 2), $orderData['merchant_freight_fee']);
-                    $merchantTotalMoneyToPoint += $this->moneyToPoint($companyId, $merchantFreightMaxMoney);
+                    $merchantTotalMaxMoney = bcadd(
+                        $merchantGoodsMaxMoney,
+                        bcmul($proportion, $orderData['merchant_freight_fee'])
+                    );
+                    $merchantTotalMoneyToPoint = $this->moneyToPoint($companyId, $merchantTotalMaxMoney);
+                } else {
+                    $merchantTotalMoneyToPoint = $this->moneyToPoint($companyId, $merchantGoodsMaxMoney);
                 }
 
                 if ($memberPoint > $merchantTotalMoneyToPoint) {
@@ -317,6 +320,9 @@ class PointMemberRuleService
                     $totalPointMerchant = $this->moneyToPoint($companyId, $this->pointToMoney($memberPoint));
                 }
                 $totalPointMerchant = $totalPointMerchant > 0 ? $totalPointMerchant : 0;
+                while ($totalPointMerchant > 0 && ! $this->moneyOutLimit($totalPointMerchant, $orderData['total_fee'])) {
+                    $totalPointMerchant--;
+                }
             }
         }
 

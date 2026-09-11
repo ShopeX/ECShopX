@@ -34,6 +34,7 @@ use GoodsBundle\Jobs\MedicineItemsSubmitAudit;
 use GoodsBundle\Repositories\ItemsMedicineRepository;
 use GoodsBundle\Services\MultiLang\MultiLangService;
 use GoodsBundle\Support\GoodsTenantScopeGuard;
+use GoodsBundle\Support\IntroHtmlSanitizer;
 use KaquanBundle\Entities\RelItems;
 
 use Dingo\Api\Exception\ResourceException;
@@ -686,7 +687,7 @@ class ItemsService
             'pics_create_qrcode' => $params['pics_create_qrcode'] ?? [],
             'video_type' => $params['video_type'] ?? 'local',
             'videos' => $params['videos'] ?? "",
-            'intro' => $params['intro'] ?? '',
+            'intro' => IntroHtmlSanitizer::sanitize($params['intro'] ?? ''),
             'special_type' => $params['special_type'] ?? 'normal',
             'purchase_agreement' => $params['purchase_agreement'] ?? '',
             'enable_agreement' => ($params['enable_agreement'] ?? false) == 'true' ? true : false,
