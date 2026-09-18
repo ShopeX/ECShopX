@@ -268,12 +268,21 @@ class NormalItemsCodeExportService implements ExportFileInterface
      * @param  string  $itemId        商品ID
      * @param  string $distributorId 店铺ID
      */
+    public static function formatH5ItemUrl(string $domain, $itemId, $distributorId = 0): string
+    {
+        return sprintf(
+            'https://%s/subpages/item/espier-detail?id=%s&dtid=%s',
+            $domain,
+            $itemId,
+            $distributorId
+        );
+    }
+
     private function getH5Url($companyId, $itemId, $distributorId = 0)
     {
         $companysService = new CompanysService();
         $domainInfo = $companysService->getDomainInfo(['company_id' => $companyId]);
         $h5urlDomain = $domainInfo['h5_domain'] != "" ? $domainInfo['h5_domain'] : $domainInfo['h5_default_domain'];
-        $h5url = sprintf('https://%s/pages/item/espier-detail?id=%s&dtid=%s', $h5urlDomain, $itemId, $distributorId);
-        return $h5url;
+        return self::formatH5ItemUrl($h5urlDomain, $itemId, $distributorId);
     }
 }

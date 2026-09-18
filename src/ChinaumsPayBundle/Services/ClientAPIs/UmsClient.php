@@ -104,7 +104,12 @@ class UmsClient extends ClientBase
 
     public function genSign(array $params = []) :  ? string
     {
-        return strtoupper( hash('sha256', substr( $this->assemble($params),0,-1 ) . $this->config['Md5Key'] ) );
+        $md5Key = $this->config['Md5Key'] ?? '';
+        if (!is_string($md5Key) || trim($md5Key) === '') {
+            throw new \InvalidArgumentException('UMS Md5Key is not configured');
+        }
+
+        return strtoupper( hash('sha256', substr( $this->assemble($params),0,-1 ) . $md5Key ) );
     }
 
     public static function assemble(array $params = []) :  ? string

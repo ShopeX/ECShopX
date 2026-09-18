@@ -5,16 +5,7 @@ declare(strict_types=1);
 namespace PaymentBundle\Services;
 
 use Dingo\Api\Exception\ResourceException;
-use PaymentBundle\Services\Payments\AdaPaymentService;
-use PaymentBundle\Services\Payments\AlipayService;
-use PaymentBundle\Services\Payments\BsPayService;
-use PaymentBundle\Services\Payments\ChinaumsPayService;
 use PaymentBundle\Services\Payments\DoumenIntlService;
-use PaymentBundle\Services\Payments\HfPayService;
-use PaymentBundle\Services\Payments\IcbcPayService;
-use PaymentBundle\Services\Payments\OfflinePayService;
-use PaymentBundle\Services\Payments\PaypalService;
-use PaymentBundle\Services\Payments\WechatPayService;
 
 /**
  * 斗门国际收银台与其它支付方式互斥：启用斗门国际时关闭其它渠道；斗门国际已启用时不允许再开启其它渠道。
@@ -49,39 +40,38 @@ class PaymentDoumenIntlMutualExclusionService
 
     public function closeAllOtherPaymentMethods(int $companyId): void
     {
+        $hash = sha1((string) $companyId);
+        $lang = $this->resolveOfflineLang();
+
         $definitions = [
-            [WechatPayService::class, [0, true], 'false'],
-            [AlipayService::class, [0, true], false],
-            [PaypalService::class, [0], false],
-            [ChinaumsPayService::class, [], false],
-            [OfflinePayService::class, [], 'false'],
-            [BsPayService::class, [], false],
-            [HfPayService::class, [], 'false'],
-            [AdaPaymentService::class, [], false],
-            [IcbcPayService::class, [], 0],
+            ['wxPaymentSetting:'.$hash, 'false'],
+            ['alipayPaymentSetting:'.$hash, false],
+            ['paypalPaymentSetting:'.$hash, false],
+            ['chinaumsPaymentSetting:'.$hash, false],
+            ['offline_paySetting:'.$hash.':'.$lang, 'false'],
+            ['bspaySetting:'.$hash, false],
+            ['hfPaymentSetting:'.$hash, 'false'],
+            ['adaPaySetting:'.$hash, false],
+            ['icbcPaymentSetting:'.$hash, 0],
         ];
 
-        foreach ($definitions as [$serviceClass, $constructorArgs, $closedValue]) {
-            $this->closePaymentMethodIfOpen($companyId, $serviceClass, $constructorArgs, $closedValue);
+        foreach ($definitions as [$redisKey, $closedValue]) {
+            $this->closePaymentMethodIfOpen($redisKey, $closedValue);
         }
     }
 
     /**
-     * @param  class-string  $serviceClass
-     * @param  array<int, mixed>  $constructorArgs
      * @param  bool|int|string  $closedValue
      */
-    private function closePaymentMethodIfOpen(
-        int $companyId,
-        string $serviceClass,
-        array $constructorArgs,
-        $closedValue
-    ): void {
-        $service = new $serviceClass(...$constructorArgs);
-        $wrapper = new PaymentsService($service);
-        $config = $wrapper->getPaymentSetting($companyId);
+    private function closePaymentMethodIfOpen(string $redisKey, $closedValue): void
+    {
+        $raw = app('redis')->get($redisKey);
+        if ($raw === false || $raw === null || $raw === '') {
+            return;
+        }
 
-        if ($config === [] || $config === null) {
+        $config = json_decode($raw, true);
+        if (! is_array($config)) {
             return;
         }
 
@@ -90,7 +80,17 @@ class PaymentDoumenIntlMutualExclusionService
         }
 
         $config['is_open'] = $closedValue;
-        $wrapper->setPaymentSetting($companyId, $config);
+        app('redis')->set($redisKey, json_encode($config));
+    }
+
+    private function resolveOfflineLang(): string
+    {
+        $lang = app('request')->input('country_code', 'zh-CN');
+        if (empty($lang)) {
+            return 'zh-CN';
+        }
+
+        return (string) $lang;
     }
 
     /**

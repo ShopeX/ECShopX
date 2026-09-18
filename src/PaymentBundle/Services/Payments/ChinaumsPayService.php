@@ -383,7 +383,7 @@ class ChinaumsPayService implements Payment
         $sign = $data['sign'];
         unset($data['sign']);
         $gensign = $this->umsClientServ->genSign($data);
-        if ($gensign != $sign) {
+        if (!hash_equals(strtoupper($gensign), strtoupper($sign))) {
             throw new BadRequestHttpException('验签失败，请检查银联支付相关配置是否有修改');
         }
 
