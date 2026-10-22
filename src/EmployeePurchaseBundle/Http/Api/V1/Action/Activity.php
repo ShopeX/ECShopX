@@ -55,7 +55,7 @@ class Activity extends Controller
      *     @SWG\Property( property="minimum_amount", type="integer", description="订单最低金额"),
      *     @SWG\Property( property="close_modify_hours_after_activity", type="integer", description="活动结束后多少小时内可以修改收货地址"),
      *     @SWG\Property( property="is_passphrase_enabled", type="boolean", description="是否开启口令通道"),
-     *     @SWG\Property( property="passphrase_enterprises", type="array", description="口令绑定企业；每项含 participate_quota、passphrase_limitfee(分)、passphrase_code 等；额度在各行配置，活动上无总额字段。enterprise 与单条企业详情接口一致(含邮箱 SMTP 字段、distributor_name 等)", @SWG\Items(type="object")),
+     *     @SWG\Property( property="passphrase_enterprises", type="array", description="口令绑定企业；每项含 participate_quota、passphrase_limitfee(分)、passphrase_code 等；额度在各行配置，活动上无总额字段。enterprise 与单条企业详情接口一致(含邮箱 SMTP 字段，密码已脱敏为******、distributor_name 等)", @SWG\Items(type="object")),
      *     @SWG\Property( property="created", type="integer", description="创建时间"),
      *     @SWG\Property( property="updated", type="integer", description="修改时间"),
      * )

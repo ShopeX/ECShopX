@@ -494,16 +494,9 @@ class AftersalesService
         // }
 
         foreach ($data['detail'] as $v) {
-            $detailTmp = $v;
             for ($i=0; $i < $v['num']; $i++) { 
-                // 如果输入了退款子订单总金额，则平均分配
-                if (isset($detailTmp['total_fee']) && $detailTmp['total_fee'] > 0) {
-                    $detailTmp['total_fee'] = floor(bcdiv(bcmul($detailTmp['total_fee'],100), $detailTmp['num'], 2));
-                }
-                if (isset($detailTmp['total_point']) && $detailTmp['total_point'] > 0) {
-                    $detailTmp['total_point'] = floor(bcdiv(bcmul($detailTmp['total_point'],100), $detailTmp['num'], 2));   
-                }
-                $detail = $detailTmp;
+                $detail = $v;
+                unset($detail['total_fee'], $detail['total_point']);
                 $detail['num'] = 1;
                 $data['detail'] = [$detail];
                 $this->__createAftersalesByNum($orderInfo, $trade, $data);
@@ -3539,16 +3532,9 @@ class AftersalesService
         $trade = $tradeService->getInfo(['company_id' => $data['company_id'], 'order_id' => $orderInfo['order_id'], 'trade_state' => 'SUCCESS']);
 
         foreach ($data['detail'] as $v) {
-            $detailTmp = $v;
             for ($i=0; $i < $v['num']; $i++) { 
-                 // 如果输入了退款子订单总金额，则平均分配
-                if (isset($detailTmp['total_fee']) && $detailTmp['total_fee'] > 0) {
-                    $detailTmp['total_fee'] = floor(bcdiv(bcmul($detailTmp['total_fee'],100), $detailTmp['num'], 2));
-                }
-                if (isset($detailTmp['total_point']) && $detailTmp['total_point'] > 0) {
-                    $detailTmp['total_point'] = floor(bcdiv(bcmul($detailTmp['total_point'],100), $detailTmp['num'], 2));   
-                }
-                $detail = $detailTmp;
+                $detail = $v;
+                unset($detail['total_fee'], $detail['total_point']);
                 $detail['num'] = 1;
                 $data['detail'] = [$detail];
                 $this->shopApplyByNumHandle($orderInfo, $trade, $data);
@@ -3770,7 +3756,7 @@ class AftersalesService
             if ($is_refund_freight && $is_refund_freight_flag) {
                 // 根据freight_type存储现金（分）或积分值，与订单表逻辑一致
                 $refundData['freight'] = $freight;
-                $refundData['return_freight'] = 1;
+                $refundData['return_freight'] = $freight ? 1 : 0;
                 $refundData['freight_type'] = $orderInfo['freight_type'];
             } else {
                 // 未申请运费时，设置默认值
@@ -3840,6 +3826,9 @@ class AftersalesService
         $flag = false;
         if (!empty($orderItems['list'])) {
             foreach ($orderItems['list'] as $v) {
+                if (isset($v['order_item_type']) && $v['order_item_type'] == 'gift') {
+                    continue;
+                }
                 if ($v['id'] == $nowId) {
                     // 注意：调用前本次售后明细已落库，getAppliedNumByNum 已包含本次申请数量，无需再加 nowNum
                     $applied_num = $this->getAppliedNumByNum($company_id, $order_id, $v['id']); // 已申请数量（只统计有效状态的售后单）

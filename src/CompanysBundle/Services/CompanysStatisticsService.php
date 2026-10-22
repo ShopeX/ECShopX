@@ -506,7 +506,11 @@ class CompanysStatisticsService
 
         $filter['supplier_item_id'] = 0;
         $result['warning_goods_count_plat'] = $itemsService->getItemCount($filter);
-        $result['warning_goods_count'] = $result['warning_goods_count_plat'] .' (自营) / '.  $result['warning_goods_count'] .' (全部)  ';
+        $allWarningCount = $result['warning_goods_count'];
+        $result['warning_goods_count'] = self::formatWarningGoodsCountLabel(
+            (int) $result['warning_goods_count_plat'],
+            (int) $allWarningCount
+        );
         //统计进行中的秒杀活动数量
         $filter = [
             'company_id' => $companyId,
@@ -588,5 +592,16 @@ class CompanysStatisticsService
         $refundErrorLogsService = new RefundErrorLogsService();
         $result['refund_errorlogs_count'] = $refundErrorLogsService->errorLogsNum($filter);
         return $result;
+    }
+
+    /**
+     * 库存预警展示文案（自营 / 全部），随 app locale（country_code）切换。
+     */
+    public static function formatWarningGoodsCountLabel(int $platCount, int $allCount): string
+    {
+        return trans('CompanysBundle/Currency.warning_goods_count_format', [
+            'plat' => $platCount,
+            'all' => $allCount,
+        ]);
     }
 }

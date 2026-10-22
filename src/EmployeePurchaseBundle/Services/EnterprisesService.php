@@ -28,6 +28,9 @@ use EmployeePurchaseBundle\Entities\EnterpriseEmailBox;
 
 class EnterprisesService
 {
+    /** 邮箱密码脱敏掩码：接口统一返回该值；更新时传该值表示沿用库中原密码 */
+    const EMAIL_PASSWORD_MASK = '******';
+
     /** @var \EmployeePurchaseBundle\Repositories\EnterprisesRepository */
     public $enterprisesRepository;
     public $enterpriseEmailBoxRepository;
@@ -57,7 +60,7 @@ class EnterprisesService
                 $result['relay_host'] = $relData['relay_host'] ?? '';
                 $result['smtp_port'] = $relData['smtp_port'] ?? '';
                 $result['email_user'] = $relData['user'] ?? '';
-                $result['email_password'] = $relData['password'] ?? '';
+                $result['email_password'] = self::EMAIL_PASSWORD_MASK;
                 $result['email_suffix'] = $relData['suffix'] ?? '';
             }
             $conn->commit();
@@ -75,6 +78,20 @@ class EnterprisesService
      */
     public function updateEnterprise($filter, $params) 
     {
+        // 编辑表单会回填脱敏密码(******)：传掩码时沿用库中原密码，避免掩码被当成真实密码入库导致发件失效
+        if (($params['auth_type'] ?? '') == 'email'
+            && ($params['email_password'] ?? '') === self::EMAIL_PASSWORD_MASK
+        ) {
+            $oldRel = $this->enterpriseEmailBoxRepository->getInfo([
+                'company_id' => $filter['company_id'],
+                'enterprise_id' => $filter['id'],
+            ]);
+            if (empty($oldRel['password'])) {
+                throw new ResourceException('邮箱密码已失效，请重新输入');
+            }
+            $params['email_password'] = $oldRel['password'];
+        }
+
         $params['company_id'] = $filter['company_id'];
         $params['enterprise_id'] = $filter['id'];
         $this->__checkExist($params);
@@ -88,7 +105,7 @@ class EnterprisesService
                 $result['relay_host'] = $relData['relay_host'] ?? '';
                 $result['smtp_port'] = $relData['smtp_port'] ?? '';
                 $result['email_user'] = $relData['user'] ?? '';
-                $result['email_password'] = $relData['password'] ?? '';
+                $result['email_password'] = self::EMAIL_PASSWORD_MASK;
                 $result['email_suffix'] = $relData['suffix'] ?? '';
             }
             $conn->commit();
@@ -143,19 +160,23 @@ class EnterprisesService
      * @param int $page
      * @return mixed
      */
-    public function getEnterprisesList($filter, $page = 1, $pageSize = 20, $orderBy = ['created' => 'DESC'])
+    public function getEnterprisesList($filter, $page = 1, $pageSize = 20, $orderBy = ['created' => 'DESC'], $withEmailConfig = true)
     {
         $result = $this->enterprisesRepository->lists($filter, '*', $page, $pageSize, $orderBy);
         if (!$result['total_count'] || !$result['list']) {
             return $result; 
         }
-        $enterpriseIds = array_column($result['list'], 'id');
-        $relFilter = [
-            'company_id' => $filter['company_id'],
-            'enterprise_id' => $enterpriseIds,
-        ];
-        $relList = $this->enterpriseEmailBoxRepository->getLists($relFilter);
-        $relList = array_column($relList, null, 'enterprise_id');
+        // $withEmailConfig=false 供 C 端接口使用：不查询也不返回企业发件邮箱 SMTP 配置，避免暴露服务器与账号信息
+        $relList = [];
+        if ($withEmailConfig) {
+            $enterpriseIds = array_column($result['list'], 'id');
+            $relFilter = [
+                'company_id' => $filter['company_id'],
+                'enterprise_id' => $enterpriseIds,
+            ];
+            $relList = $this->enterpriseEmailBoxRepository->getLists($relFilter);
+            $relList = array_column($relList, null, 'enterprise_id');
+        }
         $distributorService = new DistributorService();
         $storeIds = array_filter(array_unique(array_column($result['list'], 'distributor_id')), function ($distributorId) {
             return is_numeric($distributorId) && $distributorId >= 0;
@@ -171,12 +192,13 @@ class EnterprisesService
             $storeData[0] = $distributorService->getDistributorSelfSimpleInfo($filter['company_id']);
         }
         foreach ($result['list'] as $key => $row) {
-            if ($row['auth_type'] == 'email') {
+            if ($withEmailConfig && $row['auth_type'] == 'email') {
                 $relData = $relList[$row['id']] ?? [];
                 $result['list'][$key]['relay_host'] = $relData['relay_host'] ?? '';
                 $result['list'][$key]['smtp_port'] = $relData['smtp_port'] ?? '';
                 $result['list'][$key]['email_user'] = $relData['user'] ?? '';
-                $result['list'][$key]['email_password'] = $relData['password'] ?? '';
+                // 脱敏：不返回明文 SMTP 密码，统一返回掩码（C端/管理端列表共用此方法）
+                $result['list'][$key]['email_password'] = (isset($relData['password']) && $relData['password'] !== '') ? self::EMAIL_PASSWORD_MASK : '';
                 $result['list'][$key]['email_suffix'] = $relData['suffix'] ?? '';
             }
             $result['list'][$key]['distributor_name'] = isset($row['distributor_id']) ? ($storeData[$row['distributor_id']]['name'] ?? '') : '';
@@ -203,7 +225,8 @@ class EnterprisesService
                 $data['relay_host'] = $relData['relay_host'];
                 $data['smtp_port'] = $relData['smtp_port'];
                 $data['email_user'] = $relData['user'];
-                $data['email_password'] = $relData['password'];
+                // 脱敏：详情返回掩码；更新时传掩码表示沿用原密码（见 updateEnterprise）
+                $data['email_password'] = (isset($relData['password']) && $relData['password'] !== '') ? self::EMAIL_PASSWORD_MASK : '';
                 $data['email_suffix'] = $relData['suffix'];
             }
         }
@@ -273,7 +296,8 @@ class EnterprisesService
                     $data['relay_host'] = $relData['relay_host'];
                     $data['smtp_port'] = $relData['smtp_port'];
                     $data['email_user'] = $relData['user'];
-                    $data['email_password'] = $relData['password'];
+                    // 脱敏：批量详情结构会随活动口令列表等接口返回，不暴露明文密码
+                    $data['email_password'] = (isset($relData['password']) && $relData['password'] !== '') ? self::EMAIL_PASSWORD_MASK : '';
                     $data['email_suffix'] = $relData['suffix'];
                 }
             }
@@ -382,8 +406,10 @@ class EnterprisesService
         $data['relay_host'] = $data['relay_host'];
         $data['smtp_port'] = $data['smtp_port'];
         $data['email_user'] = $data['user'];
-        $data['email_password'] = $data['password'];
+        // 脱敏：当前调用方（按邮箱后缀定位企业）只使用企业ID；如需真实密码发信，请直读 enterpriseEmailBoxRepository
+        $data['email_password'] = self::EMAIL_PASSWORD_MASK;
         $data['email_suffix'] = $data['suffix'];
+        unset($data['password'], $data['user']);
         return $data;
     }
 

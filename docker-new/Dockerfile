@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.29-fpm-alpine3.22
+ARG BASE_IMAGE=registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.35-fpm-alpine3.24
 FROM ${BASE_IMAGE} as builder
 
 WORKDIR /app

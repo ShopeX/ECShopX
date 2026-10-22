@@ -107,7 +107,7 @@ class WechatAppPayService extends WechatPayService implements Payment
         $payment = $this->getPayment($authorizerAppId, $wxaAppId, $companyId);
         $result = $payment->order->unify($attributes);
 
-        if ($result['return_code'] == 'SUCCESS') {
+        if ($result['return_code'] == 'SUCCESS' && $result['result_code'] == 'SUCCESS') {
             $config = [
                 'appid' => $paymentSetting['app_app_id'],
                 'partnerid' => $paymentSetting['merchant_id'],

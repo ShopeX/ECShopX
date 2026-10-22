@@ -70,7 +70,7 @@ Edit `docker-lite/images.env` (see `images.env.example`):
 
 ```bash
 APP_BASE_IMAGE_TAR_URL=https://your-cdn/ecshopex-php-ecx-8.2.29.tar
-APP_BASE_IMAGE=registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.29-fpm-alpine3.22-openresty-node-20.19   # must match tag inside the tar after docker load
+APP_BASE_IMAGE=registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.35-fpm-alpine3.24-openresty-node-20.19   # must match tag inside the tar after docker load
 
 MYSQL_IMAGE_TAR_URL=https://your-cdn/mysql-5.7.tar
 MYSQL_IMAGE=mysql:5.7

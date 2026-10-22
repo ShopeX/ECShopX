@@ -53,10 +53,6 @@ class Enterprise extends BaseController
      *                          @SWG\Property( property="sort", type="string", example="0", description="排序"),
      *                          @SWG\Property( property="created", type="string", example="1612160658", description=""),
      *                          @SWG\Property( property="updated", type="string", example="1612160658", description="修改时间"),
-     *                          @SWG\Property( property="relay_host", type="string", description="服务器主机地址"),
-     *                          @SWG\Property( property="smtp_port", type="string", description="端口号"),
-     *                          @SWG\Property( property="email_user", type="string", description="邮箱用户名"),
-     *                          @SWG\Property( property="email_password", type="string", description="邮箱密码"),
      *                       ),
      *                  ),
      *          ),
@@ -83,7 +79,7 @@ class Enterprise extends BaseController
         }
         $orderBy = ['sort' => 'ASC', 'created' => 'DESC'];
         $enterprisesService = new EnterprisesService();
-        $result = $enterprisesService->getEnterprisesList($filter, $page, $pageSize, $orderBy);
+        $result = $enterprisesService->getEnterprisesList($filter, $page, $pageSize, $orderBy, false);
         return $this->response->array($result);
     }
 

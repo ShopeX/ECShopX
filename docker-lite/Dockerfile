@@ -1,5 +1,5 @@
 # Release app image: runtime only. Application code is bind-mounted at /data/httpd.
-ARG BASE_IMAGE=registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.29-fpm-alpine3.22-openresty-node-20.19
+ARG BASE_IMAGE=registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.35-fpm-alpine3.24-openresty-node-20.19
 FROM ${BASE_IMAGE}
 
 ENV TZ=Asia/Shanghai \
