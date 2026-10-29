@@ -703,80 +703,64 @@ trait CountPreferentialFee
         $remainingPoints = $item_point_use; // 剩余待分摊积分
         $remainingFee = $item_fee_by_point_fee; // 剩余待分摊金额
         
-        // 第一轮：按比例分摊
+        // 第一轮：按金额比例分摊（非末行 floor，末行吃剩余），避免 bcdiv 截断 + ceil 在多行留下 1 分现金尾差（ECX-10614）
+        $itemCount = count($orderData['items']);
         foreach ($orderData['items'] as $k => &$itemInfo) {
-            // 计算当前商品应分摊的比例
-            $itemProportion = $totalItemFee > 0 ? bcdiv($itemInfo['total_fee'], $totalItemFee, 6) : 0;
-            
-            if ($k === count($orderData['items']) - 1) {
-                // 最后一个商品，使用剩余的所有积分和金额
-                $itemInfo['share_points'] = $remainingPoints;
-                $itemInfo['point_fee'] = $remainingFee;
-                // 更新剩余积分和金额为0
-                $remainingPoints = 0;
-                $remainingFee = 0;
-            } else {
-                // 按比例分摊积分和金额
-                $sharePoints = intval(ceil(bcmul($item_point_use, $itemProportion, 6))); // 使用ceil向上取整
-                $shareFee = intval(ceil(bcmul($item_fee_by_point_fee, $itemProportion, 6))); // 使用ceil向上取整
-                
-                // 确保分摊的积分不超过剩余积分
-                if ($sharePoints > $remainingPoints) {
-                    $sharePoints = $remainingPoints;
-                }
-                
-                // 确保分摊的金额不超过剩余金额
-                if ($shareFee > $remainingFee) {
-                    $shareFee = $remainingFee;
-                }
-                
-                // 确保分摊的金额不超过商品金额
+            if ($k === $itemCount - 1) {
+                // 最后一个商品，使用剩余的所有积分和金额（不超过行应付）
+                $sharePoints = $remainingPoints;
+                $shareFee = $remainingFee;
                 if ($shareFee > $itemInfo['total_fee']) {
                     $shareFee = $itemInfo['total_fee'];
                 }
-                
                 $itemInfo['share_points'] = $sharePoints;
                 $itemInfo['point_fee'] = $shareFee;
-                
-                // 更新剩余积分和金额
+                $remainingPoints = 0;
+                $remainingFee -= $shareFee;
+            } else {
+                // 整数比例 floor：floor(pool * line / total)，避免 6 位小数截断导致少抵 1 分
+                $sharePoints = $totalItemFee > 0
+                    ? (int) bcdiv(bcmul((string) $item_point_use, (string) $itemInfo['total_fee'], 0), (string) $totalItemFee, 0)
+                    : 0;
+                $shareFee = $totalItemFee > 0
+                    ? (int) bcdiv(bcmul((string) $item_fee_by_point_fee, (string) $itemInfo['total_fee'], 0), (string) $totalItemFee, 0)
+                    : 0;
+
+                if ($sharePoints > $remainingPoints) {
+                    $sharePoints = $remainingPoints;
+                }
+                if ($shareFee > $remainingFee) {
+                    $shareFee = $remainingFee;
+                }
+                if ($shareFee > $itemInfo['total_fee']) {
+                    $shareFee = $itemInfo['total_fee'];
+                }
+
+                $itemInfo['share_points'] = $sharePoints;
+                $itemInfo['point_fee'] = $shareFee;
                 $remainingPoints -= $sharePoints;
-                $remainingFee -= $shareFee; // 使用整数减法
+                $remainingFee -= $shareFee;
             }
         }
-        
-        // // 第二轮：简单循环分配剩余积分和金额
-        // if ($remainingPoints > 0 || $remainingFee > 0) {
-        //     // 找出还有剩余金额的商品
-        //     $availableItems = [];
-        //     foreach ($orderData['items'] as $k => $item) {
-        //         $remainingItemFee = $item['total_fee'] - $item['point_fee'];
-        //         if ($remainingItemFee > 0) {
-        //             $availableItems[] = $k;
-        //         }
-        //     }
-            
-        //     if (count($availableItems) > 0) {
-        //         // 简单循环分配剩余积分
-        //         $itemIndex = 0;
-        //         while ($remainingPoints > 0 && count($availableItems) > 0) {
-        //             $k = $availableItems[$itemIndex % count($availableItems)];
-        //             $orderData['items'][$k]['share_points'] += 1;
-        //             $remainingPoints -= 1;
-        //             $itemIndex++;
-        //         }
-                
-        //         // 简单循环分配剩余金额
-        //         $itemIndex = 0;
-        //         while ($remainingFee > 0 && count($availableItems) > 0) {
-        //             $k = $availableItems[$itemIndex % count($availableItems)];
-        //             $addFee = min($remainingFee, 1); // 最小金额单位：1分
-        //             $orderData['items'][$k]['point_fee'] += $addFee;
-        //             $remainingFee -= $addFee;
-        //             $itemIndex++;
-        //         }
-        //     }
-        // }
-        
+        unset($itemInfo);
+
+        // 第二轮：若末行兜底后仍有未分完的抵扣金额，回填到仍有现金尾差的行（每行最多补到 total_fee）
+        if ($remainingFee > 0) {
+            foreach ($orderData['items'] as $k => &$itemInfo) {
+                if ($remainingFee <= 0) {
+                    break;
+                }
+                $lineRemain = $itemInfo['total_fee'] - $itemInfo['point_fee'];
+                if ($lineRemain <= 0) {
+                    continue;
+                }
+                $addFee = min($remainingFee, $lineRemain);
+                $itemInfo['point_fee'] += $addFee;
+                $remainingFee -= $addFee;
+            }
+            unset($itemInfo);
+        }
+
         // 更新商品积分字段和剩余金额
         foreach ($orderData['items'] as $k => &$itemInfo) {
             // 设置商品积分字段

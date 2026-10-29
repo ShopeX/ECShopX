@@ -538,6 +538,10 @@ class ItemsCategory extends BaseController
             }
         }
 
+        if (isset($data['customize_page_id']) && empty($data['customize_page_id'])) {
+            $data['customize_page_id'] = 0;
+        }
+
         $result = $itemsCategoryService->updateOneBy(['category_id' => $category_id, 'company_id' => $companyId], $data);
 
         return $this->response->array($result);

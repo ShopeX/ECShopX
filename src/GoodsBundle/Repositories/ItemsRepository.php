@@ -783,7 +783,7 @@ class ItemsRepository extends EntityRepository
             ->from('items_rel_attributes', 'ira')
             ->leftJoin('ira', 'items', 'i', 'ira.item_id = i.item_id')
             ->leftJoin('ira', 'items_attributes', 'ia', 'ira.attribute_id = ia.attribute_id')
-            ->leftJoin('ira', 'items_attributes_value', 'iav', 'ira.attribute_value_id = iav.attribute_value_id')
+            ->leftJoin('ira', 'items_attribute_values', 'iav', 'ira.attribute_value_id = iav.attribute_value_id')
             ->where($criteria->expr()->in('ia.attribute_type', [$criteria->expr()->literal('item_params'), $criteria->expr()->literal('item_spec')]))
             ->andWhere($criteria->expr()->eq('ia.is_show', 1));
 

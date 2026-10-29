@@ -85,6 +85,13 @@ class AftersalesRefundService
             'company_id' => $params['company_id'],
         ];
         $refundData = $this->aftersalesRefundRepository->getInfo($filter);
+        // ECX-10613：已 SUCCESS 的退款单再次进入时直接幂等返回，避免重复渠道退款与积分流水
+        if (!$resubmit && ($refundData['refund_status'] ?? '') === 'SUCCESS') {
+            return [
+                'status' => 'SUCCESS',
+                'refund_id' => $refundData['refund_id'] ?? $refundData['refund_bn'] ?? '',
+            ];
+        }
         //退款金额要增加运费（根据运费类型分别处理，与订单表逻辑一致）
         if (($refundData['freight_type'] ?? 'cash') == 'cash') {
             // 现金运费（分）加到退款金额中
