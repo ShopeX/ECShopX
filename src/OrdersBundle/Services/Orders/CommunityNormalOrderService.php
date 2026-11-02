@@ -312,7 +312,7 @@ class CommunityNormalOrderService extends AbstractNormalOrder
             //装饰会员信息
             $v['total_num'] = array_sum(array_column($v['items'], 'num'));
             $v['member']    = $members[$v['user_id']] ?? [];
-            $v['auto_cancel_seconds'] = $v['auto_cancel_time'] - time();
+            $v['auto_cancel_seconds'] = (int) $v['auto_cancel_time'] - time();
             $v['community_info'] = $this->normalizeCommunityInfoTradeNo($v['community_info']);
         });
 

@@ -781,7 +781,7 @@ class NormalOrdersRepository extends EntityRepository
             'order_type' => $orderEntity->getOrderType(),
             'order_class' => $orderEntity->getOrderClass(),
             'auto_cancel_time' => $orderEntity->getAutoCancelTime(),
-            'auto_cancel_seconds' => $orderEntity->getAutoCancelTime() - time(),
+            'auto_cancel_seconds' => (int) $orderEntity->getAutoCancelTime() - time(),
             'auto_finish_time' => $orderEntity->getAutoFinishTime(),
             'is_distribution' => $orderEntity->getIsDistribution(),
             'source_id' => $orderEntity->getSourceId(),

@@ -352,7 +352,7 @@ class OrderService
             if (isset($orderData['fee_symbol'])) {
                 $payMoney = $orderData['fee_symbol'].$payMoney;
             }
-            $limitSec = round(($orderData['auto_cancel_time'] - time()) / 60);
+            $limitSec = round(((int) $orderData['auto_cancel_time'] - time()) / 60);
             $remark = $limitSec >= 60 ? round($limitSec / 60)."小时" : $limitSec."分钟";
             $wxaTemplateMsgData = [
                 'order_id' => $orderData['order_id'],

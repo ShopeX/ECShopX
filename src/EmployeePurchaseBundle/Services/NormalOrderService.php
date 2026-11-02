@@ -452,7 +452,7 @@ class NormalOrderService extends AbstractNormalOrder
                     }
                 }
 
-                if ($v['order_status'] == 'NOTPAY' && $v['auto_cancel_time'] - time() <= 0 && $v['order_class'] != 'drug') {
+                if ($v['order_status'] == 'NOTPAY' && (int) $v['auto_cancel_time'] - time() <= 0 && $v['order_class'] != 'drug') {
                     $v['order_status'] = 'CANCEL';
                     $result['list'][$k]['order_status'] = 'CANCEL';
                 }

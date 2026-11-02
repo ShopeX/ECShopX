@@ -1046,10 +1046,10 @@ class AbstractNormalOrder implements OrderInterface
                 }
                 // 线下转账支付方式，有待审核的转账凭证时，不使用auto_cancel_time
                 if ($v['order_status'] == 'NOTPAY' && $v['order_class'] != 'drug') {
-                    if ( ($v['pay_type'] != 'offline_pay' || $v['offline_payment_status'] == '-1') && $v['auto_cancel_time'] - time() <= 0) {
+                    if ( ($v['pay_type'] != 'offline_pay' || $v['offline_payment_status'] == '-1') && (int) $v['auto_cancel_time'] - time() <= 0) {
                         $v['order_status'] = 'CANCEL';
                         $result['list'][$k]['order_status'] = 'CANCEL';
-                    } else if($v['pay_type'] == 'offline_pay' && $v['offline_payment_status'] != '0' && $v['auto_cancel_time'] - time() <= 0) {
+                    } else if($v['pay_type'] == 'offline_pay' && $v['offline_payment_status'] != '0' && (int) $v['auto_cancel_time'] - time() <= 0) {
                         $v['order_status'] = 'CANCEL';
                         $result['list'][$k]['order_status'] = 'CANCEL';
                     }
@@ -1492,9 +1492,9 @@ class AbstractNormalOrder implements OrderInterface
         $orderInfo['items'] = $orderItems;
         // 线下转账支付方式，有待审核的转账凭证时，不使用auto_cancel_time
         if ($orderInfo['order_status'] == 'NOTPAY' && $orderInfo['order_class'] != 'drug') {
-            if ( ($orderInfo['pay_type'] != 'offline_pay' || $orderInfo['offline_payment_status'] == '-1') && $orderInfo['auto_cancel_time'] - time() <= 0) {
+            if ( ($orderInfo['pay_type'] != 'offline_pay' || $orderInfo['offline_payment_status'] == '-1') && (int) $orderInfo['auto_cancel_time'] - time() <= 0) {
                 $orderInfo['order_status'] = 'CANCEL';
-            } else if($orderInfo['pay_type'] == 'offline_pay' && $orderInfo['offline_payment_status'] != '0' && $orderInfo['auto_cancel_time'] - time() <= 0) {
+            } else if($orderInfo['pay_type'] == 'offline_pay' && $orderInfo['offline_payment_status'] != '0' && (int) $orderInfo['auto_cancel_time'] - time() <= 0) {
                 $orderInfo['order_status'] = 'CANCEL';
             }
         }
@@ -3905,7 +3905,7 @@ class AbstractNormalOrder implements OrderInterface
         $dadaOrderList = array_column($dadaOrderList, null, 'order_id');
 
         foreach ($result['list'] as $k => $v) {
-            if ($v['order_status'] == 'NOTPAY' && $v['auto_cancel_time'] - time() <= 0) {
+            if ($v['order_status'] == 'NOTPAY' && (int) $v['auto_cancel_time'] - time() <= 0) {
                 $v['order_status'] = 'CANCEL';
                 $result['list'][$k]['order_status'] = 'CANCEL';
             }
