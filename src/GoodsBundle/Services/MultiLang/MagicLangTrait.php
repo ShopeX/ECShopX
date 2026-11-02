@@ -26,6 +26,11 @@ trait MagicLangTrait
         if(empty($lang)){
             $lang = 'zh-CN';
         }
+
+        // country_code 仅允许语言码字符，阻断空格/引号等注入到多语言表名
+        if (!is_string($lang) || !preg_match('/^[A-Za-z0-9_-]+$/', $lang)) {
+            $lang = config('langue.default') ?? 'zh-CN';
+        }
         
         return $lang;
     }

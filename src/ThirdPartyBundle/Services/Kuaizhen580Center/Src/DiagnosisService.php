@@ -376,16 +376,39 @@ class DiagnosisService
         ]);
 
         if (!empty($params['dstFilePath'])) {
-            $dstFilePath = (string) $params['dstFilePath'];
-            if (! OutboundUrlAllowlist::isAllowed($dstFilePath)) {
+            $dstFilePath = trim((string) $params['dstFilePath']);
+            // 仅允许公网 http(s)；拒绝本地路径、file/phar/php 等包装器
+            if ($dstFilePath === '' || ! OutboundUrlAllowlist::isAllowed($dstFilePath)) {
                 throw new ResourceException('处方文件地址不允许');
+            }
+
+            $urlPath = parse_url($dstFilePath, PHP_URL_PATH);
+            $fileName = basename(is_string($urlPath) && $urlPath !== '' ? $urlPath : 'prescription.bin');
+            if ($fileName === '' || $fileName === '.' || $fileName === '..') {
+                $fileName = 'prescription.bin';
+            }
+
+            // 禁止跟随跳转，避免 http(s) 302 到 file:// 等绕过白名单
+            $context = stream_context_create([
+                'http' => [
+                    'follow_location' => 0,
+                    'max_redirects' => 0,
+                    'timeout' => 15,
+                ],
+                'ssl' => [
+                    'verify_peer' => true,
+                    'verify_peer_name' => true,
+                ],
+            ]);
+            $fileContents = @file_get_contents($dstFilePath, false, $context);
+            if ($fileContents === false) {
+                throw new ResourceException('处方文件下载失败');
             }
 
             $storage = 'import-image';
             $filesystem = app('filesystem')->disk($storage);
-            $fileName = basename($params['dstFilePath']);
             $filePath = 'order_dst_file_path/' . $orderInfo['company_id'] . '/' . $orderInfo['order_id'] . '/' . $fileName;
-            $filesystem->put($filePath, file_get_contents($dstFilePath));
+            $filesystem->put($filePath, $fileContents);
             $fileUlr = $filesystem->url($filePath);
         }
 

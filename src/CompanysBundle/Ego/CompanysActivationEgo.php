@@ -899,7 +899,16 @@ class CompanysActivationEgo
             $md5 = $encodeString[$i];
             $resultString .= $encodeString[++$i] ^ $md5;
         }
-        $stringArray = unserialize($resultString);
+        // 禁止反序列化任意类，阻断 POP 链导致的远程命令执行
+        $stringArray = @unserialize($resultString, ['allowed_classes' => false]);
+        if (!is_array($stringArray)) {
+            return [];
+        }
+        foreach ($stringArray as $key => $value) {
+            if (is_object($value) || is_resource($value)) {
+                unset($stringArray[$key]);
+            }
+        }
         return $stringArray;
     }
 

@@ -45,8 +45,22 @@ class MultiLangItem
 
     private function normalizeTableLanguage(string $lang): string
     {
-        return self::LEGACY_TABLE_LANGUAGE_SUFFIXES[$lang]
-            ?? strtolower(str_replace('-', '', $lang));
+        if (isset(self::LEGACY_TABLE_LANGUAGE_SUFFIXES[$lang])) {
+            return self::LEGACY_TABLE_LANGUAGE_SUFFIXES[$lang];
+        }
+
+        $normalized = strtolower(str_replace('-', '', $lang));
+        // 表名后缀只允许字母数字下划线，拒绝空格/引号/SQL 关键字注入
+        if ($normalized === '' || !preg_match('/^[a-z0-9_]+$/', $normalized)) {
+            return self::LEGACY_TABLE_LANGUAGE_SUFFIXES['zh-CN'];
+        }
+
+        return $normalized;
+    }
+
+    private function quotedTable(): string
+    {
+        return '`' . str_replace('`', '``', $this->table) . '`';
     }
 
     //创建语言表
@@ -61,7 +75,7 @@ class MultiLangItem
             return; // 已存在，跳过创建
         }
         $sql = "
-CREATE TABLE {$table} LIKE `multi_lang_mod`;
+CREATE TABLE {$this->quotedTable()} LIKE `multi_lang_mod`;
         ";
 
         $conn->executeStatement($sql);
@@ -79,7 +93,7 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
         // 构造 SQL 语句
         $sql = sprintf(
             'INSERT INTO %s (%s) VALUES (%s)',
-            $table,
+            $this->quotedTable(),
             implode(', ', array_map(fn($c) => "`$c`", $columns)),   // 字段名加反引号
             implode(', ', $placeholders)
         );
@@ -106,7 +120,7 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
         // 构建 SQL
         $sql = sprintf(
             "UPDATE %s SET %s WHERE %s",
-            $table,
+            $this->quotedTable(),
             implode(', ', $setClauses),
             implode(' AND ', $whereClauses)
         );
@@ -217,7 +231,7 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
         }
 
         // 构造 SQL
-        $sql = "SELECT * FROM {$table}";
+        $sql = "SELECT * FROM {$this->quotedTable()}";
         if (!empty($whereClauses)) {
             $sql .= ' WHERE ' . implode(' AND ', $whereClauses);
         }
@@ -252,12 +266,11 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
 
     public function getOneByFilter(array $filter = []): array
     {
-        $table = $this->table;
         $whereData = $this->_filter($filter);
         $whereClauses = $whereData['whereClauses'];
         $params = $whereData['params'];
         // 构造 SQL
-        $sql = "SELECT * FROM {$table}";
+        $sql = "SELECT * FROM {$this->quotedTable()}";
         if (!empty($whereClauses)) {
             $sql .= ' WHERE ' . implode(' AND ', $whereClauses);
         }
@@ -274,12 +287,11 @@ CREATE TABLE {$table} LIKE `multi_lang_mod`;
 
     public function deleteBy(array $filter)
     {
-        $table = $this->table;
         $whereData = $this->_filter($filter);
         $whereClauses = $whereData['whereClauses'];
         $params = $whereData['params'];
         // 构造sql
-        $sql = "DELETE FROM {$table}";
+        $sql = "DELETE FROM {$this->quotedTable()}";
         if (!empty($whereClauses)) {
             $sql .= ' WHERE ' . implode(' AND ', $whereClauses);
         }

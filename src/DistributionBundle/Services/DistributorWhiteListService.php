@@ -59,32 +59,58 @@ class DistributorWhiteListService
         }
 
         $conn = app('registry')->getConnection('default');
-        $sql = 'select id,company_id,mobile,username,created,updated from distribution_distributor_white_list ';
-        $whereSql = " where 1";
-        if(!empty($filter['distributor_id'])){
-            $idArrStr = implode(",",$filter['distributor_id']);
-            $whereSql .= ' and distributor_id in (' . $idArrStr.') ';
-        }
-        if(!empty($filter['mobile'])){
-            if(is_array($filter['mobile'])){
-                $mobileArrStr = implode("','",$filter['mobile']);
-                $whereSql .= ' and mobile in ('."'" . $mobileArrStr."'".') ';
-            }else{
-                $whereSql .= ' and mobile = ' ."'". $filter['mobile']."'";
-            }
+        $whereSql = ' where 1=1';
+        $params = [];
 
+        if (!empty($filter['distributor_id'])) {
+            $distributorIds = array_values(array_map('intval', (array) $filter['distributor_id']));
+            if (!empty($distributorIds)) {
+                $placeholders = implode(',', array_fill(0, count($distributorIds), '?'));
+                $whereSql .= ' and distributor_id in (' . $placeholders . ')';
+                foreach ($distributorIds as $distributorId) {
+                    $params[] = $distributorId;
+                }
+            }
         }
-        if(!empty($filter['company_id'])){
-            $whereSql .= ' and company_id = ' . $filter['company_id'];
+
+        if (!empty($filter['mobile'])) {
+            if (is_array($filter['mobile'])) {
+                $mobiles = array_values($filter['mobile']);
+                if (!empty($mobiles)) {
+                    $placeholders = implode(',', array_fill(0, count($mobiles), '?'));
+                    $whereSql .= ' and mobile in (' . $placeholders . ')';
+                    foreach ($mobiles as $mobile) {
+                        $params[] = (string) $mobile;
+                    }
+                }
+            } else {
+                $whereSql .= ' and mobile = ?';
+                $params[] = (string) $filter['mobile'];
+            }
         }
-        if(!empty($filter['username'])){
-            $whereSql .= ' and username like ' . "'". $filter['username']."%'";
+
+        if (!empty($filter['company_id'])) {
+            $whereSql .= ' and company_id = ?';
+            $params[] = (int) $filter['company_id'];
         }
+
+        if (!empty($filter['username'])) {
+            $whereSql .= ' and username like ?';
+            $params[] = (string) $filter['username'] . '%';
+        }
+
+        $page = max(1, (int) $page);
+        $pageSize = max(1, (int) $pageSize);
         $start_limit = ($page - 1) * $pageSize;
-        $sql .= $whereSql . " group by mobile order by created desc limit {$pageSize}  offset {$start_limit}";
-        $list = $conn->fetchAll($sql);
-        $countSql = 'select count(distinct mobile) from distribution_distributor_white_list '.$whereSql;
-        $count = $conn->fetchColumn($countSql);
+
+        $sql = 'select id,company_id,mobile,username,created,updated from distribution_distributor_white_list'
+            . $whereSql
+            . ' group by mobile order by created desc limit ? offset ?';
+        $listParams = array_merge($params, [$pageSize, $start_limit]);
+        $list = $conn->fetchAll($sql, $listParams);
+
+        $countSql = 'select count(distinct mobile) from distribution_distributor_white_list' . $whereSql;
+        $count = $conn->fetchColumn($countSql, $params);
         if(empty($list)){
             return ['list'=>[],'total_count'=>$count];
         }

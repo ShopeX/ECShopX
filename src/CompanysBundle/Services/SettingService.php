@@ -285,6 +285,30 @@ class SettingService
         return 1;
     }
     /**
+     * 管理端开票配置校验规则（Api Invoice@setInvoiceSetting）。
+     * freight_name：管理端 tip 允许为空（开票行默认「运费」），不做必填校验。
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function getAdminInvoiceSettingRules(): array
+    {
+        return [
+            'invoice_status' => ['required|in:1,0', '是否启用开票功能必填'],
+            'invoice_limit' => ['required|in:item,order', '开票维度必填'],
+            'invoice_method' => ['required|in:offline,online', '开票渠道必填'],
+            'freight_invoice' => ['required|in:1,2', '运费是否开票必填'],
+            // freight_name：允许为空，保留规则键以便写入 Redis
+            'freight_name' => ['nullable|string', ''],
+            'apply_type' => ['required|in:1,2', '开票申请方式必填'],
+            'invoice_open_term' => ['required|integer|min:0', '可开票期限应为正整数'],
+            'special_invoice' => ['required|in:1,2', '专用发票展示必填'],
+            'apply_node' => ['required|in:1,2', '申请开票节点必填'],
+            'invoice_seller_type' => ['required|in:1,2', '开票方类型必填'],
+            'freight_tax_rate' => ['required|numeric|min:0|max:100', '运费税率最小为0，最大为100的整数'],
+        ];
+    }
+
+    /**
      * 获取发票选项显示状态
      * @param $companyId
      * @return array|mixed
@@ -303,7 +327,7 @@ class SettingService
         // - **invoice_method**：开票渠道（offline=线下，online=线上）
         // - **channel**：开票渠道（1=线下，2=线上），与 invoice_method 可做映射
         // - **freight_invoice**：运费是否开票（1=不支持，2=支持）
-        // - **freight_name**：运费开票名称（freight_invoice=2 时必填）
+        // - **freight_name**：运费开票名称（允许为空，开票行默认「运费」）
         // - **apply_type**：开票申请方式（1=结算页，2=已支付订单）
         // - **invoice_open_term**：可开票期限（月，0为不限制）
         // - **special_invoice**：专用发票展示（1=企业抬头可选，2=不可选）

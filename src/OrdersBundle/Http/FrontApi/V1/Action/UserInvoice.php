@@ -170,7 +170,7 @@ class UserInvoice extends Controller
         ];
         $errorMessage = validator_params($data, $rules);
         if ($errorMessage) {
-            throw new ResourceException(trans('OrdersBundle/Order.invoice_update_error', ['errorMessage' => $errorMessage]));
+            throw new ResourceException(trans('OrdersBundle/Order.invoice_update_error', ['$errorMessage' => $errorMessage]));
         }
         $data['user_id'] = $userId;
         $invoiceDetail = $this->invoiceService->getInvoiceDetail($data['invoice_id'], $authInfo['company_id']);
@@ -322,7 +322,7 @@ class UserInvoice extends Controller
         // - **invoice_method**：开票渠道（offline=线下，online=线上）
         // - **channel**：开票渠道（1=线下，2=线上），与 invoice_method 可做映射
         // - **freight_invoice**：运费是否开票（1=不支持，2=支持）
-        // - **freight_name**：运费开票名称（freight_invoice=2 时必填）
+        // - **freight_name**：运费开票名称（允许为空，开票行默认「运费」；ECX-10652）
         // - **apply_type**：开票申请方式（1=结算页，2=已支付订单）
         // - **invoice_open_term**：可开票期限（月，0为不限制）
         // - **special_invoice**：专用发票展示（1=企业抬头可选，2=不可选）
@@ -336,7 +336,8 @@ class UserInvoice extends Controller
             'invoice_method' => ['required|in:offline,online', '开票渠道必填'],
             'channel' => ['required|in:1,2', '开票渠道必填'],
             'freight_invoice' => ['required|in:1,2', '运费是否开票必填'],
-            'freight_name' => ['required_if:freight_invoice,2', '运费开票名称必填'],
+            // freight_name：允许为空，保留规则键以便写入 Redis
+            'freight_name' => ['nullable|string', ''],
             'apply_type' => ['required|in:1,2', '开票申请方式必填'],
             'invoice_open_term' => ['required|integer|min:0', '可开票期限最小为0的整数'],
             'special_invoice' => ['required|in:1,2', '专用发票展示必填'],
@@ -347,7 +348,7 @@ class UserInvoice extends Controller
         app('log')->info(__FUNCTION__.':'.__LINE__.':rules:'.json_encode($rules));
         $errorMessage = validator_params($data, $rules);
         if ($errorMessage) {
-            throw new ResourceException(trans('OrdersBundle/Order.invoice_config_error', ['errorMessage' => $errorMessage]));
+            throw new ResourceException(trans('OrdersBundle/Order.invoice_config_error', ['$errorMessage' => $errorMessage]));
         }
 
         //只取data中 rule 里面的字段到 dataInvoiceSetting 不使用 array_intersect_key 和 array_flip

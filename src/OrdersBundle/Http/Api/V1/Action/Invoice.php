@@ -331,36 +331,14 @@ class Invoice extends Controller
         $companyId  = app('auth')->user()->get('company_id');
 
         $data = $request->all();
-        // 验证参数
-        // - **invoice_status**：是否启用开票功能（true/false）
-        // - **invoice_limit**：开票维度（item=SKU维度，order=订单维度）
-        // - **invoice_method**：开票渠道（offline=线下，online=线上）
-        // - **channel**：开票渠道（1=线下，2=线上），与 invoice_method 可做映射
-        // - **freight_invoice**：运费是否开票（1=不支持，2=支持）
-        // - **freight_name**：运费开票名称（freight_invoice=2 时必填）
-        // - **apply_type**：开票申请方式（1=结算页，2=已支付订单）
-        // - **invoice_open_term**：可开票期限（月，0为不限制）
-        // - **special_invoice**：专用发票展示（1=企业抬头可选，2=不可选）
-        // - **apply_node**：申请开票节点（1=确认收货，2=过售后期）
+        // 验证参数见 SettingService::getAdminInvoiceSettingRules()
+        // freight_name：允许为空（开票行默认「运费」），与 ECX-10652 / Java 对齐
 
-        $rules = [
-            'invoice_status' => ['required|in:1,0', '是否启用开票功能必填'],
-            'invoice_limit' => ['required|in:item,order', '开票维度必填'],
-            'invoice_method' => ['required|in:offline,online', '开票渠道必填'],
-            // 'channel' => ['required|in:1,2', '开票渠道必填'],
-            'freight_invoice' => ['required|in:1,2', '运费是否开票必填'],
-            'freight_name' => ['required_if:freight_invoice,2', '运费开票名称必填'],
-            'apply_type' => ['required|in:1,2', '开票申请方式必填'],
-            'invoice_open_term' => ['required|integer|min:0', '可开票期限应为正整数'],
-            'special_invoice' => ['required|in:1,2', '专用发票展示必填'],
-            'apply_node' => ['required|in:1,2', '申请开票节点必填'],
-            'invoice_seller_type' => ['required|in:1,2', '开票方类型必填'],
-            'freight_tax_rate' => ['required|numeric|min:0|max:100', '运费税率最小为0，最大为100的整数'],
-        ];
+        $rules = SettingService::getAdminInvoiceSettingRules();
 
         $errorMessage = validator_params($data, $rules);
         if ($errorMessage) {
-            throw new ResourceException(trans('OrdersBundle/Order.invoice_config_error', ['errorMessage' => $errorMessage]));
+            throw new ResourceException(trans('OrdersBundle/Order.invoice_config_error', ['$errorMessage' => $errorMessage]));
         }
 
         //只取data中 rule 里面的字段到 dataInvoiceSetting 不使用 array_intersect_key 和 array_flip
