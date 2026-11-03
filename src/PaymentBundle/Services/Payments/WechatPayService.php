@@ -56,7 +56,7 @@ class WechatPayService implements Payment
         if ($redisData) {
             $redisData = json_decode($redisData, 1);
         }
-        if ($cert = $data['cert']) {
+        if ($cert = ($data['cert'] ?? null)) {
             if ($cert->getClientOriginalName() != 'apiclient_cert.pem') {
                 throw new BadRequestHttpException(trans('payment.cert_file_name_error'));
             }
@@ -66,7 +66,7 @@ class WechatPayService implements Payment
             $data['cert'] = $redisData['cert'] ?? null;
         }
 
-        if ($certKey = $data['cert_key']) {
+        if ($certKey = ($data['cert_key'] ?? null)) {
             if ($certKey->getClientOriginalName() != 'apiclient_key.pem') {
                 throw new BadRequestHttpException(trans('payment.cert_key_file_name_error'));
             }

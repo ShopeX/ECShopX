@@ -219,6 +219,8 @@ class Payment extends Controller
             $config['public_key'] = $request->input('public_key');
             $config['private_key'] = $request->input('private_key');
             $config['is_open'] = $request->input('is_open', 'false') == 'true' ? 1 : 0;
+        } else {
+            throw new ResourceException(trans('payment.unsupported_payment_type') . ' ' . $payType);
         }
 
         $service = new PaymentsService($paymentsService);
@@ -327,6 +329,10 @@ class Payment extends Controller
             }
         } elseif ($request->input('pay_type') == 'bspay') {
             $paymentsService = new BsPayService();
+        } else {
+            throw new ResourceException(
+                trans('payment.unsupported_payment_type') . ' ' . (string) $request->input('pay_type')
+            );
         }
 
         $service = new PaymentsService($paymentsService);
