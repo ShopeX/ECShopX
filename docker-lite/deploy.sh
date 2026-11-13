@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Intentionally does NOT run: composer-install, npm-install, pnpm-install, or frontend build
-# Runtime: docker-lite/docker-compose.yml (app + mysql).
-# Redis is an existing server instance (REDIS_HOST). MySQL and optional app base images come from docker load of tar packages.
+# Runtime: docker-lite/docker-compose.yml (app + mysql + redis).
+# MySQL/Redis and optional app base images come from docker load of tar packages.
 
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 LITE_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
@@ -84,8 +84,8 @@ usage() {
   cat <<'EOF'
 Usage: ./deploy.sh --mode b2c|bbc [options]
 
-Loads MySQL/(optional) base image tars, then starts app+mysql via
-docker-lite/docker-compose.yml. Redis must already be running; set REDIS_HOST in images.env.
+Loads MySQL/Redis/(optional) base image tars, then starts app+mysql+redis via
+docker-lite/docker-compose.yml.
 App code is bind-mounted (not baked into the image).
 
 Options:
@@ -206,13 +206,9 @@ write_backend_env() {
   upsert_env_file "$env_file" "DB_DATABASE" "${MYSQL_DATABASE:-ecshopx}"
   upsert_env_file "$env_file" "DB_USERNAME" "${MYSQL_USER:-ecshopx}"
   upsert_env_file "$env_file" "DB_PASSWORD" "${MYSQL_PASSWORD:-ecshopx}"
-  if [ -z "${REDIS_HOST:-}" ]; then
-    release_log_error "images.env 未设置 REDIS_HOST（使用服务器上已有的 Redis，本编排不再启动 Redis）"
-    return 1
-  fi
-  upsert_env_file "$env_file" "REDIS_HOST" "$REDIS_HOST"
-  upsert_env_file "$env_file" "REDIS_PORT" "${REDIS_PORT:-6379}"
-  upsert_env_file "$env_file" "REDIS_PASSWORD" "${REDIS_PASSWORD:-}"
+  upsert_env_file "$env_file" "REDIS_HOST" "redis"
+  upsert_env_file "$env_file" "REDIS_PORT" "6379"
+  upsert_env_file "$env_file" "REDIS_PASSWORD" "${REDIS_PASSWORD:-redispassword}"
   upsert_env_file "$env_file" "REDIS_DATABASE" "0"
   upsert_env_file "$env_file" "DISK_DRIVER" "local"
   upsert_env_file "$env_file" "PRODUCT_MODEL" "$product_model"
@@ -631,7 +627,7 @@ main() {
   release_log_info "服务（docker compose -f docker-lite/docker-compose.yml）："
   release_log_info "  app    : $CONTAINER_NAME  (OpenResty/FPM/cron/queues/Nuxt)"
   release_log_info "  mysql  : $MYSQL_CONTAINER_NAME (宿主机端口 ${MYSQL_HOST_PORT:-3306})"
-  release_log_info "  redis  : ${REDIS_HOST}:${REDIS_PORT:-6379}（服务器上已有实例，本编排不启动）"
+  release_log_info "  redis  : ecshopx-redis (宿主机端口 ${REDIS_HOST_PORT:-6379})"
   release_log_info "对外端口: 管理后台 ${ADMIN_HOST_PORT:-8080} | H5 ${H5_HOST_PORT:-8081} | PC ${PC_HOST_PORT:-8082}"
   release_log_info "容器内代码挂载（宿主机解压根目录 → /data/httpd）："
   release_log_info "    /data/httpd/ECShopX"

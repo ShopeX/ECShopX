@@ -43,6 +43,18 @@ grep -Eq '8080:8080|ADMIN_HOST_PORT' "$COMPOSE" || {
   echo "FAIL compose must publish admin 8080"
   exit 1
 }
+grep -qE '^\s*redis:' "$COMPOSE" || {
+  echo "FAIL compose must define in-stack redis service"
+  exit 1
+}
+grep -q 'REDIS_HOST: redis' "$COMPOSE" || {
+  echo "FAIL compose app must set REDIS_HOST to redis"
+  exit 1
+}
+if grep -q '未设置 REDIS_HOST' "$DEPLOY"; then
+  echo "FAIL deploy.sh must not require external REDIS_HOST in images.env"
+  exit 1
+fi
 grep -q 'nuxt' "$SCRIPT_DIR/../../docker-lite/supervisord.d/app.ini" || {
   echo "FAIL app.ini must run nuxt"
   exit 1

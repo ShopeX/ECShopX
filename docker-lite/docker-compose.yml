@@ -1,5 +1,4 @@
-# Offline release stack: app (OpenResty + FPM + cron + queues + Nuxt) + mysql.
-# Redis is already running on the server; set REDIS_HOST in images.env.
+# Offline release stack: app (OpenResty + FPM + cron + queues + Nuxt) + mysql + redis.
 # Host parent dir → /data/httpd (four sibling projects).
 
 services:
@@ -29,6 +28,18 @@ services:
       retries: 30
       start_period: 20s
 
+  redis:
+    image: ${REDIS_IMAGE:-redis:7.0}
+    container_name: ecshopx-redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redispassword}"]
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    volumes:
+      - ecshopx_redis_data:/data
+    networks:
+      - ecshopx-net
+
   app:
     build:
       context: .
@@ -41,6 +52,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       TZ: Asia/Shanghai
       FPM_LISTEN: 127.0.0.1:9000
@@ -54,9 +67,9 @@ services:
       DB_DATABASE: ${MYSQL_DATABASE:-ecshopx}
       DB_USERNAME: ${MYSQL_USER:-ecshopx}
       DB_PASSWORD: ${MYSQL_PASSWORD:-ecshopx}
-      REDIS_HOST: ${REDIS_HOST:?set REDIS_HOST in images.env}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redispassword}
       REDIS_DATABASE: "0"
       NUXT_API_BASE: http://127.0.0.1:8090/api/h5app
       NUXT_INTERNAL_API_BASE: http://127.0.0.1:8090/api/h5app
@@ -77,6 +90,8 @@ services:
 volumes:
   ecshopx_mysql_data:
     name: ecshopx-mysql-data
+  ecshopx_redis_data:
+    name: ecshopx-redis-data
 
 networks:
   ecshopx-net:

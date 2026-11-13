@@ -59,4 +59,19 @@ FAKE_DOCKER_STATE="$TMP/docker-state" PATH="$FAKE_BIN:$PATH" \
 }
 echo "PASS ensure_image_pull_fallback"
 
+# TC-1: release_ensure_runtime_images must ensure REDIS_IMAGE (same path as MYSQL)
+FAKE_DOCKER_STATE="$TMP/docker-state-runtime"
+mkdir -p "$FAKE_DOCKER_STATE"
+PATH="$FAKE_BIN:$PATH" FAKE_DOCKER_STATE="$FAKE_DOCKER_STATE" \
+  release_ensure_runtime_images || {
+  echo "FAIL release_ensure_runtime_images should succeed"
+  exit 1
+}
+redis_state="$FAKE_DOCKER_STATE/ecshopx-redis_test"
+if [ ! -f "$redis_state" ]; then
+  echo "FAIL release_ensure_runtime_images should ensure REDIS_IMAGE (missing state $redis_state)"
+  exit 1
+fi
+echo "PASS ensure_runtime_images_redis"
+
 echo "PASS images_helpers"
