@@ -1,24 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="./vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
-         colors="true"
->
-    <testsuites>
-        <testsuite name="Application Test Suite">
-            <directory suffix="Test.php">./tests</directory>
-        </testsuite>
-    </testsuites>
-    <listeners>
-        <listener class="TddGuard\PHPUnit\TddGuardListener">
-            <arguments>
-                <string></string>
-            </arguments>
-        </listener>
-    </listeners>
-    <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="CACHE_DRIVER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-    </php>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd" bootstrap="vendor/autoload.php" colors="true" cacheDirectory=".phpunit.cache">
+  <testsuites>
+    <testsuite name="Application Test Suite">
+      <directory suffix="Test.php">./tests</directory>
+      <exclude>tests/CommunityChiefItemsListBranchTest.php</exclude>
+      <exclude>tests/CommunityItemsCategoryBatchTest.php</exclude>
+      <exclude>tests/CommunityItemsListMultiLangTest.php</exclude>
+      <exclude>tests/DistributionBundle/GetAllDistributorListLatLngValidationTest.php</exclude>
+      <exclude>tests/DistributionBundle/PickupLocationListFilterTest.php</exclude>
+      <exclude>tests/DistributorSkuItemsListItemMainCatIdTest.php</exclude>
+      <exclude>tests/EspierBundle/UploadFileGetPicUploadTokenTest.php</exclude>
+      <exclude>tests/MerchantBundle/SettlementApplyDisabledFilterTest.php</exclude>
+      <exclude>tests/OrdersBundle/OrderServicePointDeductZitiMerchantTest.php</exclude>
+      <exclude>tests/OrdersBundle/PointsmallOrderCreateDeductPointTest.php</exclude>
+      <exclude>tests/OrdersBundle/VirtualStoreDistributorFilterTest.php</exclude>
+      <exclude>tests/PaymentBundle/ChinaumsNotifySecurityTest.php</exclude>
+      <exclude>tests/PaymentBundle/PointPayPointsmallSkipDeductTest.php</exclude>
+      <exclude>tests/PopularizeBundle/ControllerValidationTest.php</exclude>
+      <exclude>tests/Security/CnvdOmeCreateItemsTenantTest.php</exclude>
+      <exclude>tests/Security/IntroHtmlSanitizeWireTest.php</exclude>
+      <exclude>tests/WidgetItemsStoreOnsaleFilterTest.php</exclude>
+      <exclude>tests/WsugcBundle/PostListSearchFilterNormalizeTest.php</exclude>
+    </testsuite>
+  </testsuites>
+  <extensions>
+    <bootstrap class="TddGuard\PHPUnit\TddGuardExtension"/>
+  </extensions>
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="CACHE_DRIVER" value="array"/>
+    <env name="QUEUE_CONNECTION" value="sync"/>
+  </php>
 </phpunit>

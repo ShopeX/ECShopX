@@ -342,7 +342,7 @@ class ArticleService
      * @param string $cacheKey 缓存键
      * @return array 处理结果
      */
-    public function formatAndSaveToStructuredArticle(array $data, string $cacheKey = null)
+    public function formatAndSaveToStructuredArticle(array $data, ?string $cacheKey = null)
     {
         try {
             // 从生成的内容中提取内容，避免保存整个data数组
@@ -948,7 +948,7 @@ class ArticleService
         array $imagePrompts = [], 
         bool $isMultiProduct = false, 
         int $productsCount = 1, 
-        string $cacheKey = null,
+        ?string $cacheKey = null,
         bool $isFromQueue = false
     ): array {
         // 标记日志来源

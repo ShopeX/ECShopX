@@ -1,11 +1,11 @@
-FROM registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.2.35-fpm-alpine3.24
+FROM registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.4.27-fpm-alpine3.24-v1.0
 
 ARG NODE_VERSION=16.20.2
 ARG NODE_DIST_BASE=https://nodejs.org/dist
 ARG NODE_MUSL_DIST_BASE=https://unofficial-builds.nodejs.org/download/release
 
 # 安装 MySQL、Redis、Nginx、Supervisor 和 Node.js
-# 基础镜像已包含 PHP 8.2 和 FPM，只需安装其他服务
+# 基础镜像已包含 PHP 8.4 和 FPM，只需安装其他服务
 RUN apk add --no-cache \
     # MySQL (MariaDB)
     mariadb \

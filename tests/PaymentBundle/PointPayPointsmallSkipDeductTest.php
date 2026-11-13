@@ -11,8 +11,6 @@ use PaymentBundle\Services\Payments\PointPayService;
  * 积分商城 PointPay 跳过二次扣减 — TC2（RED）
  * 计划：.tasks/plans/pointsmall-mix-pay-deduct-at-order.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class PointPayPointsmallSkipDeductTest extends \TestCase
 {

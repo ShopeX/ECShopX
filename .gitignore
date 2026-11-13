@@ -19,6 +19,7 @@ composer.lock
 !/storage/app/wechatPayment
 .php_cs.cache
 .phpunit.result.cache
+.phpunit.cache/
 .php-cs-fixer.cache
 !.php-cs-fixer.dist.php
 cghooks.lock

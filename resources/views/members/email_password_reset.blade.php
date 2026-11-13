@@ -7,7 +7,7 @@
 </head>
 <body style="margin:0;padding:24px;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#111111;">
     <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px 28px;box-sizing:border-box;">
-        <div style="text-align:left;font-size:16px;font-weight:600;margin-bottom:28px;">{{ e($brand) }}</div>
+        <div style="text-align:left;font-size:16px;font-weight:600;margin-bottom:28px;">{{ $brand }}</div>
         <h1 style="text-align:left;font-size:22px;font-weight:700;margin:0 0 20px;line-height:1.3;">{{ trans('MembersBundle/Members.email_password_reset_headline') }}</h1>
         <p style="text-align:left;font-size:16px;line-height:1.55;margin:0 0 28px;color:#333333;">{{ trans('MembersBundle/Members.email_password_reset_intro') }}</p>
         <div style="text-align:left;margin-bottom:28px;">

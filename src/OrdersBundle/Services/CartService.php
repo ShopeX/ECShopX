@@ -930,10 +930,7 @@ class CartService
                         }
                         $cartdata['num'] = $store;
                     } elseif ($cartType == 'shop_offline') {
-                        if (($cartdata['cart_id'] ?? 0) > 0) {
-                            $operatorCartRepository = app('registry')->getManager('default')->getRepository(OperatorCart::class);
-                            $operatorCartRepository->updateOneBy(['cart_id' => $cartdata['cart_id']], ['num' => $store]);
-                        }
+                        // 库存不足：仅内存按剩余库存参与计价，不回写购物车（对齐 Java PJ3174JF-133）
                         $cartdata['num'] = $store;
                     } elseif ($cartType == 'employee_purchase') {
                         if (($cartdata['cart_id'] ?? 0) > 0) {
@@ -966,9 +963,19 @@ class CartService
                     if ($store <= 0) {
                         $invalidCart[] = $cartdata;
                         continue;
-                    } else {
-                        $cartdata['num'] = 1;
-                        if (($cartdata['cart_id'] ?? 0) > 0) {
+                    }
+                    $cartdata['num'] = 1;
+                    if (($cartdata['cart_id'] ?? 0) > 0) {
+                        if ($cartType == 'shop_offline') {
+                            $operatorCartRepository = app('registry')->getManager('default')->getRepository(OperatorCart::class);
+                            $operatorCartRepository->updateOneBy(['cart_id' => $cartdata['cart_id']], ['num' => 1]);
+                        } elseif ($cartType == 'salesperson') {
+                            $salespersonCartRepository = app('registry')->getManager('default')->getRepository(SalespersonCart::class);
+                            $salespersonCartRepository->updateOneBy(['cart_id' => $cartdata['cart_id']], ['num' => 1]);
+                        } elseif ($cartType == 'employee_purchase') {
+                            $employeePurchaseCartRepository = app('registry')->getManager('default')->getRepository(EmployeePurchaseCart::class);
+                            $employeePurchaseCartRepository->updateOneBy(['cart_id' => $cartdata['cart_id']], ['num' => 1]);
+                        } else {
                             $this->entityRepository->updateOneBy(['cart_id' => $cartdata['cart_id']], ['num' => 1]);
                         }
                     }
@@ -1801,10 +1808,7 @@ class CartService
                         }
                         $cartdata['num'] = $store;
                     } elseif ($cartType == 'shop_offline') {
-                        if (($cartdata['cart_id'] ?? 0) > 0) {
-                            $operatorCartRepository = app('registry')->getManager('default')->getRepository(OperatorCart::class);
-                            $operatorCartRepository->updateOneBy(['cart_id' => $cartdata['cart_id']], ['num' => $store]);
-                        }
+                        // 库存不足：仅内存按剩余库存参与计价，不回写购物车（对齐 Java PJ3174JF-133）
                         $cartdata['num'] = $store;
                     } else {
                         $logisticsNum = intval($cartdata['num']) - intval($store);

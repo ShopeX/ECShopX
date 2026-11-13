@@ -15,8 +15,6 @@ use Mockery;
  * 商户入驻申请 — 列表 disabled 过滤 + 详情类型兜底 — TC1–TC5（RED/GREEN）
  * 计划：.tasks/plans/settlement-apply-disabled-filter.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class SettlementApplyDisabledFilterTest extends \TestCase
 {
@@ -147,11 +145,11 @@ class SettlementApplyDisabledFilterTest extends \TestCase
     /**
      * TC4 / AC4：merchant_type_id 为 '0' / null / '' 时走空类型分支。
      *
-     * @dataProvider invalidMerchantTypeIdProvider
      * #given 入驻申请 merchant_type_id 无效
      * #when getSettlementApplyDetail
      * #then 三类型名字段为空串，getTypeNameById 未调用
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidMerchantTypeIdProvider')]
     public function testDetailWithInvalidMerchantTypeIdUsesEmptyTypeBranch($merchantTypeId): void
     {
         $settingMock = Mockery::mock('overload:MerchantBundle\Services\MerchantSettingService');

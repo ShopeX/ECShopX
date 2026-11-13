@@ -42,10 +42,28 @@ abstract class Job implements ShouldQueue
 
     public function __destruct()
     {
-        foreach (config('doctrine.managers') as $mangerName => $v) {
-            app('registry')->getManager($mangerName)->getConfiguration()->getResultCacheImpl()->flushAll();
-            app('registry')->getManager($mangerName)->getConfiguration()->getQueryCacheImpl()->flushAll();
-            app('registry')->getManager($mangerName)->clear();
+        // 析构阶段容器/facade 可能已被销毁（例如 PHPUnit 的 clearResolvedInstances()
+        // 会释放对象并触发本析构），此时再调 config()/app() 会抛
+        // BindingResolutionException: Target class [config] does not exist。
+        // 析构函数不能抛异常，这里做容错处理。
+        try {
+            $app = app();
+            if (!$app instanceof \Illuminate\Contracts\Container\Container || !$app->bound('config') || !$app->bound('registry')) {
+                return;
+            }
+
+            $managers = config('doctrine.managers');
+            if (!is_array($managers)) {
+                return;
+            }
+
+            foreach ($managers as $mangerName => $v) {
+                $app['registry']->getManager($mangerName)->getConfiguration()->getResultCacheImpl()->flushAll();
+                $app['registry']->getManager($mangerName)->getConfiguration()->getQueryCacheImpl()->flushAll();
+                $app['registry']->getManager($mangerName)->clear();
+            }
+        } catch (\Throwable $e) {
+            // 忽略：析构期间的异常不应影响主流程
         }
     }
 }

@@ -189,7 +189,7 @@ class TemplateService
      * @param string $configName 对应的配置名称
      * @param array $params 配置的参数
      */
-    public function setTemplateConf($companyId, $templateName, $pageName = 'index', $configName, $params, $version = 'v1.0.0', $prk = 0, $sortBy = 0)
+    public function setTemplateConf($companyId, $templateName, $pageName, $configName, $params, $version = 'v1.0.0', $prk = 0, $sortBy = 0)
     {
         $this->isValidWxappTemplate($templateName);
         // entityRepository = app('registry')->getManager('default')->getRepository(WeappSetting::class)

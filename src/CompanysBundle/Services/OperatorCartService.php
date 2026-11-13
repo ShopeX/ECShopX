@@ -255,6 +255,8 @@ class OperatorCartService
         if ($isSubmit && $itemList['total_count'] <= 0) {
             throw new ResourceException('商品已失效');
         } elseif ($itemList['total_count'] <= 0) {
+            $this->purgeOperatorCartRows($cartlist);
+
             return ['invalid_cart' => [], 'valid_cart' => []];
         }
 
@@ -267,6 +269,8 @@ class OperatorCartService
         if ($isSubmit && !$itemList) {
             throw new ResourceException('购物车商品已失效或不存在');
         } elseif (!$itemList) {
+            $this->purgeOperatorCartRows($cartlist);
+
             return ['invalid_cart' => [], 'valid_cart' => []];
         }
 
@@ -298,10 +302,11 @@ class OperatorCartService
         //处理会员价
         $cartData['valid_cart'] = $cartService->getCartItemUserGradePrice($cartData['valid_cart'], $companyId, $userId);
         $cartData['valid_cart'] = $cartService->getTotalCart($cartData['valid_cart'], $cartTypeService, $distributorId, $companyId);
-        if ($cartData['invalid_cart']) {
+        if (!empty($cartData['invalid_cart'])) {
             $cartIds = array_column($cartData['invalid_cart'], 'cart_id');
-            $this->entityRepository->updateBy(['cart_id' => $cartIds], ['is_checked' => 0]);
+            $this->purgeOperatorCartRowsByCartIds($cartIds);
         }
+
         return $cartData;
     }
 
@@ -406,13 +411,6 @@ class OperatorCartService
         }
         $cartData['valid_cart'] = $cartService->getCartItemUserGradePrice($cartData['valid_cart'], $companyId, $userId);
         $cartData['valid_cart'] = $cartService->getTotalCart($cartData['valid_cart'], $cartTypeService, $distributorId, $companyId);
-        if ($cartData['invalid_cart']) {
-            $cartIds = array_values(array_filter(array_column($cartData['invalid_cart'], 'cart_id')));
-            if ($cartIds) {
-                $this->entityRepository->updateBy(['cart_id' => $cartIds], ['is_checked' => 0]);
-            }
-        }
-
         return $cartData;
     }
 
@@ -440,5 +438,29 @@ class OperatorCartService
         $platformStock = $itemsService->resolvePlatformStoreForSkuRow($itemInfo);
         $shopStock = $this->resolveShopStockForFastBuy($rowFilter, $itemInfo);
         OperatorFastBuyStockValidator::validate($shopStock, $platformStock, (int) $params['num']);
+    }
+
+    /**
+     * @param array<int|string, array<string, mixed>> $cartlist cart_id 键或连续列表
+     */
+    private function purgeOperatorCartRows(array $cartlist): void
+    {
+        $rows = array_values($cartlist);
+        $cartIds = array_column($rows, 'cart_id');
+        $this->purgeOperatorCartRowsByCartIds($cartIds);
+    }
+
+    /**
+     * @param list<int|string|null> $cartIds
+     */
+    private function purgeOperatorCartRowsByCartIds(array $cartIds): void
+    {
+        foreach ($cartIds as $cartId) {
+            $cartId = (int) $cartId;
+            if ($cartId <= 0) {
+                continue;
+            }
+            $this->entityRepository->deleteBy(['cart_id' => $cartId]);
+        }
     }
 }

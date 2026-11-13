@@ -451,7 +451,7 @@ class NormalOrderExportService implements ExportFileInterface
         return $title;
     }
 
-    public function getLists($filter, $totalCount = 10000, $datapassBlock)
+    public function getLists($filter, $totalCount, $datapassBlock)
     {
         $limit = 2000;
         $fileNum = ceil($totalCount / $limit);
@@ -759,7 +759,7 @@ class NormalOrderExportService implements ExportFileInterface
         }
     }
 
-    public function getListsBak($filter, $totalCount = 10000, $datapassBlock)
+    public function getListsBak($filter, $totalCount, $datapassBlock)
     {
         $limit = 2000;
         $fileNum = ceil($totalCount / $limit);
@@ -1007,7 +1007,7 @@ class NormalOrderExportService implements ExportFileInterface
             yield $orderList;
         }
     }
-    public function getSupplierLists($filter, $totalCount = 10000, $datapassBlock)
+    public function getSupplierLists($filter, $totalCount, $datapassBlock)
     {
         $limit = 2000;
         $fileNum = ceil($totalCount / $limit);
@@ -1269,7 +1269,7 @@ class NormalOrderExportService implements ExportFileInterface
         }
     }
 
-    public function getSupplierListsBak($filter, $totalCount = 10000, $datapassBlock)
+    public function getSupplierListsBak($filter, $totalCount, $datapassBlock)
     {
         $limit = 2000;
         $fileNum = ceil($totalCount / $limit);
@@ -1502,7 +1502,7 @@ class NormalOrderExportService implements ExportFileInterface
         }
     }
 
-    public function getPointsmallLists($filter, $totalCount = 10000, $datapassBlock)
+    public function getPointsmallLists($filter, $totalCount, $datapassBlock)
     {
         $limit = 2000;
         $fileNum = ceil($totalCount / $limit);

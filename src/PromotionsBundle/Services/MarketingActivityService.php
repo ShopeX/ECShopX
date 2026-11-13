@@ -1405,7 +1405,7 @@ class MarketingActivityService
     /**
      * 获取指定当前或者指定时间范围内有效的会员优先购活动（购物车应用了）
      */
-    public function getValiMemberpreferenceByItemId($companyId, $itemId, $userId = null, $marketingId = null, $goodsId = null, &$msg)
+    public function getValiMemberpreferenceByItemId($companyId, $itemId, $userId, $marketingId, $goodsId, &$msg)
     {
         $marketingType = ['member_preference'];
         //获取当前有效的活动列表

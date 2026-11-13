@@ -143,7 +143,6 @@ release_ensure_runtime_images() {
 
   release_ensure_image "${APP_BASE_IMAGE:?APP_BASE_IMAGE required in images.env}" "${APP_BASE_IMAGE_TAR_URL:-}" || return 1
   release_ensure_image "${MYSQL_IMAGE:?MYSQL_IMAGE required in images.env}" "${MYSQL_IMAGE_TAR_URL:-}" || return 1
-  release_ensure_image "${REDIS_IMAGE:?REDIS_IMAGE required in images.env}" "${REDIS_IMAGE_TAR_URL:-}" || return 1
 }
 
 # Download image tars into docker-lite/images/ (used by pack.sh --with-images)
@@ -154,7 +153,7 @@ release_prefetch_image_tars() {
   mkdir -p "$images_dir"
 
   local url name
-  for url in "${APP_BASE_IMAGE_TAR_URL:-}" "${MYSQL_IMAGE_TAR_URL:-}" "${REDIS_IMAGE_TAR_URL:-}"; do
+  for url in "${APP_BASE_IMAGE_TAR_URL:-}" "${MYSQL_IMAGE_TAR_URL:-}"; do
     if [ -z "$url" ]; then
       continue
     fi

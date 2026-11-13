@@ -43,22 +43,31 @@ class SmsSignSyncServiceTest extends TestCase
         $page2Names = array_map(static fn (int $i): string => 'SignPage2_' . $i, range(1, 10));
         $allNames = array_merge($page1Names, $page2Names);
 
+        $page1Result = [
+            'Code' => 'OK',
+            'TotalCount' => 60,
+            'SmsSignList' => array_map(static fn (string $name): array => ['SignName' => $name], $page1Names),
+        ];
+        $page2Result = [
+            'Code' => 'OK',
+            'TotalCount' => 60,
+            'SmsSignList' => array_map(static fn (string $name): array => ['SignName' => $name], $page2Names),
+        ];
+
+        $expectedQueries = [
+            [[1, 50], $page1Result],
+            [[2, 50], $page2Result],
+        ];
+
         $client = $this->createMock(AliyunSmsClient::class);
         $client->expects($this->exactly(2))
             ->method('querySmsSignList')
-            ->withConsecutive([1, 50], [2, 50])
-            ->willReturnOnConsecutiveCalls(
-                [
-                    'Code' => 'OK',
-                    'TotalCount' => 60,
-                    'SmsSignList' => array_map(static fn (string $name): array => ['SignName' => $name], $page1Names),
-                ],
-                [
-                    'Code' => 'OK',
-                    'TotalCount' => 60,
-                    'SmsSignList' => array_map(static fn (string $name): array => ['SignName' => $name], $page2Names),
-                ]
-            );
+            ->willReturnCallback(function (int $page, int $pageSize) use (&$expectedQueries) {
+                [$expectedArgs, $result] = array_shift($expectedQueries);
+                $this->assertSame($expectedArgs, [$page, $pageSize]);
+
+                return $result;
+            });
 
         $getSmsSignMap = [];
         foreach ($allNames as $name) {

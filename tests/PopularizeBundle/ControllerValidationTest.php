@@ -17,8 +17,6 @@ use SalespersonBundle\Http\FrontApi\V1\Action\ShopSalespersonController;
  *
  * 使用 overload mock 隔离 BrokerageService，须独立进程避免与同 suite 其他用例类加载冲突。
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class ControllerValidationTest extends \TestCase
 {

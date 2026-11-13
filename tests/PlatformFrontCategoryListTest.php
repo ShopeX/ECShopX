@@ -10,7 +10,6 @@ use Illuminate\Http\Request;
 
 class PlatformFrontCategoryListTest extends TestCase
 {
-    /** @var ItemsCategoryService */
     private $service;
 
     protected function setUp(): void
@@ -24,8 +23,8 @@ class PlatformFrontCategoryListTest extends TestCase
     /**
      * TC-U1: Resolver matrix — resolveFrontCategoryListIsMainCategory + shouldFallbackFrontCategoryList
      *
-     * @dataProvider resolverMatrixProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('resolverMatrixProvider')]
     public function testResolveFrontCategoryListIsMainCategoryAndShouldFallbackMatrix(
         string $productModel,
         int $distributorId,
@@ -51,7 +50,7 @@ class PlatformFrontCategoryListTest extends TestCase
         $this->assertSame($expectedShouldFallback, $shouldFallback);
     }
 
-    public function resolverMatrixProvider(): array
+    public static function resolverMatrixProvider(): array
     {
         return [
             'platform distributor 0 request false' => ['platform', 0, false, true, false],

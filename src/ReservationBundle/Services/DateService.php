@@ -32,7 +32,7 @@ class DateService
         $startday = strtotime($year_start);
         if (intval(date('N', $startday)) != '1') {
             //$startday = strtotime("next monday", strtotime($year_start)); //获取年第一周的第一天日期(时间戳)
-            $w = strftime('%w', $startday);
+            $w = date('w', $startday);
             $startday = $startday - ($w - 1) * 86400;
         }
         $year_mondy = date("Y-m-d", $startday); //获取年第一周的第一天日期(日期字符串)

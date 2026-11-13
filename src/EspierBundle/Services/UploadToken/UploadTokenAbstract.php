@@ -36,7 +36,7 @@ class UploadTokenAbstract implements UploadTokenInterface
     protected $adapter;
     protected $fileType;
 
-    public function __construct(FilesystemAdapter $adapter = null, $fileType)
+    public function __construct(?FilesystemAdapter $adapter, $fileType)
     {
         $this->adapter = $adapter;
         $this->fileType = $fileType;

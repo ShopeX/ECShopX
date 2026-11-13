@@ -3,14 +3,11 @@
 use CommunityBundle\Entities\CommunityItems;
 use CommunityBundle\Repositories\CommunityItemsRepository;
 
-/**
- * @covers \CommunityBundle\Repositories\CommunityItemsRepository::joinItemsListForStandardStore
- */
+#[\PHPUnit\Framework\Attributes\CoversMethod(\CommunityBundle\Repositories\CommunityItemsRepository::class, 'joinItemsListForStandardStore')]
 final class CommunityItemsStandardStoreJoinTest extends TestCase
 {
     private const STORE_DISTRIBUTOR_ID = 306;
 
-    /** @var array<int, mixed> */
     private array $capturedAndWheres = [];
 
     /**

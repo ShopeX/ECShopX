@@ -13,9 +13,7 @@ use EmployeePurchaseBundle\Repositories\OrdersRelActivityRepository;
 use EmployeePurchaseBundle\Services\ActivityEnterpriseBehaviorLogService;
 use OrdersBundle\Services\OrderAssociationService;
 
-/**
- * @covers \EmployeePurchaseBundle\Services\ActivityEnterpriseBehaviorLogService::recordEmployeePurchaseOrderPaid
- */
+#[\PHPUnit\Framework\Attributes\CoversMethod(\EmployeePurchaseBundle\Services\ActivityEnterpriseBehaviorLogService::class, 'recordEmployeePurchaseOrderPaid')]
 final class ActivityEnterpriseBehaviorLogServiceRecordEmployeePurchaseOrderPaidTest extends TestCase
 {
     protected function tearDown(): void

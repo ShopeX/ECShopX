@@ -14,8 +14,6 @@ use Mockery;
  * TC-LL-08：getAllDistributorList lat/lng 校验与 list 接口一致。
  * 计划：.tasks/plans/fix-distributor-lat-lng-sqli.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class GetAllDistributorListLatLngValidationTest extends \TestCase
 {

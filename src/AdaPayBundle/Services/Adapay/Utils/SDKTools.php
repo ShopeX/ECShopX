@@ -51,7 +51,7 @@ class SDKTools extends AdaPay
         return self::$instance;
     }
 
-    public function post($params = [], $endpoint)
+    public function post($params, $endpoint)
     {
         $request_params = $this->do_empty_data($params);
         $req_url = self::$gateWayUrl . $endpoint;
@@ -59,7 +59,7 @@ class SDKTools extends AdaPay
         return $this->ada_request->curl_request($req_url, $request_params, $header, $is_json = true);
     }
 
-    public function get($params = [], $endpoint)
+    public function get($params, $endpoint)
     {
         ksort($params);
         $request_params = $this->do_empty_data($params);

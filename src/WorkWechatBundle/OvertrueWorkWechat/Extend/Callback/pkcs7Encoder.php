@@ -90,11 +90,7 @@ class Prpcrypt
             $pkc_encoder = new PKCS7Encoder;
             $text = $pkc_encoder->encode($text);
             //加密
-            if (function_exists('openssl_encrypt')) {
-                $encrypted = openssl_encrypt($text, 'AES-256-CBC', $this->key, OPENSSL_ZERO_PADDING, $this->iv);
-            } else {
-                $encrypted = mcrypt_encrypt(MCRYPT_RIJNDAEL_128, $this->key, base64_decode($text), MCRYPT_MODE_CBC, $this->iv);
-            }
+            $encrypted = openssl_encrypt($text, 'AES-256-CBC', $this->key, OPENSSL_ZERO_PADDING, $this->iv);
             return array(ErrorCode::$OK, $encrypted);
         } catch (Exception $e) {
             print $e;
@@ -113,11 +109,7 @@ class Prpcrypt
     {
         try {
             //解密
-            if (function_exists('openssl_decrypt')) {
-                $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $this->key, OPENSSL_ZERO_PADDING, $this->iv);
-            } else {
-                $decrypted = mcrypt_decrypt(MCRYPT_RIJNDAEL_128, $this->key, base64_decode($encrypted), MCRYPT_MODE_CBC, $this->iv);
-            }
+            $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $this->key, OPENSSL_ZERO_PADDING, $this->iv);
         } catch (Exception $e) {
             return array(ErrorCode::$DecryptAESError, null);
         }

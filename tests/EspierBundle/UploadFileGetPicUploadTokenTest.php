@@ -15,8 +15,6 @@ use Mockery;
  * UploadFile::getPicUploadToken — TC-01, TC-02, TC-03, TC-05（RED/GREEN）
  * 计划：.tasks/plans/merchant-h5-image-upload-token.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class UploadFileGetPicUploadTokenTest extends \TestCase
 {

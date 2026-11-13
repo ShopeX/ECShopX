@@ -8,8 +8,6 @@ use Illuminate\Http\Request;
  * H5 widget/items 门店上架过滤 — TC-H1…TC-X1
  * 计划：.tasks/plans/widget-items-store-onsale-filter.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 final class WidgetItemsStoreOnsaleFilterTest extends TestCase
 {
@@ -236,9 +234,9 @@ final class WidgetItemsStoreOnsaleFilterTest extends TestCase
     /**
      * TC-M1 / A-M1：standard + 店>0 + 代表性 data_type → 均注入 is_can_sale。
      *
-     * @dataProvider representativeDataTypesProvider
      * @param array<string, mixed> $paramsOverride
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('representativeDataTypesProvider')]
     public function testTcM1RepresentativeDataTypesInjectIsCanSale(string $dataType, array $paramsOverride): void
     {
         $this->bindRegistryMock();
@@ -483,6 +481,5 @@ PHP
  */
 final class WidgetItemsStoreOnsaleFilterTestActivitiesRepoHolder
 {
-    /** @var \Mockery\MockInterface|null */
     public static $repo;
 }

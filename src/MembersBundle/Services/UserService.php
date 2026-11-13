@@ -27,7 +27,7 @@ class UserService
     /**
      * UserService 构造函数.
      */
-    public function __construct(UserInterface $userInterface = null)
+    public function __construct(?UserInterface $userInterface = null)
     {
         $this->userInterface = $userInterface;
     }

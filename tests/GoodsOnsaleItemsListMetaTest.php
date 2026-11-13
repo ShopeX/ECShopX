@@ -7,7 +7,7 @@
 use DistributionBundle\Services\DistributorService;
 use GoodsBundle\Services\ItemsService;
 
-class GoodsOnsaleItemsListMetaTest extends \PHPUnit\Framework\TestCase
+class GoodsOnsaleItemsListMetaTest extends TestCase
 {
     /**
      * TC-API-01：开启云仓可购买时 inject platform_store。

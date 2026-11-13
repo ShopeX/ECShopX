@@ -266,7 +266,6 @@ class IcbcPayService extends IcbcPayApiService implements Payment
         $publickey = openssl_pkey_get_public($this->formatPublicKey($paymentSetting['public_key']));// 加载公钥
 
         $verify = openssl_verify($sign_str, $signature, $publickey, OPENSSL_ALGO_SHA256);
-        openssl_free_key($publickey);
         if (!$verify) {
             $errMsg = '验签错误';
             // app('log')->error('LitePosNotify_$req_response => ' . $req_response[1]);
@@ -298,7 +297,6 @@ class IcbcPayService extends IcbcPayApiService implements Payment
         //对请求体进行RSA加密  获取签名
         $privateKey = openssl_get_privatekey($this->formatPrivateKey($paymentSetting['private_key']));
         openssl_sign($sign_body, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-        openssl_free_key($privateKey);
         $sign = base64_encode($signature); // 对签名结果进行base64编码
         $res['sign'] = $sign;
         return json_encode($res,JSON_UNESCAPED_UNICODE);

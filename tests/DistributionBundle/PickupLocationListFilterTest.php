@@ -13,8 +13,6 @@ use Mockery;
  * 店铺端自提点列表 filter 组装 — TC1–TC6（RED/GREEN）
  * 计划：.tasks/plans/pickuplocation-list-shop-rel.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class PickupLocationListFilterTest extends \TestCase
 {

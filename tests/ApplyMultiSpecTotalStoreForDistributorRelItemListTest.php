@@ -2,9 +2,7 @@
 
 use DistributionBundle\Services\DistributorItemsService;
 
-/**
- * @covers \DistributionBundle\Services\DistributorItemsService::applyMultiSpecTotalStoreForDistributorRelItemList
- */
+#[\PHPUnit\Framework\Attributes\CoversMethod(\DistributionBundle\Services\DistributorItemsService::class, 'applyMultiSpecTotalStoreForDistributorRelItemList')]
 final class ApplyMultiSpecTotalStoreForDistributorRelItemListTest extends TestCase
 {
     public function testOnlyDefaultSkuRowShowsAggregatedStore(): void

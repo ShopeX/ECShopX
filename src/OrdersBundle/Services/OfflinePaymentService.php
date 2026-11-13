@@ -199,7 +199,7 @@ class OfflinePaymentService
     /**
      * 审核
      */
-    public function doCheck($params = [], $operater)
+    public function doCheck($params, $operater)
     {
         $id = $params['id'];
         $rs = $this->repository->getInfoById($id);
@@ -226,7 +226,7 @@ class OfflinePaymentService
     }
 
     //订单更新成已支付状态
-    public function doConfirm($params = [], $operater)
+    public function doConfirm($params, $operater)
     {
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
@@ -287,7 +287,7 @@ class OfflinePaymentService
     }
 
     //更改审核状态，为已拒绝
-    public function doRefuse($params = [], $operater)
+    public function doRefuse($params, $operater)
     {
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();

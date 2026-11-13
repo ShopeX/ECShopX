@@ -131,7 +131,7 @@ class Coupon extends Controller
      * @param  [type] $companyId [description]
      * @return [type]            [description]
      */
-    private function __getCardInfo($templateCode, $cardRuleCode = '', $companyId, $params)
+    private function __getCardInfo($templateCode, $cardRuleCode, $companyId, $params)
     {
         $discountCardService = new KaquanService(new CardService());
         $filter['card_code'] = $templateCode;

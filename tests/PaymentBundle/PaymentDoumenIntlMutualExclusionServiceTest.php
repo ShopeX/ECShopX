@@ -10,10 +10,8 @@ class PaymentDoumenIntlMutualExclusionServiceTest extends \TestCase
 {
     private const COMPANY_ID = 1001;
 
-    /** @var array<string, string> */
     private array $bucket = [];
 
-    /** @var list<array{0: string, 1: string}> */
     private array $setCalls = [];
 
     protected function setUp(): void
@@ -121,10 +119,10 @@ class PaymentDoumenIntlMutualExclusionServiceTest extends \TestCase
     /**
      * TC-4：9 渠道各自已开 → 关值类型与字面量符合契约（strict）。
      *
-     * @dataProvider tc4ChannelProvider
      *
      * @param  bool|int|string  $closedValue
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('tc4ChannelProvider')]
     public function testTc4EachChannelClosedValueMatchesContract(
         string $redisKey,
         $closedValue,

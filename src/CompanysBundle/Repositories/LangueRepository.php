@@ -217,7 +217,7 @@ class LangueRepository
         return $info;
     }
 
-    public function listsLangue($filter, $cols="*", $page, $pageSize, $orderBy)
+    public function listsLangue($filter, $cols, $page, $pageSize, $orderBy)
     {
         $filter = $this->filterLang($filter);
         $criteria = Criteria::create();

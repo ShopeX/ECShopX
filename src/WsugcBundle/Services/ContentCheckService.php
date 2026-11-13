@@ -67,7 +67,7 @@ class ContentCheckService
      * @param [string] $text
      * @return array
      */
-    function msgCheck($text = "", $open_id)
+    function msgCheck($text, $open_id)
     {
         $settingService = new SettingService();
         $enable = $settingService->getSetting($this->companyId, 'contentCheck_enable');
@@ -128,7 +128,7 @@ class ContentCheckService
      * @param [string] $text
      * @return array
      */
-    function mediaCheck($text = "", $open_id)
+    function mediaCheck($text, $open_id)
     {
         $trace_id = '';
         $settingService = new SettingService();

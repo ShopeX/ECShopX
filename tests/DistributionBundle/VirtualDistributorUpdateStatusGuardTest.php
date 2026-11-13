@@ -7,14 +7,13 @@ namespace Tests\DistributionBundle;
 use DistributionBundle\Services\VirtualDistributorUpdateStatusGuard;
 use Dingo\Api\Exception\StoreResourceFailedException;
 
-/** @see .tasks/plans/shuyun-virtual-shop-open-sync.md V-STA-01、API-01V（多字段 PUT 下 has/is_valid 意图与原始取值） */
 class VirtualDistributorUpdateStatusGuardTest extends \TestCase
 {
     /**
-     * @dataProvider enabledSemanticProvider
      *
      * @param  mixed  $value
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('enabledSemanticProvider')]
     public function testIsEnabledSemanticAcceptsTrueOneAndStrings($value): void
     {
         $this->assertTrue(VirtualDistributorUpdateStatusGuard::isEnabledSemanticIsValidValue($value));
@@ -33,10 +32,10 @@ class VirtualDistributorUpdateStatusGuardTest extends \TestCase
     }
 
     /**
-     * @dataProvider nonEnabledSemanticProvider
      *
      * @param  mixed  $value
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('nonEnabledSemanticProvider')]
     public function testIsEnabledSemanticRejectsNonEnabled($value): void
     {
         $this->assertFalse(VirtualDistributorUpdateStatusGuard::isEnabledSemanticIsValidValue($value));

@@ -3,12 +3,7 @@
 use DistributionBundle\Services\DistributorItemsService;
 use GoodsBundle\Services\MultiLang\MultiLangService;
 
-/**
- * @covers \DistributionBundle\Services\DistributorItemsService::getDistributorSkuItemsList
- *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
- */
+#[\PHPUnit\Framework\Attributes\CoversMethod(\DistributionBundle\Services\DistributorItemsService::class, 'getDistributorSkuItemsList')]
 final class DistributorSkuItemsListItemMainCatIdTest extends TestCase
 {
     protected function tearDown(): void

@@ -137,7 +137,7 @@ class WorkWechatService
      * @param array $params
      * @return array|mixed
      */
-    public function saveWorkWechatConfig($companyId = null, array $params)
+    public function saveWorkWechatConfig($companyId, array $params)
     {
         // KEY: U2hvcEV4
         $rules = [

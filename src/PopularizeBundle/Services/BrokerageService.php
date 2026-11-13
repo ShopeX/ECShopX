@@ -735,13 +735,10 @@ class BrokerageService
 
         $countBrolage = $conn->executeQuery($sql_total . $countSql, $bindParams, $types)->fetch();
 
-        $listBindParams = $bindParams;
-        $listBindParams['offset'] = $start;
-        $listBindParams['limit'] = $limit;
-        $listSql = $countSql . " limit :offset , :limit";
+        $listSql = $countSql . " limit {$start} , {$limit}";
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-countSql:". json_encode($listSql));
 
-        $listBrokerage = $conn->executeQuery($sql_cls . $listSql, $listBindParams, $types)->fetchAll();
+        $listBrokerage = $conn->executeQuery($sql_cls . $listSql, $bindParams, $types)->fetchAll();
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listBrokerage:". json_encode($sql_cls . $listSql));
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listBrokerage:". json_encode($listBrokerage));
         // 统计推广员增加人数
@@ -984,11 +981,8 @@ class BrokerageService
         $countSql .= $sqlGroupBy;
         $countSql .= " order by rebate_sum desc ";
 
-        $listBindParams = $bindParams;
-        $listBindParams['offset'] = $start;
-        $listBindParams['limit'] = $limit;
-        $countSql .= " limit :offset , :limit  ";
-        $countListBrolage = $conn->executeQuery($sql_sum . $countSql, $listBindParams, $types)->fetchAll();
+        $countSql .= " limit {$start} , {$limit}  ";
+        $countListBrolage = $conn->executeQuery($sql_sum . $countSql, $bindParams, $types)->fetchAll();
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-sql_sum:". json_encode( $sql_sum . $countSql));
 
         $salesperson_id_arr = array_column($countListBrolage, 'salesperson_id');

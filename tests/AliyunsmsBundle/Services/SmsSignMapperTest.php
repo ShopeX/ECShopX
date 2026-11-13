@@ -9,7 +9,6 @@ use AliyunsmsBundle\Services\SmsSignMapper;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
-/** @see .tasks/plans/aliyun-sms-sign-sync.md TC-01, A12 */
 class SmsSignMapperTest extends TestCase
 {
     public function testMapAuditStatusInitToZero(): void
@@ -131,10 +130,10 @@ class SmsSignMapperTest extends TestCase
     }
 
     /**
-     * @dataProvider thirdPartyTruthyProvider
      *
      * @param mixed $input
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('thirdPartyTruthyProvider')]
     public function testNormalizeThirdPartyTruthy($input): void
     {
         // #given
@@ -158,10 +157,10 @@ class SmsSignMapperTest extends TestCase
     }
 
     /**
-     * @dataProvider thirdPartyFalsyProvider
      *
      * @param mixed $input
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('thirdPartyFalsyProvider')]
     public function testNormalizeThirdPartyFalsy($input): void
     {
         // #given

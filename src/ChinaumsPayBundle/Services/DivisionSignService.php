@@ -62,7 +62,7 @@ class DivisionSignService
         }
 
         $privateKey = $certs['pkey']; 
-        if (openssl_sign(utf8_encode($md5file), $binarySignature, $privateKey, OPENSSL_ALGO_SHA256)) {
+        if (openssl_sign(mb_convert_encoding($md5file, 'UTF-8', 'ISO-8859-1'), $binarySignature, $privateKey, OPENSSL_ALGO_SHA256)) {
             $localFile = $localFile.'.chk';
             $local = $local.'.chk';
             app('filesystem')->put($localFile, bin2hex($binarySignature));
@@ -102,10 +102,9 @@ class DivisionSignService
         $chkFile = str_replace("\r\n", "", file_get_contents($chkFileName) );
         $chkFile = str_replace(PHP_EOL, '', $chkFile);
         $signature = hex2bin($chkFile);
-        $ok = openssl_verify(utf8_encode($md5file), $signature, $pubKeyId, OPENSSL_ALGO_SHA256);
+        $ok = openssl_verify(mb_convert_encoding($md5file, 'UTF-8', 'ISO-8859-1'), $signature, $pubKeyId, OPENSSL_ALGO_SHA256);
 
         if ($ok == 1) {
-            openssl_free_key($pubKeyId);
             app('log')->info('回盘验签成功');
             return true;
         } else {

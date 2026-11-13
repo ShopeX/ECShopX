@@ -473,9 +473,9 @@ class TurntableService
      * @param $date string 日期Ymd
      * @return mixed
      */
-    public function getUserTodayJoinTimes($userId, $date = null,$actId)
+    public function getUserTodayJoinTimes($userId, $date, $actId)
     {
-        $key = self::getUserTodayJoinTimesKey($date,$actId);
+        $key = self::getUserTodayJoinTimesKey($date, $actId);
         $field = self::getUserTodayJoinTimesField($userId);
         return $this->redisConn->hget($key, $field);
     }
@@ -484,7 +484,7 @@ class TurntableService
      * 增加今日已抽奖次数
      * @param $userId
      */
-    public function addUserTodayJoinTimes($userId, $date = null,$actId)
+    public function addUserTodayJoinTimes($userId, $date, $actId)
     {
         $key = self::getUserTodayJoinTimesKey(null,$actId); //今日抽奖次数
         $field = self::getUserTodayJoinTimesField($userId);
@@ -542,7 +542,7 @@ class TurntableService
      * @param null $date
      * @return string
      */
-    private static function getUserTodayJoinTimesKey($date = null,$actId)
+    private static function getUserTodayJoinTimesKey($date, $actId)
     {
         if (!$date) {
             $date = date('Ymd');

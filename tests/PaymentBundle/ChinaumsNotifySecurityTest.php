@@ -232,8 +232,6 @@ class ChinaumsNotifySecurityTest extends \TestCase
      * #when 调用 ChinaumsNotify::handle
      * #then updateStatus(SUCCESS) 且返回 SUCCESS
      *
-     * @runTestsInSeparateProcesses
-     * @preserveGlobalState disabled
      */
     public function testTcCu08HappyPathUpdatesTradeToSuccess(): void
     {
@@ -288,8 +286,6 @@ class ChinaumsNotifySecurityTest extends \TestCase
      * #when 调用 ChinaumsNotify::handle
      * #then 返回 SUCCESS，不调用 updateStatus
      *
-     * @runTestsInSeparateProcesses
-     * @preserveGlobalState disabled
      */
     public function testTcCu10TradeRefundEarlyReturnWithoutUpdate(): void
     {

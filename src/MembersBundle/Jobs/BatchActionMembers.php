@@ -86,7 +86,7 @@ class BatchActionMembers extends Job
         return true;
     }
 
-    private function batchHandel($filter, $page = 0, $limit = 100, $actionType)
+    private function batchHandel($filter, $page, $limit, $actionType)
     {
         $params = $this->params;
         $companyId = $filter['company_id'];

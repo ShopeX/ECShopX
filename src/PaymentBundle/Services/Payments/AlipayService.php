@@ -70,7 +70,6 @@ class AlipayService implements Payment
         if ($keyResource === false) {
             throw new BadRequestHttpException('私钥内容无效');
         }
-        @openssl_free_key($keyResource);
     }
 
     /**

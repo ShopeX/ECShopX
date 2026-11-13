@@ -103,7 +103,7 @@ class WechatFansBindWechatTagRepository extends EntityRepository
         return $count[0];
     }
 
-    public function getList($cols = '*', $filter)
+    public function getList($cols, $filter)
     {
         $conn = app('registry')->getConnection('default');
         $qb = $conn->createQueryBuilder();

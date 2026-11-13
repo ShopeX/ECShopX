@@ -62,7 +62,7 @@ class TrustLoginService
      *
      * @return array
      */
-    public function trustLoginParams($companyId, $trustlogin_tag, $version_tag = 'standard', $data)
+    public function trustLoginParams($companyId, $trustlogin_tag, $version_tag, $data)
     {
         $result = [];
         if ($version_tag == 'standard') {
@@ -184,7 +184,7 @@ class TrustLoginService
         return true;
     }
 
-    public function getConfigRow($type, $version = 'standard', $companyId)
+    public function getConfigRow($type, $version, $companyId)
     {
         $list = $this->getTrustLoginList($companyId);
         if (!isset($list[$version])) {

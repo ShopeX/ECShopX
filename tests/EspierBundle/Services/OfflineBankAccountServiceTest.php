@@ -191,19 +191,26 @@ class OfflineBankAccountServiceTest extends TestCase
             ->with(['company_id' => 1, 'is_default' => 1])
             ->willReturn([['id' => 10, 'is_default' => 1]]);
 
+        $expectedUpdateCalls = [
+            [
+                ['company_id' => 1, 'is_default' => 1],
+                ['is_default' => 0],
+                [['id' => 10, 'is_default' => 0]],
+            ],
+            [
+                $filter,
+                $params,
+                [['id' => 5, 'is_default' => 1]],
+            ],
+        ];
         $mockRepo->expects($this->exactly(2))
             ->method('updateBy')
-            ->withConsecutive(
-                [
-                    ['company_id' => 1, 'is_default' => 1],
-                    ['is_default' => 0],
-                ],
-                [$filter, $params]
-            )
-            ->willReturnOnConsecutiveCalls(
-                [['id' => 10, 'is_default' => 0]],
-                [['id' => 5, 'is_default' => 1]]
-            );
+            ->willReturnCallback(function (array $where, array $updateData) use (&$expectedUpdateCalls) {
+                $expected = array_shift($expectedUpdateCalls);
+                $this->assertSame([$expected[0], $expected[1]], [$where, $updateData]);
+
+                return $expected[2];
+            });
 
         $service = $this->makeServiceWithRepository($mockRepo);
         $result = $service->update($filter, $params);

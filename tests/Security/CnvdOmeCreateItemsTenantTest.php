@@ -15,8 +15,6 @@ use TestCase;
 /**
  * CNVD ome createItems 租户绑定 — TC-TENANT-01～05
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class CnvdOmeCreateItemsTenantTest extends TestCase
 {

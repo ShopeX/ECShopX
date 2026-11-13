@@ -13,8 +13,6 @@ use PointBundle\Services\PointMemberService;
  * 积分商城下单扣 order.point — TC1/TC3/TC4/TC5
  * 计划：.tasks/plans/pointsmall-mix-pay-deduct-at-order.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class PointsmallOrderCreateDeductPointTest extends \TestCase
 {

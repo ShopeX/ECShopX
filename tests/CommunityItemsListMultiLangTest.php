@@ -5,12 +5,7 @@ use CommunityBundle\Services\CommunityItemsService;
 use GoodsBundle\Services\ItemsService;
 use GoodsBundle\Services\MultiLang\MultiLangService;
 
-/**
- * @covers \CommunityBundle\Services\CommunityItemsService::getItemsList
- *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
- */
+#[\PHPUnit\Framework\Attributes\CoversMethod(\CommunityBundle\Services\CommunityItemsService::class, 'getItemsList')]
 final class CommunityItemsListMultiLangTest extends TestCase
 {
     protected function tearDown(): void
@@ -188,7 +183,7 @@ final class CommunityItemsListMultiLangTest extends TestCase
         $mock->shouldReceive('getCategoryByItemIds')->andReturn([]);
     }
 
-    private function bindMockRegistryWithJoinItemsList(array $listFixture, int $totalCount = null): void
+    private function bindMockRegistryWithJoinItemsList(array $listFixture, ?int $totalCount = null): void
     {
         $totalCount = $totalCount ?? count($listFixture);
 

@@ -89,7 +89,7 @@ class ActivityEnterpriseBehaviorLogService
      * @param string|null $resultStatus {@see self::RESULT_SUCCESS} / {@see self::RESULT_FAIL}，当前仅 {@see self::BEHAVIOR_PASSPHRASE_VERIFY} 必填
      * @return int 新插入记录主键 id
      */
-    public function writeBehaviorLog($companyId, $activityId, $enterpriseId, $behaviorType, $userId = null, $visitorKey = null, $refId = null, array $extra = null, $resultStatus = null)
+    public function writeBehaviorLog($companyId, $activityId, $enterpriseId, $behaviorType, $userId = null, $visitorKey = null, $refId = null, ?array $extra = null, $resultStatus = null)
     {
         $behaviorType = (string) $behaviorType;
         if (!in_array($behaviorType, self::allowedBehaviorTypes(), true)) {
@@ -148,7 +148,7 @@ class ActivityEnterpriseBehaviorLogService
     /**
      * 同 {@see writeBehaviorLog}，保留别名便于旧文档或调用处兼容
      */
-    public function record($companyId, $activityId, $enterpriseId, $behaviorType, $userId = null, $visitorKey = null, $refId = null, array $extra = null, $resultStatus = null)
+    public function record($companyId, $activityId, $enterpriseId, $behaviorType, $userId = null, $visitorKey = null, $refId = null, ?array $extra = null, $resultStatus = null)
     {
         return $this->writeBehaviorLog($companyId, $activityId, $enterpriseId, $behaviorType, $userId, $visitorKey, $refId, $extra, $resultStatus);
     }
@@ -168,7 +168,7 @@ class ActivityEnterpriseBehaviorLogService
      * @param int|string $orderId 订单号
      * @param OrderAssociationService|null $orderAssociationService 测试注入；默认 `new OrderAssociationService()`
      */
-    public function recordEmployeePurchaseOrderPaid($companyId, $orderId, OrderAssociationService $orderAssociationService = null): void
+    public function recordEmployeePurchaseOrderPaid($companyId, $orderId, ?OrderAssociationService $orderAssociationService = null): void
     {
         $companyId = (int) $companyId;
         if ($companyId <= 0 || $orderId === null || $orderId === '') {

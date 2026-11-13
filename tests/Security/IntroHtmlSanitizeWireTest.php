@@ -13,8 +13,6 @@ use TestCase;
 /**
  * cnvd-ome-unauthorized-access TC-XSS-WIRE-01～02
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class IntroHtmlSanitizeWireTest extends TestCase
 {

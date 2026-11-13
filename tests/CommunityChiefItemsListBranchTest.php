@@ -11,8 +11,6 @@ use Illuminate\Http\Request;
  * 团长选品列表 Controller 版本分支 — TC-S5/S5b/S6/S8/S9、TC-N1～N3、TC-X1/X2/X3（T6 RED）
  * 计划：.tasks/plans/community-chief-items-standard-store.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 final class CommunityChiefItemsListBranchTest extends TestCase
 {

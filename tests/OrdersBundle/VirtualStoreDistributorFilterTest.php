@@ -13,8 +13,6 @@ use ReflectionMethod;
  * 订单列表/导出虚拟门店 distributor_id 筛选展开 — TC-01～TC-08
  * 计划：.tasks/plans/orders-virtual-store-filter.md
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class VirtualStoreDistributorFilterTest extends \TestCase
 {
@@ -267,7 +265,6 @@ class VirtualStoreDistributorFilterTest extends \TestCase
         $method = new ReflectionMethod(AbstractNormalOrder::class, 'expandVirtualStoreDistributorFilter');
         $method->setAccessible(true);
 
-        /** @var array<string, mixed> $result */
         $result = $method->invoke($service, $filter);
 
         return $result;

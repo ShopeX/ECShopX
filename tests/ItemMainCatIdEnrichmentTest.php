@@ -21,8 +21,8 @@ class ItemMainCatIdEnrichmentTest extends \PHPUnit\Framework\TestCase
     /**
      * TC-06：fixture A/B/C/D 覆盖 fallback、条件查询与 itemMainCatName。
      *
-     * @dataProvider mainCatEnrichmentFixtureProvider
      */
+    #[\PHPUnit\Framework\Attributes\DataProvider('mainCatEnrichmentFixtureProvider')]
     public function testTc06ActionMainCatEnrichment(
         array $fixture,
         int $expectedGetInfoByIdCalls,

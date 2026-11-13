@@ -352,7 +352,7 @@ class Promoter
      *
      * @return void
      */
-    public function where($key, $operator = '=', $value)
+    public function where($key, $operator, $value)
     {
         $this->whereStr .= ' and info.'.$key.' '. $operator. ' '. $value;
         return $this;

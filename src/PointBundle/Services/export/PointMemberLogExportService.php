@@ -61,7 +61,7 @@ class PointMemberLogExportService implements ExportFileInterface
         return $title;
     }
 
-    public function getLists($filter, $totalCount = 10000, $datapassBlock)
+    public function getLists($filter, $totalCount, $datapassBlock)
     {
         // 0x53686f704578
         $limit = 2000;

@@ -378,7 +378,7 @@ class TaskBrokerageService
      * @param array $filter
      * @param string $col
      */
-    public function getTaskBrokerageList($filter, $col = "*", $page, $pageSize, $orderBy)
+    public function getTaskBrokerageList($filter, $col, $page, $pageSize, $orderBy)
     {
         $list = $this->taskBrokerageRepository->lists($filter, $col, $page, $pageSize, $orderBy);
         if ($list['total_count'] < 0) {
@@ -401,7 +401,7 @@ class TaskBrokerageService
         return $list;
     }
 
-    public function getTaskBrokerageCountList($filter, $col = "*", $page, $pageSize, $orderBy = array())
+    public function getTaskBrokerageCountList($filter, $col, $page, $pageSize, $orderBy = array())
     {
         $list = $this->taskBrokerageCountRepository->lists($filter, $col, $page, $pageSize, $orderBy);
         if ($list['total_count'] < 0) {

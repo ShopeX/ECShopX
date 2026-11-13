@@ -186,7 +186,7 @@ class NormalMasterOrderExportService implements ExportFileInterface
         return $title;
     }
 
-    public function getLists($filter, $totalCount = 10000, $datapassBlock)
+    public function getLists($filter, $totalCount, $datapassBlock)
     {
         // 数云模式
         if (config('common.oem-shuyun')) {
@@ -598,7 +598,7 @@ class NormalMasterOrderExportService implements ExportFileInterface
         return $title;
     }
 
-    public function getListsBak($filter, $totalCount = 10000, $datapassBlock)
+    public function getListsBak($filter, $totalCount, $datapassBlock)
     {
         $title = $this->getTitle();
         $limit = 2000;
@@ -1006,7 +1006,7 @@ class NormalMasterOrderExportService implements ExportFileInterface
         return str_replace(["\r", "\n", ','], ' ', $str);
     }
 
-    public function getSupplierLists($filter, $totalCount = 10000, $datapassBlock)
+    public function getSupplierLists($filter, $totalCount, $datapassBlock)
     {
         $limit = 2000;
         $fileNum = ceil($totalCount / $limit);
@@ -1320,7 +1320,7 @@ class NormalMasterOrderExportService implements ExportFileInterface
         return $title;
     }
 
-    public function getPointsmallLists($filter, $totalCount = 10000, $datapassBlock)
+    public function getPointsmallLists($filter, $totalCount, $datapassBlock)
     {
         $limit = 2000;
         $fileNum = ceil($totalCount / $limit);

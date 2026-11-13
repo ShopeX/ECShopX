@@ -16,8 +16,6 @@ use OrdersBundle\Services\OrderService;
  *   - max_point_ziti：自提最大可抵扣积分，自提关闭时为 0
  *   - max_point_merchant：商家自配送最大可抵扣积分，商家自配送关闭时为 0
  *
- * @runTestsInSeparateProcesses
- * @preserveGlobalState disabled
  */
 class OrderServicePointDeductZitiMerchantTest extends \TestCase
 {

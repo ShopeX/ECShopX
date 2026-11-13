@@ -220,6 +220,43 @@ class BrokerageServiceSqlFilterTest extends \TestCase
     }
 
     /**
+     * TC-B-09：列表分页 LIMIT 须为整型字面量，不得绑定 :offset/:limit（避免 MySQL 1064）。
+     * #given company_id=1，limit=10 page=1
+     * #when getSalesmanBrokeragelistsBySql / getSalesmanBrokerageCountList
+     * #then SQL 含 limit 0,10；params 无 offset/limit 键
+     */
+    public function testTcB09ListQueryLimitUsesIntegerLiteralsNotBoundParams(): void
+    {
+        $service = new BrokerageService();
+        $service->getSalesmanBrokeragelistsBySql(['company_id' => 1], 10, 1);
+
+        $listSql = null;
+        foreach ($this->captured as $capture) {
+            if (strpos($capture['sql'], 'bb.*') !== false) {
+                $listSql = $capture;
+            }
+        }
+        $this->assertNotNull($listSql, 'list query with bb.* expected');
+        $this->assertMatchesRegularExpression('/limit\s+0\s*,\s*10/i', $listSql['sql']);
+        $this->assertArrayNotHasKey('offset', $listSql['params']);
+        $this->assertArrayNotHasKey('limit', $listSql['params']);
+
+        $this->captured = [];
+        $service->getSalesmanBrokerageCountList(['company_id' => 1], 15, 2);
+
+        $aggSql = null;
+        foreach ($this->captured as $capture) {
+            if (strpos($capture['sql'], 'rebate_sum') !== false) {
+                $aggSql = $capture;
+            }
+        }
+        $this->assertNotNull($aggSql, 'aggregated list query expected');
+        $this->assertMatchesRegularExpression('/limit\s+15\s*,\s*15/i', $aggSql['sql']);
+        $this->assertArrayNotHasKey('offset', $aggSql['params']);
+        $this->assertArrayNotHasKey('limit', $aggSql['params']);
+    }
+
+    /**
      * TC-B-07：非法 groupby 抛 ResourceException，不执行 SQL。
      * #given company_id=1，groupby=evil
      * #when getSalesmanBrokerageCountList

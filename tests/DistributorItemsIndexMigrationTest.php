@@ -3,8 +3,8 @@
 /**
  * TC-P0-1：distribution_distributor_items 含 (distributor_id, goods_id) 非唯一索引。
  *
- * @coversNothing
  */
+#[\PHPUnit\Framework\Attributes\CoversNothing]
 final class DistributorItemsIndexMigrationTest extends TestCase
 {
     /**

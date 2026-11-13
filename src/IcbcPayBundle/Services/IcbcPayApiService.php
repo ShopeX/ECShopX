@@ -119,7 +119,6 @@ class IcbcPayApiService
         //对请求体进行RSA加密  获取签名
         $privateKey = openssl_get_privatekey($this->formatPrivateKey($paymentSetting['private_key']));
         openssl_sign($sign_str, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-        openssl_free_key($privateKey);
         $params['sign'] = base64_encode($signature);// 对签名结果进行base64编码
         $url = $this->api_url . $api_name;
         // 记录接口日志
@@ -161,7 +160,6 @@ class IcbcPayApiService
         //对请求体进行RSA加密  获取签名
         $privateKey = openssl_get_privatekey($this->formatPrivateKey($paymentSetting['private_key']));
         openssl_sign($params, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-        openssl_free_key($privateKey);
         $sign = base64_encode($signature); // 对签名结果进行base64编码
         return $sign;
     }

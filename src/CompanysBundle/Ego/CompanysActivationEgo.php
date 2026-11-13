@@ -657,7 +657,11 @@ class CompanysActivationEgo
         $certSetting = $certService->getCertSetting();
 
         $request_url = config('licensegateway.independent_license_url');
-        $ProductType = array_column(swoole_get_license(), 'Product_type');
+        // 开源版没有 swoole_loader 扩展，swoole_get_license() 不存在；无扩展时降级为开源产品类型，
+        // 避免 "Call to undefined function swoole_get_license()" 致命错误。
+        $ProductType = function_exists('swoole_get_license')
+            ? array_column(swoole_get_license(), 'Product_type')
+            : ['ECSHOPX_OPENSOURCE'];
         $postData = [
             'node_id' => $certSetting['node_id'],
             'certificate' => $certSetting['cert_id'],

@@ -80,7 +80,7 @@ class Kernel
      *
      * 文件上传
      */
-    public function upload($url, $data = [], $files)
+    public function upload($url, $data, $files)
     {
         //加签
         $strSignSourceData = json_encode($data);

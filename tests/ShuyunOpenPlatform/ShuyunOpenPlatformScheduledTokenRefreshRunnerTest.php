@@ -34,7 +34,18 @@ class ShuyunOpenPlatformScheduledTokenRefreshRunnerTest extends TestCase
         $repo->method('findEligibleForScheduledRefresh')->willReturn([$r1, $r2]);
 
         $refresh = $this->createMock(ShuyunOpenPlatformTokenRefreshServiceInterface::class);
-        $refresh->expects($this->exactly(2))->method('triggerRefresh')->withConsecutive([$r1, false], [$r2, false])->willReturnOnConsecutiveCalls(true, false);
+        $expectedRefreshCalls = [
+            [[$r1, false], true],
+            [[$r2, false], false],
+        ];
+        $refresh->expects($this->exactly(2))
+            ->method('triggerRefresh')
+            ->willReturnCallback(function ($row, bool $force) use (&$expectedRefreshCalls) {
+                [$expectedArgs, $result] = array_shift($expectedRefreshCalls);
+                $this->assertSame($expectedArgs, [$row, $force]);
+
+                return $result;
+            });
 
         $runner = new ShuyunOpenPlatformScheduledTokenRefreshRunner($repo, $refresh);
         $stats = $runner->run(null);
