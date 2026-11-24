@@ -9,7 +9,6 @@ use Dingo\Api\Http\Response\Factory;
 use Illuminate\Http\Request;
 use Mockery;
 use PopularizeBundle\Http\Api\V1\Action\BrokerageController;
-use SalespersonBundle\Http\FrontApi\V1\Action\ShopSalespersonController;
 
 /**
  * T6a（RED）：Controller 层参数校验 — 非法输入应在进入 Service 前被拒绝。
@@ -54,15 +53,6 @@ class ControllerValidationTest extends \TestCase
         $this->bindPromoterCountOverload();
 
         $brokerageServiceCalled = false;
-        $brokerageMock = Mockery::mock('overload:PopularizeBundle\Services\BrokerageService');
-        $brokerageMock->shouldReceive('getSalesmanBrokerageCount')->andReturnUsing(
-            function () use (&$brokerageServiceCalled): array {
-                $brokerageServiceCalled = true;
-
-                return [];
-            }
-        );
-
         $request = Request::create('/popularize/brokerage/count', 'GET', [
             'distributor_id' => '1abc',
         ]);
@@ -99,8 +89,6 @@ class ControllerValidationTest extends \TestCase
                 return ['total_count' => 0, 'list' => []];
             }
         );
-        $brokerageMock->shouldReceive('getSalesmanBrokeragelistsBySql')->never();
-
         $request = Request::create('/popularize/brokerage/logs', 'GET', [
             'page' => 1,
             'pageSize' => 10,
@@ -118,50 +106,6 @@ class ControllerValidationTest extends \TestCase
         }
     }
 
-    /**
-     * TC-C-03：brokagestaticlist 传入非法 groupby 应在 Controller 层拒绝，不进入 BrokerageService。
-     * #given Front/Salesperson brokagestaticlist，groupby=evil
-     * #when validator 或 Service
-     * #then 拒绝（Controller 层：Service 不应被调用）
-     */
-    public function testTcC03BrokageStaticListRejectsInvalidGroupbyBeforeService(): void
-    {
-        $this->bindResponseFactory();
-        $this->bindLog();
-
-        $brokerageServiceCalled = false;
-        $brokerageMock = Mockery::mock('overload:PopularizeBundle\Services\BrokerageService');
-        $brokerageMock->shouldReceive('getSalesmanBrokerageCountList')->andReturnUsing(
-            function () use (&$brokerageServiceCalled): array {
-                $brokerageServiceCalled = true;
-
-                return [];
-            }
-        );
-
-        $request = Request::create('/h5app/wxapp/salespersonadmin/brokagestaticlist', 'GET', [
-            'groupby' => 'evil',
-            'page' => 1,
-            'pageSize' => 10,
-            'distributor_id' => 1,
-        ]);
-        $request->merge([
-            'auth' => [
-                'company_id' => 1,
-                'user_id' => 9,
-            ],
-        ]);
-
-        $controller = new ShopSalespersonController();
-
-        try {
-            $controller->brokagestaticlist($request);
-            $this->fail('Expected ResourceException when groupby is invalid');
-        } catch (ResourceException $e) {
-            $this->assertNotEmpty($e->getMessage());
-            $this->assertFalse($brokerageServiceCalled, 'BrokerageService must not be called after controller validation failure');
-        }
-    }
 
     private function bindAuth(int $companyId): void
     {

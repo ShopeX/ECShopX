@@ -133,6 +133,8 @@ class ItemsService
 
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
+        // 事务内不写 Redis，commit 后再同步，避免回滚后 Redis/DB 分裂
+        $pendingItemStores = [];
         try {
 
             // 商品通用参数
@@ -195,6 +197,7 @@ class ItemsService
                 foreach ($specItems as $row) {
                     $itemsResult = $this->createItems($data, $row, $isForceCreate);
                     $itemIds[] = $itemsResult['item_id'];
+                    $pendingItemStores[$itemsResult['item_id']] = $itemsResult['store'] ?? ($row['store'] ?? 0);
                     if ($isMiniPrice == 0) {
                         $isMiniPrice = $row['price'];
                     } elseif (!$defaultItemId && $isMiniPrice > $row['price']) {
@@ -233,6 +236,7 @@ class ItemsService
                 }
                 $itemsResult = $this->createItems($data, $params);
                 $itemIds[] = $itemsResult['item_id'];
+                $pendingItemStores[$itemsResult['item_id']] = $itemsResult['store'] ?? ($params['store'] ?? 0);
                 if (!$defaultItemId) {
                     $defaultItemId = $itemsResult['item_id'];
                 }
@@ -289,6 +293,14 @@ class ItemsService
             throw new \Exception($e->getMessage());
         }
 
+        // commit 成功后再写 Redis，与 DB 对齐
+        if ($pendingItemStores) {
+            $itemStoreService = new ItemStoreService();
+            foreach ($pendingItemStores as $pendingItemId => $pendingStore) {
+                $itemStoreService->saveItemStore($pendingItemId, $pendingStore);
+            }
+        }
+
         // 同步总部商品到门店
         $this->syncGoods($itemsResult['company_id'], $defaultItemId);
 
@@ -305,6 +317,8 @@ class ItemsService
     {
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
+        // 事务内不写 Redis，commit 后再同步
+        $pendingStore = null;
         try {
             $itemsAttributesService = new ItemsAttributesService();
 
@@ -331,10 +345,9 @@ class ItemsService
 
             $itemsResult = $this->itemsRepository->update($itemId, $itemData);
 
-            // 更新库存
+            // 库存 Redis 延后到 commit 后
             if (isset($params['store']) && $params['store']) {
-                $itemStoreService = new ItemStoreService();
-                $itemStoreService->saveItemStore($itemId, $params['store']);
+                $pendingStore = $params['store'];
             }
 
             // 检查商品价格是否大于活动的价格
@@ -418,6 +431,12 @@ class ItemsService
         } catch (\Throwable $e) {
             $conn->rollback();
             throw new \Exception($e->getFile() . $e->getLine() . $e->getMessage());
+        }
+
+        // commit 成功后再写 Redis，避免事务回滚后 Redis/DB 分裂
+        if ($pendingStore !== null) {
+            $itemStoreService = new ItemStoreService();
+            $itemStoreService->saveItemStore($itemId, $pendingStore);
         }
 
         // 同步总部商品到门店
@@ -610,10 +629,10 @@ class ItemsService
         }
         // 保存条形码
         $this->saveBarcode($barcode_item_id, $barcode_default_item_id, $data['company_id'], $data['barcode']);
-        // if ($data['store'] && $data['store'] > 0) {
-        $itemStoreService = new ItemStoreService();
-        $itemStoreService->saveItemStore($itemsResult['item_id'], $data['store']);
-        // }
+        // Redis 库存由外层事务 commit 后再写（见 addItems），避免回滚分裂
+        if (!isset($itemsResult['store'])) {
+            $itemsResult['store'] = $data['store'] ?? 0;
+        }
 
         // 保存参数
         if (isset($params['item_spec'])) {
@@ -2856,7 +2875,15 @@ class ItemsService
                         $itemStoreService->saveItemStore($value['item_id'], $data['store']);
                     }
                 } else {
-                    $this->itemsRepository->updateStore($data['item_id'], $data['store']);
+                    $res = $this->itemsRepository->updateStore($data['item_id'], $data['store']);
+                    if (!is_array($res)) {
+                        throw new ResourceException('商品不存在，库存更新失败');
+                    }
+                    // 同步供应商商品库存（须先确认 updateStore 返回数组，避免 bool 下标访问）
+                    if (!empty($res['supplier_item_id'])) {
+                        $supplierItemsService = new SupplierItemsService();
+                        $supplierItemsService->repository->updateOneBy(['item_id' => $res['supplier_item_id']], ['store' => $data['store']]);
+                    }
                     $itemStoreService->saveItemStore($data['item_id'], $data['store']);
                 }
             // }else{
@@ -3476,16 +3503,6 @@ class ItemsService
         return true;
     }
 
-    /**
-     * getSalesmanStoreitems
-     * @param  array $filter 查询条件
-     * @return array
-     */
-    public function getSalesmanStoreitems($filter, $page = 1, $pageSize = 100, $orderBy = ['item_id' => 'DESC'], $isShowItemParams = false)
-    {
-        $listData = $this->itemsRepository->list($filter, $orderBy, $pageSize, $page);
-        return $listData;
-    }
 
     public function handleMultiLang(array $multiLang)
     {

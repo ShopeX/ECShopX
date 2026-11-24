@@ -88,6 +88,38 @@ class NormalOrdersRepository extends EntityRepository
     }
 
     /**
+     * 事务内锁定订单行，序列化同单并发售后申请
+     */
+    public function lockForUpdate($companyId, $orderId)
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $row = $conn->fetchAssociative(
+            'SELECT * FROM ' . $this->table . ' WHERE company_id = ? AND order_id = ? FOR UPDATE',
+            [$companyId, $orderId]
+        );
+        return $row ?: [];
+    }
+
+    /**
+     * 条件扣减剩余可申请售后数量，返回影响行数
+     */
+    public function decrLeftAftersalesNum($companyId, $orderId, $num): int
+    {
+        $num = (int) $num;
+        if ($num <= 0) {
+            return 1;
+        }
+        $conn = $this->getEntityManager()->getConnection();
+        $qb = $conn->createQueryBuilder();
+        return (int) $qb->update($this->table)
+            ->set('left_aftersales_num', 'left_aftersales_num - ' . $num)
+            ->where('company_id = ' . $qb->expr()->literal($companyId))
+            ->andWhere('order_id = ' . $qb->expr()->literal($orderId))
+            ->andWhere('left_aftersales_num >= ' . $num)
+            ->execute();
+    }
+
+    /**
      * 更新多条数数据
      *
      * @param $filter 更新的条件

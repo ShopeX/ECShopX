@@ -118,7 +118,8 @@ class PromotionGroupsActivityRepository extends EntityRepository
     {
         $itemsEnt = $this->find($groupId);
         if (!$itemsEnt) {
-            return true;
+            // 实体不存在返回 null，避免调用方把 bool 当成功
+            return null;
         }
 
         $itemsEnt->setStore($store);

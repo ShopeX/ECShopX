@@ -138,39 +138,37 @@ class PackageQueryService
 
 
         $checkResult = [];
+        $checkGradeIdStr = (string) $checkGradeId;
         foreach ($cards as $item) {
             $reKey = $packageDetails['title'].'_'.$item['card_id'];
-            // 等级限制
-            if (!empty($item['grade_ids'])) {
-                $gradeIds = $item['grade_ids'] ? explode(',', trim($item['grade_ids'], ',')) : [];
-
-                foreach ($gradeIds as $value) {
-                    // 当前设置不在
-                    if ($setType != 'grade' || $value != $checkGradeId) {
-                        $checkResult[$reKey] = [
-                            'package_title' => $packageDetails['title'],
-                            'title' => $item['title'],
-                            'grade_id' => $checkGradeId,
-                            'grade_name' => $gradeName
-                        ];
-                    }
+            // 只检查当前 setType 对应层，避免 grade / vip_grade 互串产生伪冲突
+            if ($setType === 'grade') {
+                if (empty($item['grade_ids'])) {
+                    continue;
                 }
-            }
-
-            // 会员等级限制
-            if (!empty($item['vip_grade_ids'])) {
-                $vipGradeIds = $item['vip_grade_ids'] ? explode(',', trim($item['vip_grade_ids'], ',')) : [];
-
-                foreach ($vipGradeIds as $value) {
-                    // 当前设置不在
-                    if ($setType != 'vip_grade' || $value != $checkGradeId) {
-                        $checkResult[$reKey] = [
-                            'package_title' => $packageDetails['title'],
-                            'title' => $item['title'],
-                            'grade_id' => $checkGradeId,
-                            'grade_name' => $gradeName
-                        ];
-                    }
+                $gradeIds = array_filter(explode(',', trim($item['grade_ids'], ',')), 'strlen');
+                // 当前设置不在卡券允许的会员等级列表中
+                if (!in_array($checkGradeIdStr, $gradeIds, true)) {
+                    $checkResult[$reKey] = [
+                        'package_title' => $packageDetails['title'],
+                        'title' => $item['title'],
+                        'grade_id' => $checkGradeId,
+                        'grade_name' => $gradeName
+                    ];
+                }
+            } elseif ($setType === 'vip_grade') {
+                if (empty($item['vip_grade_ids'])) {
+                    continue;
+                }
+                $vipGradeIds = array_filter(explode(',', trim($item['vip_grade_ids'], ',')), 'strlen');
+                // 当前设置不在卡券允许的付费会员等级列表中
+                if (!in_array($checkGradeIdStr, $vipGradeIds, true)) {
+                    $checkResult[$reKey] = [
+                        'package_title' => $packageDetails['title'],
+                        'title' => $item['title'],
+                        'grade_id' => $checkGradeId,
+                        'grade_name' => $gradeName
+                    ];
                 }
             }
         }
@@ -242,6 +240,7 @@ class PackageQueryService
 
         $discountCards = [];
         foreach ($discountCardsList as $card) {
+            $takeEffect = '';
             if ($card['date_type'] == "DATE_TYPE_FIX_TERM" || $card['date_type'] == DiscountNewGiftCardService::DATE_TYPE_LONG) {
                 $begin = $card['begin_day_type'] == 0 ? trans('KaquanBundle.current_day') : $card['begin_day_type'];
                 $takeEffect = trans('KaquanBundle.receive_after_effective', ['begin' => $begin, 'term' => $card['fixed_term']]);
@@ -250,7 +249,7 @@ class PackageQueryService
 
             $discountCards[] = [
                 'give_num' => (int)$packageItemsIndex[$card['card_id']],
-                'takeEffect' => $takeEffect ?? '',
+                'takeEffect' => $takeEffect,
                 'card_id' => (int)$card['card_id'],
                 'title' => (string)$card['title'],
                 'card_type' => (string)$card['card_type'],

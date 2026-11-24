@@ -460,10 +460,17 @@ class DiscountCard extends BaseController
             throw new ResourceException('删除卡券出错.', $validator->errors());
         }
 
-        $discountCardService = new KaquanService(new DiscountCardService());
         $filter['company_id'] = app('auth')->user()->get('company_id');
         $filter['card_id'] = $request->input('card_id');
         $authorizerAppid = app('auth')->user()->get('authorizer_appid');
+
+        // new_gift 走新版礼券删除（含会员标签关联清理）
+        $cardDetail = (new DiscountCardService())->discountCardRepository->getInfo($filter);
+        if (($cardDetail['card_type'] ?? '') === 'new_gift') {
+            $discountCardService = new KaquanService(new DiscountNewGiftCardService());
+        } else {
+            $discountCardService = new KaquanService(new DiscountCardService());
+        }
         $result = $discountCardService->deleteKaquan($filter, $authorizerAppid);
         return $this->response->array(['status' => $result]);
     }
@@ -659,8 +666,10 @@ class DiscountCard extends BaseController
         $store_self = $request->input('store_self');
         $sourceId = intval($request->get('distributor_id', 0));//如果是平台，这里是0
         if ($store_self == "true") {//平台版仅支持自营商品【总店】
-            $filter['or']['distributor_id|like'] = ',0,';
-            $filter['or']['distributor_id|like'] = '%,%';
+            // __orFilter 按数组键去重：同键 distributor_id|like 会互相覆盖，需用后缀区分
+            // 适用店铺字段形如 ,0, / ,0,1,：精确总店 或 包含总店 id=0
+            $filter['or']['distributor_id|like|exact'] = ',0,';
+            $filter['or']['distributor_id|like|hq'] = '%,0,%';
         } elseif ($sourceId > 0) {
             ShopDiscountCardListFilter::applyToFilter($filter, $sourceId);
         }

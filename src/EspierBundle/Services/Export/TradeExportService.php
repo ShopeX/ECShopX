@@ -174,7 +174,7 @@ class TradeExportService implements ExportFileInterface
                         if ($k == 'payFee' && isset($value['payType']) && $value['payType'] == 'point') {
                             $orderList[$key][$k] = 0;
                         } else {
-                            $orderList[$key][$k] = $value[$k] / 100;
+                            $orderList[$key][$k] = bcdiv($value[$k], 100, 2);
                         }
                     } elseif ($k == 'payPoint') {
                         // 现金/混合支付时，订单实付积分取订单主表 point_use

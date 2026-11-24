@@ -6,7 +6,8 @@ require_once __DIR__.'/../vendor/autoload.php';
     dirname(__DIR__)
 ))->bootstrap();
 
-date_default_timezone_set(env('APP_TIMEZONE', 'UTC'));
+// 与 config/app.php timezone=PRC 对齐，避免日切统计按 UTC 错位；可用 APP_TIMEZONE 覆盖
+date_default_timezone_set(env('APP_TIMEZONE', 'PRC'));
 
 /*
 |--------------------------------------------------------------------------

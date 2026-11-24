@@ -327,9 +327,6 @@ class CartService
             'shop_type' => $params['shop_type'],
             'shop_id' => $params['shop_id'] ?? 0,
         ];
-        if(isset($params['promoter_user_id']) &&  $params['promoter_user_id']){
-            $filter['promoter_user_id'] = $params['promoter_user_id'];
-        }
         app('log')->info(':dkxd:'.__FUNCTION__.__LINE__.':22222:filter :' . json_encode($filter) ) ;
 
         if (($params['activity_id'] ?? 0) && ($params['activity_type'] ?? '')) {
@@ -468,12 +465,7 @@ class CartService
             'wxa_appid' => $params['wxa_appid'] ?? '',
             'is_plus_buy' => $params['is_plus_buy'] ?? false,
             'isAccumulate' => false,
-            'promoter_user_id'=>$params['promoter_user_id'] ?? null,
         ];
-
-        if($data['promoter_user_id']){
-            $data['source_type'] = 'salesperson';
-        }
         return $data;
     }
 
@@ -644,9 +636,6 @@ class CartService
             // 如果是订单结算，那么只取已经选择的购物车数据
             if ($isCheckout) {
                 $filter['is_checked'] = true;
-            }
-            if(isset($inputData['promoter_user_id']) && $inputData['promoter_user_id'] ){
-                $filter['promoter_user_id'] = $inputData['promoter_user_id'];
             }
             $cartList = $this->entityRepository->lists($filter)['list'];
         } elseif ($cartType == 'fastbuy') {

@@ -28,7 +28,6 @@ use Dingo\Api\Exception\UpdateResourceFailedException;
 use Illuminate\Http\Response;
 
 use MembersBundle\Services\MemberService;
-use PopularizeBundle\Services\PromoterService;
 use DistributionBundle\Services\DistributorService;
 
 class SalespersonController extends BaseController
@@ -87,14 +86,6 @@ class SalespersonController extends BaseController
         }
         app('log')->debug("\n".__FUNCTION__."-".__LINE__.":params:". json_encode($params));
 
-        $distributorService = new DistributorService();
-        $distributorInfo = $distributorService->getInfoSimple(['distributor_id' => $params['distributor_id'] ]);
-        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":distributorInfo:". json_encode($distributorInfo));
-        
-        if(!$distributorInfo['is_open_salesman']){
-            throw new ResourceException('店铺未开启业务员配置！');
-        }
-
         $data = [
             'mobile' => trim($request->input('mobile')),
             'name' => trim($request->input('salesman_name')),
@@ -123,9 +114,6 @@ class SalespersonController extends BaseController
         }
 
         $result = $salespersonService->createSalesperson($data);
-
-        $promoterService = new PromoterService();
-        $promoterService->updateShopStatusSalesperson($companyId, $userId);
         return $this->response->array($result);
     }
 

@@ -135,10 +135,17 @@ class DepositTrade
             return true;
         }
         $conn = app('registry')->getConnection('default');
+        $data = null;
+        $totalFee = 0;
+
+        // begin/业务全部入 try，异常必 rollback，避免事务悬挂
         $conn->beginTransaction();
-        $data = app('registry')->getManager('default')->getRepository(DBDepositTrade::class)->updateStatus($depositTradeId, $status, $options);
-        $cur = $this->getCur($data->getCompanyId());
         try {
+            $data = app('registry')->getManager('default')->getRepository(DBDepositTrade::class)->updateStatus($depositTradeId, $status, $options);
+            if (!$data) {
+                throw new ResourceException('储值交易单不存在');
+            }
+            $cur = $this->getCur($data->getCompanyId());
             $data->setTradeStatus = 'SUCCESS';
             $totalFee = $data->getCurPayFee();
             if ($data->getRechargeRuleId()) {
@@ -195,14 +202,18 @@ class DepositTrade
             // 充值返佣
 //            $brokerageService = new BrokerageService();
 //            $brokerageService->recharge($data->getUserId(), $data->getCompanyId(), $data->getCurPayFee(), $data->getDepositTradeId(), $data);
-            $this->addDepositToRedis($data->getCompanyId(), $data->getUserId(), $totalFee, $data->getCurPayFee());
             //$this->addUserAllDepositTotal($data->getCompanyId(), $data->getUserId(), $data->getCurPayFee());
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollback();
+            }
             app('log')->debug('支付回调记录错误 ' . $e->getMessage() . ' ' . $e->getLine() . ' ' . $e->getFile());
-            $conn->rollback();
             throw $e;
         }
+
+        // Redis 改 commit 后，避免 DB 回滚后余额虚增
+        $this->addDepositToRedis($data->getCompanyId(), $data->getUserId(), $totalFee, $data->getCurPayFee());
 
         $promoterService = new PromoterService();
         $promoterService->updateByUserId($data->getUserId(), ['is_buy' => 1]);
@@ -280,37 +291,13 @@ class DepositTrade
             $money = -intval($money);
         }
 
-        $deposit = $this->getUserDepositTotal($companyId, $userId);
-        $setMoney = bcadd($money, $deposit);
-
         $redis = app('redis')->connection('deposit');
-
-        // 清除缓存数据保证一致性
+        // 先失效缓存，以 DB 原子更新为准，避免并发读改写丢失/透支
         $redis->hdel('userDepositTotal_' . $companyId, $userId);
 
-        // 更新数据库
         $userDeposit = app('registry')->getManager('default')->getRepository(UserDeposit::class);
+        $setMoney = $userDeposit->incrMoneyAtomic($companyId, $userId, $money);
 
-        $filter = [
-            'company_id' => $companyId,
-            'user_id' => $userId
-        ];
-        $findInfo = $userDeposit->getInfo($filter);
-        if (!empty($findInfo)) {
-            $updateWhere = [
-                'deposit_id' => $findInfo['deposit_id']
-            ];
-            $userDeposit->updateOneBy($updateWhere, ['money' => $setMoney]);
-        } else {
-            $addData = [
-                'company_id' => $companyId,
-                'user_id' => $userId,
-                'money' => $setMoney,
-            ];
-            $userDeposit->create($addData);
-        }
-
-        // 更新缓存
         $redis->hset('userDepositTotal_' . $companyId, $userId, $setMoney);
 
         return true;
@@ -394,7 +381,7 @@ class DepositTrade
             $redis->hincrby($dayRechargeTotalKey, $companyId, $money);
 
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw new BadRequestHttpException('支付失败');
         }
@@ -426,7 +413,7 @@ class DepositTrade
             $this->addUserDepositTotal($companyId, $userId, $money);
 
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw new BadRequestHttpException('支付失败');
         }
@@ -520,7 +507,7 @@ class DepositTrade
             $this->addUserDepositTotal($companyId, $userId, $money);
 
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             app('log')->debug('后台充值预存款失败：' . $e->getMessage() . ' ' . $e->getLine() . ' ' . $e->getFile());
             $conn->rollback();
             throw new ResourceException($e->getMessage());

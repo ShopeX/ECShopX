@@ -370,7 +370,7 @@ class Item extends Controller
                 $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
                 $result = $itemsRepository->updateStore($itemBnList[$value['bn']]['item_id'], $value['quantity']);
             }
-            if (!$result) {
+            if (!is_array($result)) {
                 $failUpdateItem[] = $value['bn'];
             }
         }

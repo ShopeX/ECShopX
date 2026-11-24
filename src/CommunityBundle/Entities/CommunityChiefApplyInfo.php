@@ -27,6 +27,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  *    @ORM\Index(name="ix_company_id", columns={"company_id"}),
  *    @ORM\Index(name="ix_chief_mobile", columns={"chief_mobile"}),
  *    @ORM\Index(name="ix_user_id", columns={"user_id"})
+ * }, uniqueConstraints={
+ *    @ORM\UniqueConstraint(name="uk_company_user_distributor", columns={"company_id", "user_id", "distributor_id"})
  * })
  * @ORM\Entity(repositoryClass="CommunityBundle\Repositories\CommunityChiefApplyInfoRepository")
  */

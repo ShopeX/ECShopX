@@ -435,11 +435,11 @@ class ExportData extends Controller
                     'title' => $value['title'],
                     'create_date' => date('Y-m-d H:i:s', $value['create_time']),
                     'mobile' => $value['mobile'],
-                    'total_fee' => $value['total_fee'] / 100,
+                    'total_fee' => bcdiv($value['total_fee'], 100, 2),
                     'order_status' => isset($order_status[$value['order_status']]) ? $order_status[$value['order_status']] : '未知状态',
                     'delivery_status' => isset($delivery_status[$value['delivery_status']]) ? $delivery_status[$value['delivery_status']] : '未知状态',
                     'item_name' => $value1['item_name'],
-                    'item_total_fee' => $value1['total_fee'] / 100,
+                    'item_total_fee' => bcdiv($value1['total_fee'], 100, 2),
                     'item_total_num' => $value1['num'],
                 ];
             }

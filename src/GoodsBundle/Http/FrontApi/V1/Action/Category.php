@@ -304,30 +304,9 @@ class Category extends BaseController
         $company_id = $authInfo['company_id'];
         $filter['company_id'] = $company_id;
 
-        $isSalesmanPage  = $request->input('isSalesmanPage',false);
-        $distributor_id = $request->input('distributor_id',false);
-
-        if($isSalesmanPage){
-            //获取业务员推广店铺
-            $listdata = ['list' => []];
-            $salespersonService = new SalespersonService();
-            $filter_sales['company_id'] = $authInfo['company_id'];
-            $filter_sales['user_id']    = $authInfo['user_id'];
-
-            $listdata = $salespersonService->getSalespersonList($filter_sales, 1, 500);
-            $dIds = array_column($listdata['list'],'shop_id');
-            if($dIds && $isSalesmanPage){
-                $filter['distributor_id'] = $dIds;
-            }
-
-            if ($distributor_id  && in_array($distributor_id,$dIds)) {
-                $filter['distributor_id'] = $request->input('distributor_id');
-            }
-        }else{
-            if ($distributor_id ) {
-                $filter['distributor_id'] = $request->input('distributor_id');
-            }
-
+        $distributor_id = $request->input('distributor_id', false);
+        if ($distributor_id) {
+            $filter['distributor_id'] = $request->input('distributor_id');
         }
 
         $filter['is_main_category'] = $request->input('is_main_category', false);

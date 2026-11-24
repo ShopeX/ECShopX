@@ -110,7 +110,7 @@ class PopularizeExportService implements ExportFileInterface
                                 $promoterData[$key][$k] = $value[$k];
                                 break;
                             default:
-                                $promoterData[$key][$k] = round(intval($value[$k])/100, 2);
+                                $promoterData[$key][$k] = bcdiv($value[$k], 100, 2);
                         }
                     }
                 }

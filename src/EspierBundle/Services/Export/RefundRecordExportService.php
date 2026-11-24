@@ -118,11 +118,11 @@ class RefundRecordExportService implements ExportFileInterface
                             // 直接赋值，不再添加引号，由 ExportFileService 统一处理
                             $recordData[$key][$k] = $value[$k];
                         } elseif (in_array($k, ['refund_fee', 'refunded_fee'])) {
-                            $recordData[$key][$k] = $value[$k] / 100;
+                            $recordData[$key][$k] = bcdiv($value[$k], 100, 2);
                         } elseif ($k == 'refund_freight_fee') {
                             // 退款运费金额（¥），根据freight_type判断，如果是cash需要转换为元，没有的则显示0
                             if (isset($value['freight_type']) && $value['freight_type'] == 'cash' && isset($value['freight'])) {
-                                $recordData[$key][$k] = $value['freight'] / 100;
+                                $recordData[$key][$k] = bcdiv($value['freight'], 100, 2);
                             } else {
                                 $recordData[$key][$k] = 0;
                             }

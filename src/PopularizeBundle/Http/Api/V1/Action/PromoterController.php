@@ -194,58 +194,8 @@ class PromoterController extends Controller
             }    
         }
 
-        if ($request->input('distributor_id', false) 
-        ||  ( isset($pathSource) && strpos($pathSource,'popularizedata') !== false )
-        ) {
-            $distributor_id = $request->input('distributor_id', false);
-            $brokerageService = new BrokerageService();
-            $filter['distributor_id'] = $distributor_id;
-            if(isset($filter['mobile']) && $filter['mobile'] && isset($data['filter']['user_id'])){
-                $filter['user_id'] = $data['filter']['user_id'];
-                unset($filter['mobile']);
-            }
+        $countDataShopList_user = [];
 
-            if ($operatorType == 'merchant' && $shopIds) {
-                $filter['dIds'] = $shopIds;
-    
-            }
-    
-            $filter['groupby'] = 'distributor_id';
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-distributor_id:". json_encode($distributor_id));
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-filter:". json_encode($filter));
-            $countDataShopList = $brokerageService->getSalesmanBrokerageCountList($filter, $limit, $page );
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":countDataShopList:". json_encode($countDataShopList));
-            $countDataShopList_user = array_column($countDataShopList,null,'user_id'); 
-
-
-            // $salesperson_id_arr = array_column($countDataShopList['list'],'salesperson_id'); 
-            // if($salesperson_id_arr){
-            //     $filter_salesperson = array(
-            //         'salesperson_id' => $salesperson_id_arr,
-            //     );
-            //     $salespersonService = new SalespersonService();
-    
-            //     $data_alesperson = $salespersonService->salesperson->lists($filter_salesperson);
-            //     $data_alesperson_id_arr = array_column($data_alesperson['list'],null,'salesperson_id'); 
-
-            //     $countDataShopList['data_alesperson'] = $data_alesperson;
-    
-            // }
-            // foreach($countDataShopList['list'] as $k => &$v_salesperson){
-            //     $v_salesperson['mobile'] = $data_alesperson_id_arr[$v_salesperson['salesperson_id']]['mobile'] ?? '-';
-            //     $v_salesperson['username'] = $data_alesperson_id_arr[$v_salesperson['salesperson_id']]['name'] ?? '-';
-            // }
-            // $data = 
-            // return $this->response->array($countDataShopList);
-
-        }  
-        if( ( isset($pathSource) && strpos($pathSource,'popularizedata') !== false &&  strpos($pathSource,'sellers') !== false )
-        ||  ( isset($pathSource) && strpos($pathSource,'popularizedata') !== false  &&  strpos($pathSource,'shopadmin') !== false)
-        ){
-            return $this->response->array($countDataShopList);
-        }      
-
-        
         // 是否有权限查看加密数据
         $datapassBlock = $request->get('x-datapass-block', 0);
         $data['datapass_block'] = $datapassBlock;

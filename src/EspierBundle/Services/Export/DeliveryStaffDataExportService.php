@@ -113,10 +113,10 @@ class DeliveryStaffDataExportService implements ExportFileInterface
                 }
                 if($val['payment_method'] == 'order'){
                     $tmp['payment_method'] = '按单笔订单';
-                    $tmp['payment_fee'] = $val['payment_fee']/100;
+                    $tmp['payment_fee'] = bcdiv($val['payment_fee'], 100, 2);
                 }elseif ($val['payment_method'] == 'amount'){
                     $tmp['payment_method'] = '按订单金额比例';
-                    $tmp['payment_fee'] = '%'.$val['payment_fee']/100;
+                    $tmp['payment_fee'] = '%'.bcdiv($val['payment_fee'], 100, 2);
                 }
                 if($val['staff_type'] == 'platform'){
                     $tmp['staff_type'] = '平台配送员';

@@ -257,9 +257,6 @@ class OrderDeliveryService
             $conn->commit();
 
             return $result;
-        } catch (\Exception $e) {
-            $conn->rollback();
-            throw $e;
         } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
@@ -611,7 +608,13 @@ class OrderDeliveryService
                 $can_aftersales_num += $order_items_val['num'];
             }
         } elseif ($params['delivery_type'] == 'sep') {
-            //拆单发货
+            //拆单发货：按 id IN 批量取出再内存匹配，避免循环内逐条 getRow
+            $sepItemIds = array_values(array_unique(array_filter(array_column($order_items, 'id'))));
+            $orderItemsMap = [];
+            if ($sepItemIds) {
+                $batchList = $this->normalOrdersItemsRepository->getList(['id' => $sepItemIds], 0, -1);
+                $orderItemsMap = array_column($batchList['list'] ?? [], null, 'id');
+            }
             foreach ($order_items as $val) {
                 $deliveryNum = $val['delivery_num'] ?? 0;
                 if (!$deliveryNum) {
@@ -624,10 +627,7 @@ class OrderDeliveryService
                     throw new ResourceException(trans('OrdersBundle/Order.order_delivery_item_quantity_error', ['{0}' => $order_id, '{1}' => $num]));
                 }
 
-                $order_items_filter = [
-                    'id' => $order_items_id
-                ];
-                $order_items_info = $this->normalOrdersItemsRepository->getRow($order_items_filter);
+                $order_items_info = $orderItemsMap[$order_items_id] ?? null;
                 if (empty($order_items_info)) {
                     throw new ResourceException(trans('OrdersBundle/Order.order_delivery_item_incorrect', ['{0}' => $order_id]));
                 }
@@ -899,9 +899,6 @@ class OrderDeliveryService
             $conn->commit();
 
             return $result;
-        } catch (\Exception $e) {
-            $conn->rollback();
-            throw $e;
         } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;

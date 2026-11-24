@@ -63,8 +63,10 @@ class ItemStoreService
         foreach ($result as $value) {
             $itemId = $value[1];
             $store = $value[2];
-            $itemkeyarr = explode('_', $value[3]);
-            $itemsRepository->updateStore($itemId, $store);
+            $res = $itemsRepository->updateStore($itemId, $store);
+            if (!is_array($res)) {
+                throw new ResourceException('积分商城商品不存在，库存同步失败');
+            }
         }
         return true;
     }

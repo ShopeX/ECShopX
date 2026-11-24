@@ -208,12 +208,23 @@ class TaskBrokerageRepository extends EntityRepository
     public function getMonthCount(array $filter, $page = 1, $pageSize = -1, $orderBy = array(), $groupBy = array())
     {
         $conn = app("registry")->getConnection("default");
-        $qb = $conn->createQueryBuilder()->select('*, sum(price) as total_fee, sum(num) as _count')->from($this->table);
+        // only_full_group_by: do not SELECT *; keep grouped keys + aggregates/MAX for display cols
+        $qb = $conn->createQueryBuilder()->select(
+            'item_id',
+            'company_id',
+            'user_id',
+            'status',
+            'plan_date',
+            'MAX(item_name) AS item_name',
+            'MAX(item_spec_desc) AS item_spec_desc',
+            'SUM(price) AS total_fee',
+            'SUM(num) AS _count'
+        )->from($this->table);
 
         $qb = $this->_filter($filter, $qb);
 
         if (!$groupBy) {
-            $groupBy = ['item_id', 'company_id', 'user_id', 'status'];
+            $groupBy = ['item_id', 'company_id', 'user_id', 'status', 'plan_date'];
         }
         foreach ($groupBy as $col) {
             $qb->addGroupBy($col);

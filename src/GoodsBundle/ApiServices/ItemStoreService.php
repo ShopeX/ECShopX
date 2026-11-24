@@ -67,10 +67,17 @@ class ItemStoreService
         }
 
         $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
+        $supplierItemsService = new \SupplierBundle\Services\SupplierItemsService();
         foreach ($result as $value) {
             $itemId = $value[1];
             $store = $value[2];
-            $itemsRepository->updateStore($itemId, $store);
+            $res = $itemsRepository->updateStore($itemId, $store);
+            if (!is_array($res)) {
+                throw new ResourceException('商品不存在，库存同步失败');
+            }
+            if (!empty($res['supplier_item_id'])) {
+                $supplierItemsService->repository->updateOneBy(['item_id' => $res['supplier_item_id']], ['store' => $store]);
+            }
         }
         return true;
     }
@@ -94,14 +101,20 @@ class ItemStoreService
             app('redis')->incrby('item_store:' . $key, $num);
             app('log')->debug('扣减库存结束：'.$msg. ',库存数量为 ' . app('redis')->get('item_store:' . $key) . ',失败恢复');
             return false;
-        } else {
-            app('log')->debug('扣减库存结束：'.$msg.  ',库存数量为 ' . app('redis')->get('item_store:' . $key) . ',扣减成功');
+        }
 
+        app('log')->debug('扣减库存结束：'.$msg.  ',库存数量为 ' . app('redis')->get('item_store:' . $key) . ',扣减成功');
+
+        try {
             $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
             $itemsRepository->updateStore($itemId, $store);
-
-            return true;
+        } catch (\Throwable $e) {
+            app('redis')->incrby('item_store:' . $key, $num);
+            app('log')->error('minusItemStore DB failed, redis compensated: ' . $msg . ', ' . $e->getMessage());
+            throw $e;
         }
+
+        return true;
     }
 
     //设置商品库存预警

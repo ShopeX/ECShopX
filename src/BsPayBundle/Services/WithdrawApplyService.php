@@ -183,6 +183,9 @@ class WithdrawApplyService
             throw new ResourceException('请上传发票文件');
         }
 
+        // 元转分：避免 intval(float) IEEE-754 截断少记 1 分（如 8.29）
+        $amountFen = (int) round(bcmul((string) $data['amount'], '100', 2));
+
         // 将金额转换为分
         $applyData = [
             'company_id' => $data['company_id'],
@@ -192,7 +195,7 @@ class WithdrawApplyService
             'operator_id' => $data['operator_id'],
             'operator' => $data['operator'],
             'huifu_id' => $huifuId,
-            'amount' => intval($data['amount'] * 100), // 转换为分
+            'amount' => $amountFen,
             'withdraw_type' => $data['withdraw_type'],
             'invoice_file' => $data['invoice_url'],
             'status' => WithdrawStatus::PENDING // 审核中
@@ -207,8 +210,8 @@ class WithdrawApplyService
         );
         // 计算可提现余额
         $availableBalance = max(0, $balanceInfo['available_balance'] - $balanceInfo['pending_balance']);
-        // 检查可提现金额
-        if (intval($data['amount'] * 100) > $availableBalance) {
+        // 检查可提现金额（与落库同一换算）
+        if ($amountFen > $availableBalance) {
             throw new ResourceException('可提现余额不足');
         }
 

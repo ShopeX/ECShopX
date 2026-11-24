@@ -267,6 +267,12 @@ class AftersalesService
         try {
             // 创建售后单
             $normalOrderService = new NormalOrderService();
+            // 锁定订单行，避免并发读改写 left_aftersales_num / 明细已申请数量
+            $lockedOrder = $normalOrderService->normalOrdersRepository->lockForUpdate($data['company_id'], $data['order_id']);
+            if (!$lockedOrder) {
+                throw new ResourceException('系统无此订单，无法申请售后');
+            }
+            $orderInfo['left_aftersales_num'] = $lockedOrder['left_aftersales_num'];
             $total_refund_fee = 0;
             $total_refund_point = 0;
             $total_return_point = 0;
@@ -363,13 +369,11 @@ class AftersalesService
             app('log')->info('aftersales::__createAftersales::orderInfo===>'.json_encode($orderInfo,JSON_UNESCAPED_UNICODE));
             app('log')->info('aftersales::__createAftersales::aftersales_data===>'.json_encode($aftersales_data,JSON_UNESCAPED_UNICODE));
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
-            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货
+            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货（条件扣减防并发超额）
             if (in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
-                $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
-                if ($left_aftersales_num < 0) {
+                if ($normalOrderService->normalOrdersRepository->decrLeftAftersalesNum($data['company_id'], $data['order_id'], $apply_num) < 1) {
                     throw new ResourceException('超出可申请数量');
                 }
-                $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
             }
 
             // 创建售后退款单
@@ -416,7 +420,7 @@ class AftersalesService
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -598,6 +602,12 @@ class AftersalesService
         try {
             // 创建售后单
             $normalOrderService = new NormalOrderService();
+            // 锁定订单行，避免并发读改写 left_aftersales_num / 明细已申请数量
+            $lockedOrder = $normalOrderService->normalOrdersRepository->lockForUpdate($data['company_id'], $data['order_id']);
+            if (!$lockedOrder) {
+                throw new ResourceException('系统无此订单，无法申请售后');
+            }
+            $orderInfo['left_aftersales_num'] = $lockedOrder['left_aftersales_num'];
             $total_refund_fee = 0;
             $total_refund_point = 0;
             $total_return_point = 0;
@@ -727,13 +737,11 @@ class AftersalesService
             }
             // 创建售后主单据
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
-            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货
+            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货（条件扣减防并发超额）
             if (in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
-                $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
-                if ($left_aftersales_num < 0) {
+                if ($normalOrderService->normalOrdersRepository->decrLeftAftersalesNum($data['company_id'], $data['order_id'], $apply_num) < 1) {
                     throw new ResourceException('超出可申请数量');
                 }
-                $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
             }
             // 创建售后退款单
             $aftersalesRefundService = new AftersalesRefundService();
@@ -779,7 +787,7 @@ class AftersalesService
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -885,7 +893,7 @@ class AftersalesService
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -1094,7 +1102,7 @@ class AftersalesService
 
             $conn->commit();
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -1374,7 +1382,7 @@ class AftersalesService
             }
 
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -1457,7 +1465,7 @@ class AftersalesService
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -1539,7 +1547,7 @@ class AftersalesService
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -1589,7 +1597,7 @@ class AftersalesService
             // 更新售后明细状态
             $this->aftersalesDetailRepository->updateBy($filter, $updateData);
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -1647,7 +1655,7 @@ class AftersalesService
             $this->aftersalesDetailRepository->updateBy($update_aftersales_detail_filter, $aftersales_detail_data);
 
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -2309,7 +2317,7 @@ class AftersalesService
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -2438,18 +2446,6 @@ class AftersalesService
                     // ];
                     // $this->updateItemAftersaleStatus($itemFilter, $itemUpdate);
 
-                    $templateData = [
-                        'aftersales_type' => $aftersales['aftersales_type'],
-                        'aftersales_bn' => $aftersales['aftersales_bn'],
-                        'user_id' => $aftersales['user_id'],
-                        'item_name' => $aftersales['item_name'] ?? '',
-                        'company_id' => $aftersales['company_id'],
-                        'refuse_reason' => $aftersales['refuse_reason'] ?? '',
-                        'order_id' => $aftersales['order_id'],
-                        'refund_amount' => $aftersales['refund_fee'],
-                    ];
-                    $this->sendWxaTemplateMsg($itemUpdate['aftersales_status'], $templateData);
-
                     $orderProcessLog = [
                         'order_id' => $aftersales['order_id'],
                         'company_id' => $aftersales['company_id'],
@@ -2459,9 +2455,29 @@ class AftersalesService
                     ];
                     event(new OrderProcessLogEvent($orderProcessLog));
                     $conn->commit();
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     $conn->rollback();
                     continue;
+                }
+
+                // 微信模板消息走外网，必须在 commit 之后发送，避免占用事务连接
+                $templateData = [
+                    'aftersales_type' => $aftersales['aftersales_type'],
+                    'aftersales_bn' => $aftersales['aftersales_bn'],
+                    'user_id' => $aftersales['user_id'],
+                    'item_name' => $aftersales['item_name'] ?? '',
+                    'company_id' => $aftersales['company_id'],
+                    'refuse_reason' => $update['refuse_reason'],
+                    'order_id' => $aftersales['order_id'],
+                    'refund_amount' => $aftersales['refund_fee'],
+                ];
+                try {
+                    $this->sendWxaTemplateMsg($itemUpdate['aftersales_status'], $templateData);
+                } catch (\Exception $e) {
+                    app('log')->error('scheduleAutoRefuse sendWxaTemplateMsg failed: ' . $e->getMessage(), [
+                        'aftersales_bn' => $aftersales['aftersales_bn'] ?? '',
+                        'company_id' => $aftersales['company_id'] ?? '',
+                    ]);
                 }
             }
         }
@@ -3348,6 +3364,12 @@ class AftersalesService
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
+            // 锁定订单行，避免并发读改写 left_aftersales_num / 明细已申请数量
+            $lockedOrder = $normalOrderService->normalOrdersRepository->lockForUpdate($data['company_id'], $data['order_id']);
+            if (!$lockedOrder) {
+                throw new ResourceException('系统无此订单，无法申请售后');
+            }
+            $orderInfo['left_aftersales_num'] = $lockedOrder['left_aftersales_num'];
             // 创建售后单
             $total_refund_fee = 0;
             $total_refund_point = 0;
@@ -3433,10 +3455,11 @@ class AftersalesService
 
             // 创建售后主单据
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
-            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货
+            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货（条件扣减防并发超额）
             if (in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
-                $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
-                $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+                if ($normalOrderService->normalOrdersRepository->decrLeftAftersalesNum($data['company_id'], $data['order_id'], $apply_num) < 1) {
+                    throw new ResourceException('超出可申请数量');
+                }
             }
 
             $tradeService = new TradeService();
@@ -3486,7 +3509,7 @@ class AftersalesService
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -3593,6 +3616,12 @@ class AftersalesService
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
+            // 锁定订单行，避免并发读改写 left_aftersales_num / 明细已申请数量
+            $lockedOrder = $normalOrderService->normalOrdersRepository->lockForUpdate($data['company_id'], $data['order_id']);
+            if (!$lockedOrder) {
+                throw new ResourceException('系统无此订单，无法申请售后');
+            }
+            $orderInfo['left_aftersales_num'] = $lockedOrder['left_aftersales_num'];
             // 创建售后单
             $total_refund_fee = 0;
             $total_refund_point = 0;
@@ -3721,10 +3750,11 @@ class AftersalesService
             }
             // 创建售后主单据
             $aftersales = $this->aftersalesRepository->create($aftersales_data);
-            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货
+            // 仅退款不占用订单级可申请售后数量，只扣退货退款/换货（条件扣减防并发超额）
             if (in_array($aftersales_data['aftersales_type'], ['REFUND_GOODS', 'EXCHANGING_GOODS'])) {
-                $left_aftersales_num = $orderInfo['left_aftersales_num'] - $apply_num;
-                $normalOrderService->normalOrdersRepository->update(['company_id' => $data['company_id'], 'order_id' => $data['order_id']], ['left_aftersales_num' => $left_aftersales_num]);
+                if ($normalOrderService->normalOrdersRepository->decrLeftAftersalesNum($data['company_id'], $data['order_id'], $apply_num) < 1) {
+                    throw new ResourceException('超出可申请数量');
+                }
             }
             // 创建售后退款单
             $aftersalesRefundService = new AftersalesRefundService();
@@ -3779,7 +3809,7 @@ class AftersalesService
             ];
             event(new OrderProcessLogEvent($orderProcessLog));
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -3891,7 +3921,7 @@ class AftersalesService
             $update['refunded_num'] = $aftersalesDetail['num']; //并未返回时间入库数量，商家确定，就按申请数量为准
             $this->aftersalesDetailRepository->update($filter, $update);
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -3934,7 +3964,7 @@ class AftersalesService
             $this->aftersalesRepository->update($filter, $update);
             $this->aftersalesDetailRepository->update($filter, $update);
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -3943,47 +3973,180 @@ class AftersalesService
 
     public function getAftersaleRefundInfoByOrderIdItemId($orderId, $itemId, $companyId, $supplier_id = '')
     {
-        // 如果是支付取消订单，那就是原路返回子订单数据，否则就是走售后数据
-        $conn = app('registry')->getConnection('default');
-        $qb = $conn->createQueryBuilder();
-        $qb = $qb->select('sum(C.refunded_fee) as refunded_fee,sum(C.refunded_point) as refunded_point,sum(C.freight) as freight,C.refund_success_time,A.order_id,A.item_id,sum(A.num) as num,sum(A.refund_fee) as refund_fee,sum(A.refund_point) as refund_point')
-            ->from('aftersales_detail', 'A')
-            ->leftjoin('A','aftersales_refund', 'C', 'A.aftersales_bn = C.aftersales_bn')
-            ->where($qb->expr()->eq('A.company_id', $companyId))
-            ->andWhere($qb->expr()->eq('A.order_id', $qb->expr()->literal($orderId)))
-            ->andWhere($qb->expr()->eq('A.item_id',$qb->expr()->literal($itemId)))
-            ->andWhere($qb->expr()->in('C.refund_status', array_map(function($v) use ($qb) { 
-                return $qb->expr()->literal($v);
-            }, ["AUDIT_SUCCESS", "SUCCESS"] ))); // REFUND_SUCCESS
-        if ($supplier_id) {
-            $qb = $qb->andwhere($qb->expr()->eq('C.supplier_id',$qb->expr()->literal($supplier_id)));
-        }    
-        $info = $qb->execute()->fetch();
-        
-        return $info ?? [];
+        $map = $this->getAftersaleRefundInfoByOrderIdItemIds($companyId, [
+            ['order_id' => $orderId, 'item_id' => $itemId],
+        ], $supplier_id);
+
+        return $map[$orderId][$itemId] ?? [];
     }
 
-     public function getAftersaleRefundInfoByOrderId($orderId, $companyId, $supplier_id = '')
+    /**
+     * 批量按 order_id + item_id 汇总售后退款（与单条语义一致，供导出预取）
+     *
+     * @param array $orderItemPairs [['order_id'=>..., 'item_id'=>...], ...]
+     * @return array [order_id][item_id] => row
+     */
+    public function getAftersaleRefundInfoByOrderIdItemIds($companyId, array $orderItemPairs, $supplier_id = '')
     {
-        // 如果是支付取消订单，那就是原路返回子订单数据，否则就是走售后数据
+        if (empty($orderItemPairs)) {
+            return [];
+        }
+
+        $orderIds = [];
+        $itemIds = [];
+        $wanted = [];
+        foreach ($orderItemPairs as $pair) {
+            $oid = $pair['order_id'] ?? null;
+            $iid = $pair['item_id'] ?? null;
+            if ($oid === null || $oid === '' || $iid === null || $iid === '') {
+                continue;
+            }
+            $orderIds[] = $oid;
+            $itemIds[] = $iid;
+            $wanted[(string) $oid][(string) $iid] = true;
+        }
+        $orderIds = array_values(array_unique($orderIds));
+        $itemIds = array_values(array_unique($itemIds));
+        if (empty($orderIds) || empty($itemIds)) {
+            return [];
+        }
+
+        // 先按 aftersales_bn 聚合退款，再 JOIN 明细，避免一对多放大；
+        // 非聚合列用 MAX() + GROUP BY，兼容 MySQL only_full_group_by。
         $conn = app('registry')->getConnection('default');
-        $qb = $conn->createQueryBuilder();
-        $qb = $qb->select('sum(C.refunded_fee) as refunded_fee,sum(C.refunded_point) as refunded_point,sum(C.freight) as freight,C.refund_success_time,A.order_id,sum(COALESCE(A.num, 0)) as num, sum(D.cost_price * COALESCE(A.num, 0)) as refund_cost_fee, sum(A.refund_fee) as refund_fee, sum(A.refund_point) as refund_point')
-            ->from('aftersales_detail', 'A')    
-            ->leftjoin('A','aftersales_refund', 'C', 'A.aftersales_bn = C.aftersales_bn')
-            ->leftjoin('A','items', 'D', 'A.item_id = D.item_id')
-            ->where($qb->expr()->eq('A.company_id', $companyId))
-            ->andWhere($qb->expr()->eq('A.order_id', $qb->expr()->literal($orderId)))
-            ->andWhere($qb->expr()->in('C.refund_status', array_map(function($v) use ($qb) { 
-                return $qb->expr()->literal($v);
-            }, ["AUDIT_SUCCESS", "SUCCESS"] ))); // REFUND_SUCCESS
+        $refundStatuses = array_map(function ($v) use ($conn) {
+            return $conn->quote($v);
+        }, ['AUDIT_SUCCESS', 'SUCCESS']);
+        $refundStatusList = implode(',', $refundStatuses);
+        $refundSubSql = "SELECT aftersales_bn,"
+            . " SUM(refunded_fee) AS refunded_fee,"
+            . " SUM(refunded_point) AS refunded_point,"
+            . " SUM(freight) AS freight,"
+            . " MAX(refund_success_time) AS refund_success_time"
+            . " FROM aftersales_refund"
+            . " WHERE refund_status IN ({$refundStatusList})";
         if ($supplier_id) {
-            $qb = $qb->andwhere($qb->expr()->eq('C.supplier_id',$qb->expr()->literal($supplier_id)));
-        }    
-        $qb = $qb->groupBy('A.order_id');
-        $info = $qb->execute()->fetch();
-            
-        return $info ?? [];
+            $refundSubSql .= ' AND supplier_id = ' . $conn->quote($supplier_id);
+        }
+        $refundSubSql .= ' GROUP BY aftersales_bn';
+
+        $qb = $conn->createQueryBuilder();
+        $qb = $qb->select(
+            'SUM(C.refunded_fee) as refunded_fee,'
+            . 'SUM(C.refunded_point) as refunded_point,'
+            . 'SUM(C.freight) as freight,'
+            . 'MAX(C.refund_success_time) as refund_success_time,'
+            . 'A.order_id,'
+            . 'A.item_id,'
+            . 'SUM(A.num) as num,'
+            . 'SUM(A.refund_fee) as refund_fee,'
+            . 'SUM(A.refund_point) as refund_point'
+        )
+            ->from('aftersales_detail', 'A')
+            ->innerJoin('A', "({$refundSubSql})", 'C', 'A.aftersales_bn = C.aftersales_bn')
+            ->where($qb->expr()->eq('A.company_id', (int) $companyId))
+            ->andWhere($qb->expr()->in('A.order_id', array_map(function ($id) use ($qb) {
+                return $qb->expr()->literal($id);
+            }, $orderIds)))
+            ->andWhere($qb->expr()->in('A.item_id', array_map(function ($id) use ($qb) {
+                return $qb->expr()->literal($id);
+            }, $itemIds)))
+            ->groupBy('A.order_id')
+            ->addGroupBy('A.item_id');
+
+        $rows = $qb->execute()->fetchAll() ?: [];
+        $map = [];
+        foreach ($rows as $row) {
+            $oid = (string) $row['order_id'];
+            $iid = (string) $row['item_id'];
+            if (!isset($wanted[$oid][$iid])) {
+                continue;
+            }
+            $map[$row['order_id']][$row['item_id']] = $row;
+        }
+
+        return $map;
+    }
+
+    public function getAftersaleRefundInfoByOrderId($orderId, $companyId, $supplier_id = '')
+    {
+        $map = $this->getAftersaleRefundInfoByOrderIds($companyId, [$orderId], $supplier_id);
+
+        return $map[$orderId] ?? [];
+    }
+
+    /**
+     * 批量按 order_id 汇总售后退款（与单条语义一致，供对账单预取）
+     *
+     * @return array [order_id] => row
+     */
+    public function getAftersaleRefundInfoByOrderIds($companyId, array $orderIds, $supplier_id = '')
+    {
+        $orderIds = array_values(array_unique(array_filter($orderIds, function ($id) {
+            return $id !== null && $id !== '';
+        })));
+        if (empty($orderIds)) {
+            return [];
+        }
+
+        // 明细按 aftersales_bn 预聚合后再 JOIN 退款聚合，避免一对多放大；
+        // refund_success_time 用 MAX()，兼容 MySQL only_full_group_by。
+        $conn = app('registry')->getConnection('default');
+        $refundStatuses = array_map(function ($v) use ($conn) {
+            return $conn->quote($v);
+        }, ['AUDIT_SUCCESS', 'SUCCESS']);
+        $refundStatusList = implode(',', $refundStatuses);
+
+        $refundSubSql = "SELECT aftersales_bn,"
+            . " SUM(refunded_fee) AS refunded_fee,"
+            . " SUM(refunded_point) AS refunded_point,"
+            . " SUM(freight) AS freight,"
+            . " MAX(refund_success_time) AS refund_success_time"
+            . " FROM aftersales_refund"
+            . " WHERE refund_status IN ({$refundStatusList})";
+        if ($supplier_id) {
+            $refundSubSql .= ' AND supplier_id = ' . $conn->quote($supplier_id);
+        }
+        $refundSubSql .= ' GROUP BY aftersales_bn';
+
+        $orderIdListSql = implode(',', array_map(function ($id) use ($conn) {
+            return $conn->quote($id);
+        }, $orderIds));
+
+        $detailSubSql = "SELECT A.aftersales_bn, A.order_id,"
+            . " SUM(COALESCE(A.num, 0)) AS num,"
+            . " SUM(COALESCE(D.cost_price, 0) * COALESCE(A.num, 0)) AS refund_cost_fee,"
+            . " SUM(A.refund_fee) AS refund_fee,"
+            . " SUM(A.refund_point) AS refund_point"
+            . " FROM aftersales_detail A"
+            . " LEFT JOIN items D ON A.item_id = D.item_id"
+            . " WHERE A.company_id = " . (int) $companyId
+            . " AND A.order_id IN ({$orderIdListSql})"
+            . " GROUP BY A.aftersales_bn, A.order_id";
+
+        $qb = $conn->createQueryBuilder();
+        $qb = $qb->select(
+            'SUM(C.refunded_fee) as refunded_fee,'
+            . 'SUM(C.refunded_point) as refunded_point,'
+            . 'SUM(C.freight) as freight,'
+            . 'MAX(C.refund_success_time) as refund_success_time,'
+            . 'A.order_id,'
+            . 'SUM(A.num) as num,'
+            . 'SUM(A.refund_cost_fee) as refund_cost_fee,'
+            . 'SUM(A.refund_fee) as refund_fee,'
+            . 'SUM(A.refund_point) as refund_point'
+        )
+            ->from("({$detailSubSql})", 'A')
+            ->innerJoin('A', "({$refundSubSql})", 'C', 'A.aftersales_bn = C.aftersales_bn')
+            ->groupBy('A.order_id');
+        $rows = $qb->execute()->fetchAll() ?: [];
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[$row['order_id']] = $row;
+        }
+
+        return $map;
     }
 
      public function getSuccAftersaleRefundInfoByOrderIdList($companyId, $orderIdList)

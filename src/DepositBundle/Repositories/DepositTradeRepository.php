@@ -128,7 +128,7 @@ class DepositTradeRepository extends EntityRepository
             $conn->update($this->table, $updateData, ['deposit_trade_id' => $depositTradeId]);
             $conn->commit();
             return $this->find($depositTradeId);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }

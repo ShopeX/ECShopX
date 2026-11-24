@@ -123,7 +123,8 @@ class ItemsRepository extends EntityRepository
             if ($is_log) {
                 app('log')->info('NormalGoodsStoreUploadService updateStore itemId:'.$itemId.',store===>'.$store.',itemsEnt is null,line:'.__LINE__);
             }
-            return true;
+            // 实体不存在时返回 null，调用方须 is_array 判断，避免把 bool 当数组访问
+            return null;
         }
 
         $itemsEnt->setStore($store);
@@ -301,7 +302,8 @@ class ItemsRepository extends EntityRepository
                 if (count($list) > 1) {
                     list($v, $k) = $list;
                     if ($k == 'direct') {
-                        $orWhere[] = $qb->andWhere($qb->expr()->eq(($alias ? $alias.'.' : '').$v, $filterValue));
+                        // andWhere 返回 QueryBuilder，不能塞进 orX；直接放入表达式
+                        $orWhere[] = $qb->expr()->eq(($alias ? $alias.'.' : '').$v, $filterValue);
                         continue;
                     }
                     if ($k == 'contains') {

@@ -65,21 +65,29 @@ class DistributeLogsService
         }
 
         $distributeCountService = new DistributeCountService();
-        $totalPage = ceil($totalCount / 100);
+        // 先按页码 $i 拉全量待结算行，再逐条结算；避免边结算边翻页漏单
+        $pendingRows = [];
+        $totalPage = (int) ceil($totalCount / 100);
         for ($i = 1; $i <= $totalPage; $i++) {
-            $data = $this->entityRepository->lists($filter, ["create_time" => "DESC"], 100, 1);
+            $data = $this->entityRepository->lists($filter, ["create_time" => "DESC"], 100, $i);
+            if (empty($data['list'])) {
+                break;
+            }
             foreach ($data['list'] as $row) {
-                $conn = app('registry')->getConnection('default');
-                $conn->beginTransaction();
-                try {
-                    $this->entityRepository->updateOneBy(['id' => $row], ['is_close' => true]);
-                    $distributeCountService->addSettleRebate($row['company_id'], $row['distributor_id'], $row['total_rebate']);
-                    $conn->commit();
-                } catch (\Exception $e) {
-                    $conn->rollback();
-                    app('log')->debug('定时执行佣金结算失败=>'.$e->getMessage());
-                    app('log')->debug('定时执行佣金结算失败参数=>'. var_export($row, 1));
-                }
+                $pendingRows[] = $row;
+            }
+        }
+        foreach ($pendingRows as $row) {
+            $conn = app('registry')->getConnection('default');
+            $conn->beginTransaction();
+            try {
+                $this->entityRepository->updateOneBy(['id' => $row['id']], ['is_close' => true]);
+                $distributeCountService->addSettleRebate($row['company_id'], $row['distributor_id'], $row['total_rebate']);
+                $conn->commit();
+            } catch (\Exception $e) {
+                $conn->rollback();
+                app('log')->debug('定时执行佣金结算失败=>'.$e->getMessage());
+                app('log')->debug('定时执行佣金结算失败参数=>'. var_export($row, 1));
             }
         }
         return true;

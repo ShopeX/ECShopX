@@ -143,10 +143,12 @@ class ChinaumsPayDivisionService
                 $ordersDivisionService->updateBy(['id' => $orderDivision['id']], ['status' => $ordersDivisionService::STATUS_SKIP]);
                 continue;
             }
-            $totalRateFee = bcmul($orderDivision['total_fee'], $paymentSetting['rate'] / 100);
-            $refundRateFee = bcmul($appliedTotalRefundFee, $paymentSetting['rate'] / 100);
-            $finalRateFee = bcsub($totalRateFee, $refundRateFee);
-            $divisionFee = bcsub($actualFee, $finalRateFee);
+            // 费率用字符串 + bcmul scale=2，避免默认 scale=0 把小费率手续费抹成 0
+            $rate = bcdiv((string) $paymentSetting['rate'], '100', 6);
+            $totalRateFee = bcmul((string) $orderDivision['total_fee'], $rate, 2);
+            $refundRateFee = bcmul((string) $appliedTotalRefundFee, $rate, 2);
+            $finalRateFee = bcsub($totalRateFee, $refundRateFee, 2);
+            $divisionFee = bcsub($actualFee, $finalRateFee, 2);
             app('log')->info('划付上传 totalRateFee:'.$totalRateFee);
             app('log')->info('划付上传 refundRateFee:'.$refundRateFee);
             app('log')->info('划付上传 finalRateFee:'.$finalRateFee);
@@ -188,9 +190,9 @@ class ChinaumsPayDivisionService
         $this->divisionDetailRepository->updateBy(['id' => $divisionDetailIds], ['division_id' => $divisionResult['id']]);
 
         if ($distributorInfo['dealer_id'] == 0) {//未关联经销商两方分账
-            $headquartersProportion = $splitLedgerInfo['headquarters_proportion'] / 100;
-            $headquartersFee = bcmul($distributorDivisionFee, $headquartersProportion);
-            $distributorFee = bcsub($distributorDivisionFee, $headquartersFee);
+            $headquartersProportion = bcdiv((string) $splitLedgerInfo['headquarters_proportion'], '100', 6);
+            $headquartersFee = bcmul((string) $distributorDivisionFee, $headquartersProportion, 2);
+            $distributorFee = bcsub($distributorDivisionFee, $headquartersFee, 2);
 
             $uploadDivision[] = [
                 'division_id' => $divisionResult['id'],
@@ -212,11 +214,11 @@ class ChinaumsPayDivisionService
                 'distributor_id' => $distributorId,
             ];
         } else {//关联经销商三方分账
-            $headquartersProportion = $splitLedgerInfo['headquarters_proportion'] / 100;
-            $dealerProportion = $splitLedgerInfo['dealer_proportion'] / 100;
-            $headquartersFee = bcmul($distributorDivisionFee, $headquartersProportion);
-            $dealerFee = bcmul($distributorDivisionFee, $dealerProportion);
-            $distributorFee = bcsub($distributorDivisionFee, $headquartersFee + $dealerFee);
+            $headquartersProportion = bcdiv((string) $splitLedgerInfo['headquarters_proportion'], '100', 6);
+            $dealerProportion = bcdiv((string) $splitLedgerInfo['dealer_proportion'], '100', 6);
+            $headquartersFee = bcmul((string) $distributorDivisionFee, $headquartersProportion, 2);
+            $dealerFee = bcmul((string) $distributorDivisionFee, $dealerProportion, 2);
+            $distributorFee = bcsub($distributorDivisionFee, bcadd($headquartersFee, $dealerFee, 2), 2);
 
             $uploadDivision[] = [
                 'division_id' => $divisionResult['id'],

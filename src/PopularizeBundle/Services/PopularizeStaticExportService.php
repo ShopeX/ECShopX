@@ -56,9 +56,9 @@ class PopularizeStaticExportService implements ExportFileInterface
         $brokerageService = new BrokerageService();
         $limit = 1;
         $page  = 1;
-        $data = $brokerageService->getSalesmanBrokerageCountList($filter, $limit, $page );
+        $data = $brokerageService->getBrokerageDbList($filter, $page, $limit );
 
-        // $data = $brokerageService->getSalesmanBrokeragelistsBySql($filter, 1 ,1);
+        // $data = $brokerageService->getBrokerageDbList($filter, 1, 1);
         app('log')->info(':export:brokerage:'.__FUNCTION__.__LINE__.':data:' . var_export($data, true));
 
         $count = count($data);
@@ -94,8 +94,8 @@ class PopularizeStaticExportService implements ExportFileInterface
         // $promoterService = new PromoterService();
         for ($i = 1; $i <= $totalPage; $i++) {
             $promoterData = [];
-            // getSalesmanBrokeragelistsBySql
-            $list = $brokerageService->getSalesmanBrokerageCountList($filter, $limit ,$i);
+            // getBrokerageDbList
+            $list = $brokerageService->getBrokerageDbList($filter, $i, $limit);
             app('log')->info(':export:brokerage-static:'.__FUNCTION__.__LINE__.':page:i::::::' . json_encode($i)); 
             app('log')->info(':export:brokerage-static:'.__FUNCTION__.__LINE__.':filter:' . json_encode($filter)); 
             app('log')->info(':export:brokerage-static:'.__FUNCTION__.__LINE__.':list:' . json_encode($list)); 

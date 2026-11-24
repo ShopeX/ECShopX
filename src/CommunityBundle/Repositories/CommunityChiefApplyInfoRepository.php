@@ -19,6 +19,7 @@ namespace CommunityBundle\Repositories;
 
 use CommunityBundle\Entities\CommunityChiefApplyInfo;
 use Dingo\Api\Exception\ResourceException;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityRepository;
 
 class CommunityChiefApplyInfoRepository extends EntityRepository
@@ -36,10 +37,45 @@ class CommunityChiefApplyInfoRepository extends EntityRepository
         $entity = $this->setColumnNamesData($entity, $data);
 
         $em = $this->getEntityManager();
-        $em->persist($entity);
-        $em->flush();
+        try {
+            $em->persist($entity);
+            $em->flush();
+        } catch (UniqueConstraintViolationException $e) {
+            throw new ResourceException('不能重复申请');
+        } catch (\Doctrine\DBAL\Exception $e) {
+            // 兼容部分驱动将 1062 包成通用 DBAL Exception
+            if ($this->isDuplicateKeyException($e)) {
+                throw new ResourceException('不能重复申请');
+            }
+            throw $e;
+        } catch (\PDOException $e) {
+            if ($this->isDuplicateKeyException($e)) {
+                throw new ResourceException('不能重复申请');
+            }
+            throw $e;
+        }
 
         return $this->getColumnNamesData($entity);
+    }
+
+    /**
+     * 是否唯一键冲突（MySQL 1062 / SQLSTATE 23000）
+     */
+    private function isDuplicateKeyException(\Throwable $e): bool
+    {
+        $cur = $e;
+        while ($cur) {
+            if ($cur instanceof UniqueConstraintViolationException) {
+                return true;
+            }
+            $code = (string) $cur->getCode();
+            $msg = $cur->getMessage();
+            if ($code === '23000' || strpos($msg, '1062') !== false || stripos($msg, 'Duplicate entry') !== false) {
+                return true;
+            }
+            $cur = $cur->getPrevious();
+        }
+        return false;
     }
 
     /**

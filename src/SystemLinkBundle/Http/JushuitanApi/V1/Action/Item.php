@@ -181,7 +181,7 @@ class Item extends Controller
                 $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
                 $result = $itemsRepository->updateStore($itemId, $value['quantity']);
             }
-            if (!$result){
+            if (!is_array($result)){
                 $failUpdateItem[] = $value['bn'];
             }
         }
@@ -261,7 +261,7 @@ class Item extends Controller
                 $pointsmallItemsRepository = app('registry')->getManager('default')->getRepository(PointsmallItems::class);
                 $result = $pointsmallItemsRepository->updateStore($itemId, $value['quantity']);
             }
-            if (!$result){
+            if (!is_array($result)){
                 $failUpdateItem[] = $value['bn'];
             }
         }

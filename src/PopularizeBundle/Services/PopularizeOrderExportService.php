@@ -72,7 +72,7 @@ class PopularizeOrderExportService implements ExportFileInterface
         // $data = $promoterService->getPromoterList($filter, 1, 1);
 
         $brokerageService = new BrokerageService();
-        $data = $brokerageService->getSalesmanBrokeragelistsBySql($filter, 1 ,1);
+        $data = $brokerageService->getBrokerageDbList($filter, 1, 1);
         app('log')->info(':export:brokerage:'.__FUNCTION__.__LINE__.':data:' . var_export($data, true));
 
         $count = $data['total_count'];
@@ -110,7 +110,7 @@ class PopularizeOrderExportService implements ExportFileInterface
             $promoterData = [];
             // $result = $promoterService->getPromoterList($filter, $i, $limit);
           
-            $result = $brokerageService->getSalesmanBrokeragelistsBySql($filter, $limit ,$i);
+            $result = $brokerageService->getBrokerageDbList($filter, $i, $limit);
             app('log')->info(':export:brokerage:'.__FUNCTION__.__LINE__.':filter:' . var_export($filter, true)); 
 
 

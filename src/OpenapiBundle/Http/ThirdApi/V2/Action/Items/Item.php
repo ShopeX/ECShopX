@@ -271,7 +271,7 @@ class Item extends Controller
                     $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
                     $result = $itemsRepository->updateStore($itemBnList[$value['sku_id']]['item_id'], $value['stock']);
                 }
-                if (!$result) {
+                if (!is_array($result)) {
                     $updateError[] = ['sku_id' => $value['sku_id'], 'error' => '更新失败'];
                     continue;
                 }

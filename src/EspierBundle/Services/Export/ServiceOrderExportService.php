@@ -88,7 +88,7 @@ class ServiceOrderExportService implements ExportFileInterface
                                 // 直接赋值，不再添加引号，由 ExportFileService 统一处理
                                 $orderList[$key."-".$i][$k] = $value[$k];
                             } elseif ($k == "total_fee" && isset($value[$k])) {
-                                $orderList[$key."-".$i][$k] = $value[$k] / 100;
+                                $orderList[$key."-".$i][$k] = bcdiv($value[$k], 100, 2);
                             } elseif ($k == "order_source" && isset($value[$k])) {
                                 $orderList[$key."-".$i][$k] = ($value[$k] == 'shop') ? '代客下单' : '会员自主下单';
                             } elseif (isset($value[$k])) {
@@ -106,7 +106,7 @@ class ServiceOrderExportService implements ExportFileInterface
                             // 直接赋值，不再添加引号，由 ExportFileService 统一处理
                             $orderList[$key][$k] = $value[$k];
                         } elseif ($k == "total_fee" && isset($value[$k])) {
-                            $orderList[$key][$k] = $value[$k] / 100;
+                            $orderList[$key][$k] = bcdiv($value[$k], 100, 2);
                         } elseif ($k == "order_source" && isset($value[$k])) {
                             $orderList[$key][$k] = ($value[$k] == 'shop') ? '代客下单' : '会员自主下单';
                         } elseif (isset($value[$k])) {

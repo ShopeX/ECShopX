@@ -159,7 +159,7 @@ class TaskBrokerageExportService implements ExportFileInterface
                     if ($k == 'status') {
                         $data[$key][$k] = $value[$k] ? '已达标' : $value['limit_desc'];
                     } elseif ($k == 'rebate_money' || $k == 'total_fee') {
-                        $data[$key][$k] = '¥'.$value[$k] / 100;
+                        $data[$key][$k] = '¥'.bcdiv($value[$k], 100, 2);
                     } elseif ($k == 'rebate_type') {
                         $data[$key][$k] = $value[$k] == 'total_num' ? '按总数量' : '按总金额';
                     } elseif ($k == 'wait' || $k == 'finish' || $k == 'close') {

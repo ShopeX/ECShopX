@@ -23,6 +23,7 @@ use KaquanBundle\Entities\RelItems;
 use KaquanBundle\Entities\RelMemberTags;
 use KaquanBundle\Entities\UserDiscount;
 use KaquanBundle\Events\CouponAddEvent;
+use KaquanBundle\Events\CouponDeleteEvent;
 use KaquanBundle\Events\CouponEditEvent;
 use KaquanBundle\Interfaces\KaquanInterface;
 use KaquanBundle\Repositories\DiscountCardsRepository;
@@ -106,14 +107,50 @@ class DiscountNewGiftCardService implements KaquanInterface
 
     public function deleteKaquan($filter, $appId = '')
     {
+        $userDiscountRepository = app('registry')->getManager('default')->getRepository(UserDiscount::class);
+        $userDiscount = $userDiscountRepository->get(['card_id' => $filter['card_id']]);
+        if ($userDiscount) {
+            throw new ResourceException(trans('KaquanBundle.delete_coupon_failed_members_received'));
+        }
+
+        $conn = app('registry')->getConnection('default');
+        $conn->beginTransaction();
+        try {
+            $result = $this->discountCardRepository->delete($filter);
+            if ($result) {
+                $this->relItemsRepository->deleteQuick($filter);
+                $this->relMemberTagRepository->deleteQuick($filter);
+            }
+            $conn->commit();
+        } catch (\Exception $e) {
+            $conn->rollback();
+            throw $e;
+        }
+
+        if ($result && $appId) {
+            $wechatService = new WechatCardService($filter['company_id'], $appId);
+            $wechatService->deleteWechatCard($filter);
+        }
+
+        event(new CouponDeleteEvent([
+            'card_id' => $filter['card_id'],
+            'company_id' => $filter['company_id'],
+        ]));
+
+        return true;
     }
 
     /**
      * @param $filter
-     * @return array|void
+     * @return array
      */
     public function getKaquanDetail($filter)
     {
+        if (!$filter) {
+            throw new ResourceException(trans('KaquanBundle.coupon_invalid'));
+        }
+        // 复用 DiscountCardService 详情组装（含 new_gift 生效态等字段）
+        return (new DiscountCardService())->getKaquanDetail($filter);
     }
 
     public function getKaquanList($offset, $count, $filter = [])

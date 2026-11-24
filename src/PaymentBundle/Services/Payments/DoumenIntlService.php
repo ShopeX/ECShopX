@@ -19,7 +19,6 @@ namespace PaymentBundle\Services\Payments;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
-use LogicException;
 use OrdersBundle\Entities\NormalOrdersItems;
 use OrdersBundle\Repositories\NormalOrdersItemsRepository;
 use OrdersBundle\Services\TradeService;
@@ -318,9 +317,30 @@ class DoumenIntlService implements PaymentInterface
         return $result;
     }
 
+    /**
+     * 获取支付订单状态信息
+     */
     public function getPayOrderInfo($companyId, $trade_id)
     {
-        throw new LogicException('Doumen Intl getPayOrderInfo is not implemented');
+        $paymentSetting = $this->getRawPaymentSetting($companyId);
+        if (empty($paymentSetting) || empty($paymentSetting['is_open'])) {
+            throw new BadRequestHttpException('请检查斗门国际支付配置');
+        }
+
+        $tradeService = new TradeService();
+        $tradeInfo = $tradeService->getInfo(['trade_id' => $trade_id, 'company_id' => $companyId]);
+        if (!$tradeInfo) {
+            throw new BadRequestHttpException('交易ID不存在');
+        }
+
+        if (empty($tradeInfo['transaction_id'])) {
+            return [];
+        }
+
+        return $this->query([
+            'company_id' => $companyId,
+            'transaction_id' => $tradeInfo['transaction_id'],
+        ]);
     }
 
     /**

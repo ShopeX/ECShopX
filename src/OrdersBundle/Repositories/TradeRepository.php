@@ -242,48 +242,73 @@ class TradeRepository extends EntityRepository
     }
 
     /**
-     * 更新支付状态
+     * 更新支付状态（FOR UPDATE + WHERE trade_state=NOTPAY，防止重复回调双写）
      */
     public function updateStatus($tradeId, $status = null, $options = array())
     {
-        $entity = $this->find($tradeId);
-        if (!$entity) {
-            throw new \Exception('更新订单不存在');
-        }
-        if ($entity->getTradeState() != 'NOTPAY') {
-            throw new BadRequestHttpException('更新已处理，不需要更新');
-        }
-
-        $updateData = [
-            'trade_state' => $status,
-            'bank_type' => isset($options['bank_type']) ? $options['bank_type'] : null,
-            'pay_type' => isset($options['pay_type']) ? $options['pay_type'] : null,
-            // 'time_expire'    => time(),
-            'coupon_fee' => isset($options['coupon_fee']) ? $options['coupon_fee'] : 0,
-            'coupon_info' => isset($options['coupon_info']) ? json_encode($options['coupon_info']) : null
-        ];
-        if ($status == 'SUCCESS') {
-            $updateData['time_expire'] = time();
-            $companyId = $entity->getCompanyId();
-            $distributorId = $entity->getDistributorId();
-            $orderId = $entity->getOrderId();
-            // 增加订单序号
-            $tradeNo = (new TradeService())->getTodayTradeNo($companyId, $distributorId, $orderId);
-            $updateData['trade_no'] = date('md').'-'.$tradeNo;
-        }
-
-        if (isset($options['transaction_id'])) {
-            $updateData['transaction_id'] = $options['transaction_id'];
-        }
-        if (isset($options['pay_channel'])) {
-            $updateData['pay_channel'] = $options['pay_channel'];
-        }
-        $entity = $this->setColumnNamesData($entity, $updateData);
-
         $em = $this->getEntityManager();
-        $em->persist($entity);
-        $em->flush();
-        return $entity;
+        $conn = $em->getConnection();
+        $conn->beginTransaction();
+        try {
+            $lockedRow = $conn->fetchAssociative(
+                'SELECT trade_state, company_id, distributor_id, order_id FROM ' . $this->table . ' WHERE trade_id = ? FOR UPDATE',
+                [$tradeId]
+            );
+            if (!$lockedRow) {
+                throw new \Exception('更新订单不存在');
+            }
+            if ($lockedRow['trade_state'] !== 'NOTPAY') {
+                throw new BadRequestHttpException('更新已处理，不需要更新');
+            }
+
+            $updateData = [
+                'trade_state' => $status,
+                'bank_type' => isset($options['bank_type']) ? $options['bank_type'] : null,
+                'pay_type' => isset($options['pay_type']) ? $options['pay_type'] : null,
+                'coupon_fee' => isset($options['coupon_fee']) ? $options['coupon_fee'] : 0,
+                'coupon_info' => isset($options['coupon_info']) ? json_encode($options['coupon_info']) : null,
+            ];
+            if ($status == 'SUCCESS') {
+                $updateData['time_expire'] = time();
+                $tradeNo = (new TradeService())->getTodayTradeNo(
+                    $lockedRow['company_id'],
+                    $lockedRow['distributor_id'],
+                    $lockedRow['order_id']
+                );
+                $updateData['trade_no'] = date('md') . '-' . $tradeNo;
+            }
+            if (isset($options['transaction_id'])) {
+                $updateData['transaction_id'] = $options['transaction_id'];
+            }
+            if (isset($options['pay_channel'])) {
+                $updateData['pay_channel'] = $options['pay_channel'];
+            }
+
+            $affected = (int) $conn->update(
+                $this->table,
+                $updateData,
+                ['trade_id' => $tradeId, 'trade_state' => 'NOTPAY']
+            );
+            if ($affected !== 1) {
+                throw new BadRequestHttpException('更新已处理，不需要更新');
+            }
+
+            $conn->commit();
+
+            $entity = $this->find($tradeId);
+            if ($entity) {
+                $em->refresh($entity);
+            }
+            if (!$entity) {
+                throw new \Exception('更新订单不存在');
+            }
+            return $entity;
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollback();
+            }
+            throw $e;
+        }
     }
 
     /**

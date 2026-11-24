@@ -17,10 +17,11 @@
 
 namespace OpenapiBundle\Http\ThirdApi\V2\Action\Distributor;
 
+use Dingo\Api\Exception\ResourceException;
 use OpenapiBundle\Http\Controllers\Controller;
 
 /**
- * 店铺售后地址
+ * 店铺售后地址（尚未实现，显式拒绝避免静默空响应）
  * Class DistributorAftersaleAddressController
  * @package OpenapiBundle\Http\ThirdApi\V2\Action\Distributor
  */
@@ -28,21 +29,21 @@ class DistributorAftersaleAddressController extends Controller
 {
     public function list()
     {
-        // TODO 查询店铺售后地址列表
+        throw new ResourceException('店铺售后地址接口未实现');
     }
 
     public function create()
     {
-        // TODO 新增店铺售后地址
+        throw new ResourceException('店铺售后地址接口未实现');
     }
 
     public function update()
     {
-        // TODO 修改店铺售后地址
+        throw new ResourceException('店铺售后地址接口未实现');
     }
 
     public function delete()
     {
-        // TODO 删除店铺售后地址
+        throw new ResourceException('店铺售后地址接口未实现');
     }
 }

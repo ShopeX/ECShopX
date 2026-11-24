@@ -88,7 +88,7 @@ class CashWithdrawalExportService implements ExportFileInterface
                             }
                             $cashData[$key][$k] = $title;
                         } elseif ($k == 'money') {
-                            $cashData[$key][$k] = '¥'.$value[$k] / 100;
+                            $cashData[$key][$k] = '¥'.bcdiv($value[$k], 100, 2);
                         } else {
                             $cashData[$key][$k] = $value[$k];
                         }

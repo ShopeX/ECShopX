@@ -163,7 +163,10 @@ class UserGroupService
             $conn->commit();
 
             return [ 'result' => true ];
-        } catch (\Exception $exception) {
+        } catch (\Throwable $exception) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollback();
+            }
             throw $exception;
         }
     }

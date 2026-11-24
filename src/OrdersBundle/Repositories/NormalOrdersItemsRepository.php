@@ -59,6 +59,27 @@ class NormalOrdersItemsRepository extends EntityRepository
     }
 
     /**
+     * 原子递增 cancel_item_num，避免绝对值覆盖与并发丢失更新
+     *
+     * @return int 影响行数
+     */
+    public function incrCancelItemNum($id, $num)
+    {
+        $num = (int) $num;
+        $id = (int) $id;
+        if ($num <= 0 || $id <= 0) {
+            return 0;
+        }
+        $conn = $this->getEntityManager()->getConnection();
+        $qb = $conn->createQueryBuilder();
+        return (int) $qb->update($this->table)
+            ->set('cancel_item_num', 'cancel_item_num + ' . $num)
+            ->where('id = ' . $id)
+            ->andWhere('cancel_item_num + delivery_item_num + ' . $num . ' <= num')
+            ->execute();
+    }
+
+    /**
      * 更新多条数数据
      *
      * @param $filter 更新的条件
@@ -525,9 +546,17 @@ class NormalOrdersItemsRepository extends EntityRepository
      */
     public function getOrderFirstItem($order_id = '')
     {
-        $sql = 'SELECT id,user_id,item_id,item_bn,item_name,pic,num,price,item_fee,item_spec_desc,order_item_type
-            FROM orders_normal_orders_items WHERE order_id = "'.$order_id.'" limit 1 ';
-        $item = app('registry')->getConnection()->query($sql)->fetch();
+        if ($order_id === '' || $order_id === null) {
+            return [];
+        }
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder();
+        $qb->select('id,user_id,item_id,item_bn,item_name,pic,num,price,item_fee,item_spec_desc,order_item_type')
+            ->from('orders_normal_orders_items')
+            ->where($qb->expr()->eq('order_id', ':order_id'))
+            ->setParameter('order_id', $order_id)
+            ->setMaxResults(1);
+        $item = $qb->execute()->fetch();
         if (!empty($item)) {
             return [$item];
         }

@@ -26,10 +26,6 @@ $api->version('v1', function ($api) {
         //根据店铺id获取店铺售后地址
         $api->get('/wxapp/distributor/aftersaleaddress', ['as' => 'front.wxapp.distributor.aftersaleaddress',  'uses'=>'Distributor@getAftersaleAddressByDistributor']);
 
-        // 业务员佣金提现申请-已支持h5
-        $api->post('/wxapp/salesman/applyCashWithdrawal', ['as' => 'front.wxapp.salesman.cash_withdrawal.apply',  'uses'=>'CashWithdrawal@salesmanApplyCashWithdrawal']);
-        // 业务员提现申请列表-已支持h5
-        $api->get('/wxapp/salesman/getCashWithdrawalList', ['as' => 'front.wxapp.salesman.cash_withdrawal.list',  'uses'=>'CashWithdrawal@salesmanGetCashWithdrawalList']);
 
         //自配送员店铺列表
         $api->get('/wxapp/selfdelivery/getDistributorList', ['as' => 'front.wxapp.selfdelivery.distributor.list',  'uses'=>'SelfDeliveryStaff@getSelfDeliveryStaffDistributor']);

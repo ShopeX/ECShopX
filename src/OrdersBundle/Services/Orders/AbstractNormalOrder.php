@@ -484,7 +484,7 @@ class AbstractNormalOrder implements OrderInterface
             }
 
             return $orderInfo;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $error = [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -515,7 +515,9 @@ class AbstractNormalOrder implements OrderInterface
                     continue;
                 }
             }
-            if (($num = $item['num'] - $item['delivery_item_num']) > 0) {
+            // 扣除已取消数量，避免重复取消
+            $cancelItemNum = intval($item['cancel_item_num'] ?? 0);
+            if (($num = $item['num'] - $item['delivery_item_num'] - $cancelItemNum) > 0) {
                 $detail[] = [
                     'id' => $item['id'],
                     'num' => $num,
@@ -538,76 +540,92 @@ class AbstractNormalOrder implements OrderInterface
             'operator_type' => $params['operator_type'],
             'operator_id' => $params['operator_id'],
         ];
-        $aftersalesService = new AftersalesService();
-        $result = $aftersalesService->create($aftersalesParams);
 
-        if ($result) {
-            foreach ($detail as $row) {
-                $this->normalOrdersItemsRepository->update(['id' => $row['id']], ['cancel_item_num' => $row['num']]);
-            }
+        $conn = app('registry')->getConnection('default');
+        $conn->beginTransaction();
+        try {
+            $aftersalesService = new AftersalesService();
+            $result = $aftersalesService->create($aftersalesParams);
 
-            $order_status = 'WAIT_BUYER_CONFIRM';
-            $orderItems = $this->normalOrdersItemsRepository->get($params['company_id'], $params['order_id']);
-            foreach ($orderItems as $v) {
-                $processNum = $v['delivery_item_num'] + intval($v['cancel_item_num']);//已发货和已取消的商品数量
-                if ($processNum < $v['num']) {
-                    $order_status = '';
+            if ($result) {
+                foreach ($detail as $row) {
+                    // 条件增量更新，避免绝对值覆盖与并发丢失
+                    $affected = $this->normalOrdersItemsRepository->incrCancelItemNum($row['id'], $row['num']);
+                    if ($affected !== 1) {
+                        throw new ResourceException(trans('OrdersBundle/Order.no_items_to_refund'));
+                    }
                 }
-            }
 
-            // 更新订单状态
-            if ($order_status) {
-                $finishTime = $this->getOrdersSetting($result['company_id'], 'order_finish_time');
-                $finishTime = $finishTime * 24 * 3600; //订单自动完成时间换算为秒数
-                $updateFilter = [
-                    'company_id' => $result['company_id'],
-                    'supplier_id' => $params['supplier_id'],
-                    'order_id' => $result['order_id']
-                ];
-                $updateData = [
-                    'auto_finish_time' => time() + $finishTime,
-                    'order_status' => 'WAIT_BUYER_CONFIRM',
-                ];
-                $this->update($updateFilter, $updateData);
-            }
-
-            //更新供应商订单状态
-            if ($params['supplier_id']) {
-                $updateInfo = [
-                    'order_status' => 'CANCEL',
-                    // 'cancel_status' => 'WAIT_PROCESS',
-                ];
+                $order_status = 'WAIT_BUYER_CONFIRM';
+                $orderItems = $this->normalOrdersItemsRepository->get($params['company_id'], $params['order_id']);
                 foreach ($orderItems as $v) {
-                    if ($v['supplier_id'] != $params['supplier_id']) {
-                        continue;
-                    }
-                    if ($v['delivery_item_num']) {
-                        $updateInfo['order_status'] = 'WAIT_BUYER_CONFIRM';
+                    $processNum = $v['delivery_item_num'] + intval($v['cancel_item_num']);//已发货和已取消的商品数量
+                    if ($processNum < $v['num']) {
+                        $order_status = '';
                     }
                 }
-                $updateFilter = [
-                    'company_id' => $params['company_id'],
-                    'supplier_id' => $params['supplier_id'],
-                    'order_id' => $params['order_id']
-                ];
-                $supplierOrderService = new SupplierOrderService();
-                $supplierOrderService->repository->updateOneBy($updateFilter, $updateInfo);
+
+                // 更新订单状态
+                if ($order_status) {
+                    $finishTime = $this->getOrdersSetting($result['company_id'], 'order_finish_time');
+                    $finishTime = $finishTime * 24 * 3600; //订单自动完成时间换算为秒数
+                    $updateFilter = [
+                        'company_id' => $result['company_id'],
+                        'supplier_id' => $params['supplier_id'],
+                        'order_id' => $result['order_id']
+                    ];
+                    $updateData = [
+                        'auto_finish_time' => time() + $finishTime,
+                        'order_status' => 'WAIT_BUYER_CONFIRM',
+                    ];
+                    $this->update($updateFilter, $updateData);
+                }
+
+                //更新供应商订单状态
+                if ($params['supplier_id']) {
+                    $updateInfo = [
+                        'order_status' => 'CANCEL',
+                        // 'cancel_status' => 'WAIT_PROCESS',
+                    ];
+                    foreach ($orderItems as $v) {
+                        if ($v['supplier_id'] != $params['supplier_id']) {
+                            continue;
+                        }
+                        if ($v['delivery_item_num']) {
+                            $updateInfo['order_status'] = 'WAIT_BUYER_CONFIRM';
+                        }
+                    }
+                    $updateFilter = [
+                        'company_id' => $params['company_id'],
+                        'supplier_id' => $params['supplier_id'],
+                        'order_id' => $params['order_id']
+                    ];
+                    $supplierOrderService = new SupplierOrderService();
+                    $supplierOrderService->repository->updateOneBy($updateFilter, $updateInfo);
+                }
+
+                // 自动退款
+                $autoAfterSales = $this->getOrdersSetting($result['company_id'], 'auto_aftersales');
+                if ($autoAfterSales) {
+                    $reviewParams = [
+                        'company_id' => $result['company_id'],
+                        'aftersales_bn' => $result['aftersales_bn'],
+                        'is_approved' => 1,
+                        'refund_fee' => $result['refund_fee'],
+                        'refund_point' => $result['refund_point'],
+                        'operator_type' => $params['operator_type'],
+                        'operator_id' => $params['operator_id'],
+                    ];
+                    $aftersalesService->review($reviewParams);
+                }
             }
 
-            // 自动退款
-            $autoAfterSales = $this->getOrdersSetting($result['company_id'], 'auto_aftersales');
-            if ($autoAfterSales) {
-                $reviewParams = [
-                    'company_id' => $result['company_id'],
-                    'aftersales_bn' => $result['aftersales_bn'],
-                    'is_approved' => 1,
-                    'refund_fee' => $result['refund_fee'],
-                    'refund_point' => $result['refund_point'],
-                    'operator_type' => $params['operator_type'],
-                    'operator_id' => $params['operator_id'],
-                ];
-                $aftersalesService->review($reviewParams);
+            $conn->commit();
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollback();
             }
+            throw $e;
         }
 
         return $result;
@@ -2005,6 +2023,9 @@ class AbstractNormalOrder implements OrderInterface
                     $canAftersalesNum += $order_items_val['ship_num'];
                 }
 
+                // 按 order_id 批量取出子单，循环内内存匹配，避免逐条 getRow
+                $orderItems = $this->normalOrdersItemsRepository->get($params['company_id'], $params['order_id']);
+                $orderItemsMap = array_column($orderItems, null, 'item_id');
                 foreach ($sepInfo as $item) {
                     $itemFilter = [
                         'order_id' => $params['order_id'],
@@ -2015,7 +2036,7 @@ class AbstractNormalOrder implements OrderInterface
                         if ($item['delivery_status'] == 'DONE') {
                             $deliveryItems[] = $item['item_id'];
                         }
-                        $itemInfo = $this->normalOrdersItemsRepository->getRow($itemFilter);
+                        $itemInfo = $orderItemsMap[$item['item_id']] ?? null;
                         if (!$itemInfo) {
                             throw new Exception(trans('OrdersBundle/Order.sub_order_not_found', ['order_id' => $params['order_id'], 'item_id' => $item['item_id']]));
                         }
@@ -2033,13 +2054,14 @@ class AbstractNormalOrder implements OrderInterface
                         $sendData['delivery_corp_source'] = $updateInfo['delivery_corp_source'];
                         $this->sendDeliverySuccNotice($sendData, $item, 'sep');
                         $this->normalOrdersItemsRepository->update($itemFilter, $update);
+                        // 同步内存状态，供后续 PARTAIL 判断
+                        $orderItemsMap[$item['item_id']] = array_merge($itemInfo, $update);
                         //}
                     }
                 }
 
                 // 如果存在未发货商品，主订单发货状态为部分发货
-                $orderItems = $this->normalOrdersItemsRepository->get($params['company_id'], $params['order_id']);
-                foreach ($orderItems as $v) {
+                foreach ($orderItemsMap as $v) {
                     if ($v['delivery_status'] == 'PENDING' && !$v['aftersales_status']) {
                         $updateInfo['delivery_status'] = 'PARTAIL';
                         unset($updateInfo['order_status']);
@@ -2096,7 +2118,7 @@ class AbstractNormalOrder implements OrderInterface
             $conn->commit();
 
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -2132,12 +2154,15 @@ class AbstractNormalOrder implements OrderInterface
             'order_id' => $params['order_id'],
             'company_id' => $params['company_id'],
         ];
+        $orderItemsMap = [];
         if ($params['delivery_type'] == 'sep') {
             $orderItems = $this->normalOrdersItemsRepository->get($params['company_id'], $params['order_id']);
             if (!$orderItems) {
                 throw new Exception(trans('OrdersBundle/Order.sub_order_not_exist', ['id' => $params['order_id']]));
             }
             $orderItemIds = array_column($orderItems, 'item_id');
+            // 批量取出后内存匹配，避免循环内逐条 getRow
+            $orderItemsMap = array_column($orderItems, null, 'item_id');
         }
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
@@ -2155,7 +2180,7 @@ class AbstractNormalOrder implements OrderInterface
                     ];
                     if ($item['delivery_corp'] && $item['delivery_code']) {
                         $deliveryItems[] = $item['item_id'];
-                        $itemInfo = $this->normalOrdersItemsRepository->getRow($itemFilter);
+                        $itemInfo = $orderItemsMap[$item['item_id']] ?? null;
                         if (!$itemInfo) {
                             throw new Exception(trans('OrdersBundle/Order.sub_order_not_found', ['order_id' => $params['order_id'], 'item_id' => $item['item_id']]));
                         }
@@ -2191,7 +2216,7 @@ class AbstractNormalOrder implements OrderInterface
             $conn->commit();
 
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -3013,7 +3038,7 @@ class AbstractNormalOrder implements OrderInterface
 
             }
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $msg = 'file:'.$e->getFile().',line:'.$e->getLine().',msg:'.$e->getMessage();
             app('log')->info('取消订单失败 msg:'.$msg);
             $conn->rollback();
@@ -3408,7 +3433,7 @@ class AbstractNormalOrder implements OrderInterface
             event(new SaasErpUpdateEvent($order));
 
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $error = [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -3501,7 +3526,7 @@ class AbstractNormalOrder implements OrderInterface
                 // 旺店通取消订单
                 event(new WdtErpTradeCancelEvent($refund));
                 return $result;
-            } catch (Exception $exception) {
+            } catch (\Throwable $exception) {
                 $conn->rollback();
                 throw $exception;
             }
@@ -3713,7 +3738,7 @@ class AbstractNormalOrder implements OrderInterface
             }
             $aftersalesService->bindUserAftersales($params['company_id'], $params['order_id'], $params['user_id']);
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -4335,7 +4360,7 @@ class AbstractNormalOrder implements OrderInterface
             }
             $conn->commit();
             return $orderInfo;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw new ResourceException($e->getMessage());
         }

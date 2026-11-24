@@ -600,8 +600,9 @@ class AftersalesRepository extends EntityRepository
             unset($rFilter[$key]);
         }
         $conn = app('registry')->getConnection('default');
-        $qb = $conn->createQueryBuilder()
-            ->select("aftersales.self_delivery_operator_id,  COUNT(aftersales.order_id) as aftersales_count, SUM(aftersales.refund_fee)as refund_fee_count")
+        // JOIN aftersales_refund 会一对多放大行数；先按 aftersales_bn 去重再聚合
+        $innerQb = $conn->createQueryBuilder()
+            ->select("aftersales.self_delivery_operator_id, aftersales.aftersales_bn, MAX(aftersales.refund_fee) as refund_fee")
             ->from($this->table)
             ->leftJoin(
                 $aftersalesTable,
@@ -609,10 +610,17 @@ class AftersalesRepository extends EntityRepository
                 $aftersalesRefundTable,
                 sprintf("%s.aftersales_bn = %s.aftersales_bn", $aftersalesTable, $aftersalesRefundTable)
             )
-            ->groupBy('self_delivery_operator_id');
+            ->groupBy('aftersales.self_delivery_operator_id')
+            ->addGroupBy('aftersales.aftersales_bn');
 
-        $qb = $this->_filter($aFilter, $qb);
-        $qb = $this->_filter($rFilter, $qb);
+        $innerQb = $this->_filter($aFilter, $innerQb);
+        $innerQb = $this->_filter($rFilter, $innerQb);
+
+        $qb = $conn->createQueryBuilder()
+            ->select("t.self_delivery_operator_id, COUNT(t.aftersales_bn) as aftersales_count, SUM(t.refund_fee) as refund_fee_count")
+            ->from('(' . $innerQb->getSQL() . ')', 't')
+            ->groupBy('t.self_delivery_operator_id');
+
         return $qb->execute()->fetchAll();
     }
 

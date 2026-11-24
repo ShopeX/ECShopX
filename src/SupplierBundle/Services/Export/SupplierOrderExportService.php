@@ -512,7 +512,7 @@ class SupplierOrderExportService implements ExportFileInterface
                         case 'total_fee':
                         case 'freight_fee':
                         case 'item_fee':
-                            $lineData[$k] = $value[$k] / 100;
+                            $lineData[$k] = bcdiv($value[$k], 100, 2);
                             break;
                         case 'create_time':
                         case 'timeExpire':

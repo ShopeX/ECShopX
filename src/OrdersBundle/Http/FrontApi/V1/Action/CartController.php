@@ -187,7 +187,6 @@ class CartController extends BaseController
         $authInfo = $request->get('auth');
         $params = $request->all();
         $params['company_id'] = $authInfo['company_id'];
-        $params['promoter_user_id'] = $params['promoter_user_id'] ?? 0;
         $params['wxa_appid'] = $authInfo['wxapp_appid'] ?? '';
         $params['shop_id'] = $params['shop_id'] ?? 0;
         $params['activity_type'] = $params['activity_type'] ?? '';
@@ -445,12 +444,8 @@ class CartController extends BaseController
         $cartType = $request->input('cart_type', 'cart');
         $shopType = $request->input('shop_type', 'distributor');
         $items = $request->input('items', []);
-        $promoter_user_id = $request->input('promoter_user_id', 0);
         $buy_user_id = $request->input('buy_user_id', 0);
         $inputData = array();
-        if($promoter_user_id){
-            $inputData['promoter_user_id'] = $promoter_user_id;
-        }
         $result = [];
         if ((!isset($authInfo['user_id']) || !$authInfo['user_id']) && $cartType != 'offline') {
             return $this->response->array($result);
@@ -463,7 +458,6 @@ class CartController extends BaseController
         $actingUserId = (new SalespersonProxyAuthorizationService())->resolveActingUserId(
             $authInfo,
             [
-                'promoter_user_id' => $promoter_user_id,
                 'buy_user_id' => $buy_user_id,
                 'distributor_id' => $request->input('distributor_id', 0),
                 'shop_id' => $request->input('shop_id', 0),
@@ -976,7 +970,6 @@ class CartController extends BaseController
         $iscrossborder = $request->get('iscrossborder', 0);
 
         $params = $request->all();
-        $params['promoter_user_id'] = $params['promoter_user_id'] ?? 0;
         $params['buy_user_id']      = $params['buy_user_id'] ?? 0;
 
         if (!$request->input('shop_type')) {
@@ -1001,10 +994,6 @@ class CartController extends BaseController
             // 'shop_id' => $shopId,
         ];
         $filter['user_id'] = $actingUserId;
-        if ($params['promoter_user_id'] && (int) $actingUserId !== (int) $authInfo['user_id']) {
-            $filter['promoter_user_id'] = $params['promoter_user_id'];
-        }
-
         $isShopScreen = $request->input('isShopScreen', 0);
         if ($isShopScreen || $shopId > 0) {
             $filter['shop_id'] = $shopId;

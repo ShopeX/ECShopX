@@ -280,6 +280,36 @@ class CashWithdrawalRepository extends EntityRepository
     }
 
     /**
+     * 条件抢占：仅 status=apply 时可改为 process，返回影响行数
+     */
+    public function claimProcess($companyId, $cashWithdrawalId)
+    {
+        return $this->updateStatusIf($companyId, $cashWithdrawalId, 'apply', 'process');
+    }
+
+    /**
+     * 条件更新状态，返回影响行数；并清理实体缓存避免脏读
+     */
+    public function updateStatusIf($companyId, $cashWithdrawalId, $fromStatus, $toStatus)
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $qb = $conn->createQueryBuilder();
+        $affected = $qb->update('distribution_cash_withdrawal')
+            ->set('status', $qb->expr()->literal($toStatus))
+            ->where('id = ' . $qb->expr()->literal($cashWithdrawalId))
+            ->andWhere('company_id = ' . $qb->expr()->literal($companyId))
+            ->andWhere('status = ' . $qb->expr()->literal($fromStatus))
+            ->execute();
+
+        $entity = $this->find($cashWithdrawalId);
+        if ($entity) {
+            $this->getEntityManager()->refresh($entity);
+        }
+
+        return (int) $affected;
+    }
+
+    /**
      * 获取数据表字段数据
      *
      * @param entity

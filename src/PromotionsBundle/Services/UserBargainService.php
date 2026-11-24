@@ -195,35 +195,61 @@ class UserBargainService
             'user_id' => $params['user_id'],
             'bargain_id' => $params['bargain_id'],
         ];
-        $userBargainInfo = $this->userBargainsRepository->get($filter);
-        if (!$userBargainInfo) {
-            throw new ResourceException("助力活动不存在！");
-        }
-        if ($userBargainInfo['is_ordered']) {
-            throw new ResourceException("助力活动已结束，期待您的下次参与！");
-        }
         $totalCutdownAmount = $bargainInfo['mkt_price'] - $bargainInfo['price'];
-
-        if ($totalCutdownAmount <= $userBargainInfo['cutdown_amount']) {
-            throw new ResourceException(trans("PromotionsBundle.bargain_activity_completed_expect_next"));
-        }
 
         $conn = app('registry')->getConnection('default');
         $conn->beginTransaction();
         try {
+            // FOR UPDATE 串行化同一发起人的助力，避免 cutdown_amount / cutprice_range 丢失更新
+            $locked = $conn->fetchAssociative(
+                'SELECT cutdown_amount, cutprice_range, is_ordered, mkt_price, price, user_id, company_id, bargain_id, wxa_appid, item_name FROM promotions_user_bargains WHERE company_id = ? AND user_id = ? AND bargain_id = ? FOR UPDATE',
+                [$params['company_id'], $params['user_id'], $params['bargain_id']]
+            );
+            if (!$locked) {
+                throw new ResourceException("助力活动不存在！");
+            }
+            if (!empty($locked['is_ordered'])) {
+                throw new ResourceException("助力活动已结束，期待您的下次参与！");
+            }
+            if ($totalCutdownAmount <= (int) $locked['cutdown_amount']) {
+                throw new ResourceException(trans("PromotionsBundle.bargain_activity_completed_expect_next"));
+            }
 
-            // $params['cutdown_num'] = $bargainInfo['bargain_range']['min'] + ($bargainInfo['bargain_range']['max'] - $bargainInfo['bargain_range']['min'])* mt_rand(1,100)/100;
+            $userBargainInfo = $locked;
+            $cutpriceRange = $locked['cutprice_range'];
+            if (is_string($cutpriceRange)) {
+                $cutpriceRange = json_decode($cutpriceRange, true) ?: [];
+            }
+            $userBargainInfo['cutprice_range'] = $cutpriceRange;
+
             $params['cutdown_num'] = $this->getCutdownPrice($userBargainInfo);
             $cutprice_range = $userBargainInfo['cutprice_range'];
             $result = $this->bargainLogRepository->create($params);
 
+            // 原子累加已砍金额，并写回已占用的砍价槽位
+            $conn->executeUpdate(
+                'UPDATE promotions_user_bargains SET cutdown_amount = cutdown_amount + ?, cutprice_range = ? WHERE company_id = ? AND user_id = ? AND bargain_id = ?',
+                [
+                    (int) $params['cutdown_num'],
+                    json_encode($cutprice_range),
+                    $params['company_id'],
+                    $params['user_id'],
+                    $params['bargain_id'],
+                ]
+            );
+
+            $em = $this->userBargainsRepository->getEntityManager();
+            $entity = $this->userBargainsRepository->findOneBy($filter);
+            if ($entity) {
+                $em->refresh($entity);
+            }
             $userBargainInfo = $this->userBargainsRepository->get($filter);
-            $total_cutdown = intval($userBargainInfo['cutdown_amount']) + intval($params['cutdown_num']);
-            $userBargainInfo = $this->userBargainsRepository->update($filter, ['cutdown_amount' => $total_cutdown, 'cutprice_range' => $cutprice_range]);
 
             $conn->commit();
-        } catch (\Exception $e) {
-            $conn->rollback();
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollback();
+            }
             throw $e;
         }
 

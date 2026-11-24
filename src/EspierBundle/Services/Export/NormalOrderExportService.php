@@ -560,11 +560,11 @@ class NormalOrderExportService implements ExportFileInterface
             $orderListData = $orderService->getOrderList(['company_id' =>$filter['company_id'], 'order_id' => $orderIdList], 1, -1, [], false);
             $orderListMap = array_column($orderListData['list'], null, 'order_id');
                 
-            // 退款信息
-            $refundMap = [];
-            foreach ($orderdata['list'] as $k => $v) {
-                $refundMap[$v['order_id']][$v['item_id']] = $aftersalesService->getAftersaleRefundInfoByOrderIdItemId($v['order_id'], $v['item_id'], $filter['company_id']);
-            }
+            // 退款信息（批量预取，避免按子单 N+1）
+            $refundMap = $aftersalesService->getAftersaleRefundInfoByOrderIdItemIds(
+                $filter['company_id'],
+                $orderdata['list']
+            );
              // 售前退款，不会存在售后单
             $refundMapForward = $aftersalesService->getSuccAftersaleRefundInfoByOrderIdList($filter['company_id'], $orderIdList);
 
@@ -1139,10 +1139,24 @@ class NormalOrderExportService implements ExportFileInterface
                 $supplierData = array_column($supplierList['list'], null, 'operator_id');
             }
 
-            // 退款信息
+            // 退款信息（按 supplier_id 分组批量预取，避免按子单 N+1）
             $refundMap = [];
-            foreach ($orderdata['list'] as $k => $v) {
-                $refundMap[$v['order_id']][$v['item_id']] = $aftersalesService->getAftersaleRefundInfoByOrderIdItemId($v['order_id'], $v['item_id'], $filter['company_id'], $v['supplier_id']);
+            $pairsBySupplier = [];
+            foreach ($orderdata['list'] as $v) {
+                $sid = (string) ($v['supplier_id'] ?? '');
+                $pairsBySupplier[$sid][] = $v;
+            }
+            foreach ($pairsBySupplier as $sid => $pairs) {
+                $batchMap = $aftersalesService->getAftersaleRefundInfoByOrderIdItemIds(
+                    $filter['company_id'],
+                    $pairs,
+                    $sid
+                );
+                foreach ($batchMap as $oid => $itemRows) {
+                    foreach ($itemRows as $iid => $row) {
+                        $refundMap[$oid][$iid] = $row;
+                    }
+                }
             }
             // 售前退款，不会存在售后单
             $refundMapForward = $aftersalesService->getSuccAftersaleRefundInfoByOrderIdList($filter['company_id'], $orderIdList);

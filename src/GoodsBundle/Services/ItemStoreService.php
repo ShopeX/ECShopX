@@ -56,7 +56,7 @@ class ItemStoreService
     }
 
     /**
-     * 批量处理库存
+     * 批量处理库存（Redis 扣减成功后写 DB；DB 失败回补 Redis，避免永久泄漏）
      */
     public function batchMinusItemStore($data)
     {
@@ -72,28 +72,44 @@ class ItemStoreService
             throw new ResourceException($result);
         }
 
-        /** @var \GoodsBundle\Repositories\ItemsRepository $itemsRepository */
-        $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
-        $distributorItemsRepository = app('registry')->getManager('default')->getRepository(DistributorItems::class);
-        $supplierItemsService = new SupplierItemsService();
-        foreach ($result as $value) {
-            $itemId = $value[1];
-            $store = $value[2];
-            $itemkeyarr = explode('_', $value[3]);
-            $distributorId = $itemkeyarr[0];
-            if ((count($itemkeyarr) == 2) && ($distributorId > 0)) {
-                $filter = [
-                    'item_id' => $itemId,
-                    'distributor_id' => $distributorId
-                ];
-                $distributorItemsRepository->updateOneBy($filter, ['store' => $store]);
-            } else {
-                $res = $itemsRepository->updateStore($itemId, $store);
-                //更新供应商商品库存
-                if ($res['supplier_item_id']) {
-                    $supplierItemsService->repository->updateOneBy(['item_id' => $res['supplier_item_id']], ['store' => $store]);
+        $em = app('registry')->getManager('default');
+        $conn = $em->getConnection();
+        $conn->beginTransaction();
+        try {
+            /** @var \GoodsBundle\Repositories\ItemsRepository $itemsRepository */
+            $itemsRepository = $em->getRepository(Items::class);
+            $distributorItemsRepository = $em->getRepository(DistributorItems::class);
+            $supplierItemsService = new SupplierItemsService();
+            foreach ($result as $value) {
+                $itemId = $value[1];
+                $store = $value[2];
+                $itemkeyarr = explode('_', $value[3]);
+                $distributorId = $itemkeyarr[0];
+                if ((count($itemkeyarr) == 2) && ($distributorId > 0)) {
+                    $filter = [
+                        'item_id' => $itemId,
+                        'distributor_id' => $distributorId
+                    ];
+                    $distributorItemsRepository->updateOneBy($filter, ['store' => $store]);
+                } else {
+                    $res = $itemsRepository->updateStore($itemId, $store);
+                    if (!is_array($res)) {
+                        throw new ResourceException('商品不存在，库存同步失败');
+                    }
+                    //更新供应商商品库存
+                    if (!empty($res['supplier_item_id'])) {
+                        $supplierItemsService->repository->updateOneBy(['item_id' => $res['supplier_item_id']], ['store' => $store]);
+                    }
                 }
             }
+            $conn->commit();
+        } catch (\Throwable $e) {
+            if ($conn->isTransactionActive()) {
+                $conn->rollback();
+            }
+            $this->compensateRedisMinus($data);
+            app('log')->error('batchMinusItemStore DB failed, redis compensated: ' . $e->getMessage());
+            throw $e;
         }
         return true;
     }
@@ -117,9 +133,11 @@ class ItemStoreService
             app('redis')->incrby('item_store:' . $key, $num);
             app('log')->debug('扣减库存结束：' . $msg . ',库存数量为 ' . app('redis')->get('item_store:' . $key) . ',失败恢复');
             return false;
-        } else {
-            app('log')->debug('扣减库存结束：' . $msg . ',库存数量为 ' . app('redis')->get('item_store:' . $key) . ',扣减成功');
+        }
 
+        app('log')->debug('扣减库存结束：' . $msg . ',库存数量为 ' . app('redis')->get('item_store:' . $key) . ',扣减成功');
+
+        try {
             if ($distributorId && !$isTotalStore) {
                 $itemsRepository = app('registry')->getManager('default')->getRepository(DistributorItems::class);
                 $filter['distributor_id'] = $distributorId;
@@ -130,8 +148,27 @@ class ItemStoreService
                 $itemsRepository = app('registry')->getManager('default')->getRepository(Items::class);
                 $itemsRepository->updateStore($itemId, $store);
             }
+        } catch (\Throwable $e) {
+            app('redis')->incrby('item_store:' . $key, $num);
+            app('log')->error('minusItemStore DB failed, redis compensated: ' . $msg . ', ' . $e->getMessage());
+            throw $e;
+        }
 
-            return true;
+        return true;
+    }
+
+    /**
+     * DB 写失败时按入参回补 Redis 已扣库存
+     */
+    private function compensateRedisMinus(array $data): void
+    {
+        foreach ($data as $row) {
+            $key = $row['key'] ?? null;
+            $num = $row['num'] ?? null;
+            if ($key === null || $num === null) {
+                continue;
+            }
+            app('redis')->incrby('item_store:' . $key, (int) $num);
         }
     }
 

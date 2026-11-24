@@ -299,8 +299,6 @@ class Items extends BaseController
         $pageSize = $request->input('pageSize', 20);
         $shopUserId = $request->input('shop_user_id', '');
         $categoryId = intval($request->input('category_id', 0));
-        $isSalesmanPage = intval($request->input('isSalesmanPage', 0));
-
         $filter['user_id'] = $shopUserId ? $shopUserId : $authInfo['user_id'];
         $filter['company_id'] = $authInfo['company_id'];
 
@@ -323,58 +321,6 @@ class Items extends BaseController
         if ($request->input('distributor_id')) {
             $params['distributor_id'] = $request->input('distributor_id');
         }
-        if( isset($isSalesmanPage) &&   $isSalesmanPage == 1 )  {
-            // $shopUserId
-            $salespersonService = new SalespersonService();
-            $filter_sales['company_id'] = $authInfo['company_id'];
-            $filter_sales['user_id']    = $shopUserId;
-            $filter_sales['is_valid']   = 'true';
-
-            $listdata = $salespersonService->getSalespersonList($filter_sales, 1, 500);
-            $dIds = array_column($listdata['list'],'shop_id');
-            // foreach($dIds as $kd => $vd){
-
-            // }
-            $distributorService = new DistributorService();
-            $orderBy = [
-                "distributor_id" => "DESC"
-            ];
-            $d_filter = [
-                'is_open_salesman' => 1,
-                'distributor_id'=>$dIds ,
-                'company_id'=>$authInfo['company_id'],
-            ];
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":d_filter:dids:". json_encode($d_filter));
-
-            if(isset($params['distributor_id']) && $params['distributor_id'] ){
-                if(in_array($params['distributor_id'],$dIds)  ){
-                    $d_filter['distributor_id'] =  $params['distributor_id'];
-                }else{
-                    $d_filter['distributor_id'] = false;
-                }
-            }
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":d_filter:dids:". json_encode($d_filter));
-
-            if(!$d_filter['distributor_id']){
-                $result = array('total_count'=> 0 ,'list'=>array(),'nosalestore'=> 1);
-                return $this->response->array($result);
-            }
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":d_filter:distributorid:". json_encode($d_filter));
-
-            // 查询店铺信息
-            $distributorLists = $distributorService->lists($d_filter, $orderBy, 100, 1, false,'distributor_id,distance');
-            $dIds = array_column($distributorLists['list'],'distributor_id');
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":d_filter:distributorid:". json_encode($dIds));
-
-            if(!$dIds){
-                $result = array('total_count'=> 0 ,'list'=>array(),'nosalestore'=> 2);
-                return $this->response->array($result);
-            }
-            $params['distributor_id'] = $dIds;
-
-        }
-
-
 
         if ($categoryId) {
             $itemRelCatsParams['company_id'] = $authInfo['company_id'];
@@ -910,78 +856,6 @@ class Items extends BaseController
             $pageSize = -1;
             $result = $itemsService->getSkuItemsList($params, $page, $pageSize);
         } else {
-            if( isset($inputData['isSalesmanPage']) &&   $inputData['isSalesmanPage'] == 1 )  {
-                if (isset($inputData['store_status']) &&  $inputData['store_status'] ) {
-                    $params["store|gt"] = 0;
-                }
-
-                if (isset($inputData['store_status']) &&  $inputData['store_status'] === '0') {
-                    $params["store|lt"] = 1;
-                }
-                $params["rebate"] = 1;
-                $params['item_type'] = 'normal';
-
-                if($authInfo['user_id']){
-                    $salespersonService = new SalespersonService();
-                    $filter_sales['company_id'] = $authInfo['company_id'];
-                    $filter_sales['user_id']    = $authInfo['user_id'];
-                    $filter_sales['is_valid']   = 'true';
-
-                    $listdata = $salespersonService->getSalespersonList($filter_sales, 1, 500);
-                    $dIds = array_column($listdata['list'],'shop_id');
-                    // foreach($dIds as $kd => $vd){
-
-                    // }
-                    $distributorService = new DistributorService();
-                    $orderBy = [
-                        "distributor_id" => "DESC"
-                    ];
-                    $d_filter = [
-                        'is_open_salesman' => 1,
-                        'distributor_id'=>$dIds ,
-                        'company_id'=>$authInfo['company_id'],
-                    ];
-                    app('log')->debug("\n".__FUNCTION__."-".__LINE__.":d_filter:dids:". json_encode($d_filter));
-
-                    if(isset($inputData['distributor_id']) && $inputData['distributor_id'] ){
-                        if(in_array($inputData['distributor_id'],$dIds)  ){
-                            $d_filter['distributor_id'] =  $inputData['distributor_id'];
-                        }
-                    }
-                    app('log')->debug("\n".__FUNCTION__."-".__LINE__.":d_filter:dids:". json_encode($d_filter));
-
-                    if(!$d_filter['distributor_id']){
-                        $result = array('total_count'=> 0 ,'list'=>array(),'nosalestore'=> 1);
-                        return $this->response->array($result);
-                    }
-                    app('log')->debug("\n".__FUNCTION__."-".__LINE__.":d_filter:distributorid:". json_encode($d_filter));
-
-                    // 查询店铺信息
-                    $distributorLists = $distributorService->lists($d_filter, $orderBy, 100, 1, false,'distributor_id,distance');
-                    $dIds = array_column($distributorLists['list'],'distributor_id');
-                    app('log')->debug("\n".__FUNCTION__."-".__LINE__.":d_filter:distributorid:". json_encode($dIds));
-
-                    if(!$dIds){
-                        $result = array('total_count'=> 0 ,'list'=>array(),'nosalestore'=> 2);
-                        return $this->response->array($result);
-                    }
-
-                    if($distributor_id){
-                        if(in_array($distributor_id,    $dIds )) {
-                             $params['distributor_id'] = $distributor_id;
-                        }else{
-                             $result = array('total_count'=> 0 ,'list'=>array(),'nosalestore'=> 2);
-                             return $this->response->array($result);
-                        }
-                    }else{
-                        $params['distributor_id'] = $dIds;
-                    }
-
-                }else{
-                    $params['distributor_id'] = '';
-                }
-            }
-
             $result = $itemsService->getItemListData($params, $page, $pageSize, $orderBy, false);
         }
 

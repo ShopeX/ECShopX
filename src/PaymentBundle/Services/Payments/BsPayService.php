@@ -855,11 +855,18 @@ class BsPayService implements Payment
     }
 
     /**
-     * 获取订单的商品平台佣金
+     * 获取订单的商品平台佣金（分单位用 bcmath，避免浮点累加误差；totalFee=0 时短路防除零）
      */
     public function getItemHeadquartersFee($companyId, $orderId, $totalFee, $feeAmt, $headquarters_fee_mode)
     {
-        $headquartersFee = 0;
+        $totalFee = (string) $totalFee;
+        $feeAmt = (string) $feeAmt;
+        // 订单金额为 0 时无法按占比分摊手续费，也无平台佣金可计
+        if (bccomp($totalFee, '0', 2) === 0) {
+            return '0.00';
+        }
+
+        $headquartersFee = '0.00';
         $normalOrdersItemsRepository = app('registry')->getManager('default')->getRepository(NormalOrdersItems::class);
 
         $filter = [
@@ -869,43 +876,36 @@ class BsPayService implements Payment
 
         $rsList = $normalOrdersItemsRepository->getList($filter);
         if ($rsList['total_count'] == 0) {
-            return 0;
+            return '0.00';
         }
         $itemsCommissionService = new ItemsCommissionService();
 
         $itemIds = array_column($rsList['list'], 'item_id');
         $commissionList = $itemsCommissionService->getAllCommissionByItem($companyId, $itemIds);
         if (empty($commissionList)) {
-            return 0;
+            return '0.00';
         }
         $orderItems = array_column($rsList['list'], null, 'item_id');
         foreach ($itemIds as $item_id) {
             if (!isset($commissionList[$item_id])) {
                 continue;
             }
-            $divFee = $itemTotalFee = bcdiv($orderItems[$item_id]['total_fee'], 100, 2);
-            // app('log')->info('itemTotalFee===>'.$itemTotalFee);
-            // app('log')->info('totalFee===>'.$totalFee);
-            // app('log')->info('feeAmt===>'.$feeAmt);
+            $divFee = $itemTotalFee = bcdiv((string) $orderItems[$item_id]['total_fee'], '100', 2);
             if ($headquarters_fee_mode == '2') {
-                // 内扣，可分账金额 = 订单单金额-交易手续费
-                $itemFeeAmt = number_format(round($itemTotalFee / $totalFee * $feeAmt, 2), 2, '.', '');//子单手续费
-                // app('log')->info('itemFeeAmt===>'.$itemFeeAmt);
-                $divFee = $itemTotalFee - $itemFeeAmt;
-                // app('log')->info('divFee===>'.$divFee);
+                // 内扣：子单手续费按金额占比分摊，可分账金额 = 子单金额 - 子单手续费
+                $itemFeeAmt = bcmul(bcdiv($itemTotalFee, $totalFee, 6), $feeAmt, 2);
+                $divFee = bcsub($itemTotalFee, $itemFeeAmt, 2);
             }
             $commissionInfo = $commissionList[$item_id];
             $commission = !empty($commissionInfo['sku_commission']) ? $commissionInfo['sku_commission'] : $commissionInfo['commission'];
             if ($commissionInfo['commission_type'] == '1') {// 按比例
-                $headquartersFee += number_format(round($divFee * $commission / 100, 2), 2, '.', '');
-                // app('log')->info('commission===>'.$commission);
-                // app('log')->info('headquartersFee===>'.$headquartersFee);
+                $lineFee = bcmul($divFee, bcdiv((string) $commission, '100', 6), 2);
             } else {
-                // 固定金额 佣金 * 商品数量
-                $headquartersFee += number_format($commission / 100 * $orderItems[$item_id]['num'], 2, '.', '');
+                // 固定金额 佣金(分)→元 * 商品数量
+                $lineFee = bcmul(bcdiv((string) $commission, '100', 2), (string) $orderItems[$item_id]['num'], 2);
             }
+            $headquartersFee = bcadd($headquartersFee, $lineFee, 2);
         }
-        $headquartersFee = number_format(round($headquartersFee, 2), 2, '.', '');
         return $headquartersFee;
     }
     public function getFeeRate($companyId, $payChannel)

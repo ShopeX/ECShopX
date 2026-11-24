@@ -55,6 +55,8 @@ class LimitSaleItemUploadService extends AbstractTemplate
 
     public function handleRow(int $companyId, array $row): void
     {
+        // 店铺限购导入实际走 handleFile + saveLimitItems；禁止静默空实现被误接
+        throw new ResourceException('限购商品按行导入未实现，请使用批量文件导入');
     }
 
     //处理限购商品文件

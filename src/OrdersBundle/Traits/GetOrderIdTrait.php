@@ -17,6 +17,7 @@
 
 namespace OrdersBundle\Traits;
 
+use OrdersBundle\Entities\NormalOrders;
 use OrdersBundle\Entities\NormalOrdersRelDada;
 use MembersBundle\Services\MemberService;
 
@@ -28,6 +29,25 @@ trait GetOrderIdTrait
         if (env('TEST_MODE', false) == true) {
             return date('ymdhis').substr(implode(null, array_map('ord', str_split(substr(uniqid(), 7, 13), 1))), 0, 7);
         }
+
+        // 固定步长 hincrby；若 Redis 丢失导致号段回绕与库内 PK 冲突，则重试分配
+        $maxAttempts = 5;
+        $id = null;
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            $id = $this->buildTimedRedisId($identifier);
+            if (!$this->timedIdExistsInOrders($id)) {
+                return $id;
+            }
+            app('log')->warning('genId collision, retry', ['id' => $id, 'attempt' => $attempt]);
+        }
+        return $id;
+    }
+
+    /**
+     * 基于日桶 + 90 秒窗口的 Redis 计数生成 16 位 ID（步长固定为 1）
+     */
+    private function buildTimedRedisId($identifier)
+    {
         $time = time();
         $startTime = 1325347200;//2012-01-01 做为初始年
         //当前时间相距初始年的天数，4位可使用20年
@@ -36,15 +56,23 @@ trait GetOrderIdTrait
         //确定每90秒的的订单生成 一天总共有960个90秒，控制在三位
         $minute = floor(($time - strtotime(date('Y-m-d'))) / 90);
 
-        //防止通过订单号计算出商城生成的订单数量，导致泄漏关键数据
-        $redisId = app('redis')->hincrby(date('Ymd'), $minute, rand(1, 9));
-
-        //设置过期时间
+        $redisId = app('redis')->hincrby(date('Ymd'), $minute, 1);
         app('redis')->expire(date('Ymd'), 86400);
 
-        $id = $day . str_pad($minute, 3, '0', STR_PAD_LEFT) . str_pad($redisId, 5, '0', STR_PAD_LEFT) . str_pad($identifier % 10000, 4, '0', STR_PAD_LEFT);//16位
+        return $day . str_pad($minute, 3, '0', STR_PAD_LEFT) . str_pad($redisId, 5, '0', STR_PAD_LEFT) . str_pad($identifier % 10000, 4, '0', STR_PAD_LEFT);//16位
+    }
 
-        return $id;
+    /**
+     * 软探测订单主键是否已占用（Redis 丢失后防重号）
+     */
+    private function timedIdExistsInOrders($id): bool
+    {
+        try {
+            $repo = app('registry')->getManager('default')->getRepository(NormalOrders::class);
+            return (bool) $repo->find($id);
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**

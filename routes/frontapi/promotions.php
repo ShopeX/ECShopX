@@ -77,9 +77,6 @@ $api->version('v1', function ($api) {
         $api->post('/wxapp/promoter/relgoods',  ['name' => '关联推广员关联的商品', 'as' => 'front.promotions.promoter.relgoods.post', 'uses' => 'PromoterController@relPromoterGoods']);
         $api->delete('/wxapp/promoter/relgoods',  ['name' => '删除推广员关联的商品', 'as' => 'front.promotions.promoter.relgoods.delete', 'uses' => 'PromoterController@deleteRelPromoterGoods']);
 
-        $api->get('/wxapp/promoter/getSalesmanCount',  ['name' => '业务员统计', 'as' => 'front.promotions.promoter.getSalesmanCount', 'uses' => 'PromoterController@getSalesmanCount']);
-        $api->get('/wxapp/promoter/getSalesmanStatic',  ['name' => '业务员业绩', 'as' => 'front.promotions.promoter.getSalesmanStatic', 'uses' => 'PromoterController@getSalesmanStatic']);
-        $api->get('/wxapp/promoter/getSalesmanStoreitems',  ['name' => '业务员推广店铺商品', 'as' => 'front.promotions.promoter.getSalesmanStoreitems', 'uses' => 'PromoterController@getSalesmanStoreitems']);
 
 
     });

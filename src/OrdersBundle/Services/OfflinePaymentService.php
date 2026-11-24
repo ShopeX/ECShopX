@@ -265,7 +265,7 @@ class OfflinePaymentService
             $this->updateTradeStatus($company_id, $order_id, $orderProcessLog);
 
             $conn->commit();
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw new ResourceException($e->getMessage());
         }
@@ -329,7 +329,7 @@ class OfflinePaymentService
             event(new OrderProcessLogEvent($orderProcessLog));
             // 提交事务
             $conn->commit();
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             // 回滚事务
             $conn->rollback();
             // 抛出异常并抛出错误消息

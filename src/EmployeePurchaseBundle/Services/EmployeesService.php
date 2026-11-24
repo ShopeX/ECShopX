@@ -201,7 +201,7 @@ class EmployeesService
         $emailService = new EmailService($from);
         $to = $params['email'];
         $key = $this->generateReidsKey($to, 'email', $enterpriseId);
-        $vcode = (string)mt_rand(100000, 999999);
+        $vcode = (string)random_int(100000, 999999);
         //保存验证码
         $this->redisStore($key, $vcode, 1800);
         // 标题

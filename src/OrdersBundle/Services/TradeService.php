@@ -71,8 +71,8 @@ class TradeService implements InterfacesTrade
         //确定每90秒的的订单生成 一天总共有960个90秒，控制在三位
         $minute = floor(($time - strtotime(date('Y-m-d'))) / 90);
 
-        //防止通过订单号计算出商城生成的订单数量，导致泄漏关键数据
-        $redisId = app('redis')->hincrby(date('Ymd'), $minute, rand(1, 9));
+        // 固定步长，避免可变 rand 步长导致跳号且仍依赖 Redis 日桶
+        $redisId = app('redis')->hincrby(date('Ymd'), $minute, 1);
 
         //设置过期时间
         app('redis')->expire(date('Ymd'), 86400);
@@ -161,8 +161,8 @@ class TradeService implements InterfacesTrade
     {
         $data = $this->tradeRepository->updateStatus($tradeId, $status, $options);
         app('log')->debug('updateStatus data:'.json_encode($data, 256));
-        if ($status == 'SUCCESS') {
-            // $data->setTradeState('SUCCESS');
+        // 仅抢占成功（库内已为 SUCCESS）时派发完成事件，避免重复回调双倍副作用
+        if ($status == 'SUCCESS' && $data && $data->getTradeState() === 'SUCCESS') {
             app('log')->debug("saaserp ".__FUNCTION__.",".__LINE__.", 交易完成 去交易完成事件 埋点");
             $data = $this->syncTradeUserIdFromOrderWhenMissing($data);
             $this->finishEvents($data);
@@ -450,14 +450,28 @@ class TradeService implements InterfacesTrade
         $today = date('md');
         $key = 'h_trade_no_' . $companyId . '_' . $distributorId . '_' . $today;
         $countKey = 'c_trade_no_' . $companyId . '_' . $distributorId . '_' . $today;
-        $countNum = app('redis')->hget($key, $orderId);
-        if (!$countNum) {
-            $countNum = app('redis')->incr($countKey);
-            app('redis')->hset($key, $orderId, $countNum);
-            app('redis')->expire($key, 86400);
-            app('redis')->expire($countKey, 86400);
-        }
-        return $countNum;
+
+        // 单命令 Lua：已分配则复用；否则 INCR + HSETNX 抢占，避免 hget/incr/hset 非原子跳号/重号
+        $script = <<<'LUA'
+local mapKey = KEYS[1]
+local counterKey = KEYS[2]
+local orderId = ARGV[1]
+local ttl = tonumber(ARGV[2])
+local existing = redis.call('HGET', mapKey, orderId)
+if existing then
+  return existing
+end
+local n = redis.call('INCR', counterKey)
+local ok = redis.call('HSETNX', mapKey, orderId, tostring(n))
+if ok == 1 then
+  redis.call('EXPIRE', mapKey, ttl)
+  redis.call('EXPIRE', counterKey, ttl)
+  return tostring(n)
+end
+return redis.call('HGET', mapKey, orderId)
+LUA;
+
+        return app('redis')->eval($script, 2, $key, $countKey, (string) $orderId, 86400);
     }
 
     public function getTradeIndexByOrderIdList($companyId, $orderIdList)

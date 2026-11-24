@@ -353,7 +353,7 @@ class TaskBrokerageService
                 'rebate_type' => $value['rebate_type'],
                 'rebate_conf' => $value['rebate_conf'],
                 'item_id' => $value['item_id'],
-                'total_fee' => $value['price'],
+                'total_fee' => $value['total_fee'],
                 'item_name' => $value['item_name'],
                 'item_spec_desc' => $value['item_spec_desc'],
                 'user_id' => $value['user_id'],

@@ -309,7 +309,7 @@ class OrderService
                 $this->orderInterface->beforeOrderCreateCommit($orderData, $params);
             }
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw $e;
         }
@@ -783,62 +783,6 @@ class OrderService
                 app('log')->info(':export brokerage:'.__FUNCTION__.__LINE__.':promoterShopId:' . var_export($promoterShopId, true));
 
             }
-        }
-
-        //业务员 导购分享逻辑
-        if (isset($params['distributor_id']) && $params['distributor_id']) {
-            $distributorService = new DistributorService();
-            $distributorInfo = $distributorService->getInfoSimple(['distributor_id' => $params['distributor_id'] ]);
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":distributorInfo:". json_encode($distributorInfo));
-            if (isset($distributorInfo['is_open_salesman']) && $distributorInfo['is_open_salesman']) {
-                $promoterUserId = $promoterService->getPromoter($params['company_id'], $params['user_id']);
-            }
-        }
-        //分享扫码的导购ID
-        $key = "promoter_user_info_dayset:" . $params['user_id'] ;
-        $promoterinfo_json = app('redis')->get($key);
-        app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':filter_salesperson:' . json_encode($promoterinfo_json));
-
-        $promoterinfoData = json_decode($promoterinfo_json, true);
-        if (isset($promoterinfoData['promoter_user_id'])
-        && $promoterinfoData['promoter_user_id']) {
-            $promoterUserId = $promoterinfoData['promoter_user_id'];
-        }
-
-        //业务员 代课下单
-        if (isset($params['promoter_user_id']) && $params['promoter_user_id']) {
-            $promoterUserId = $params['promoter_user_id'];
-        }
-
-        //导购ID信息处理
-        if (isset($promoterUserId) && isset($distributorInfo['is_open_salesman']) && $distributorInfo['is_open_salesman']) {
-            // check 业务员 导购店铺
-            $salespersonService = new SalespersonService();
-
-            $filter_salesperson = array(
-                'company_id' => $params['company_id'],
-                'user_id' => $promoterUserId,//$promoterinfoData['promoter_user_id'],
-                'shop_id' => $params['distributor_id'],
-                'is_valid' => 'true',
-            );
-            app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':filter_salesperson:' . json_encode($filter_salesperson));
-
-            $salespersonInfo = $salespersonService->getInfo($filter_salesperson);
-            app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':salespersonInfo:' . json_encode($salespersonInfo));
-
-
-            if (isset($salespersonInfo['user_id']) && $salespersonInfo['user_id']) {
-                $promoterUserId = $promoterUserId;
-                $params['salesman_id'] = $promoterUserId;
-                app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':promoterUserId:' . json_encode($promoterUserId));
-            } else {
-                $promoterUserId = 0;
-                $salespersonInfo = array('user_id' => '','name' => '','mobile' => '');
-            }
-
-        } else {
-            $promoterUserId = 0;
-            $salespersonInfo = array('user_id' => '','name' => '','mobile' => '');
         }
 
         //创建订单时，导购员id获取前端传参，不予取会员原有绑定的导购员
@@ -1413,6 +1357,15 @@ class OrderService
         $totalCommissionFee = 0;//订单总佣金
         $supplierFreightFee = [];
         $itemsCommissionService = new ItemsCommissionService();
+        // 批量预取佣金比例，避免循环内 N+1
+        $goodsIds = array_values(array_unique(array_filter(array_column($this->orderItemList, 'goods_id'))));
+        $commissionRatioMap = [];
+        if ($goodsIds) {
+            $fetched = $itemsCommissionService->getCommissionRatio($goodsIds);
+            if (is_array($fetched)) {
+                $commissionRatioMap = $fetched;
+            }
+        }
         foreach ($this->orderItemList as $itemInfo) {
             if (!in_array($this->orderInterface->orderClass, ['pointsmall', 'employee_purchase'])) {
                 $memberpreference = $this->checkCurrentMemberpreferenceByItemId($orderData['company_id'], $orderData['user_id'], $itemInfo['itemId'], $msg, $orderData['distributor_id'], false);
@@ -1466,7 +1419,13 @@ class OrderService
                 $activity_price = 0;
             }
 
-            $commissionRatio = $itemsCommissionService->getCommissionRatio($itemInfo['goods_id']);
+            $commissionRatio = $commissionRatioMap[$itemInfo['goods_id']] ?? 0;
+            // round 明确舍入，替代 bcdiv scale=0 截断少算
+            $commissionFee = (int) round((float) bcdiv(
+                bcmul((string) $total_fee, (string) $commissionRatio, 4),
+                '10000',
+                4
+            ));
 
             $itemTmp = [
                 'order_id' => $orderData['order_id'],
@@ -1487,7 +1446,7 @@ class OrderService
                 'cost_fee' => $itemInfo['cost_price'] * $buyNum, // 商品总金额
                 'item_unit' => $itemInfo['item_unit'],
                 'total_fee' => $total_fee, // 商品支付总金额
-                'commission_fee' => bcdiv($total_fee * $commissionRatio, '10000', 0), //佣金
+                'commission_fee' => $commissionFee, //佣金
                 'discount_fee' => $discount_fee, //商品优惠金额
                 'discount_info' => $discount_info, // 商品优惠明细
                 'rebate' => 0, // 单个商品店奖金金额
@@ -1846,10 +1805,6 @@ class OrderService
         return $taxstrategy_tax_rate;
     }
 
-    public function tradeSuccUpdateOrderPayType($orderData, $payType)
-    {
-    }
-
     /**
      * 订单支付成功回调
      */
@@ -1930,7 +1885,7 @@ class OrderService
             $this->orderStatusUpdate($filter, $orderStatus, $payType);
 
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             app('log')->debug($e->getMessage());
             throw $e;

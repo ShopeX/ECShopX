@@ -341,13 +341,14 @@ class PackageReceivesService
         $discountCardsList = $discountCardsData['list'];
         $discountCardsIndex = [];
         foreach ($discountCardsList as $card) {
+            $takeEffect = '';
             if ($card['date_type'] == "DATE_TYPE_FIX_TERM" || $card['date_type'] == DiscountNewGiftCardService::DATE_TYPE_LONG) {
                 $begin = $card['begin_day_type'] == 0 ? trans('KaquanBundle.current_day') : $card['begin_day_type'];
                 $takeEffect = trans('KaquanBundle.receive_after_effective', ['begin' => $begin, 'term' => $card['fixed_term']]);
             }
 
             $discountCardsIndex[$card['card_id']] = [
-                'takeEffect' => $takeEffect ?? '',
+                'takeEffect' => $takeEffect,
                 'card_id' => (int)$card['card_id'],
                 'card_type' => (string)$card['card_type'],
                 'date_type' => (string)$card['date_type'],

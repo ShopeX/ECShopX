@@ -62,7 +62,7 @@ class RegistrationRecordService
             $group_no = $activityInfo['group_no'];
             $params['group_no'] = $group_no;
             $params['record_no'] = $this->genRecordNo($activityInfo['company_id'], $activity_id, $group_no);
-            $params['verify_code'] = mt_rand(111111, 999999);
+            $params['verify_code'] = random_int(111111, 999999);
             $params['is_white_list'] = 0;
             $params['get_points'] = 0;
             $params['verify_time'] = 0;

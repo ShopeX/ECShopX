@@ -264,7 +264,7 @@ class AftersalesRecordExportService implements ExportFileInterface
                             // 配送员（从售后单的self_delivery_operator_id获取）
                             $recordData[$key][$k] = $selfDeliveryOperator[$aftersalesOperatorId] ?? '';
                         } elseif ($k == 'refund_fee') {
-                            $recordData[$key][$k] = $value[$k] / 100;
+                            $recordData[$key][$k] = bcdiv($value[$k], 100, 2);
                         } elseif ($k == 'refund_point') {
                             // 退款抵扣积分：有退款记录但值为0时显示0，无退款记录时显示--
                             if (!empty($refundData) && array_key_exists('refund_point', $refundData)) {
@@ -275,7 +275,7 @@ class AftersalesRecordExportService implements ExportFileInterface
                         } elseif ($k == 'refund_freight_fee') {
                             // 退款运费金额（¥），根据freight_type判断，如果是cash需要转换为元，没有的则显示0
                             if (!empty($refundData) && isset($refundData['freight_type']) && $refundData['freight_type'] == 'cash' && isset($refundData['freight'])) {
-                                $recordData[$key][$k] = $refundData['freight'] / 100;
+                                $recordData[$key][$k] = bcdiv($refundData['freight'], 100, 2);
                             } else {
                                 $recordData[$key][$k] = 0;
                             }
@@ -289,7 +289,7 @@ class AftersalesRecordExportService implements ExportFileInterface
                         } elseif ($k == 'refunded_fee') {
                             // 实退金额，需转换为元：有退款记录但值为0时显示0，无退款记录时显示--
                             if (!empty($refundData) && array_key_exists('refunded_fee', $refundData)) {
-                                $recordData[$key][$k] = $refundData['refunded_fee'] / 100;
+                                $recordData[$key][$k] = bcdiv($refundData['refunded_fee'], 100, 2);
                             } else {
                                 $recordData[$key][$k] = '--';
                             }

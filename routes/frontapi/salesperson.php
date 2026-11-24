@@ -16,28 +16,6 @@
 /* ↓↓↓↓↓ ↓↓↓↓↓ ↓↓↓↓↓ ↓↓↓↓↓ taro小程序、h5、app端、pc端 ↓↓↓↓↓ ↓↓↓↓↓ ↓↓↓↓↓ ↓↓↓↓↓ */
 $api->version('v1', function ($api) {
 
-    $api->group(['prefix' => 'h5app', 'namespace' => 'SalespersonBundle\Http\FrontApi\V1\Action', 'middleware' => ['dingoguard:h5app', 'api.auth'], 'providers' => 'jwt'], function ($api) {
-        // 业务员店铺相关
-        $api->get('/wxapp/salesperson/salemanShopList', ['name' => '业务员店铺列表', 'as' => 'h5app.wxapp.salesperson.salemanShopList',  'uses'=>'ShopSalespersonController@SalemanShopList']);
-        //业务员关系绑定24小时有效
-        $api->post('/wxapp/salesperson/bindusersalesperson', ['name' => '业务员关系绑定24小时有效', 'as' => 'h5app.wxapp.salesperson.bindusersalesperson', 'uses'=>'ShopSalespersonController@bindusersalesperson']);
-
-        // 店铺业务员管理-查询业务员信息
-        $api->get( '/wxapp/salespersonadmin/storemanagerinfo', ['name' => '查询管理信息', 'as' => 'h5app.wxapp.salespersonadmin.storemanagerinfo',  'uses'=>'ShopSalespersonController@storemanagerinfo']);
-        // 店铺业务员管理-增加业务员
-        $api->post('/wxapp/salespersonadmin/addsalesperson', ['name' => '增加业务员', 'as' => 'h5app.wxapp.salespersonadmin.addsalesperson', 'uses'=>'ShopSalespersonController@addsalesperson']);
-        // 店铺业务员管理-更新业务员
-        $api->post('/wxapp/salespersonadmin/updatesalesperson', ['name' => '更新业务员', 'as' => 'h5app.wxapp.salespersonadmin.updatesalesperson', 'uses'=>'ShopSalespersonController@updatesalesperson']);
-        // 店铺业务员管理-查询业务员列表
-        $api->get('/wxapp/salespersonadmin/salespersonlist', ['name' => '查询业务员列表', 'as' => 'h5app.wxapp.salespersonadmin.salespersonlist', 'uses'=>'ShopSalespersonController@salespersonlist']);
-        // 店铺业务员管理-查询业务员信息
-        $api->get('/wxapp/salespersonadmin/salespersoninfo', ['name' => '查询业务员列表', 'as' => 'h5app.wxapp.salespersonadmin.salespersoninfo', 'uses'=>'ShopSalespersonController@salespersoninfo']);
-        // 店铺业务员管理-查询业绩
-        $api->get('/wxapp/salespersonadmin/brokagestaticlist', ['name' => '查询业绩统计', 'as' => 'h5app.wxapp.salespersonadmin.brokagestaticlist', 'uses'=>'ShopSalespersonController@brokagestaticlist']);
- 
-    });
-
-
     // 导购货架相关api
     $api->group(['prefix' => 'h5app', 'namespace' => 'SalespersonBundle\Http\FrontApi\V1\Action', 'middleware' => ['api.auth'], 'providers' => 'qywxapp'], function ($api) {
 

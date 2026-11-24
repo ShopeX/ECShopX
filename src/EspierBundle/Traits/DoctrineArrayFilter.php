@@ -50,7 +50,13 @@ trait DoctrineArrayFilter
             $field = $field_expr;
             $expr = 'eq';
         } else {
-            list($field, $expr) = explode('|', $field_expr);
+            // 限制拆成「字段|操作符」，多余段（如去重后缀 field|like|hq）忽略，避免 list 解构越界/误用
+            $parts = explode('|', $field_expr, 2);
+            $field = $parts[0];
+            $expr = $parts[1] ?? 'eq';
+            if (strpos($expr, '|') !== false) {
+                $expr = explode('|', $expr, 2)[0];
+            }
         }
         if (in_array($field, [CompositeExpression::TYPE_AND,CompositeExpression::TYPE_OR])) {
             return [$field,$expr];

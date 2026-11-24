@@ -488,8 +488,6 @@ class WxappOrder extends Controller
         $params['isNostores'] = $request->input('isNostores', 0);
         $params['user_device'] = $request->get('user_device');
         $params['receipt_type'] = $request->input('receipt_type', 'logistics');
-        $params['isSalesmanPage'] = $request->input('isSalesmanPage', 0);
-        $params['promoter_user_id'] = $request->input('promoter_user_id', 0);
         $params['source_from'] = $this->getOrderSourceFrom($request);
 
         if(!empty($params['distributor_id'])){
@@ -516,7 +514,7 @@ class WxappOrder extends Controller
         if ((int) $actingUserId !== (int) $authInfo['user_id']) {
             $params['order_source'] = 'salesperson';
             $params['mobile'] = $params['receiver_mobile'] ?? 0;
-            $params['salesman_id'] = $params['promoter_user_id'] ?? 0;
+            $params['salesman_id'] = $authInfo['user_id'] ?? 0;
         }
         app('log')->info(':dkxd:'.__FUNCTION__.__LINE__.':2 createorder:params :' . json_encode($params) ) ;
 
@@ -570,15 +568,6 @@ class WxappOrder extends Controller
             }
         }
 
-        // 线下转账
-        if ($params['isSalesmanPage'] == 1 && $params['promoter_user_id'] > 0 && $params['pay_type'] == 'offline_pay') {
-            $offlinePayData = $orderService->getSalesmanOfflinePayData($params, $result);
-            $authorizerAppId = $authInfo['woa_appid'] ?? '';
-            $wxaAppId = $offlinePayData['wxapp_appid'] ?? '';
-
-            $service = $this->getPaymentService($params['pay_type'], $offlinePayData['distributor_id']);
-            $service->doPayment($authorizerAppId, $wxaAppId, $offlinePayData, false);
-        }
 
         $payResult = [
             'order_id' => $result['order_id'],
@@ -1084,8 +1073,6 @@ class WxappOrder extends Controller
             $orderId = $tradeInfo['order_id'];
         }
         $from = $request->input('from', 'front_list');
-        $params['promoter_user_id'] = $request->input('promoter_user_id', '');
-        $params['isSalesmanPage'] = $request->input('isSalesmanPage', '');
         $orderAssociationService = new OrderAssociationService();
         $order = $orderAssociationService->getOrder($authInfo['company_id'], $orderId);
         $result = [];
@@ -1119,8 +1106,6 @@ class WxappOrder extends Controller
                 $settingService = new SettingService();
                 $pickupCodeSetting = $settingService->presalePickupcodeGet($authInfo['company_id']);
                 $result['orderInfo']['pickupcode_status'] = $pickupCodeSetting['pickupcode_status'];
-            } elseif ($params['promoter_user_id'] && $params['isSalesmanPage'] && ($order['promoter_user_id'] == $params['promoter_user_id'] or $order['salesman_id'] == $params['promoter_user_id'])){
-                //搞不清楚  salesman_id  和 promoter_user_id 有什么区别，这里用 or 来判断
                 $order['order_source'] =  'salesperson';
             } else if ($userId != $authInfo['user_id'] && $prescriptionOrderRandom) {
                 // 验证扫码订单
@@ -1244,43 +1229,26 @@ class WxappOrder extends Controller
 
         return $orderInfo;
     }
-    public function getSalesPromoterInfo($promoterUserId = 0,$params = []){
-        //业务员 导购分享逻辑
-        $distributorService = new DistributorService();
-        $distributorInfo = $distributorService->getInfoSimple(['distributor_id' => $params['distributor_id'] ]);
-        app('log')->debug("\n".__FUNCTION__."-".__LINE__.":distributorInfo:". json_encode($distributorInfo));
-
-        //导购ID信息处理
-        if($promoterUserId && $distributorInfo['is_open_salesman']){
-            // check 业务员 导购店铺
-            $salespersonService = new SalespersonService();
-
-            $filter_salesperson = array(
-                'company_id'=> $params['company_id'],
-                'user_id'=> $promoterUserId,//$promoterinfoData['promoter_user_id'],
-                'shop_id'=> $params['distributor_id'],
-                'is_valid'=> 'true',
-            );
-            app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':filter_salesperson:' . json_encode($filter_salesperson));
-
-            $salespersonInfo = $salespersonService->getInfo($filter_salesperson);
-            app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':salespersonInfo:' . json_encode($salespersonInfo));
-
-
-            if(isset($salespersonInfo['user_id']) && $salespersonInfo['user_id']  ){
-                $promoterUserId = $promoterUserId;
-                app('log')->info(':brokerage:'.__FUNCTION__.__LINE__.':promoterUserId:' . json_encode($promoterUserId));
-            }else{
-                $promoterUserId = 0;
-                $salespersonInfo = array('user_id'=>'','name'=>'','mobile'=>'');
-            }
-
-        }else{
-            $promoterUserId = 0;
-            $salespersonInfo = array('user_id'=>'','name'=>'','mobile'=>'');
+    public function getSalesPromoterInfo($promoterUserId = 0, $params = [])
+    {
+        $salespersonInfo = ['user_id' => '', 'name' => '', 'mobile' => ''];
+        if (!$promoterUserId) {
+            return $salespersonInfo;
         }
-        return $salespersonInfo;
 
+        $salespersonService = new SalespersonService();
+        $filter_salesperson = [
+            'company_id' => $params['company_id'],
+            'user_id' => $promoterUserId,
+            'shop_id' => $params['distributor_id'],
+            'is_valid' => 'true',
+        ];
+        $salespersonInfo = $salespersonService->getInfo($filter_salesperson);
+        if (!isset($salespersonInfo['user_id']) || !$salespersonInfo['user_id']) {
+            return ['user_id' => '', 'name' => '', 'mobile' => ''];
+        }
+
+        return $salespersonInfo;
     }
 
     /**
@@ -1781,13 +1749,6 @@ class WxappOrder extends Controller
                 // throw new BadRequestHttpException('您还不是会员，无法查看订单！');
             }
         }
-        if(isset($params['promoter_user_id']) &&  $params['promoter_user_id']
-        && isset($params['isSalesmanPage']) && $params['isSalesmanPage']){
-            unset($filter['user_id']);
-            $filter['salesman_id'] =  $params['promoter_user_id'];
-            $filter['order_source'] =  'salesperson';
-        }
-
         $page = $request->input('page', 1);
         $limit = $request->input('pageSize', 50);
         $from = $request->input('from', 'front_list');
@@ -3093,9 +3054,6 @@ class WxappOrder extends Controller
         if ($errorMessage) {
             throw new ResourceException($errorMessage);
         }
-        if (isset($params['promoter_user_id']) && isset($params['isSalesmanPage']) && $params['promoter_user_id'] && $params['isSalesmanPage'] == 1 ){
-            $params['promoter_user_id'] = $params['promoter_user_id'];
-        }
         $authInfo = $request->get('auth');
         $params['company_id'] = $authInfo['company_id'];
         $params['user_id'] =  $authInfo['user_id'];
@@ -3185,9 +3143,6 @@ class WxappOrder extends Controller
         $errorMessage = validator_params($params, $rules);
         if ($errorMessage) {
             throw new ResourceException($errorMessage);
-        }
-        if (isset($params['promoter_user_id']) && isset($params['isSalesmanPage']) && $params['promoter_user_id'] && $params['isSalesmanPage'] == 1 ){
-            $params['promoter_user_id'] = $params['promoter_user_id'];
         }
         $authInfo = $request->get('auth');
         $params['company_id'] = $authInfo['company_id'];

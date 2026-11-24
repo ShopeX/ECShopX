@@ -17,80 +17,40 @@
 
 namespace WechatBundle\Services;
 
-// use MembersBundle\Services\WechatDiscountCardService;
-
+/**
+ * 历史空壳：微信卡券事件处理未实现。
+ * 保留类名避免自动加载断裂，调用即失败，防止误接静默失效。
+ * 业务卡券请使用 KaquanBundle\Services\WechatCardService / UserDiscountService。
+ */
 class WechatCardService
 {
-    /**
-     * WechatCardService 构造函数.
-     */
     public function __construct()
     {
-        // $this->wechatDiscountCard = new WechatDiscountCardService();
+        throw new \LogicException('WechatBundle\\Services\\WechatCardService 已废弃且无实现，请使用 KaquanBundle 卡券服务');
     }
 
-    /**
-     * 会员领取卡券
-     */
     public function userGetCard($eventData)
     {
-//        $cardType = $cardRel->getCardType();
-//        if($cardType == "MEMBER_CARD") {
-//            return true;
-//        } elseif (in_array($cardType,['gift','cash','discount','groupon','general_coupon'])) {
-//            return $this->wechatDiscountCard->userGetCard($eventData);
-//        }
+        throw new \LogicException('WechatBundle\\Services\\WechatCardService::userGetCard 未实现');
     }
 
-    /**
-     * 会员转赠卡券
-     */
     public function userGiftingCard($eventData)
     {
-//        $cardType = $cardRel->getCardType();
-//        if($cardType == "MEMBER_CARD") {
-//            return true;
-//        } elseif (in_array($cardType,['gift','cash','discount','groupon','general_coupon'])) {
-//            return $this->wechatDiscountCard->userGiftingCard($eventData);
-//        }
+        throw new \LogicException('WechatBundle\\Services\\WechatCardService::userGiftingCard 未实现');
     }
 
-    /**
-     * 会员删除卡券
-     */
     public function userDelCard($eventData)
     {
-//        $cardType = $cardRel->getCardType();
-//        if($cardType == "MEMBER_CARD") {
-//            return true;
-//        } elseif (in_array($cardType,['gift','cash','discount','groupon','general_coupon'])) {
-//            return $this->wechatDiscountCard->userDelCard($eventData);
-//        }
+        throw new \LogicException('WechatBundle\\Services\\WechatCardService::userDelCard 未实现');
     }
 
-    /**
-     *  会员核销卡券
-     */
     public function userConsumeCard($eventData)
     {
-//        $cardType = $cardRel->getCardType();
-//        if($cardType == "MEMBER_CARD") {
-//            return true;
-//        } elseif (in_array($cardType,['gift','cash','discount','groupon','general_coupon'])) {
-//            return $this->wechatDiscountCard->userConsumeCard($eventData);
-//        }
+        throw new \LogicException('WechatBundle\\Services\\WechatCardService::userConsumeCard 未实现');
     }
 
-    /**
-     * 会员卡券买单
-     */
     public function userPayFromPayCell($eventData)
     {
-//        $cardType = $cardRel->getCardType();
-//        if($cardType == "MEMBER_CARD") {
-//            return true;
-//        } elseif (in_array($cardType,['gift','cash','discount','groupon','general_coupon'])) {
-//            return $this->wechatDiscountCard->userPayFromPayCell($eventData);
-//        }
+        throw new \LogicException('WechatBundle\\Services\\WechatCardService::userPayFromPayCell 未实现');
     }
 }

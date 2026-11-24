@@ -19,21 +19,35 @@ namespace EspierBundle\Traits;
 
 trait RequestParamsTrait
 {
+    /** 分页页码下限 */
+    private const PAGE_MIN = 1;
+
+    /** 分页每页条数下限 */
+    private const PAGE_SIZE_MIN = 1;
+
+    /** 分页每页条数上限，防止 page_size<=0 全表或过大查询 */
+    private const PAGE_SIZE_MAX = 100;
+
     /**
-     * 获取当前页
+     * 获取当前页（钳制到 >= 1）
      * @return int
      */
     protected function getPage(): int
     {
-        return (int)request()->query("page", 1);
+        $page = (int) request()->query('page', self::PAGE_MIN);
+        return max(self::PAGE_MIN, $page);
     }
 
     /**
-     * 获取当前页需要拿取的数据条数
+     * 获取当前页需要拿取的数据条数（钳制到 [1, 100]）
      * @return int
      */
     protected function getPageSize(): int
     {
-        return (int)request()->query("page_size", 10);
+        $pageSize = (int) request()->query('page_size', 10);
+        if ($pageSize < self::PAGE_SIZE_MIN) {
+            $pageSize = 10;
+        }
+        return min(self::PAGE_SIZE_MAX, $pageSize);
     }
 }

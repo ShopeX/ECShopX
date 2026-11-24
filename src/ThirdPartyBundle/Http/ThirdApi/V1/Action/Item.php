@@ -163,7 +163,7 @@ class Item extends Controller
                 if ($result) {
                     $result = $itemsRepository->updateStore($itemBnList[$value['product_bn']]['item_id'], $value['product_store']);
                 }
-                if (!$result) {
+                if (!is_array($result)) {
                     $failUpdateItem[] = $value['product_bn'];
                 }
             }

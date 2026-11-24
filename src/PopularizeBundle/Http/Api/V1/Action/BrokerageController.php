@@ -266,14 +266,6 @@ class BrokerageController extends Controller
 
         $userId = $request->input('user_id');
         $distributor_id = $request->input('distributor_id', 0);
-        if ($distributor_id) {
-            $brokerageService = new BrokerageService();
-            $filter['company_id'] = $companyId;
-            $filter['dIds']    = [$distributor_id]; 
-            $filter['user_id'] = $userId; 
-            $countDataShop = $brokerageService->getSalesmanBrokerageCount($filter, 1 ,1000);
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-listBrokerage:". json_encode($distributor_id));
-        }
 
         if ($userId) {
             $countData = $promoterCountService->getPromoterCount($companyId, $userId);
@@ -386,13 +378,7 @@ class BrokerageController extends Controller
         }
 
         $brokerageService = new BrokerageService();
-        if ($request->input('distributor_id', false)) {
-            $distributor_id = $request->input('distributor_id', false);
-            $filter['dIds'] = [$distributor_id]; 
-            $data = $brokerageService->getSalesmanBrokeragelistsBySql($filter, $params['pageSize'] ,$params['page']);
-        }else{
-            $data = $brokerageService->getBrokerageDbList($filter, $params['page'], $params['pageSize']);
-        }
+        $data = $brokerageService->getBrokerageDbList($filter, $params['page'], $params['pageSize']);
 
         return $this->response->array($data);
     }

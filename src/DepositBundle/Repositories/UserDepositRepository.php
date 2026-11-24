@@ -311,4 +311,69 @@ class UserDepositRepository extends EntityRepository
         }
         return true;
     }
+
+    /**
+     * 原子增减储值余额；不允许透支（money + delta >= 0）
+     * @return int 变更后的余额（分）
+     */
+    public function incrMoneyAtomic($companyId, $userId, $delta): int
+    {
+        $delta = (int) $delta;
+        $conn = $this->getEntityManager()->getConnection();
+
+        $affected = $this->atomicIncrUpdate($conn, $companyId, $userId, $delta);
+        if ($affected > 0) {
+            return $this->getMoneyAfterAtomic($companyId, $userId);
+        }
+
+        $info = $this->getInfo(['company_id' => $companyId, 'user_id' => $userId]);
+        if (!empty($info)) {
+            // 行存在但未更新：余额不足
+            throw new ResourceException('储值余额不足');
+        }
+
+        if ($delta < 0) {
+            throw new ResourceException('储值余额不足');
+        }
+
+        try {
+            $created = $this->create([
+                'company_id' => $companyId,
+                'user_id' => $userId,
+                'money' => $delta,
+            ]);
+            return (int) $created['money'];
+        } catch (\Exception $e) {
+            // 并发首充竞态：重试条件更新
+            $affected = $this->atomicIncrUpdate($conn, $companyId, $userId, $delta);
+            if ($affected > 0) {
+                return $this->getMoneyAfterAtomic($companyId, $userId);
+            }
+            throw $e;
+        }
+    }
+
+    private function atomicIncrUpdate($conn, $companyId, $userId, $delta): int
+    {
+        $qb = $conn->createQueryBuilder();
+        $expr = 'money + (' . (int) $delta . ')';
+        return (int) $qb->update($this->table)
+            ->set('money', $expr)
+            ->where('company_id = ' . $qb->expr()->literal($companyId))
+            ->andWhere('user_id = ' . $qb->expr()->literal($userId))
+            ->andWhere($expr . ' >= 0')
+            ->execute();
+    }
+
+    private function getMoneyAfterAtomic($companyId, $userId): int
+    {
+        // 清 ORM 缓存，避免读到更新前快照
+        $entity = $this->findOneBy(['company_id' => $companyId, 'user_id' => $userId]);
+        if ($entity) {
+            $this->getEntityManager()->refresh($entity);
+            return (int) $entity->getMoney();
+        }
+        $info = $this->getInfo(['company_id' => $companyId, 'user_id' => $userId]);
+        return !empty($info) ? (int) $info['money'] : 0;
+    }
 }

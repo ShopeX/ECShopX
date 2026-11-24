@@ -75,7 +75,7 @@ class DivisionDetailExportService implements ExportFileInterface
                         if (!$divisionDetail[$k]) {
                             $divisionDetail[$k] = 0;
                         }
-                        $dataList[$key][$k] = $divisionDetail[$k] / 100;
+                        $dataList[$key][$k] = bcdiv($divisionDetail[$k], 100, 2);
                     } elseif (in_array($k, ['create_time']) && isset($divisionDetail[$k]) && $divisionDetail[$k]) {
                         $dataList[$key][$k] = date('Y-m-d H:i:s', $divisionDetail[$k]);
                     } elseif ($k == "back_status" && isset($divisionDetail[$k])) {

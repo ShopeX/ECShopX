@@ -210,11 +210,8 @@ class GenerateStatementsJob extends Job
                 $numList = $supplierOrderService->getOrderSupplierNum($orderIds, $this->companyId,$operator_id);
                 $numMap = array_column($numList, null, 'order_id');
                 
-                // 退款信息
-                $refundMap = [];
-                foreach ($orderIds as $k => $v) {
-                    $refundMap[$v] = $aftersalesService->getAftersaleRefundInfoByOrderId($v, $this->companyId, $operator_id);
-                }
+                // 退款信息（批量预取，避免按单 N+1）
+                $refundMap = $aftersalesService->getAftersaleRefundInfoByOrderIds($this->companyId, $orderIds, $operator_id);
 
                 $details = [];
                 foreach ($list as $row) {

@@ -73,7 +73,7 @@ class AftersalesFinancialExportService implements ExportFileInterface
                             // 直接赋值，不再添加引号，由 ExportFileService 统一处理
                             $recordData[$key][$k] = $value[$k];
                         } elseif ($k == 'refund_fee') {
-                            $recordData[$key][$k] = $value[$k] / 100;
+                            $recordData[$key][$k] = bcdiv($value[$k], 100, 2);
                         } else {
                             $recordData[$key][$k] = $value[$k] ?? '';
                         }

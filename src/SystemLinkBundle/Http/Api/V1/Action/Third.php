@@ -121,35 +121,50 @@ class Third extends Controller
 
     public function sendOrderToOms(Request $request)
     {
+        $companyId = app('auth')->user()->get('company_id');
         $normalOrderService = new \OrdersBundle\Services\Orders\NormalOrderService();
         $normalOrdersItemsRepository = app('registry')->getManager('default')->getRepository(NormalOrdersItems::class);
+        $orderService = new \SystemLinkBundle\Services\ShopexErp\OrderService();
         $filter = [
+            'company_id' => $companyId,
             'discount_fee|gt' => 0,
             'order_status|notin' => ['CANCEL', 'NOTPAY'],
         ];
         $count = $normalOrderService->count($filter);
         $pageSize = 20;
         $totalPage = ceil($count / $pageSize);
+        $orderBy = ['item_fee' => 'asc', 'item_id' => 'asc'];
 
         $result = [];
         $result1 = [];
         for ($i = 0; $i < $totalPage; $i++) {
-            $orderlist = $normalOrderService->getList($filter, $i, $pageSize);
+            // getList 第 2 参为 offset，不能传页码
+            $orderlist = $normalOrderService->getList($filter, $i * $pageSize, $pageSize);
+            if (!$orderlist) {
+                continue;
+            }
+
+            $orderIds = array_column($orderlist, 'order_id');
+            $itemsResult = $normalOrdersItemsRepository->getList([
+                'company_id' => $companyId,
+                'discount_fee|gt' => 0,
+                'order_item_type' => 'normal',
+                'order_id' => $orderIds,
+            ], 0, -1, $orderBy);
+            $itemsByOrderId = [];
+            foreach ($itemsResult['list'] as $orderitem) {
+                $itemsByOrderId[$orderitem['order_id']][] = $orderitem;
+            }
+
             foreach ($orderlist as $order) {
                 $totalDiscountFee = $order['discount_fee'];
-                $ifilter = [
-                    'discount_fee|gt' => 0,
-                    'order_item_type' => 'normal',
-                    'order_id' => $order['order_id'],
-                ];
-                $orderBy = ['item_fee' => 'asc', 'item_id' => 'asc'];
-                $orderitemlist = $normalOrdersItemsRepository->getList($ifilter, 0, -1, $orderBy);
-                $discountfeeArr = array_column($orderitemlist['list'], 'discount_fee');
-                if (count($orderitemlist['list']) > 1 && intval($totalDiscountFee) != intval(array_sum($discountfeeArr))) {
+                $orderItems = $itemsByOrderId[$order['order_id']] ?? [];
+                $discountfeeArr = array_column($orderItems, 'discount_fee');
+                if (count($orderItems) > 1 && intval($totalDiscountFee) != intval(array_sum($discountfeeArr))) {
                     $lastdata = [];
                     $discountFee = [];
-                    foreach ($orderitemlist['list'] as $k => $orderitem) {
-                        if ($discountFee && $k == count($orderitemlist['list']) - 1) {
+                    foreach ($orderItems as $k => $orderitem) {
+                        if ($discountFee && $k == count($orderItems) - 1) {
                             $discountFee[$k] = bcsub($totalDiscountFee, array_sum($discountFee));
                         } else {
                             $discountFee[$k] = $orderitem['discount_fee'];
@@ -157,6 +172,7 @@ class Third extends Controller
                         $lastdata['total_fee'] = intval(bcsub($orderitem['item_fee'], $discountFee[$k]));
                         $lastdata['discount_fee'] = intval($discountFee[$k]);
                         $ufilter = [
+                            'company_id' => $companyId,
                             'order_id' => $orderitem['order_id'],
                             'id' => $orderitem['id'],
                         ];
@@ -167,12 +183,11 @@ class Third extends Controller
                         ];
                     }
                 }
-                $orderService = new \SystemLinkBundle\Services\ShopexErp\OrderService();
-                $orderStruct = $orderService->getOrderStruct($order['company_id'], $order['order_id'], 'normal');
+                $orderStruct = $orderService->getOrderStruct($companyId, $order['order_id'], 'normal');
                 $orderStruct['custom_mark'] = '异常订单，手动操作更新';
                 $orderStruct['lastmodify'] = date('Y-m-d H:i:s');
                 if ($orderStruct) {
-                    $omeRequest = new \SystemLinkBundle\Services\ShopexErp\Request($order['company_id']);
+                    $omeRequest = new \SystemLinkBundle\Services\ShopexErp\Request($companyId);
                     $method = 'ome.order.add';
                     $result1[] = $omeRequest->call($method, $orderStruct);
                 }

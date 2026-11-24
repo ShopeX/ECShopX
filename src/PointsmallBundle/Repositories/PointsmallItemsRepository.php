@@ -104,7 +104,8 @@ class PointsmallItemsRepository extends EntityRepository
             if ($is_log) {
                 app('log')->info('NormalGoodsStoreUploadService updateStore itemId:' . $itemId . ',store===>' . $store . ',itemsEnt is null,line:' . __LINE__);
             }
-            return true;
+            // 实体不存在返回 null，避免调用方把 bool 当成功/当数组访问
+            return null;
         }
 
         $itemsEnt->setStore($store);

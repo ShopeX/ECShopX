@@ -89,7 +89,7 @@ class AdapayTradeExportService implements ExportFileInterface
                     if (in_array($k, ['orderId', 'tradeId']) && isset($value[$k])) {
                         $orderList[$key][$k] = "'".$value[$k]."'";
                     } elseif (in_array($k, ['totalFee', 'payFee','refundedFee', 'divFee','adapayFee']) && isset($value[$k])) {
-                        $orderList[$key][$k] = $value[$k] / 100;
+                        $orderList[$key][$k] = bcdiv($value[$k], 100, 2);
                     } elseif (in_array($k, ['timeStart', 'timeExpire']) && isset($value[$k]) && $value[$k]) {
                         $orderList[$key][$k] = date('Y-m-d H:i:s', $value[$k]);
                     } elseif ($k == "tradeState" && isset($value[$k])) {

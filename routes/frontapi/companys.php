@@ -23,7 +23,6 @@ $api->version('v1', function ($api) {
         $api->get('/wxapp/shops/protocol', ['name' => '获取站点的协议信息','as' => 'front.shops.protocol', 'uses' => 'ProtocolController@get']);
         $api->get('/wxapp/shops/protocolUpdateTime', ['name' => '获取站点的协议发布时间','as' => 'front.shops.protocolupdatetime', 'uses' => 'ProtocolController@getUpdateTime']);
 
-        $api->get('/wxapp/shops/protocolsaleman', ['name' => '获取业务员协议信息','as' => 'front.shops.protocolsaleman', 'uses' => 'ProtocolController@protocolsaleman']);
 
     });
 

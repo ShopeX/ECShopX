@@ -79,41 +79,12 @@ class BrokerageController extends Controller
         ];
 
         $filter['is_close'] = true;
-        $isSalesmanPage = $request->input('isSalesmanPage', 0);
-        if ($isSalesmanPage) {
-            $validateParams = $request->all('distributor_id', 'mobile', 'order_id');
-            $validateRules = [
-                'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
-                'mobile' => ['nullable|string', 'mobile参数错误'],
-                'order_id' => ['nullable|string', 'order_id参数错误'],
-            ];
-            $error = validator_params($validateParams, $validateRules);
-            if ($error) {
-                throw new ResourceException($error);
-            }
-
-            $shopName = $request->input('shopName', 0);
-            $mobile   = $request->input('mobile', 0);
-            $order_id   = $request->input('order_id', 0);
-            if($shopName) $filter['shopName'] = $shopName ;
-            if($mobile)   $filter['mobile']   = $mobile ;
-            if($order_id)   $filter['order_id']   = $order_id ;
-        }
-        
         $page = $request->input('page', 1);
         $pageSize = $request->input('pageSize', 10);
-        if($isSalesmanPage){
-            $data['close'] = $brokerageService->getBrokerageListSalesman($filter, $page, $pageSize);
-        }else{
-            $data['close'] = $brokerageService->getBrokerageList($filter, $page, $pageSize);
-        }
+        $data['close'] = $brokerageService->getBrokerageList($filter, $page, $pageSize);
 
         $filter['is_close'] =  false;
-        if($isSalesmanPage){
-            $data['noClose'] = $brokerageService->getBrokerageListSalesman($filter, $page, $pageSize);
-        }else{
-            $data['noClose'] = $brokerageService->getBrokerageList($filter, $page, $pageSize);
-        }
+        $data['noClose'] = $brokerageService->getBrokerageList($filter, $page, $pageSize);
 
         if ($request->input('close_type') == 'close') {
             return $this->response->array($data['close']);
@@ -165,74 +136,6 @@ class BrokerageController extends Controller
     {
         $promoterCountService = new PromoterCountService();
         $authInfo = $request->get('auth');
-        $isSalesmanPage = $request->input('isSalesmanPage', 0);
-
-        if($isSalesmanPage){
-            $validateParams = $request->all('distributor_id');
-            $validateRules = [
-                'distributor_id' => ['nullable|integer', 'distributor_id参数错误'],
-            ];
-            $error = validator_params($validateParams, $validateRules);
-            if ($error) {
-                throw new ResourceException($error);
-            }
-
-            $distributor_id = $request->input('distributor_id', 0);
-            $isSalesmanPage = $request->input('isSalesmanPage', 0);
-
-            $salespersonService = new SalespersonService();
-            $filter_salesman['company_id'] = $authInfo['company_id'];
-            $filter_salesman['user_id']    = $authInfo['user_id'];
-    
-            $listdata = $salespersonService->getSalespersonList($filter_salesman, 1, 1000);
-            $dIds = array_column($listdata['list'],'shop_id');
-
-            //1 获取全部佣金总额 getSalesmanBrokerageCount
-            $brokerageService = new BrokerageService();
-            $filter_count['company_id']     = $authInfo['company_id'];
-
-            if(isset($dIds) && $dIds) {
-                $filter_count['dIds'] = $dIds;
-            } 
-            if($distributor_id) {
-                $filter_count['distributor_id'] = $distributor_id;
-                unset($filter_count['dIds']);
-            }; 
-
-            $filter_count['user_id']        = $authInfo['user_id']; 
-            $countDataShop = $brokerageService->getSalesmanBrokerageCount($filter_count, 1 ,1000);
-
-            //2 获取有效提现总额
-            $filter_withdrow = $filter_count;
-            if(isset($dIds) && $dIds) {
-                $filter_withdrow['distributor_id'] = $dIds; 
-                unset($filter_withdrow['dIds']);
-            }
-            if($distributor_id) {
-                $filter_withdrow['distributor_id'] = $distributor_id;
-            }; 
-
-            $filter_withdrow['status'] = ['apply','process','success'];
-            $salesmanCashWithdrawalService = new salesmanCashWithdrawalService();
-            $list_withdraw = $salesmanCashWithdrawalService->lists($filter_withdrow);
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-filter_withdrow:". json_encode($filter_withdrow));
-            app('log')->debug("\n".__FUNCTION__."-".__LINE__.":in-list_withdraw:". json_encode($list_withdraw));
-            
-            $sum_withdrawal_money = array_sum(array_column($list_withdraw['list'], 'money'));//            
-            $countDataShop['sum_withdrawal_money']= $sum_withdrawal_money;
-            $countDataShop['cashWithdrawalRebate']= (int)$countDataShop['rebate_sum_close'] - (int)$sum_withdrawal_money;
-            $countDataShop['payedRebate'] =  (int)$sum_withdrawal_money;
-            $countDataShop['orderRebate'] =  (int)$countDataShop['rebate_sum'];
-            // noCloseRebate
-            $countDataShop['noCloseRebate'] =  (int)$countDataShop['rebate_sum_noclose'];
-            $countDataShop['orderCloseRebate'] =  (int)$countDataShop['rebate_sum_close'];
-            // rebateTotal  
-            $countDataShop['rebateTotal'] =  (int)$countDataShop['rebate_sum'];
-
-            return $this->response->array($countDataShop);
-
-        }
-
         $countData = $promoterCountService->getPromoterCount($authInfo['company_id'], $authInfo['user_id']);
         //已提现
         $data['payedRebate'] = $countData['payedRebate'];

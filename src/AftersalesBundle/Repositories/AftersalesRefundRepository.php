@@ -76,6 +76,28 @@ class AftersalesRefundRepository extends EntityRepository
     }
 
     /**
+     * 幂等抢占：仅非 SUCCESS 可更新为 SUCCESS，返回影响行数
+     */
+    public function claimSuccess($companyId, $refundBn): int
+    {
+        $conn = $this->getEntityManager()->getConnection();
+        $qb = $conn->createQueryBuilder();
+        $affected = (int) $qb->update($this->table)
+            ->set('refund_status', $qb->expr()->literal('SUCCESS'))
+            ->where('company_id = ' . $qb->expr()->literal($companyId))
+            ->andWhere('refund_bn = ' . $qb->expr()->literal($refundBn))
+            ->andWhere('refund_status <> ' . $qb->expr()->literal('SUCCESS'))
+            ->execute();
+
+        $entity = $this->findOneBy(['company_id' => $companyId, 'refund_bn' => $refundBn]);
+        if ($entity) {
+            $this->getEntityManager()->refresh($entity);
+        }
+
+        return $affected;
+    }
+
+    /**
      * 更新多条数数据
      *
      * @param $filter 更新的条件

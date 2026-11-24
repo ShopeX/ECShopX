@@ -196,7 +196,21 @@ class CommunityChief extends BaseController
         $params['user_id'] = $userId;
         $params['distributor_id'] = $distributorId;
         $params['chief_mobile'] = $authInfo['mobile'];
-        $result = $chiefApplyInfoService->create($params);
+        // 唯一键 (company_id,user_id,distributor_id)：驳回后复用原行重提，避免再插重复键
+        $rejected = $chiefApplyInfoService->getInfo([
+            'company_id' => $companyId,
+            'user_id' => $userId,
+            'distributor_id' => $distributorId,
+            'approve_status' => 2,
+        ]);
+        if ($rejected) {
+            $params['approve_status'] = 0;
+            $params['refuse_reason'] = '';
+            $result = $chiefApplyInfoService->updateOneBy(['apply_id' => $rejected['apply_id']], $params);
+        } else {
+            // create 内捕获唯一键冲突，兜底并发 count-then-create
+            $result = $chiefApplyInfoService->create($params);
+        }
 
         return $this->response->array($result);
     }

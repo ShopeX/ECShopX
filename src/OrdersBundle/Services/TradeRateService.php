@@ -101,7 +101,7 @@ class TradeRateService
 
             $result = $this->tradeRateRepository->create($createDate);
             $conn->commit();
-        } catch (BadRequestHttpException $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw new ResourceException($e->getMessage());
         }
@@ -183,7 +183,7 @@ class TradeRateService
 
 
             $conn->commit();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $conn->rollback();
             throw new ResourceException($e->getMessage());
         }

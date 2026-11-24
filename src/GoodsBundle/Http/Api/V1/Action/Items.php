@@ -1891,7 +1891,9 @@ class Items extends BaseController
                     }
                 }
                 $value['itemCatName'] = $cat_arr;
-                $value['commission_ratio'] = $commissionRatio[$value['goods_id']] ?? 0;
+                // 库内为万分比（写入时 *100），列表回填前端百分比需 /100，避免 >100 校验失败
+                $storedRatio = $commissionRatio[$value['goods_id']] ?? 0;
+                $value['commission_ratio'] = $storedRatio ? (float) bcdiv((string) $storedRatio, '100', 2) : 0;
             }
         }
 

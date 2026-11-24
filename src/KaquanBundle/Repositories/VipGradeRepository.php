@@ -233,8 +233,10 @@ class VipGradeRepository extends EntityRepository
             $entity->setLvType($data["lv_type"]);
         }
 
-        if (isset($data["default_grade"]) && $data["default_grade"] = false) {
-            $entity->setDefaultGrade($data["default_grade"]);
+        if (isset($data["default_grade"])) {
+            // 原代码误写为赋值 `$data["default_grade"] = false`，条件恒假导致永不更新
+            $defaultGrade = (!$data["default_grade"] || $data["default_grade"] === 'false') ? false : true;
+            $entity->setDefaultGrade($defaultGrade);
         }
 
         if (isset($data["is_disabled"])) {

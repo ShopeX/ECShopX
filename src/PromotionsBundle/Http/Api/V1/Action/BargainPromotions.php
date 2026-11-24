@@ -119,11 +119,11 @@ class BargainPromotions extends Controller
                 'mkt_price' => 'required|numeric|min:0',
                 'limit_num' => 'required|numeric|min:0',
                 'bargain_rules' => 'required',
-                // 'bargain_range.min' => 'required|numeric',
-                // 'bargain_range.max' => 'required|numeric|min:0',
+                'bargain_range.min' => 'required|numeric',
+                'bargain_range.max' => 'required|numeric|min:0',
                 'people_range.min' => 'required|numeric|min:1',
                 'people_range.max' => 'required|numeric|min:2',
-                // 'min_price'         => 'required|numeric',
+                'min_price' => 'required|numeric|min:0',
                 'begin_time' => 'required',
                 'end_time' => 'required',
                 'share_msg' => 'required',
@@ -139,11 +139,11 @@ class BargainPromotions extends Controller
                 'mkt_price.*' => trans('PromotionsBundle.item_discount_required_min_0'),
                 'limit_num.*' => trans('PromotionsBundle.limit_purchase_quantity_required'),
                 'bargain_rules.*' => trans('PromotionsBundle.bargain_rules_required'),
-                // 'bargain_range.min' => '最小助力数额必填',
-                // 'bargain_range.max' => '最大助力数额必须大于0且必填',
+                'bargain_range.min' => '最小助力数额必填',
+                'bargain_range.max' => '最大助力数额必须大于0且必填',
                 'people_range.min.*' => trans('PromotionsBundle.min_help_people_required_min_1'),
                 'people_range.max.*' => trans('PromotionsBundle.max_help_people_required_min_2'),
-                // 'min_price'         => '最少助力金额必填',
+                'min_price' => '最少助力金额必填',
                 'begin_time.*' => trans('PromotionsBundle.bargain_start_time_required'),
                 'end_time.*' => trans('PromotionsBundle.bargain_end_time_required'),
                 'share_msg.*' => trans('PromotionsBundle.share_content_required'),
@@ -157,9 +157,9 @@ class BargainPromotions extends Controller
                 throw new ResourceException($msg);
             }  
         }
-        // if ($params['bargain_range']['min'] >= $params['bargain_range']['max']) {
-        //     throw new ResourceException('最大助力金额要大于最低助力金额');
-        // }
+        if ($params['bargain_range']['min'] >= $params['bargain_range']['max']) {
+            throw new ResourceException('最大助力金额要大于最低助力金额');
+        }
         $companyId = app('auth')->user()->get('company_id');
         $params['company_id'] = $companyId;
         $params['begin_time'] = strtotime($params['begin_time']);
@@ -169,17 +169,19 @@ class BargainPromotions extends Controller
         }
         $params['price'] = intval($params['price'] * 100);
         $params['mkt_price'] = intval($params['mkt_price'] * 100);
-        $params['min_price'] = 100; //intval($params['min_price']*100);
-        // $params['bargain_range']['min'] = intval($params['bargain_range']['min']*100);
-        // $params['bargain_range']['max'] = intval($params['bargain_range']['max']*100);
+        // 列定义单位为分，前端按元传入，需 *100（勿硬编码 1 元）
+        $params['min_price'] = (int) round($params['min_price'] * 100);
+        // 列定义单位为分，前端按元传入，需 *100
+        $params['bargain_range']['min'] = intval($params['bargain_range']['min'] * 100);
+        $params['bargain_range']['max'] = intval($params['bargain_range']['max'] * 100);
 
         $maxCutPrice = $params['mkt_price'] - $params['price'];
         if ($maxCutPrice < 100) {
             throw new ResourceException(trans('PromotionsBundle.price_difference_must_greater_than_1'));
         }
-        // if ($params['bargain_range']['max'] > $maxCutPrice) {
-        //     throw new ResourceException('最大助力金额为￥' . $maxCutPrice / 100);
-        // }
+        if ($params['bargain_range']['max'] > $maxCutPrice) {
+            throw new ResourceException('最大助力金额为￥' . $maxCutPrice / 100);
+        }
         if ($params['people_range']['max'] <= $params['people_range']['min']) {
             throw new ResourceException(trans('PromotionsBundle.max_help_people_greater_than_min'));
         }
@@ -355,11 +357,11 @@ class BargainPromotions extends Controller
                 'mkt_price' => 'required|numeric|min:0',
                 'limit_num' => 'required|numeric|min:0',
                 'bargain_rules' => 'required',
-                // 'bargain_range.min' => 'required|numeric',
-                // 'bargain_range.max' => 'required|numeric|min:0',
+                'bargain_range.min' => 'required|numeric',
+                'bargain_range.max' => 'required|numeric|min:0',
                 'people_range.min' => 'required|numeric|min:1',
                 'people_range.max' => 'required|numeric|min:1',
-                // 'min_price'         => 'required|numeric',
+                'min_price' => 'required|numeric|min:0',
                 'begin_time' => 'required',
                 'end_time' => 'required',
                 'share_msg' => 'required',
@@ -376,11 +378,11 @@ class BargainPromotions extends Controller
                 'mkt_price.*' => trans('PromotionsBundle.item_discount_required_min_0'),
                 'limit_num.*' => trans('PromotionsBundle.limit_purchase_quantity_required'),
                 'bargain_rules' => trans('PromotionsBundle.bargain_rules_required'),
-                // 'bargain_range.min' => '最小助力数额必填',
-                // 'bargain_range.max' => '最大助力数额必须大于0且必填',
+                'bargain_range.min' => '最小助力数额必填',
+                'bargain_range.max' => '最大助力数额必须大于0且必填',
                 'people_range.min' => trans('PromotionsBundle.min_help_people_required'),
                 'people_range.max' => trans('PromotionsBundle.max_help_people_required_min_0'),
-                // 'min_price'         => '最少助力金额必填',
+                'min_price' => '最少助力金额必填',
                 'begin_time' => trans('PromotionsBundle.bargain_start_time_required'),
                 'end_time' => trans('PromotionsBundle.bargain_end_time_required'),
                 'share_msg' => trans('PromotionsBundle.share_content_required'),
@@ -394,9 +396,9 @@ class BargainPromotions extends Controller
                 throw new ResourceException($msg);
             }
         }
-        // if ($params['bargain_range']['min'] >= $params['bargain_range']['max']) {
-        //     throw new ResourceException('最大助力金额要大于最低助力金额');
-        // }
+        if ($params['bargain_range']['min'] >= $params['bargain_range']['max']) {
+            throw new ResourceException('最大助力金额要大于最低助力金额');
+        }
         $companyId = app('auth')->user()->get('company_id');
         $params['company_id'] = $companyId;
         $params['begin_time'] = strtotime($params['begin_time']);
@@ -407,17 +409,19 @@ class BargainPromotions extends Controller
 
         $params['price'] = intval($params['price'] * 100);
         $params['mkt_price'] = intval($params['mkt_price'] * 100);
-        $params['min_price'] = 100;//intval($params['min_price']*100);
-        // $params['bargain_range']['min'] = intval($params['bargain_range']['min']*100);
-        // $params['bargain_range']['max'] = intval($params['bargain_range']['max']*100);
+        // 列定义单位为分，前端按元传入，需 *100（勿硬编码 1 元）
+        $params['min_price'] = (int) round($params['min_price'] * 100);
+        // 列定义单位为分，前端按元传入，需 *100
+        $params['bargain_range']['min'] = intval($params['bargain_range']['min'] * 100);
+        $params['bargain_range']['max'] = intval($params['bargain_range']['max'] * 100);
 
         $maxCutPrice = $params['mkt_price'] - $params['price'];
         if ($maxCutPrice < 100) {
             throw new ResourceException(trans('PromotionsBundle.price_difference_must_greater_than_1'));
         }
-        // if ($params['bargain_range']['max'] > $maxCutPrice) {
-        //     throw new ResourceException('最大助力金额为￥' . $maxCutPrice / 100);
-        // }
+        if ($params['bargain_range']['max'] > $maxCutPrice) {
+            throw new ResourceException('最大助力金额为￥' . $maxCutPrice / 100);
+        }
         if ($params['people_range']['max'] <= $params['people_range']['min']) {
             throw new ResourceException(trans('PromotionsBundle.max_help_people_greater_than_min'));
         }
