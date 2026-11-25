@@ -1,4 +1,4 @@
-FROM registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.4.27-fpm-alpine3.24-v1.0
+FROM registry.cn-hangzhou.aliyuncs.com/shopex_company/ecshopex-php:ecx-8.4.28-fpm-alpine3.24
 
 ARG NODE_VERSION=16.20.2
 ARG NODE_DIST_BASE=https://nodejs.org/dist
