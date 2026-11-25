@@ -125,11 +125,11 @@
     "repositories": {
         "packagist": {
             "type": "composer",
-            "url": "https://repo.packagist.org"
+            "url": "https://mirrors.cloud.tencent.com/composer/"
         },
         "0": {
             "type": "composer",
-            "url": "https://mirrors.aliyun.com/composer/",
+            "url": "https://mirrors.cloud.tencent.com/composer/",
             "options": {
                 "http": {
                     "timeout": 30

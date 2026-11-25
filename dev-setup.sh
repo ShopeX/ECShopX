@@ -1195,7 +1195,7 @@ configure_application() {
         log_info "开始安装 Composer 依赖（这可能需要一些时间）..."
         # 后台执行并显示进度
         docker exec "$CONTAINER_NAME" sh -c "cd /data/httpd/ECShopX && \
-            php -d memory_limit=-1 composer.phar config repo.packagist composer https://mirrors.aliyun.com/composer/ 2>/dev/null || true && \
+            php -d memory_limit=-1 composer.phar config repo.packagist composer https://mirrors.cloud.tencent.com/composer/ 2>/dev/null || true && \
             php -d memory_limit=-1 composer.phar install -o --no-interaction --prefer-dist" > /tmp/composer_output.log 2>&1 &
         local composer_pid=$!
         
