@@ -37,5 +37,6 @@ $api->version('v1', function($api) {
         $api->get('/refund/logExport',  ['name'=>'导出退款单列表', 'as' => 'refund.logexport', 'uses'=>'Refund@logExport']);
         $api->get('/refund/offline/bank', ['name' => '获取线下退款银行信息', 'as' => 'refund.offline', 'uses' => 'Refund@getOfflineBank']);
         $api->post('/refund/offline', ['name' => '线下退款', 'as' => 'refund.offline', 'uses' => 'Refund@saveOfflineRefund']);
+        $api->post('/refund/{refund_bn}/abnormal-refund', ['name' => '支付完结异常退款', 'as' => 'refund.abnormal', 'uses' => 'Refund@abnormalRefund']);
     });
 });

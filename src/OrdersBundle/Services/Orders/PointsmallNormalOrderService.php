@@ -259,7 +259,7 @@ class PointsmallNormalOrderService extends AbstractNormalOrder
                 'company_id' => $params['company_id'],
                 'order_id' => $params['order_id'],
                 'refund_type' => 1,
-                'refund_status' => ['READY', 'AUDIT_SUCCESS', 'SUCCESS', 'CANCEL', 'REFUNDCLOSE', 'PROCESSING', 'CHANGE'],
+                'refund_status' => 'READY',
             ];
         } else { // 传了退款单
             $refundFilter = [
@@ -288,6 +288,9 @@ class PointsmallNormalOrderService extends AbstractNormalOrder
         try {
             // 同意退款
             if ($params['check_cancel'] == '1') {
+                if (AftersalesRefundService::isTradeFinishAbnormalRefund($refund)) {
+                    throw new ResourceException('支付完结异常退款单不走售前退款审核');
+                }
                 // 生成退款单并退款
                 if ($refund['refund_status'] == 'SUCCESS') {
                     throw new ResourceException('退款单状态 已退款，无法继续操作');

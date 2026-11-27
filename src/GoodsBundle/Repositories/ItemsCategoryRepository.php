@@ -38,6 +38,56 @@ class ItemsCategoryRepository extends EntityRepository
         'category_name',
     ];
 
+    /**
+     * 允许出现在 SELECT / ORDER BY / FILTER 列位的字段白名单（CNVD-2026-45822）
+     */
+    private static $allowedColumns = [
+        'category_id' => true,
+        'company_id' => true,
+        'regionauth_id' => true,
+        'category_name' => true,
+        'category_code' => true,
+        'parent_id' => true,
+        'category_level' => true,
+        'is_main_category' => true,
+        'is_show_front' => true,
+        'path' => true,
+        'distributor_id' => true,
+        'commission_ratio' => true,
+        'sort' => true,
+        'goods_params' => true,
+        'goods_spec' => true,
+        'image_url' => true,
+        'crossborder_tax_rate' => true,
+        'invoice_tax_rate_id' => true,
+        'invoice_tax_rate' => true,
+        'created' => true,
+        'updated' => true,
+        'customize_page_id' => true,
+        'category_id_taobao' => true,
+        'parent_id_taobao' => true,
+        'taobao_category_info' => true,
+    ];
+
+    /**
+     * 允许的 ExpressionBuilder 操作符 / 业务别名
+     */
+    private static $allowedFilterOps = [
+        'eq' => true,
+        'neq' => true,
+        'lt' => true,
+        'lte' => true,
+        'gt' => true,
+        'gte' => true,
+        'like' => true,
+        'in' => true,
+        'notIn' => true,
+        'contains' => true,
+        'startWith' => true,
+        'startsWith' => true,
+        'direct' => true,
+    ];
+
     public function getDistributorId($data)
     {
         // Powered by ShopEx EcShopX
@@ -318,6 +368,8 @@ class ItemsCategoryRepository extends EntityRepository
             ->from('items_category');
         $filter = $this->getDistributorId($filter);
         $criteria = $this->_filter($filter, $criteria);
+        $orderBy = $this->sanitizeOrderBy($orderBy);
+        $columns = $this->sanitizeColumns($columns);
 
         $result['total_count'] = $criteria->execute()->fetchColumn();
         $result['list'] = [];
@@ -450,6 +502,8 @@ class ItemsCategoryRepository extends EntityRepository
 
         $filter = $this->getDistributorId($filter);
         $criteria = $this->_filter($filter, $criteria, 'p');
+        $orderBy = $this->sanitizeOrderBy($orderBy);
+        $columns = $this->sanitizeColumns($columns, 'p');
 
         $result['total_count'] = $criteria->execute()->fetchColumn();
         $result['list'] = [];
@@ -465,15 +519,6 @@ class ItemsCategoryRepository extends EntityRepository
                     $criteria->addOrderBy('p.'.$filed, $val);
                 }
             }
-            if (!$columns || $columns == '*') {
-                $columns = 'p.*';
-            } else {
-                $columns = explode(',', $columns);
-                $columns = array_map(function ($val) {
-                    return 'p.'.$val;
-                }, $columns);
-                $columns = implode(',', $columns);
-            }
             $result['list'] = $criteria->select($columns.',(CASE WHEN c.category_id IS NULL THEN 0 ELSE 1 END) as has_children')->execute()->fetchAll();
         }
 //获取语言
@@ -486,15 +531,31 @@ class ItemsCategoryRepository extends EntityRepository
 
     private function _filter($filter, $qb, $alias = '')
     {
+        if (!is_array($filter)) {
+            return $qb;
+        }
         foreach ($filter as $field => $value) {
+            if (!is_string($field)) {
+                continue;
+            }
             if (is_bool($value)) {
                 $value = $value ? 1 : 0;
             }
             $list = explode('|', $field);
             if (count($list) > 1) {
                 list($v, $k) = $list;
+                if (!$this->isAllowedColumn($v) || !$this->isAllowedFilterOp($k)) {
+                    continue;
+                }
                 if ($k == 'direct') {
-                    $qb = $qb->andWhere($qb->expr()->eq(($alias ? $alias.'.' : '').$v, $value));
+                    // direct 用于列=列或列=数值；禁止任意 SQL 片段
+                    $left = ($alias ? $alias.'.' : '').$v;
+                    if (is_int($value) || is_float($value)) {
+                        $qb = $qb->andWhere($qb->expr()->eq($left, $value));
+                    } elseif (is_string($value) && $this->isAllowedColumn($value)) {
+                        $right = ($alias ? $alias.'.' : '').$value;
+                        $qb = $qb->andWhere($qb->expr()->eq($left, $right));
+                    }
                     continue;
                 }
                 if ($k == 'contains') {
@@ -525,6 +586,9 @@ class ItemsCategoryRepository extends EntityRepository
                     }
                 }
             } else {
+                if (!$this->isAllowedColumn($field)) {
+                    continue;
+                }
                 if (is_array($value)) {
                     if (!$value) continue;
                     array_walk($value, function (&$colVal) use ($qb) {
@@ -541,6 +605,82 @@ class ItemsCategoryRepository extends EntityRepository
             }
         }
         return $qb;
+    }
+
+    /**
+     * 白名单化 SELECT 列；非法片段丢弃，全部非法时回退为 *
+     *
+     * @param mixed $columns
+     * @param string $alias 表别名（如 p），非空时输出 alias.col
+     * @return string
+     */
+    private function sanitizeColumns($columns, $alias = '')
+    {
+        if ($columns === null || $columns === '' || $columns === '*') {
+            return $alias !== '' ? ($alias.'.*') : '*';
+        }
+        if (!is_string($columns)) {
+            return $alias !== '' ? ($alias.'.*') : '*';
+        }
+        $safe = [];
+        foreach (explode(',', $columns) as $part) {
+            $part = trim($part);
+            if ($part === '' || $part === '*') {
+                continue;
+            }
+            // 去掉已有别名前缀，仅保留标识符
+            if (strpos($part, '.') !== false) {
+                $part = substr($part, strrpos($part, '.') + 1);
+            }
+            if (!$this->isAllowedColumn($part)) {
+                continue;
+            }
+            $safe[] = $alias !== '' ? ($alias.'.'.$part) : $part;
+        }
+        if (!$safe) {
+            return $alias !== '' ? ($alias.'.*') : '*';
+        }
+        return implode(',', $safe);
+    }
+
+    /**
+     * 白名单化 ORDER BY：字段必须在白名单，方向仅 ASC/DESC
+     *
+     * @param mixed $orderBy
+     * @return array
+     */
+    private function sanitizeOrderBy($orderBy)
+    {
+        if (!is_array($orderBy) || !$orderBy) {
+            return [];
+        }
+        $safe = [];
+        foreach ($orderBy as $field => $direction) {
+            if (!is_string($field) || !$this->isAllowedColumn($field)) {
+                continue;
+            }
+            if (!is_string($direction)) {
+                continue;
+            }
+            $dir = strtoupper(trim($direction));
+            if ($dir !== 'ASC' && $dir !== 'DESC') {
+                continue;
+            }
+            $safe[$field] = $dir;
+        }
+        return $safe;
+    }
+
+    private function isAllowedColumn($column)
+    {
+        return is_string($column)
+            && isset(self::$allowedColumns[$column])
+            && (bool) preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $column);
+    }
+
+    private function isAllowedFilterOp($op)
+    {
+        return is_string($op) && isset(self::$allowedFilterOps[$op]);
     }
 
     /**

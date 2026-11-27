@@ -1881,8 +1881,13 @@ class OrderService
         $conn->beginTransaction();
 
         try {
-            // 更改订单状态
-            $this->orderStatusUpdate($filter, $orderStatus, $payType);
+            // 更改订单状态（支付回调路径仅当订单仍为待付/部分付时推进）
+            $updated = $this->orderStatusUpdate($filter, $orderStatus, $payType, true);
+            if ($updated === false) {
+                $conn->rollback();
+
+                return false;
+            }
 
             $conn->commit();
         } catch (\Throwable $e) {

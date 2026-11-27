@@ -84,6 +84,25 @@ class ServiceOrdersRepository extends EntityRepository
         return true;
     }
 
+    /**
+     * 条件批量更新并返回受影响行数
+     *
+     * @param  array<string, mixed>  $filter
+     * @param  array<string, mixed>  $data
+     */
+    public function updateBy(array $filter, array $data)
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder()->update($this->table);
+        foreach ($data as $key => $val) {
+            $qb = $qb->set($key, $qb->expr()->literal($val));
+        }
+
+        $qb = $this->_filter($filter, $qb);
+
+        return $qb->execute();
+    }
+
     public function getList($filter = array(), $offset = 0, $limit = 500, $orderby = null)
     {
         $conn = app('registry')->getConnection('default');

@@ -219,7 +219,7 @@ class CommunityNormalOrderService extends AbstractNormalOrder
         return $orderData;
     }
 
-    public function orderStatusUpdate($filter, $orderStatus, $payType = '')
+    public function orderStatusUpdate($filter, $orderStatus, $payType = '', bool $onlyIfAwaitingPayment = false)
     {
         // 支付更新跟团号
         if ($orderStatus == 'PAYED') {
@@ -230,7 +230,7 @@ class CommunityNormalOrderService extends AbstractNormalOrder
             $relService->updateOneBy(['order_id' => $orderInfo['order_id']], $data);
         }
 
-        return parent::orderStatusUpdate($filter, $orderStatus, $payType);
+        return parent::orderStatusUpdate($filter, $orderStatus, $payType, $onlyIfAwaitingPayment);
     }
 
     // todo 增加销量

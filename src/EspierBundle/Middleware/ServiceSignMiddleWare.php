@@ -44,11 +44,16 @@ class ServiceSignMiddleWare
             throw new \Exception('签名格式不不正确');
         }
         list($serviceName, $sign) = $signData;
-        $localSign = config('services.'.$serviceName.'.sign');
-        if (!$localSign) {
+        // 仅允许配置中声明的服务名，避免探测任意 config 路径
+        if (!is_string($serviceName) || !preg_match('/^[a-zA-Z0-9_]+$/', $serviceName)
+            || !is_array(config('services.'.$serviceName))) {
             throw new \Exception('签名不存在');
         }
-        if ($localSign != $sign) {
+        $localSign = config('services.'.$serviceName.'.sign');
+        if (!$localSign || !is_string($localSign) || !is_string($sign)) {
+            throw new \Exception('签名不存在');
+        }
+        if (!hash_equals($localSign, $sign)) {
             throw new \Exception('签名不正确');
         }
         return $next($request);

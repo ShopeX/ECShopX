@@ -17,6 +17,7 @@
 
 namespace OrdersBundle\Services;
 
+use Dingo\Api\Exception\ResourceException;
 use OrdersBundle\Entities\RefundErrorLogs;
 use OrdersBundle\Traits\GetOrderServiceTrait;
 use AftersalesBundle\Services\AftersalesRefundService;
@@ -59,6 +60,13 @@ class RefundErrorLogsService
             'refund_bn' => $data['refund_bn'],
             'company_id' => $data['company_id']
         ];
+        $refund = $aftersalesRefundService->getInfo($refund_filter);
+        if (!$refund) {
+            throw new ResourceException('退款单不存在');
+        }
+        if (AftersalesRefundService::isTradeFinishAbnormalRefund($refund)) {
+            throw new ResourceException('支付完结异常退款单不支持错误日志重提，请在退款单列表操作');
+        }
         $aftersalesRefundService->doRefund($refund_filter, true);
 
         $res = $this->refundErrorLogsRepository->updateOneBy(['id' => $refundErrorLogs['id']], ['is_resubmit' => true]);

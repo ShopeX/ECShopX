@@ -17,20 +17,29 @@
 
 namespace OrdersBundle\Listeners;
 
-use OrdersBundle\Events\NormalOrderPaySuccessEvent;
-use OrdersBundle\Events\TradeFinishEvent;
-use OrdersBundle\Traits\GetOrderServiceTrait;
-use OrdersBundle\Services\OrderAssociationService;
+use AftersalesBundle\Services\AftersalesRefundService;
 use DataCubeBundle\Services\TrackService;
-use OrdersBundle\Services\TradeService;
-use OrdersBundle\Events\OrderProcessLogEvent;
-
 use MembersBundle\Services\MemberService;
-use PointBundle\Services\PointMemberService;
+use OrdersBundle\Entities\Trade;
+use OrdersBundle\Events\NormalOrderPaySuccessEvent;
+use OrdersBundle\Events\OrderProcessLogEvent;
+use OrdersBundle\Events\TradeFinishEvent;
+use OrdersBundle\Repositories\TradeRepository;
+use OrdersBundle\Services\OrderAssociationService;
+use OrdersBundle\Services\TradeService;
+use OrdersBundle\Traits\GetOrderServiceTrait;
 
 class UpdateOrderStatusListener
 {
     use GetOrderServiceTrait;
+
+    /** @var list<string> */
+    private const POST_PAY_ORDER_STATUSES = [
+        'PAYED',
+        'WAIT_GROUPS_SUCCESS',
+        'WAIT_BUYER_CONFIRM',
+        'DONE',
+    ];
 
     /**
      * Handle the event.
@@ -41,7 +50,6 @@ class UpdateOrderStatusListener
     public function handle(TradeFinishEvent $event)
     {
         $orderId = $event->entities->getOrderId();
-        $order_prefix = mb_substr($orderId, 0, 2);
 
         return $this->handle_common_order($event);
     }
@@ -54,136 +62,278 @@ class UpdateOrderStatusListener
         $orderId = $event->entities->getOrderId();
         $payType = $event->entities->getPayType();
         $tradeId = $event->entities->getTradeId();
-        // 会员小程序直接买单 只有支付单 没有订单
         if (!$orderId) {
             return false;
         }
 
         $paymentstate = $event->entities->getTradeState();
-        $orderAssociationService = new OrderAssociationService();
-        $order = $orderAssociationService->getOrder($companyId, $orderId);
-        if (!$order) {
-            // 后续改为Sentry抛错
-            app('log')->debug('订单号'.$orderId.' 不存在');
-            return false;
+        if ($paymentstate != 'SUCCESS') {
+            return true;
         }
 
-        if (! in_array($order['order_status'], ['NOTPAY', 'PART_PAYMENT'])) {
-            // 非待付态进此分支，不会发 NormalOrderPaySuccessEvent，数云 trade 派单也不会触发。店务/重复回调时可检索本关键字。
-            app('log')->info('update_order_status_trade_finish_skip_awaiting_payment', [
+        $trade = $this->loadTradeForReconcile((int) $companyId, (string) $tradeId);
+        if ($trade === []) {
+            app('log')->warning('trade_finish_reconcile_missing_trade', [
                 'order_id' => $orderId,
                 'company_id' => $companyId,
-                'order_status' => $order['order_status'] ?? null,
-                'order_class' => $order['order_class'] ?? null,
-                'order_type' => $order['order_type'] ?? null,
+                'trade_id' => $tradeId,
             ]);
-            $orderService = $this->getOrderService($order['order_type']);
-            try {
-                // 未被取消的订单，直接取消
-                if ($order['order_status'] != 'CANCEL') {
-                    $params = [
-                        'company_id' => $order['company_id'],
-                        'order_id' => $order['order_id'],
-                        'user_id' => $order['user_id'],
-                        'mobile' => $order['mobile'],
-                        'cancel_from' => 'system', //用户取消订单
-                        'cancel_reason' => '',
-                        'other_reason' => '订单异常退款'
-                    ];
-                    $result = $orderService->cancelOrder($params);
-                    // 去退款
-                    $params = [
-                        'company_id' => $order['company_id'],
-                        'order_id' => $order['order_id'],
-                        'order_type' => $order['order_type'],
-                        'check_cancel' => '1',
-                        'shop_reject_reason' => '',
-                        'operator_type' => 'system',
-                        'operator_id' => '0',
-                    ];
-                    $result = $orderService->confirmCancelOrder($params);
-                } else {
-                    $params = [
-                        'company_id' => $order['company_id'],
-                        'order_id' => $order['order_id'],
-                        'user_id' => $order['user_id'],
-                    ];
-                    $orderService->systemCreateRefund($params);
-                }
-            } catch (\Exception $e) {
-                app('log')->debug('已取消订单自动退款报错：'.$e->getMessage());
-                app('log')->debug('已取消订单自动退款报错：'.$e->getFile().' '.$e->getLine());
-            }
-            //$tradeService = new TradeService();
-            //$tradeService->refundTrade($tradeId);
+
             return false;
         }
 
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            $orderAssociationService = new OrderAssociationService();
+            $order = $orderAssociationService->getOrder($companyId, $orderId);
+            if (!$order) {
+                app('log')->debug('订单号'.$orderId.' 不存在');
+
+                return false;
+            }
+
+            $branch = $this->resolveReconcileBranch($order, (string) $tradeId);
+            if ($branch === 'payable') {
+                $advanced = $this->handlePayableBranch($order, $payType, $companyId, $orderId, $userId, (string) $tradeId);
+                if ($advanced === 'cas_retry') {
+                    continue;
+                }
+
+                return $advanced === 'success';
+            }
+
+            return $this->handleNonPayableBranch($branch, $order, $trade, $companyId, $orderId, $tradeId);
+        }
+
+        app('log')->info('trade_finish_reconcile_cas_exhausted', [
+            'order_id' => $orderId,
+            'company_id' => $companyId,
+            'trade_id' => $tradeId,
+        ]);
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     */
+    protected function resolveReconcileBranch(array $order, string $currentTradeId): string
+    {
+        $status = (string) ($order['order_status'] ?? '');
+
+        if ($status === 'PART_PAYMENT') {
+            return 'payable';
+        }
+
+        if ($status === 'NOTPAY') {
+            return $this->isNotPayTimedOut($order) ? 'pay_after_cancel' : 'payable';
+        }
+
+        if ($status === 'CANCEL') {
+            return 'pay_after_cancel';
+        }
+
+        if (in_array($status, self::POST_PAY_ORDER_STATUSES, true)) {
+            return $this->hasOtherSuccessfulNonPointTrade(
+                (int) ($order['company_id'] ?? 0),
+                (string) ($order['order_id'] ?? ''),
+                $currentTradeId
+            ) ? 'dup_pay' : 'same_trade_ignore';
+        }
+
+        return 'unhandled';
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     */
+    protected function isNotPayTimedOut(array $order, ?int $now = null): bool
+    {
+        if (($order['order_status'] ?? '') !== 'NOTPAY') {
+            return false;
+        }
+
+        $autoCancel = (int) ($order['auto_cancel_time'] ?? 0);
+
+        return $autoCancel > 0 && $autoCancel <= ($now ?? time());
+    }
+
+    protected function hasOtherSuccessfulNonPointTrade(int $companyId, string $orderId, string $excludeTradeId): bool
+    {
+        if ($companyId < 1 || $orderId === '') {
+            return false;
+        }
+
+        /** @var TradeRepository $tradeRepository */
+        $tradeRepository = app('registry')->getManager('default')->getRepository(Trade::class);
+        $tradeList = $tradeRepository->lists([
+            'company_id' => $companyId,
+            'order_id' => $orderId,
+            'trade_state' => 'SUCCESS',
+        ], [], 100, 1);
+
+        foreach ($tradeList['list'] ?? [] as $row) {
+            $rowTradeId = (string) ($row['trade_id'] ?? $row['tradeId'] ?? '');
+            if ($rowTradeId !== '' && $rowTradeId === $excludeTradeId) {
+                continue;
+            }
+            $rowPayType = strtolower((string) ($row['pay_type'] ?? $row['payType'] ?? ''));
+            if ($rowPayType !== 'point') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function loadTradeForReconcile(int $companyId, string $tradeId): array
+    {
+        if ($companyId < 1 || $tradeId === '') {
+            return [];
+        }
+
+        $tradeService = new TradeService();
+
+        return $tradeService->getInfo(['company_id' => $companyId, 'trade_id' => $tradeId]) ?: [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     * @return 'success'|'cas_retry'|'failed'
+     */
+    private function handlePayableBranch(array $order, string $payType, $companyId, string $orderId, $userId, string $tradeId = ''): string
+    {
         $orderService = $this->getOrderServiceByOrderInfo($order);
 
         try {
-            // 交易但支付成功
-            if ($paymentstate == 'SUCCESS') {
-                $orderService->tradeSuccUpdateOrderStatus($order, $payType);
-                // 临时解决会员消费记录筛选：用订单上的会员与会员拓展表对齐；仅 user_id+company_id 参与查询（无 username 等条件）
-                $membersService = new MemberService();
-                $memFilter = [
-                    'user_id' => $order['user_id'],
-                    'company_id' => $order['company_id'],
-                ];
-                $params = ['have_consume' => true];
-                try {
-                    $membersService->memberInfoUpdate($params, $memFilter);
-                } catch (\Exception $memberEx) {
-                    app('log')->warning('trade_finish_member_info_update_skipped', [
-                        'order_id' => $orderId,
-                        'company_id' => $order['company_id'] ?? null,
-                        'user_id' => $order['user_id'] ?? null,
-                        'event_user_id' => $userId,
-                        'message' => $memberEx->getMessage(),
-                    ]);
-                }
-
-                // $orderData = $orderService->getOrderInfo($order['company_id'], $order['order_id'])['orderInfo'];
-                // //扣减积分
-                // if ($orderData['point_use'] && $orderData['pay_type'] != 'point') {
-                //     app('log')->debug('订单使用了积分 order_id:'.$orderData['order_id']);
-                //     $pointMemberService = new PointMemberService();
-                //     $pointMemberService->addPoint($orderData['user_id'], $orderData['company_id'], $orderData['point_use'], 6, false, '购物扣减积分', $orderData['order_id']);
-                // }
-
-                $trackService = new TrackService();
-                $trackParams = [
-                    'monitor_id' => $order['monitor_id'],
-                    'company_id' => $companyId,
-                    'source_id' => $order['source_id']
-                ];
-                $trackService->addEntriesNum($trackParams);
-
-                $orderProcessLog = [
+            $updated = $orderService->tradeSuccUpdateOrderStatus($order, $payType);
+            if ($updated === false) {
+                app('log')->info('trade_finish_reconcile_cas_miss', [
                     'order_id' => $orderId,
                     'company_id' => $companyId,
-                    'operator_type' => 'system',
-                    'is_show' => true,
-                    'remarks' => '订单支付',
-                    'detail' => '订单号：' . $orderId . '，订单支付成功',
-                ];
-                event(new OrderProcessLogEvent($orderProcessLog));
+                    'trade_id' => $tradeId,
+                    'order_status' => $order['order_status'] ?? null,
+                    'result' => 'cas_retry',
+                ]);
 
-                $eventData = [
-                    'company_id' => $companyId,
-                    'order_id' => $order['order_id'],
-                    // 供数云等监听方在入队前判断，避免无会员/0 元订单进队列
-                    'user_id' => (int) ($order['user_id'] ?? 0),
-                    'total_fee' => $order['total_fee'] ?? 0,
-                ];
-                event(new NormalOrderPaySuccessEvent($eventData));
-
-                return true;
+                return 'cas_retry';
             }
+
+            $membersService = new MemberService();
+            $memFilter = [
+                'user_id' => $order['user_id'],
+                'company_id' => $order['company_id'],
+            ];
+            try {
+                $membersService->memberInfoUpdate(['have_consume' => true], $memFilter);
+            } catch (\Exception $memberEx) {
+                app('log')->warning('trade_finish_member_info_update_skipped', [
+                    'order_id' => $orderId,
+                    'company_id' => $order['company_id'] ?? null,
+                    'user_id' => $order['user_id'] ?? null,
+                    'event_user_id' => $userId,
+                    'message' => $memberEx->getMessage(),
+                ]);
+            }
+
+            $trackService = new TrackService();
+            $trackService->addEntriesNum([
+                'monitor_id' => $order['monitor_id'],
+                'company_id' => $companyId,
+                'source_id' => $order['source_id'],
+            ]);
+
+            event(new OrderProcessLogEvent([
+                'order_id' => $orderId,
+                'company_id' => $companyId,
+                'operator_type' => 'system',
+                'is_show' => true,
+                'remarks' => '订单支付',
+                'detail' => '订单号：' . $orderId . '，订单支付成功',
+            ]));
+
+            event(new NormalOrderPaySuccessEvent([
+                'company_id' => $companyId,
+                'order_id' => $order['order_id'],
+                'user_id' => (int) ($order['user_id'] ?? 0),
+                'total_fee' => $order['total_fee'] ?? 0,
+            ]));
+
+            app('log')->info('trade_finish_reconcile_pay_success', [
+                'order_id' => $orderId,
+                'company_id' => $companyId,
+                'trade_id' => $tradeId,
+                'order_status' => $order['order_status'] ?? null,
+                'result' => 'pay_success',
+            ]);
+
+            return 'success';
         } catch (\Exception $e) {
             app('log')->debug('订单号:'.$orderId.', 状态更新错误: '.$e->getMessage());
+
+            return 'failed';
         }
-        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $order
+     * @param  array<string, mixed>  $trade
+     */
+    private function handleNonPayableBranch(
+        string $branch,
+        array $order,
+        array $trade,
+        $companyId,
+        string $orderId,
+        string $tradeId
+    ): bool {
+        $logContext = [
+            'order_id' => $orderId,
+            'company_id' => $companyId,
+            'trade_id' => $tradeId,
+            'order_status' => $order['order_status'] ?? null,
+        ];
+
+        if ($branch === 'pay_after_cancel') {
+            /** @var AftersalesRefundService $refundService */
+            $refundService = app(AftersalesRefundService::class);
+            $refund = $refundService->createAbnormalTradeRefund($order, $trade, 'PAY_AFTER_CANCEL');
+            app('log')->info('trade_finish_reconcile_pay_after_cancel', array_merge($logContext, [
+                'refund_status' => $refund['refund_status'] ?? 'PAY_AFTER_CANCEL',
+                'refund_bn' => $refund['refund_bn'] ?? '',
+                'result' => 'created',
+            ]));
+
+            return false;
+        }
+
+        if ($branch === 'dup_pay') {
+            /** @var AftersalesRefundService $refundService */
+            $refundService = app(AftersalesRefundService::class);
+            $refund = $refundService->createAbnormalTradeRefund($order, $trade, 'DUP_PAY');
+            app('log')->info('trade_finish_reconcile_dup_pay', array_merge($logContext, [
+                'refund_status' => $refund['refund_status'] ?? 'DUP_PAY',
+                'refund_bn' => $refund['refund_bn'] ?? '',
+                'result' => 'created',
+            ]));
+
+            return false;
+        }
+
+        if ($branch === 'same_trade_ignore') {
+            app('log')->info('trade_finish_reconcile_same_trade_ignore', array_merge($logContext, [
+                'result' => 'ignored',
+            ]));
+
+            return false;
+        }
+
+        app('log')->info('trade_finish_reconcile_unhandled', array_merge($logContext, [
+            'result' => 'skipped',
+        ]));
+
+        return false;
     }
 }

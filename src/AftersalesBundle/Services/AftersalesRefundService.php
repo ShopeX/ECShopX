@@ -52,6 +52,51 @@ class AftersalesRefundService
 {
     use GetRefundBnTrait;
 
+    private const ABNORMAL_REFUND_CREATE_STATUSES = ['PAY_AFTER_CANCEL', 'DUP_PAY'];
+
+    private const ABNORMAL_REFUND_IDEMPOTENT_STATUSES = [
+        'PAY_AFTER_CANCEL',
+        'DUP_PAY',
+        'PROCESSING',
+        'SUCCESS',
+    ];
+
+    /**
+     * 支付完结异常退款单（售前路径与错误日志重提均需隔离）。
+     */
+    public static function isTradeFinishAbnormalRefund(array $refund): bool
+    {
+        $status = (string) ($refund['refund_status'] ?? '');
+        if (in_array($status, self::ABNORMAL_REFUND_CREATE_STATUSES, true)) {
+            return true;
+        }
+        if ($status === 'PROCESSING' && (int) ($refund['refund_type'] ?? 0) === 1
+            && (int) ($refund['return_freight'] ?? 1) === 0
+            && empty($refund['aftersales_bn'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static function refundStatusLabel(string $status): string
+    {
+        $labels = [
+            'READY' => '待审核',
+            'AUDIT_SUCCESS' => '审核成功待退款',
+            'SUCCESS' => '退款成功',
+            'REFUSE' => '退款驳回',
+            'CANCEL' => '撤销退款',
+            'REFUNDCLOSE' => '退款关闭',
+            'PROCESSING' => '已发起退款等待到账',
+            'CHANGE' => '退款异常',
+            'PAY_AFTER_CANCEL' => '逾期支付待退款',
+            'DUP_PAY' => '重复支付待退款',
+        ];
+
+        return $labels[$status] ?? $status;
+    }
+
     public $aftersalesRepository;
     public $aftersalesDetailRepository;
     /** @var \AftersalesBundle\Repositories\AftersalesRefundRepository */
@@ -105,84 +150,7 @@ class AftersalesRefundService
         $tradeInfo = $tradeService->getInfo(['company_id' => $params['company_id'], 'trade_id' => $refundData['trade_id'], 'trade_state' => 'SUCCESS']);
         $tradeInfo['wxaAppid'] = '';
         $refundData['pay_fee'] = $tradeInfo['pay_fee']; // 支付单原来支付总金额,用于某些支付需要传原始支付金额
-        if (($refundData['pay_type'] != 'point') && ($refundData['refund_fee'] <= 0)) { //退款金额为0的直接返回成功，主要是第三方支付，积分支付走的是refund_point，所以直接过，不影响流程
-            $res['status'] = 'SUCCESS';
-            $res['refund_id'] = '';
-        } else {
-            switch (strtolower($refundData['pay_type'])) {
-                // 微信支付
-                case 'wxpay':
-                case 'wxpaypc':
-                case 'wxpayh5':
-                case 'wxpayapp':
-                case 'wxpayjs':
-                case 'wxpaypos':
-                    $paymentsService = new PaymentsService(new WechatPayService($refundData['distributor_id']));
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                // 支付宝支付
-                case 'alipay':
-                case 'alipayapp':
-                case 'alipayh5':
-                case 'alipaypos':
-                case 'alipaymini':
-                    $paymentsService = new PaymentsService(new AlipayService($refundData['distributor_id']));
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                // 积分支付
-                case 'point':
-                    $paymentsService = new PaymentsService(new PointPayService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                // 0元订单
-                case 'localpay':
-                    // 0元订单无第三方支付渠道可退，标记退款异常，避免队列任务无限重试
-                    $res = [
-                        'status' => 'FAIL',
-                    ];
-                    break;
-                // 预存款
-                case 'deposit':
-                    $paymentsService = new PaymentsService(new DepositPayService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                case 'pos':
-                    $paymentsService = new PaymentsService(new PosPayService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                case 'hfpay':
-                    $paymentsService = new PaymentsService(new HfPayService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                case 'adapay':
-                    $paymentsService = new PaymentsService(new AdaPaymentService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                case 'chinaums':
-                    $paymentsService = new PaymentsService(new ChinaumsPayService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData, $resubmit);
-                    break;
-                case 'bspay':
-                    $refundData['bspay_req_date'] = $tradeInfo['bspay_req_date'];
-                    $refundData['transaction_id'] = $tradeInfo['transaction_id'];
-                    $paymentsService = new PaymentsService(new BsPayService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                case 'offline_pay':
-                    $paymentsService = new PaymentsService(new OfflinePayService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                case 'doumen_intl':
-                    $refundData['transaction_id'] = $tradeInfo['transaction_id'];
-                    $refundData['fee_type'] = $refundData['currency'] ?? $tradeInfo['fee_type'] ?? 'CNY';
-                    $paymentsService = new PaymentsService(new DoumenIntlService());
-                    $res = $paymentsService->doRefund($params['company_id'], $tradeInfo['wxaAppid'], $refundData);
-                    break;
-                default:
-                    throw new ResourceException("未知的支付方式");
-                    break;
-            }
-        }
+        $res = $this->invokePaymentChannelRefund($params['company_id'], $tradeInfo, $refundData, $resubmit);
 
         // 处理积分组合支付订单售后退积分
         if (($refundData['pay_type'] != 'point') && ($refundData['refund_point'] > 0) && !$resubmit) {
@@ -424,6 +392,348 @@ class AftersalesRefundService
         return intval($count);
     }
 
+    /**
+     * 支付完结异常场景建单（逾期 / 重复支付），同 company_id+trade_id 幂等复用。
+     *
+     * @param array  $order  订单信息（含 company_id、order_id、user_id 等）
+     * @param array  $trade  本笔支付单（pay_type、pay_fee 取自 trade）
+     * @param string $status PAY_AFTER_CANCEL 或 DUP_PAY
+     */
+    public function createAbnormalTradeRefund(array $order, array $trade, string $status): array
+    {
+        if (!in_array($status, self::ABNORMAL_REFUND_CREATE_STATUSES, true)) {
+            throw new ResourceException('无效的异常退款状态');
+        }
+
+        $companyId = $order['company_id'] ?? null;
+        $tradeId = $trade['trade_id'] ?? $trade['tradeId'] ?? null;
+        if (!$companyId || !$tradeId) {
+            throw new ResourceException('缺少企业与支付单号');
+        }
+
+        $existingList = $this->aftersalesRefundRepository->getList([
+            'company_id' => $companyId,
+            'trade_id' => $tradeId,
+            'refund_status' => self::ABNORMAL_REFUND_IDEMPOTENT_STATUSES,
+        ], 0, 1);
+        if (($existingList['total_count'] ?? 0) > 0) {
+            $existing = $existingList['list'][0];
+            app('log')->info('refund_abnormal_idempotent', [
+                'company_id' => $companyId,
+                'trade_id' => $tradeId,
+                'order_id' => $order['order_id'] ?? '',
+                'refund_bn' => $existing['refund_bn'] ?? '',
+                'refund_status' => $existing['refund_status'] ?? '',
+            ]);
+
+            return $existing;
+        }
+
+        $payType = (string) ($trade['pay_type'] ?? $trade['payType'] ?? '');
+        $payTypeLower = strtolower($payType);
+        $refundFee = (int) ($trade['pay_fee'] ?? $trade['payFee'] ?? 0);
+        $refundChannel = $payTypeLower === 'offline_pay' ? 'offline' : 'original';
+
+        $currency = '';
+        $curFeeType = '';
+        $curFeeSymbol = '';
+        if ($payTypeLower !== 'point') {
+            $currency = (string) ($trade['fee_type'] ?? $trade['feeType'] ?? '');
+            $curFeeType = (string) ($trade['cur_fee_type'] ?? $trade['curFeeType'] ?? $currency);
+            $curFeeSymbol = (string) ($trade['cur_fee_symbol'] ?? $trade['curFeeSymbol'] ?? '');
+        }
+
+        $params = [
+            'company_id' => $companyId,
+            'user_id' => $order['user_id'],
+            'order_id' => $order['order_id'],
+            'trade_id' => $tradeId,
+            'shop_id' => $order['shop_id'] ?? 0,
+            'distributor_id' => $order['distributor_id'] ?? 0,
+            'refund_type' => 1,
+            'refund_channel' => $refundChannel,
+            'refund_status' => $status,
+            'refund_fee' => $refundFee,
+            'refund_point' => $order['point_use'] ?? $order['point'] ?? 0,
+            'return_freight' => 0,
+            'pay_type' => $payType,
+            'currency' => $currency,
+            'cur_fee_type' => $curFeeType,
+            'cur_fee_rate' => $trade['cur_fee_rate'] ?? $trade['curFeeRate'] ?? '',
+            'cur_fee_symbol' => $curFeeSymbol,
+            'cur_pay_fee' => $payTypeLower === 'point'
+                ? (int) ($order['point'] ?? 0)
+                : (int) ($trade['cur_pay_fee'] ?? $trade['curPayFee'] ?? $refundFee),
+            'merchant_id' => $trade['merchant_id'] ?? 0,
+        ];
+        $params = $this->applyOrderCurrencyToRefundParams($params);
+
+        $refundData = [
+            'refund_bn' => $this->__genRefundBn(),
+            'company_id' => $params['company_id'],
+            'supplier_id' => $params['supplier_id'] ?? 0,
+            'user_id' => $params['user_id'],
+            'order_id' => $params['order_id'],
+            'trade_id' => $params['trade_id'],
+            'shop_id' => $params['shop_id'] ?? 0,
+            'distributor_id' => $params['distributor_id'] ?? 0,
+            'refund_type' => 1,
+            'refund_channel' => $refundChannel,
+            'refund_status' => $status,
+            'refund_fee' => $refundFee,
+            'refund_point' => $params['refund_point'],
+            'return_freight' => 0,
+            'freight' => 0,
+            'freight_type' => 'cash',
+            'pay_type' => $payType,
+            'currency' => $params['currency'],
+            'cur_fee_type' => $params['cur_fee_type'],
+            'cur_fee_rate' => $params['cur_fee_rate'],
+            'cur_fee_symbol' => $params['cur_fee_symbol'],
+            'cur_pay_fee' => $params['cur_pay_fee'],
+            'merchant_id' => $params['merchant_id'],
+        ];
+
+        app('log')->info('refund_abnormal_create', [
+            'company_id' => $companyId,
+            'trade_id' => $tradeId,
+            'order_id' => $order['order_id'] ?? '',
+            'refund_status' => $status,
+            'refund_fee' => $refundFee,
+            'pay_type' => $payType,
+        ]);
+
+        return $this->aftersalesRefundRepository->create($refundData);
+    }
+
+    /**
+     * 支付完结异常退款实退：仅渠道打款，不触发售前 doRefund 收尾副作用。
+     */
+    public function refundAbnormalTrade($companyId, string $refundBn): array
+    {
+        $filter = [
+            'company_id' => $companyId,
+            'refund_bn' => $refundBn,
+        ];
+        $refund = $this->aftersalesRefundRepository->getInfo($filter);
+        if (!$refund) {
+            throw new ResourceException('退款单不存在');
+        }
+
+        $status = (string) ($refund['refund_status'] ?? '');
+        if ($status === 'SUCCESS') {
+            app('log')->info('refund_abnormal_idempotent', [
+                'company_id' => $companyId,
+                'refund_bn' => $refundBn,
+                'trade_id' => $refund['trade_id'] ?? '',
+                'order_id' => $refund['order_id'] ?? '',
+                'refund_status' => 'SUCCESS',
+            ]);
+
+            return $refund;
+        }
+        if ($status === 'PROCESSING') {
+            app('log')->info('refund_abnormal_reject', [
+                'company_id' => $companyId,
+                'refund_bn' => $refundBn,
+                'trade_id' => $refund['trade_id'] ?? '',
+                'order_id' => $refund['order_id'] ?? '',
+                'refund_status' => 'PROCESSING',
+            ]);
+            throw new ResourceException('退款处理中，请勿重复操作');
+        }
+        if (!in_array($status, self::ABNORMAL_REFUND_CREATE_STATUSES, true)) {
+            throw new ResourceException('当前退款单状态不允许异常实退');
+        }
+
+        $priorStatus = $status;
+        $claimed = $this->aftersalesRefundRepository->claimAbnormalRefundProcessing($companyId, $refundBn, $priorStatus);
+        if ($claimed < 1) {
+            $refund = $this->aftersalesRefundRepository->getInfo($filter);
+            $status = (string) ($refund['refund_status'] ?? '');
+            if ($status === 'SUCCESS') {
+                app('log')->info('refund_abnormal_idempotent', [
+                    'company_id' => $companyId,
+                    'refund_bn' => $refundBn,
+                    'trade_id' => $refund['trade_id'] ?? '',
+                    'order_id' => $refund['order_id'] ?? '',
+                    'refund_status' => 'SUCCESS',
+                ]);
+
+                return $refund;
+            }
+            if ($status === 'PROCESSING') {
+                app('log')->info('refund_abnormal_reject', [
+                    'company_id' => $companyId,
+                    'refund_bn' => $refundBn,
+                    'trade_id' => $refund['trade_id'] ?? '',
+                    'order_id' => $refund['order_id'] ?? '',
+                    'refund_status' => 'PROCESSING',
+                ]);
+                throw new ResourceException('退款处理中，请勿重复操作');
+            }
+            throw new ResourceException('退款单状态已变更，请刷新后重试');
+        }
+
+        $tradeId = (string) ($refund['trade_id'] ?? '');
+        $tradeInfo = $this->getSuccessTradeForAbnormalRefund($companyId, $tradeId);
+        if (!$tradeInfo || (string) ($tradeInfo['trade_id'] ?? '') !== $tradeId) {
+            $this->restoreAbnormalRefundStatus($companyId, $refundBn, $priorStatus);
+            app('log')->info('refund_abnormal_fail', [
+                'company_id' => $companyId,
+                'refund_bn' => $refundBn,
+                'trade_id' => $tradeId,
+                'order_id' => $refund['order_id'] ?? '',
+                'refund_status' => $priorStatus,
+                'reason' => 'trade_not_success',
+            ]);
+            throw new ResourceException('本笔支付单不存在或未支付成功');
+        }
+
+        $tradeInfo['wxaAppid'] = $tradeInfo['wxaAppid'] ?? $tradeInfo['wxa_appid'] ?? '';
+        $refundData = $refund;
+        $refundData['pay_fee'] = $tradeInfo['pay_fee'] ?? $tradeInfo['payFee'] ?? 0;
+
+        try {
+            $res = $this->invokePaymentChannelRefund($companyId, $tradeInfo, $refundData, false);
+        } catch (\Throwable $e) {
+            $this->restoreAbnormalRefundStatus($companyId, $refundBn, $priorStatus);
+            app('log')->info('refund_abnormal_fail', [
+                'company_id' => $companyId,
+                'refund_bn' => $refundBn,
+                'trade_id' => $tradeId,
+                'order_id' => $refund['order_id'] ?? '',
+                'refund_status' => $priorStatus,
+                'reason' => $e->getMessage(),
+            ]);
+            throw $e instanceof ResourceException ? $e : new ResourceException($e->getMessage());
+        }
+
+        if (($res['status'] ?? '') === 'SUCCESS' || ($res['status'] ?? '') === 'PROCESSING') {
+            $updated = $this->aftersalesRefundRepository->updateOneBy($filter, [
+                'refund_id' => $res['refund_id'] ?? '',
+                'refund_status' => 'SUCCESS',
+                'refunded_fee' => $refundData['refund_fee'],
+                'refunded_point' => $refundData['refund_point'] ?? 0,
+                'refund_success_time' => time(),
+            ]);
+            app('log')->info('refund_abnormal_success', [
+                'company_id' => $companyId,
+                'refund_bn' => $refundBn,
+                'trade_id' => $tradeId,
+                'order_id' => $refund['order_id'] ?? '',
+                'refund_status' => 'SUCCESS',
+            ]);
+
+            return $updated;
+        }
+
+        $this->restoreAbnormalRefundStatus($companyId, $refundBn, $priorStatus);
+        $errorDesc = (string) ($res['error_desc'] ?? $res['error_message'] ?? '渠道退款失败');
+        app('log')->info('refund_abnormal_fail', [
+            'company_id' => $companyId,
+            'refund_bn' => $refundBn,
+            'trade_id' => $tradeId,
+            'order_id' => $refund['order_id'] ?? '',
+            'refund_status' => $priorStatus,
+            'reason' => $errorDesc,
+        ]);
+        throw new ResourceException($errorDesc);
+    }
+
+    /**
+     * 仅调用支付渠道退款，不含售后单状态收尾与订单副作用。
+     *
+     * @return array{status: string, refund_id?: string, error_desc?: string}
+     */
+    protected function invokePaymentChannelRefund($companyId, array $tradeInfo, array $refundData, bool $resubmit = false): array
+    {
+        if (($refundData['pay_type'] != 'point') && ($refundData['refund_fee'] <= 0)) {
+            return [
+                'status' => 'SUCCESS',
+                'refund_id' => '',
+            ];
+        }
+
+        switch (strtolower((string) $refundData['pay_type'])) {
+            case 'wxpay':
+            case 'wxpaypc':
+            case 'wxpayh5':
+            case 'wxpayapp':
+            case 'wxpayjs':
+            case 'wxpaypos':
+                $paymentsService = new PaymentsService(new WechatPayService($refundData['distributor_id']));
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'alipay':
+            case 'alipayapp':
+            case 'alipayh5':
+            case 'alipaypos':
+            case 'alipaymini':
+                $paymentsService = new PaymentsService(new AlipayService($refundData['distributor_id']));
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'point':
+                $paymentsService = new PaymentsService(new PointPayService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'localpay':
+                return ['status' => 'FAIL'];
+            case 'deposit':
+                $paymentsService = new PaymentsService(new DepositPayService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'pos':
+                $paymentsService = new PaymentsService(new PosPayService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'hfpay':
+                $paymentsService = new PaymentsService(new HfPayService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'adapay':
+                $paymentsService = new PaymentsService(new AdaPaymentService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'chinaums':
+                $paymentsService = new PaymentsService(new ChinaumsPayService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData, $resubmit);
+            case 'bspay':
+                $refundData['bspay_req_date'] = $tradeInfo['bspay_req_date'];
+                $refundData['transaction_id'] = $tradeInfo['transaction_id'];
+                $paymentsService = new PaymentsService(new BsPayService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'offline_pay':
+                $paymentsService = new PaymentsService(new OfflinePayService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            case 'doumen_intl':
+                $refundData['transaction_id'] = $tradeInfo['transaction_id'];
+                $refundData['fee_type'] = $refundData['currency'] ?? $tradeInfo['fee_type'] ?? 'CNY';
+                $paymentsService = new PaymentsService(new DoumenIntlService());
+                return $paymentsService->doRefund($companyId, $tradeInfo['wxaAppid'], $refundData);
+            default:
+                throw new ResourceException('未知的支付方式');
+        }
+    }
+
+    protected function getSuccessTradeForAbnormalRefund($companyId, string $tradeId): array
+    {
+        $tradeService = new TradeService();
+
+        return $tradeService->getInfo([
+            'company_id' => $companyId,
+            'trade_id' => $tradeId,
+            'trade_state' => 'SUCCESS',
+        ]);
+    }
+
+    private function restoreAbnormalRefundStatus($companyId, string $refundBn, string $priorStatus): void
+    {
+        if (!in_array($priorStatus, self::ABNORMAL_REFUND_CREATE_STATUSES, true)) {
+            return;
+        }
+
+        $this->aftersalesRefundRepository->updateOneBy([
+            'company_id' => $companyId,
+            'refund_bn' => $refundBn,
+        ], [
+            'refund_status' => $priorStatus,
+        ]);
+    }
+
     // 售前 创建退款单
     public function createRefund($params)
     {
@@ -519,6 +829,7 @@ class AftersalesRefundService
             $indexDistributor = $distributorService->getDistributorListById($filter['company_id'], $distributorIdList);
             foreach ($res['list'] as &$v) {
                 $v['distributor_info'] = $indexDistributor[$v['distributor_id']] ?? ['name' => '平台自营'];
+                $v['refund_status_des'] = self::refundStatusLabel((string) ($v['refund_status'] ?? ''));
             }
         }
 

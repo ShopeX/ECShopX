@@ -58,6 +58,62 @@ class BargainOrdersRepository extends EntityRepository
         return $result;
     }
 
+    /**
+     * @param  array<string, mixed>  $filter
+     * @param  array<string, mixed>  $data
+     */
+    public function updateBy(array $filter, array $data)
+    {
+        $conn = app('registry')->getConnection('default');
+        $qb = $conn->createQueryBuilder()->update($this->table);
+        foreach ($data as $key => $val) {
+            $qb = $qb->set($key, $qb->expr()->literal($val));
+        }
+
+        $qb = $this->_filter($filter, $qb);
+
+        return $qb->execute();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filter
+     */
+    private function _filter($filter, $qb)
+    {
+        if ($filter) {
+            foreach ($filter as $key => $filterValue) {
+                if ($filterValue !== '' && $filterValue !== null) {
+                    if (is_array($filterValue)) {
+                        array_walk($filterValue, function (&$value) use ($qb) {
+                            $value = $qb->expr()->literal($value);
+                        });
+                    } else {
+                        $filterValue = $qb->expr()->literal($filterValue);
+                    }
+                    $list = explode('|', $key);
+                    if (count($list) > 1) {
+                        list($v, $k) = $list;
+                        $qb->andWhere($qb->expr()->andX(
+                            $qb->expr()->$k($v, $filterValue)
+                        ));
+                        continue;
+                    }
+                    if (is_array($filterValue)) {
+                        $qb->andWhere($qb->expr()->andX(
+                            $qb->expr()->in($key, $filterValue)
+                        ));
+                    } else {
+                        $qb->andWhere($qb->expr()->andX(
+                            $qb->expr()->eq($key, $filterValue)
+                        ));
+                    }
+                }
+            }
+        }
+
+        return $qb;
+    }
+
     public function get($filter)
     {
         $order = $this->findOneBy($filter);

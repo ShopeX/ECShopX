@@ -601,4 +601,19 @@ class Refund extends Controller
         $result = $aftersalesOfflineRefundService->create($params);
         return response()->json($result);
     }
+
+    /**
+     * 支付完结异常退款审批实退（PAY_AFTER_CANCEL / DUP_PAY）。
+     */
+    public function abnormalRefund($refund_bn)
+    {
+        if (!$refund_bn) {
+            throw new ResourceException('退款单号不能为空');
+        }
+        $companyId = app('auth')->user()->get('company_id');
+        $aftersalesRefundService = new AftersalesRefundService();
+        $result = $aftersalesRefundService->refundAbnormalTrade($companyId, (string) $refund_bn);
+
+        return $this->response->array($result);
+    }
 }

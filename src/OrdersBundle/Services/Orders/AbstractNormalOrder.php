@@ -702,7 +702,7 @@ class AbstractNormalOrder implements OrderInterface
     }
 
     // 订单支付状态修改操作
-    public function orderStatusUpdate($filter, $orderStatus, $payType = '')
+    public function orderStatusUpdate($filter, $orderStatus, $payType = '', bool $onlyIfAwaitingPayment = false)
     {
         $updateStatus['order_status'] = $orderStatus;
         if ($orderStatus != 'PART_PAYMENT') {
@@ -711,7 +711,16 @@ class AbstractNormalOrder implements OrderInterface
             }
             $updateStatus['pay_status'] = 'PAYED';
         }
-        $result = $this->normalOrdersRepository->update($filter, $updateStatus);
+        if ($onlyIfAwaitingPayment) {
+            $casFilter = array_merge($filter, ['order_status|in' => ['NOTPAY', 'PART_PAYMENT']]);
+            $affected = (int) $this->normalOrdersRepository->updateBy($casFilter, $updateStatus);
+            if ($affected < 1) {
+                return false;
+            }
+            $result = $this->normalOrdersRepository->getInfo($filter);
+        } else {
+            $result = $this->normalOrdersRepository->update($filter, $updateStatus);
+        }
 
         $supplierOrderService = new SupplierOrderService();
         $supplierOrderService->updateOrderStatus($filter, $updateStatus);
@@ -3310,6 +3319,9 @@ class AbstractNormalOrder implements OrderInterface
         if (empty($refund)) {
             throw new ResourceException(trans('OrdersBundle/Order.refund_not_found'));
         }
+        if (AftersalesRefundService::isTradeFinishAbnormalRefund($refund)) {
+            throw new ResourceException('支付完结异常退款单不走售前退款审核');
+        }
         $params['supplier_id'] = $params['supplier_id'] ?? 0;
 
         $aftersalesRefundService = new AftersalesRefundService();
@@ -3458,7 +3470,7 @@ class AbstractNormalOrder implements OrderInterface
                 'supplier_id' => $params['supplier_id'] ?? 0,
                 'order_id' => $params['order_id'],
                 'refund_type' => 1,
-                'refund_status' => ['READY', 'AUDIT_SUCCESS', 'SUCCESS', 'CANCEL', 'REFUNDCLOSE', 'PROCESSING', 'CHANGE'],
+                'refund_status' => 'READY',
             ];
         } else { // 传了退款单
             $refundFilter = [

@@ -98,6 +98,32 @@ class AftersalesRefundRepository extends EntityRepository
     }
 
     /**
+     * 异常退款实退抢占：仅 PAY_AFTER_CANCEL / DUP_PAY 可 CAS 为 PROCESSING。
+     */
+    public function claimAbnormalRefundProcessing($companyId, $refundBn, string $expectedStatus): int
+    {
+        if (!in_array($expectedStatus, ['PAY_AFTER_CANCEL', 'DUP_PAY'], true)) {
+            return 0;
+        }
+
+        $conn = $this->getEntityManager()->getConnection();
+        $qb = $conn->createQueryBuilder();
+        $affected = (int) $qb->update($this->table)
+            ->set('refund_status', $qb->expr()->literal('PROCESSING'))
+            ->where('company_id = ' . $qb->expr()->literal($companyId))
+            ->andWhere('refund_bn = ' . $qb->expr()->literal($refundBn))
+            ->andWhere('refund_status = ' . $qb->expr()->literal($expectedStatus))
+            ->execute();
+
+        $entity = $this->findOneBy(['company_id' => $companyId, 'refund_bn' => $refundBn]);
+        if ($entity) {
+            $this->getEntityManager()->refresh($entity);
+        }
+
+        return $affected;
+    }
+
+    /**
      * 更新多条数数据
      *
      * @param $filter 更新的条件

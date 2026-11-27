@@ -219,9 +219,33 @@ class BargainOrderService implements OrderInterface
      * @params filter company_id, user_id, order_id
      *
      */
-    public function orderStatusUpdate($filter, $orderStatus)
+    public function orderStatusUpdate($filter, $orderStatus, $payType = '', bool $onlyIfAwaitingPayment = false)
     {
-        $updateInfo['order_status'] = $orderStatus;
+        $updateInfo = ['order_status' => $orderStatus];
+
+        if ($onlyIfAwaitingPayment) {
+            $casFilter = array_merge($filter, ['order_status|in' => ['NOTPAY', 'PART_PAYMENT']]);
+            $affected = (int) $this->bargainOrderRepository->updateBy($casFilter, $updateInfo);
+            if ($affected < 1) {
+                return false;
+            }
+
+            $conn = app('registry')->getConnection('default');
+
+            return $conn->transactional(function () use ($filter, $updateInfo) {
+                $orderResult = $this->bargainOrderRepository->get($filter);
+                if (!$orderResult) {
+                    throw new ResourceException("订单不存在！");
+                }
+                $this->orderAssociationsRepository->update($filter, $updateInfo);
+                if (isset($orderResult['bargain_id']) && $orderResult['bargain_id']) {
+                    $bargainPromotionsService = new BargainPromotionsService();
+                    $bargainPromotionsService->updateBargainOrderNum($orderResult['bargain_id']);
+                }
+
+                return $orderResult;
+            });
+        }
 
         $conn = app('registry')->getConnection('default');
         $orderResult = $conn->transactional(function ($conn) use ($filter, $updateInfo) {

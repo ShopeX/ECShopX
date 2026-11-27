@@ -124,15 +124,25 @@ class GroupsServiceOrderService extends AbstractServiceOrder
     }
 
     // 订单支付状态修改操作
-    public function orderStatusUpdate($filter, $orderStatus, $payType = '')
+    public function orderStatusUpdate($filter, $orderStatus, $payType = '', bool $onlyIfAwaitingPayment = false)
     {
         $serviceUpdate = ['order_status' => $orderStatus];
         if ($payType) {
             $serviceUpdate['pay_type'] = $payType;
         }
+        if ($onlyIfAwaitingPayment) {
+            $casFilter = array_merge($filter, ['order_status|in' => ['NOTPAY', 'PART_PAYMENT']]);
+            $affected = (int) $this->serviceOrderRepository->updateBy($casFilter, $serviceUpdate);
+            if ($affected < 1) {
+                return false;
+            }
+
+            return $this->orderAssociationsRepository->update($filter, ['order_status' => $orderStatus]);
+        }
+
         $this->serviceOrderRepository->update($filter, $serviceUpdate);
-        $result = $this->orderAssociationsRepository->update($filter, ['order_status' => $orderStatus]);
-        return $result;
+
+        return $this->orderAssociationsRepository->update($filter, ['order_status' => $orderStatus]);
     }
 
     public function createExtend($orderData, $params)
